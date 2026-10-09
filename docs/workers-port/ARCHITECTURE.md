@@ -7,6 +7,7 @@ Cloudflare Workers behind Cloudflare Zero Trust Access. Behavioural references f
 ## Goals and non-goals
 
 Goals:
+
 - Serve the OpenAI (chat/completions, completions, Responses), Claude (messages, count_tokens), Gemini (`/v1beta`) and
   Interactions APIs from a Worker, backed by the same provider credentials (OAuth and API key) as the Go server.
 - Faithful port of model resolution, credential selection/cooldowns/refresh, translators, the thinking pipeline and
@@ -56,6 +57,7 @@ workers/                      pnpm package, deployed with wrangler
 - **Cron trigger**: model catalog refresh (3 h in Go) and a safety sweep that re-arms credential refresh alarms.
 
 Request flow:
+
 ```
 client -> Cloudflare Access -> Worker
   verify Cf-Access-Jwt-Assertion -> principal (email | service token common_name)
@@ -108,8 +110,9 @@ client -> Cloudflare Access -> Worker
   snapshot, 5 s TTL then a version check, stale-if-error.
 - **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
-  integer normalisation that Go performs inside the same function belongs to the Codex executor slice.
-- **Config normalisation** follows the Go `Sanitize*` functions on the *flattened* list: gemini/interactions keys are
+  integer normalisation that Go performs inside the same function lives in `executor/helps/payload.ts` (`finalizePayload`: normalise
+  for Codex clients targeting non-Codex executors, then `applyPayloadRules`); executors call `finalizePayload`.
+- **Config normalisation** follows the Go `Sanitize*` functions on the _flattened_ list: gemini/interactions keys are
   deduplicated across all groups of a family (key, base URL, proxy, prefix, order-independent headers; entry values override
   the group's), vertex keys by `api-key|base-url` (keys without api-key and models without name or alias are dropped), and
   credential-less entries (a gemini entry with only a base URL) are accepted.
@@ -131,13 +134,13 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 - Summary helpers (`extractSummaryConfig`, `applySummaryConfigForProvider`, `applyTranslatedSummaryToClaude`, …) are
   exported for the translator registry (Go calls them from `TranslateRequestEnvelope`).
 - Fixtures: `go run ./workers/tools/fixturegen/thinking` → `test/fixtures/thinking.json` (~2.7 MB; includes the Go
-  static model catalog used by the lookup). Known Go quirk not mirrored: gjson reads *unparsable* source JSON
+  static model catalog used by the lookup). Known Go quirk not mirrored: gjson reads _unparsable_ source JSON
   leniently in `extractCodexConfig`; the Workers port only handles parsed bodies.
 
 ## Credentials and selection (ControlPlane)
 
 - **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim in
-  the DO's SQLite `credentials` table, the file *is* the metadata) and API keys synthesised from `api-keys` config with
+  the DO's SQLite `credentials` table, the file _is_ the metadata) and API keys synthesised from `api-keys` config with
   the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
   `derive.ts` turns a stored file into the immutable `Credential` (priority, weight, prefix, headers, exclusions,
   aliases, plan/domain attributes); global exclusions and aliases are applied at selection time, so config edits take
@@ -244,6 +247,42 @@ Core contracts every provider slice implements (Go references in each module hea
   and feeds `PickRequest.session` together with the Access `callerScope`. Not ported: the derived content-hash identity and
   the LCP conversation matcher, so requests without an explicit session marker are never bound.
 
+## Codex provider and Responses API (`src/executor/codex/`, `src/translator/codex/`, `src/handlers/responses/`)
+
+- **Translators** (`translator/codex/<pkg>/{request,response}.ts`, registered by `codex/register.ts`): faithful ports of
+  `internal/translator/codex/*` for `openai`, `openai-response`, `claude`, `gemini` and `interactions` -> `codex`. Shared
+  helpers are under `translator/common/` (SSE frame builders, `UserTurnDrops`, apply_patch bridge, Responses tool winners,
+  Claude message helpers, GPT/Grok signature checks). `TranslationError` may carry the translated `body` (Go returns both
+  for unsupported-part refusals). Golden fixtures: `corpus/codex-*.json`; **generate them with `TZ=UTC`** (Gemini timestamps
+  use the process time zone in Go). The Interactions `interaction.completed` event embeds the current time, so it is
+  covered by a fake-timer unit test instead of a fixture. Request `tool_use.input` text is re-serialised compactly (Go
+  forwards the raw bytes), hence the corpus files are excluded from prettier.
+- **Executor** (`executor/codex/executor.ts`): per attempt `translate -> Thinking.apply -> model/stream fields ->
+instructions -> image_generation tool -> reasoning sanitising -> parallel_tool_calls -> tool schema normalisation ->
+reasoning replay -> prompt cache key + Session-Id -> input id sanitising -> finalizePayload (last) -> headers (routing
+hint reads the final body) -> fetch`. Streams are processed line by line (`stream.ts`); non-stream aggregates the SSE
+  until the terminal event; compaction posts to `/responses/compact` as `openai-response`. Errors (`errors.ts`) follow
+  `codex_executor_terminal.go`: usage-limit/capacity -> 429 (credential-scoped unless `model-level-cooling`), body
+  rewrites (`context_too_large`, `thinking_signature_invalid`, `previous_response_not_found`, `auth_unavailable`),
+  in-stream `error`/`response.failed` mapping, empty `response.incomplete` -> request-scoped 502, missing terminal ->
+  request-scoped 408. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
+- **Reasoning replay** (`replay.ts`): Claude-format callers get cached encrypted reasoning/tool calls re-inserted by
+  anchor matching. The store is an interface; the default is a per-isolate in-memory store (TTL 1 h, bounds as in Go).
+  TODO(SessionState): back it with the `SessionState` Durable Object for cross-isolate continuity.
+- **Handlers**: `POST /v1/responses`, `/v1/responses/compact` and `/backend-api/codex/{responses,responses/compact}` share
+  `responses/routes.ts`; the Responses frame assembler (`responses/framer.ts`) buffers partial frames, filters private
+  `responsesapi.*`/`codex.*` events (Codex clients keep `codex.response.metadata`), rebuilds an empty
+  `response.output`, normalises error payloads (redacting secrets) and ends with a bare newline. `/v1/images/{generations,
+edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (multipart edits become JSON in the handler;
+  free-plan credentials are excluded through `ExecutionInput.disallowFreeAuth`). `/v1/alpha/search` and
+  `/backend-api/codex/alpha/search` (`handlers/codex/alpha-search.ts`) forward the sanitised body to
+  `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
+- **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
+  `is-compat` models, local token counting (`countTokens` answers 501; needs a BPE tokenizer) and the Claude stream
+  input-token estimate, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
+  the Grok signature check, xAI/OpenAI-compatible image models, and the Responses-tool image path being reachable only for
+  non-`gpt-image` models (ported but not routed).
+
 ## Model registry and `/models` endpoints (`src/registry/`)
 
 Port of `internal/registry` plus the model registration in `sdk/cliproxy/service_models.go`. The Go registry is a mutable
@@ -311,7 +350,7 @@ Port of `auto_refresh_loop.go` + `conductor_refresh.go` + the per-provider `Refr
   A refresh whose base tokens were replaced meanwhile (re-login) is discarded. `credentialVersion` bumps on rotation,
   so leases of the old tokens are ignored by `report`.
 - **Protocols** (`claude|codex|antigravity|xai|kimi|meta.ts`): `(context) => Effect<updatedMetadata, RefreshError,
-  HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in production, a recording client in
+HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in production, a recording client in
   tests). Each HTTP call is bounded to 30 s, a whole refresh to 120 s. Claude retries only HTTP >= 500 and blocks the
   credential for `Retry-After` on 429; Codex retries three times except `refresh_token_reused`.
 - **Request-time preparation** (`ensureFresh(id)`): returns a snapshot with a usable `metadata.access_token`: Meta mints
@@ -341,7 +380,7 @@ preparation belong to their executor slices (use `patchCredentialMetadata`).
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
 - Management routes require the principal to match a configured admin allow-list (emails / service token ids), in
   addition to Access policy.
-- Implementation notes (`workers/src/access/`): the gate is a *global* router middleware that matches protected path
+- Implementation notes (`workers/src/access/`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which

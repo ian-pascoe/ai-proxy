@@ -1,0 +1,70 @@
+[
+  {
+    "name": "request: string input, sampling and cache fields stripped, system role to developer",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"Say hi","temperature":0.7,"top_p":0.9,"max_output_tokens":100,"user":"u1","truncation":"auto","prompt_cache_retention":"24h","prompt_cache_options":{"x":1},"context_management":[{"type":"compaction","compact_threshold":1000}],"service_tier":"fast","store":true,"parallel_tool_calls":false,"include":["web_search_call.action.sources"],"stream":false}
+  },
+  {
+    "name": "request: array input with breakpoints, web_search_preview tools and blank function arguments",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"gpt-5.4","instructions":"Be nice","service_tier":"ultrafast","input":[{"type":"message","role":"system","content":[{"type":"input_text","text":"sys","prompt_cache_breakpoint":{"type":"ephemeral"}}],"prompt_cache_breakpoint":true},{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":"data:image/png;base64,AAAA"}]},{"type":"function_call","call_id":"c1","name":"now","arguments":"  "},{"type":"function_call_output","call_id":"c1","output":[{"type":"input_text","text":"t","prompt_cache_breakpoint":{}}]},{"type":"function_call","call_id":"c2","name":"x","arguments":"not json"},"stray"],"tools":[{"type":"web_search_preview","search_context_size":"low"},{"type":"web_search_preview_2025_03_11"},{"type":"function","name":"now","parameters":{"type":"object"}}],"tool_choice":{"type":"web_search_preview"},"reasoning":{"effort":"low","summary":"auto"},"include":["reasoning.encrypted_content"]}
+  },
+  {
+    "name": "request: tool_choice allowed tools list and bogus service tier",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":[],"service_tier":5,"tool_choice":{"type":"allowed_tools","tools":[{"type":"web_search_preview"},{"type":"function","name":"f"}]}}
+  },
+  {
+    "name": "stream: response.created/in_progress without model get the request model; other lines pass through",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"team/gpt-5.4","input":"hi","stream":true},
+    "responseLines": [
+      "event: response.created",
+      "data: {\"type\": \"response.created\", \"response\": {\"id\": \"r1\", \"status\": \"in_progress\"}}",
+      "",
+      "data: {\"type\": \"response.in_progress\", \"response\": {\"id\": \"r1\", \"model\": \"gpt-5.4\"}}",
+      ": keepalive",
+      "data: {\"type\": \"response.output_text.delta\", \"delta\": \"x\"}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: terminal event unwraps response",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseBody": {"type":"response.completed","sequence_number":40,"response":{"id":"resp_0a1b2c","object":"response","created_at":1767225600,"status":"completed","model":"gpt-5.4","output":[{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Hi!","annotations":[]}]}],"usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":64,"cache_write_tokens":8},"output_tokens":37,"output_tokens_details":{"reasoning_tokens":12},"total_tokens":157}}}
+  },
+  {
+    "name": "non-stream: compact response body is returned unchanged",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseBody": {"id":"resp_c","object":"response.compaction","output":[{"type":"message","role":"user","content":[{"type":"input_text","text":"x"}]},{"type":"compaction","id":"cmp_1","encrypted_content":"enc"}],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4}}
+  },
+  {
+    "name": "non-stream: non-terminal event yields nothing",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseBody": {"type":"response.created","sequence_number":0,"response":{"id":"resp_0a1b2c","object":"response","created_at":1767225600,"model":"gpt-5.4","status":"in_progress"}}
+  }
+]

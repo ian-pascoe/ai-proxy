@@ -83,7 +83,7 @@ const USAGE_BUCKET_PATHS = [
   "output_tokens_details.reasoning_tokens"
 ] as const
 
-const hasUsageFields = (node: Json | undefined): node is Json =>
+export const hasUsageFields = (node: Json | undefined): node is Json =>
   isJsonObject(node) &&
   (get(node, "total_tokens") !== undefined || USAGE_BUCKET_PATHS.some((path) => get(node, path) !== undefined))
 

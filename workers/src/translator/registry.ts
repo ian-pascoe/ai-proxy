@@ -22,7 +22,9 @@ export class TranslationError extends Error {
   override readonly name = "TranslationError"
   constructor(
     message: string,
-    readonly status = 400
+    readonly status = 400,
+    /** The translated body produced alongside the refusal (Go returns both); never to be sent upstream. */
+    readonly body?: Json
   ) {
     super(message)
   }
@@ -111,7 +113,9 @@ export class TranslatorRegistry {
         try {
           return { ...envelope, body: request(envelope.model, envelope.body, envelope.stream) }
         } catch (error) {
-          if (error instanceof TranslationError) return { ...envelope, error }
+          if (error instanceof TranslationError) {
+            return { ...envelope, ...(error.body !== undefined ? { body: error.body } : {}), error }
+          }
           throw error
         }
       })

@@ -94,6 +94,8 @@ export interface PipelineOptions {
   readonly thinking?: Layer.Layer<Thinking>
   /** Defaults to the config-only static picker (no Durable Object). */
   readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>
+  /** Defaults to the config-backed model lookup. */
+  readonly modelProviders?: Layer.Layer<ModelProviders, never, ConfigReader>
 }
 
 export interface PipelineHarness {
@@ -113,7 +115,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
     usageSink: UsageSink.memory(records),
     credentialPicker: options.credentialPicker ?? StaticCredentialPickerLayer,
     // Tests configure everything through the static config: no registry, no refresh.
-    modelProviders: ModelProviders.configLayer,
+    modelProviders: options.modelProviders ?? ModelProviders.configLayer,
     modelCapabilities: ModelCapabilities.configLayer,
     credentialRefresher: CredentialRefresher.none,
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})

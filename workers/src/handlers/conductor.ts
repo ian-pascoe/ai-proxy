@@ -91,6 +91,8 @@ export interface Prepared {
   readonly endpoint: string
   readonly session: PickSession | undefined
   readonly pinnedId?: string | undefined
+  /** Skip free-plan Codex credentials. */
+  readonly disallowFreeAuth?: boolean
   /** Token counting (Go `ExecuteCount`): no passive quota snapshot, generic endpoint 404s are availability-neutral. */
   readonly countTokens?: boolean
 }
@@ -284,7 +286,8 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               retryRound: round,
               requestRetry: settings.requestRetry,
               ...(prepared.session === undefined ? {} : { session: prepared.session }),
-              ...(prepared.pinnedId === undefined ? {} : { pinnedId: prepared.pinnedId })
+              ...(prepared.pinnedId === undefined ? {} : { pinnedId: prepared.pinnedId }),
+              ...(prepared.disallowFreeAuth === true ? { disallowFreeAuth: true } : {})
             })
           )
           if (pick._tag === "Failure") {
@@ -360,7 +363,8 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           attempted: outcome.attempted,
           ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
           maxWaitMs: settings.maxWaitMs,
-          ...(prepared.pinnedId === undefined ? {} : { pinnedAuthId: prepared.pinnedId })
+          ...(prepared.pinnedId === undefined ? {} : { pinnedAuthId: prepared.pinnedId }),
+          ...(prepared.disallowFreeAuth === true ? { disallowFreeCodex: true } : {})
         })
         return plan
       })

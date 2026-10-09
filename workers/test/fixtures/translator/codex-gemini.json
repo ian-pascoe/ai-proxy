@@ -1,0 +1,805 @@
+[
+ {
+  "name": "request: system instruction, multimodal parts, function calls/responses and tools",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": true,
+  "request": {
+   "systemInstruction": {
+    "parts": [
+     {
+      "text": "Be helpful."
+     },
+     {
+      "text": "hidden",
+      "thought": true
+     },
+     {
+      "text": "Use \u003ctools\u003e wisely \u0026 carefully"
+     }
+    ]
+   },
+   "service_tier": "fast",
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "What is the weather in Paris and Rome? See picture."
+      },
+      {
+       "inlineData": {
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+       }
+      },
+      {
+       "inline_data": {
+        "mime_type": "audio/wav",
+        "data": "UklGRg=="
+       }
+      },
+      {
+       "inlineData": {
+        "mimeType": "application/pdf",
+        "data": "JVBERi0="
+       }
+      },
+      {
+       "fileData": {
+        "mimeType": "image/jpeg",
+        "fileUri": "https://example.com/a.jpg"
+       }
+      },
+      {
+       "file_data": {
+        "mime_type": "video/mp4",
+        "file_uri": "gs://bucket/v.mp4"
+       }
+      },
+      {
+       "fileData": {
+        "mimeType": "audio/mp3",
+        "fileUri": "gs://bucket/a.mp3"
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "thinking...",
+       "thought": true
+      },
+      {
+       "text": "Checking."
+      },
+      {
+       "functionCall": {
+        "name": "get_weather",
+        "args": {
+         "city": "Paris"
+        }
+       }
+      },
+      {
+       "functionCall": {
+        "name": "get_weather",
+        "args": {
+         "city": "Rome"
+        },
+        "id": "gw_2"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "get_weather",
+        "response": {
+         "result": "18C"
+        }
+       }
+      },
+      {
+       "functionResponse": {
+        "name": "get_weather",
+        "id": "gw_2",
+        "response": {
+         "temp": 25
+        }
+       }
+      },
+      {
+       "functionResponse": {
+        "name": "orphan",
+        "response": {
+         "result": "x"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "Paris 18C, Rome 25C."
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ],
+   "toolConfig": {
+    "functionCallingConfig": {
+     "mode": "ANY",
+     "allowedFunctionNames": [
+      "get_weather"
+     ]
+    }
+   },
+   "generationConfig": {
+    "thinkingConfig": {
+     "thinkingBudget": 8192,
+     "includeThoughts": true
+    },
+    "temperature": 0.3,
+    "maxOutputTokens": 100
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"developer\",\"content\":[{\"type\":\"input_text\",\"text\":\"Be helpful.\"},{\"type\":\"input_text\",\"text\":\"Use \u003ctools\u003e wisely \u0026 carefully\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"What is the weather in Paris and Rome? See picture.\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_audio\",\"input_audio\":{\"data\":\"UklGRg==\",\"format\":\"wav\"}}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_file\",\"file_data\":\"JVBERi0=\",\"filename\":\"document.pdf\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://example.com/a.jpg\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_file\",\"file_url\":\"gs://bucket/v.mp4\",\"filename\":\"video\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"File: gs://bucket/a.mp3 (Type: audio/mp3)\"}]},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Checking.\"}]},{\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"call_id\":\"call_gemini_0000000000000001\"},{\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Rome\\\"}\",\"call_id\":\"gw_2\"},{\"type\":\"function_call_output\",\"output\":\"18C\",\"call_id\":\"call_gemini_0000000000000001\"},{\"type\":\"function_call_output\",\"output\":\"{\\\"temp\\\":25}\",\"call_id\":\"gw_2\"},{\"type\":\"function_call_output\",\"output\":\"x\",\"call_id\":\"call_gemini_0000000000000002\"},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Paris 18C, Rome 25C.\"}]}],\"service_tier\":\"priority\",\"tool_choice\":{\"type\":\"function\",\"name\":\"get_weather\"},\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\",\"summary\":\"auto\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "request: thinking level variants and tool config modes",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ],
+   "toolConfig": {
+    "functionCallingConfig": {
+     "mode": "NONE"
+    }
+   },
+   "generationConfig": {
+    "thinking_level": "HIGH"
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tool_choice\":\"none\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"high\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "request: snake case thinking config and AUTO/ANY with several names",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "system_instruction": {
+    "parts": [
+     {
+      "text": "sys"
+     }
+    ]
+   },
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ],
+   "toolConfig": {
+    "functionCallingConfig": {
+     "mode": "ANY",
+     "allowedFunctionNames": [
+      "a",
+      "b"
+     ]
+    }
+   },
+   "generationConfig": {
+    "thinkingConfig": {
+     "thinking_level": "Low"
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"developer\",\"content\":[{\"type\":\"input_text\",\"text\":\"sys\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tool_choice\":\"required\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"low\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "request: AUTO mode and thinking budget zero",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "googleSearch": {}
+    }
+   ],
+   "toolConfig": {
+    "functionCallingConfig": {
+     "mode": "AUTO"
+    }
+   },
+   "generationConfig": {
+    "thinking_config": {
+     "thinking_budget": 0
+    },
+    "thinkingConfig": {
+     "thinking_budget": 0
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tool_choice\":\"auto\",\"tools\":[],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"none\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "request: empty contents",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": []
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "stream: text, reasoning and usage",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": true,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_g1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+   "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"Thinking \u003cx\u003e\"}",
+   "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hel\"}",
+   "data: {\"type\":\"response.output_text.delta\",\"delta\":\"lo\"}",
+   "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}]}}",
+   "data: {\"type\":\"response.completed\",\"sequence_number\":40,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"status\":\"completed\",\"model\":\"gpt-5.4\",\"output\":[],\"usage\":{\"input_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":64,\"cache_write_tokens\":8},\"output_tokens\":37,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":157}}}",
+   "event: x"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "streamOutputs": [
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"Thinking \u003cx\u003e\"}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\",\"promptTokenCount\":120,\"candidatesTokenCount\":37,\"totalTokenCount\":157},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: message only in output_item.done, function call held until next chunk, images",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": true,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_g1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+   "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Fallback text\"},{\"type\":\"output_text\",\"text\":\"\"}]}}",
+   "data: {\"type\":\"response.image_generation_call.partial_image\",\"item_id\":\"ig\",\"partial_image_b64\":\"QUJD\",\"output_format\":\"jpeg\"}",
+   "data: {\"type\":\"response.image_generation_call.partial_image\",\"item_id\":\"ig\",\"partial_image_b64\":\"QUJD\"}",
+   "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"ig\",\"type\":\"image_generation_call\",\"result\":\"REVG\"}}",
+   "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Oslo\\\"}\"}}",
+   "data: {\"type\":\"response.incomplete\",\"sequence_number\":40,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"status\":\"incomplete\",\"model\":\"gpt-5.4\",\"output\":[],\"usage\":{\"input_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":64,\"cache_write_tokens\":8},\"output_tokens\":37,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":157},\"incomplete_details\":{\"reason\":\"content_filter\"}}}"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tool_choice\":\"auto\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "streamOutputs": [
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Fallback text\"}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"inlineData\":{\"data\":\"QUJD\",\"mimeType\":\"image/jpeg\"}}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"inlineData\":{\"data\":\"REVG\",\"mimeType\":\"image/png\"}}]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Oslo\"},\"id\":\"call_1\"}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}",
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"SAFETY\"}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\",\"promptTokenCount\":120,\"candidatesTokenCount\":37,\"totalTokenCount\":157},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ]
+  ]
+ },
+ {
+  "name": "stream: function call with shortened name and no call id",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": true,
+  "request": {
+   "contents": [],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_g1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+   "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_2\",\"type\":\"function_call\",\"name\":\"mcp__\",\"arguments\":\"[1]\"}}",
+   "data: {\"type\":\"response.completed\",\"sequence_number\":40,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"status\":\"completed\",\"model\":\"gpt-5.4\",\"output\":[],\"usage\":{\"input_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":64,\"cache_write_tokens\":8},\"output_tokens\":37,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":157}}}"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[],\"tool_choice\":\"auto\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "streamOutputs": [
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"mcp__\",\"args\":{},\"id\":\"fc_2\"}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\"},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"responseId\":\"resp_g1\"}",
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]}}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\",\"promptTokenCount\":120,\"candidatesTokenCount\":37,\"totalTokenCount\":157},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_g1\"}"
+   ]
+  ]
+ },
+ {
+  "name": "non-stream: reasoning, message, parallel function calls and image",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Get weather",
+       "parameters": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "OBJECT",
+        "properties": {
+         "city": {
+          "type": "STRING"
+         },
+         "units": {
+          "type": "STRING",
+          "enum": [
+           "c",
+           "f"
+          ]
+         }
+        },
+        "required": [
+         "city"
+        ]
+       }
+      },
+      {
+       "name": "mcp__srv__very_long_tool_name_very_long_tool_name_very_long_tool_name_very_long_tool_name_",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": true
+       }
+      },
+      {
+       "name": "plain"
+      }
+     ]
+    }
+   ]
+  },
+  "responseBody": {
+   "type": "response.completed",
+   "sequence_number": 40,
+   "response": {
+    "id": "resp_0a1b2c",
+    "object": "response",
+    "created_at": 1767225600,
+    "status": "completed",
+    "model": "gpt-5.4",
+    "output": [
+     {
+      "type": "reasoning",
+      "summary": [],
+      "content": "thinking raw"
+     },
+     {
+      "type": "message",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "Answer"
+       }
+      ]
+     },
+     {
+      "type": "function_call",
+      "call_id": "c1",
+      "name": "get_weather",
+      "arguments": "{\"city\":\"A\"}"
+     },
+     {
+      "type": "function_call",
+      "id": "fc_2",
+      "name": "plain",
+      "arguments": "not json"
+     },
+     {
+      "type": "image_generation_call",
+      "result": "QUJD",
+      "output_format": "webp"
+     },
+     {
+      "type": "message",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "More"
+       }
+      ]
+     }
+    ],
+    "usage": {
+     "input_tokens": 120,
+     "input_tokens_details": {
+      "cached_tokens": 64,
+      "cache_write_tokens": 8
+     },
+     "output_tokens": 37,
+     "output_tokens_details": {
+      "reasoning_tokens": 12
+     },
+     "total_tokens": 157
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tool_choice\":\"auto\",\"tools\":[{\"type\":\"function\",\"name\":\"get_weather\",\"description\":\"Get weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"type\":\"string\",\"enum\":[\"c\",\"f\"]}},\"required\":[\"city\"],\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"mcp__very_long_tool_name_very_long_tool_name_very_long_tool_name\",\"parameters\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"strict\":false},{\"type\":\"function\",\"name\":\"plain\",\"strict\":false}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "responseBodyText": "{\"type\":\"response.completed\",\"sequence_number\":40,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"status\":\"completed\",\"model\":\"gpt-5.4\",\"output\":[{\"type\":\"reasoning\",\"summary\":[],\"content\":\"thinking raw\"},{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Answer\"}]},{\"type\":\"function_call\",\"call_id\":\"c1\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\"},{\"type\":\"function_call\",\"id\":\"fc_2\",\"name\":\"plain\",\"arguments\":\"not json\"},{\"type\":\"image_generation_call\",\"result\":\"QUJD\",\"output_format\":\"webp\"},{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"More\"}]}],\"usage\":{\"input_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":64,\"cache_write_tokens\":8},\"output_tokens\":37,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":157}}}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thinking raw\",\"thought\":true},{\"text\":\"Answer\"},{\"functionCall\":{\"args\":{\"city\":\"A\"},\"name\":\"get_weather\",\"id\":\"c1\"}},{\"functionCall\":{\"args\":{},\"name\":\"plain\",\"id\":\"fc_2\"}},{\"inlineData\":{\"data\":\"QUJD\",\"mimeType\":\"image/webp\"}},{\"text\":\"More\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\",\"promptTokenCount\":120,\"candidatesTokenCount\":37,\"totalTokenCount\":157},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_0a1b2c\"}"
+ },
+ {
+  "name": "non-stream: incomplete max tokens",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": []
+  },
+  "responseBody": {
+   "type": "response.incomplete",
+   "sequence_number": 40,
+   "response": {
+    "id": "resp_0a1b2c",
+    "object": "response",
+    "created_at": 1767225600,
+    "status": "incomplete",
+    "model": "gpt-5.4",
+    "output": [],
+    "usage": {
+     "input_tokens": 120,
+     "input_tokens_details": {
+      "cached_tokens": 64,
+      "cache_write_tokens": 8
+     },
+     "output_tokens": 37,
+     "output_tokens_details": {
+      "reasoning_tokens": 12
+     },
+     "total_tokens": 157
+    },
+    "incomplete_details": {
+     "reason": "max_output_tokens"
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "responseBodyText": "{\"type\":\"response.incomplete\",\"sequence_number\":40,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"status\":\"incomplete\",\"model\":\"gpt-5.4\",\"output\":[],\"usage\":{\"input_tokens\":120,\"input_tokens_details\":{\"cached_tokens\":64,\"cache_write_tokens\":8},\"output_tokens\":37,\"output_tokens_details\":{\"reasoning_tokens\":12},\"total_tokens\":157},\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"trafficType\":\"PROVISIONED_THROUGHPUT\",\"promptTokenCount\":120,\"candidatesTokenCount\":37,\"totalTokenCount\":157},\"modelVersion\":\"gpt-5.4\",\"createTime\":\"2026-01-01T00:00:00Z\",\"responseId\":\"resp_0a1b2c\"}"
+ },
+ {
+  "name": "non-stream: non-terminal event",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": []
+  },
+  "responseBody": {
+   "type": "response.created",
+   "response": {
+    "id": "resp_g1",
+    "created_at": 1767225600,
+    "model": "gpt-5.4"
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "responseBodyText": "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_g1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+  "nonStreamOutput": ""
+ },
+ {
+  "name": "token count: Gemini totalTokens JSON",
+  "from": "gemini",
+  "to": "codex",
+  "model": "gpt-5.4",
+  "stream": false,
+  "request": {
+   "contents": []
+  },
+  "tokenCount": 77,
+  "tokenCountUsage": {
+   "response": {
+    "usage": {
+     "input_tokens": 77
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5.4\",\"instructions\":\"\",\"input\":[],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}",
+  "tokenCountOutput": "{\"totalTokens\":77,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":77}]}"
+ }
+]

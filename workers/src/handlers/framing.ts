@@ -7,16 +7,11 @@
  * sdk/api/handlers/openai_responses_handlers.go (terminal events, `[DONE]`-less close), stream_forwarder.go
  * (`: keep-alive`). A framer is stateful and must be created per request.
  *
- * The Responses framer covers termination and errors; the full frame assembler (partial-frame buffering, private
- * event filtering, `response.output` repair, Codex-client detection) belongs to the Responses slice.
+ * The Responses framer (partial-frame assembler, private event filtering, `response.output` repair) is in
+ * `responses/framer.ts`.
  */
 import { ExecutionError } from "../executor/errors.ts"
-import {
-  claudeErrorBody,
-  openAIErrorBody,
-  responsesStreamErrorChunk,
-  responsesStreamFailedChunk
-} from "../http/errors.ts"
+import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts"
 import { SSE_KEEP_ALIVE, sseData, sseEvent } from "../http/sse.ts"
 import { statusText } from "../http/status.ts"
 import { get, isJsonArray, tryParseJson } from "../json/index.ts"
@@ -120,58 +115,5 @@ export const interactionsFramer = (): StreamFramer => ({
   keepAlive: SSE_KEEP_ALIVE
 })
 
-const RESPONSES_TERMINAL_EVENTS = new Set([
-  "response.completed",
-  "response.incomplete",
-  "response.failed",
-  "response.done",
-  "response.error",
-  "error"
-])
-
-/**
- * OpenAI Responses: chunks are complete `event:`/`data:` frames. Errors become `event: error` (or `response.failed`
- * for Codex clients) with a sequence number; the stream ends with a bare newline and no `[DONE]`.
- */
-export const responsesFramer = (options: { readonly codexClient: boolean }): StreamFramer => {
-  let dataFrames = 0
-  let lastEvent = ""
-  let terminal = false
-  return {
-    chunk: (payload) => {
-      for (const line of payload.split("\n")) {
-        const trimmed = line.trim()
-        if (trimmed.startsWith("event:")) lastEvent = trimmed.slice(6).trim()
-        if (trimmed.startsWith("data:")) {
-          dataFrames++
-          const type = get(tryParseJson(trimmed.slice(5).trim()), "type")
-          if (typeof type === "string") lastEvent = type
-        }
-      }
-      if (RESPONSES_TERMINAL_EVENTS.has(lastEvent)) terminal = true
-      return payload
-    },
-    terminalError: (error) => {
-      const status = statusOf(error)
-      const text = errorText(error, status)
-      // The error frame is the next data frame of the stream.
-      const sequence = dataFrames
-      return options.codexClient
-        ? sseEvent("response.failed", responsesStreamFailedChunk(status, text, sequence))
-        : sseEvent("error", responsesStreamErrorChunk(status, text, sequence))
-    },
-    closeError: () =>
-      terminal
-        ? undefined
-        : new ExecutionError({
-            status: 502,
-            message:
-              dataFrames === 0
-                ? "upstream stream closed before first payload"
-                : `upstream stream closed before a terminal event (last event: ${lastEvent})`
-          }),
-    done: () => "\n",
-    emptyBody: "\n",
-    keepAlive: SSE_KEEP_ALIVE
-  }
-}
+/** OpenAI Responses: the full frame assembler lives in `responses/framer.ts`. */
+export { responsesFramer } from "./responses/framer.ts"

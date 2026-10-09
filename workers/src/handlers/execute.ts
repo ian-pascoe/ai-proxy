@@ -40,6 +40,8 @@ export interface ExecutionInput {
   readonly request: HttpServerRequest.HttpServerRequest
   readonly allowImageModel?: boolean
   readonly allowSpeechModel?: boolean
+  /** Skip free-plan Codex credentials (image tools). */
+  readonly disallowFreeAuth?: boolean
 }
 
 export interface ExecutionOutput {
@@ -144,7 +146,8 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
             id: sessionInfo.sessionId,
             ...(sessionInfo.parentSessionId === undefined ? {} : { parentId: sessionInfo.parentSessionId }),
             ...(sessionInfo.isFork ? { isFork: true } : {})
-          }
+          },
+    ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {})
   } satisfies Prepared
 })
 

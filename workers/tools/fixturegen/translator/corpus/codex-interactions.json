@@ -1,0 +1,105 @@
+[
+  {
+    "name": "request: string input with system instruction, thinking config and a function declaration",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"gpt-5.4","input":"What's 2+2?","system_instruction":"Be terse.","stream":true,"generation_config":{"thinking_level":"High","thinking_summaries":"auto","temperature":0.5},"tools":[{"function_declarations":[{"name":"calc","description":"Calculator","parameters":{"$schema":"x","type":"object","properties":{"expr":{"type":"string"}}}}]}],"service_tier":"fast","store":false}
+  },
+  {
+    "name": "request: steps with multimodal user content, function call/result and thought",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","systemInstruction":{"parts":[{"text":"line one"},{"text":""},{"text":"line two"}]},"generationConfig":{"thinkingConfig":{"thinkingBudget":24000,"includeThoughts":true}},"input":[{"type":"user_input","content":[{"type":"text","text":"Describe"},{"type":"image","mime_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="},{"type":"image","uri":"https://example.com/a.png"},{"type":"audio","mime_type":"audio/ogg","data":"AAAA"},{"type":"document","mime_type":"application/pdf","data":"JVBERi0="},{"type":"video","file_uri":"gs://b/v.mp4","mime_type":"video/mp4"},{"inlineData":{"mimeType":"text/csv","data":"YSxi"}},{"fileData":{"mimeType":"image/jpeg","fileUri":"gs://b/i.jpg"}}]},{"type":"thought","content":[{"type":"text","text":"pondering"}],"id":"th_1"},{"type":"function_call","name":"calc","id":"call_1","arguments":{"expr":"2+2"}},{"type":"function_result","call_id":"call_1","result":{"value":4}},{"type":"model_output","content":[{"type":"text","text":"It is 4."}]},{"role":"user","content":"thanks"},{"type":"system","content":"late system note"}],"tools":[{"name":"calc","parameters_json_schema":{"type":"object"}},{"functionDeclarations":[{"name":"mcp__x__yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"}]}],"tool_choice":"required","parallel_tool_calls":false,"metadata":{"a":1},"include":["reasoning.encrypted_content"]}
+  },
+  {
+    "name": "request: nested steps object and unsupported-only user turn is refused",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":{"role":"user","steps":[{"type":"user_input","content":[{"type":"image","mime_type":"image/png"}]}]}}
+  },
+  {
+    "name": "request: non-array tools pass through and generation_config reasoning is copied",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":[{"type":"user_input","content":"hi"}],"generation_config":{"reasoning":{"effort":"low"},"include_thoughts":false},"tools":{"type":"web_search"}}
+  },
+  {
+    "name": "stream: text with reasoning, function call and image output (no terminal event)",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"gpt-5.4","input":"hi","stream":true},
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_i1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+      "data: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"id\":\"resp_0a1b2c\",\"object\":\"response\",\"created_at\":1767225600,\"model\":\"gpt-5.4\",\"status\":\"in_progress\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\"}}",
+      "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"Thinking\"}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Thinking.\"},{\"text\":\"More\"}]}}",
+      "data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello \"}",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"world\"}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello world\"}]}}",
+      "data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"function_call\",\"call_id\":\"call_9\",\"name\":\"calc\"}}",
+      "data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"expr\\\":\"}",
+      "data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"1+1\\\"}\"}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\",\"call_id\":\"call_9\",\"name\":\"calc\",\"arguments\":\"{\\\"expr\\\":\\\"1+1\\\"}\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"image_generation_call\",\"result\":\"QUJD\",\"output_format\":\"jpg\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"unknown\"}}",
+      "data: {\"type\":\"response.unknown\"}",
+      "",
+      "data: "
+    ]
+  },
+  {
+    "name": "stream: output_item.done only (no deltas) emits full steps",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_i1\",\"created_at\":1767225600,\"model\":\"gpt-5.4\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Direct\"},{\"type\":\"output_text\",\"text\":\"\"}]}}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"content\":\"raw reasoning\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_1\",\"type\":\"tool_call\",\"name\":\"search\",\"arguments\":\"{}\"}}"
+    ]
+  },
+  {
+    "name": "stream: events without response.created still start the interaction",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": true,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseLines": [
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"x\",\"response\":{\"id\":\"resp_late\",\"model\":\"gpt-5.4-mini\",\"created_at\":1767225601}}"
+    ]
+  },
+  {
+    "name": "non-stream: message, reasoning, function call and image steps with usage",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseBody": {"type":"response.completed","sequence_number":40,"response":{"id":"resp_0a1b2c","object":"response","created_at":1767225600,"status":"completed","model":"gpt-5.4","output":[{"type":"reasoning","summary":[{"type":"summary_text","text":"Because"}]},{"type":"message","content":[{"type":"output_text","text":"Answer"}]},{"type":"function_call","call_id":"c1","name":"calc","arguments":"{\"expr\":\"1\"}"},{"type":"function_call","id":"f2","name":"calc","arguments":"not-an-object"},{"type":"image_generation_call","result":"QUJD"},{"type":"message","content":[]}],"usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":64,"cache_write_tokens":8},"output_tokens":37,"output_tokens_details":{"reasoning_tokens":12},"total_tokens":157}}}
+  },
+  {
+    "name": "non-stream: bare response object with chat-style usage",
+    "from": "interactions",
+    "to": "codex",
+    "model": "gpt-5.4",
+    "stream": false,
+    "request": {"model":"gpt-5.4","input":"hi"},
+    "responseBody": {"id":"resp_x","status":"incomplete","output":[],"usage":{"prompt_tokens":5,"completion_tokens":6,"reasoning_tokens":2,"cached_tokens":1}}
+  }
+]

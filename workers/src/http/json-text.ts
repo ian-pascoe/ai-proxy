@@ -33,7 +33,7 @@ export const htmlEscapeJson = (json: string): string =>
 /** `json.Marshal` of a struct-like value: field order as given, HTML-safe escaping. */
 export const goMarshal = (value: unknown): string => htmlEscapeJson(JSON.stringify(value))
 
-const sortKeys = (value: unknown): unknown => {
+export const sortKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(sortKeys)
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {}

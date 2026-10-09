@@ -18,7 +18,10 @@ import { Thinking } from "../executor/thinking.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
 import { ModelProviders } from "./model-providers.ts"
+import { AlphaSearchRoutes } from "./codex/alpha-search.ts"
+import { ImagesRoutes } from "./openai/images.ts"
 import { OpenAIRoutes } from "./openai/routes.ts"
+import { ResponsesRoutes } from "./responses/routes.ts"
 
 export interface ProxyLayerOptions {
   readonly configReader?: Layer.Layer<ConfigReader>
@@ -36,7 +39,7 @@ export interface ProxyLayerOptions {
 }
 
 /** All proxy route layers (provider slices add theirs here). */
-export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes)
+export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes, ResponsesRoutes, ImagesRoutes, AlphaSearchRoutes)
 
 /**
  * Proxy routes with their services provided. Handlers still read `AccessPrincipal`: wrap the result with

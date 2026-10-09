@@ -13,7 +13,6 @@
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { applyPayloadRules } from "../../config/payload/index.ts"
 import { get, type Json, set, tryParseJson } from "../../json/index.ts"
 import { splitLines } from "../../http/sse.ts"
 import { builtinTranslators } from "../../translator/builtin.ts"
@@ -22,6 +21,7 @@ import { makeTranslationState, type ResponseContext, type TranslatorRegistry } f
 import { parseOpenAIStreamUsage, parseOpenAIUsage, responseModelOf, ssePayloadObject } from "../../usage/record.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
+import { finalizePayload } from "../helps/payload.ts"
 import {
   normalizeOpenAIMaxTokens,
   setBoolIfDifferent,
@@ -180,8 +180,9 @@ export const makeOpenAICompatExecutor = (
     context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
 
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
-    body = applyPayloadRules(
+    body = finalizePayload(
       context.config,
+      provider,
       {
         model: baseModel,
         requestedModel,
@@ -192,7 +193,7 @@ export const makeOpenAICompatExecutor = (
         original: original.body
       },
       body
-    ).payload
+    )
 
     const headers: Record<string, string> = { "content-type": "application/json" }
     if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`

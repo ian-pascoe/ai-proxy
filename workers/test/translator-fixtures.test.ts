@@ -1,6 +1,7 @@
 // Golden translator fixtures generated from the Go registry by `go run ./workers/tools/fixturegen/translator`.
 // Every file under test/fixtures/translator is picked up automatically; provider slices only add corpus files.
 import { describe, expect, it } from "vitest"
+import { summaryHooks as thinkingSummaryHooks } from "../src/executor/thinking.ts"
 import type { Json } from "../src/json/index.ts"
 import { builtinTranslators } from "../src/translator/builtin.ts"
 import { makeTranslationState } from "../src/translator/registry.ts"
@@ -28,7 +29,8 @@ interface FixtureCase {
  * Capabilities implemented on the TypeScript side. Cases that need anything else are skipped (e.g. the thinking
  * slice adds "thinking-summary" once the summary hooks are wired into the registry).
  */
-const SUPPORTED_NEEDS = new Set<string>()
+const SUPPORTED_NEEDS = new Set<string>(["thinking-summary"])
+const summaryHooks = thinkingSummaryHooks
 
 const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>("./fixtures/translator/*.json", {
   eager: true
@@ -61,12 +63,17 @@ describe("translator golden fixtures", () => {
         const missing = (c.needs ?? []).filter((need) => !SUPPORTED_NEEDS.has(need))
         const test = missing.length > 0 ? it.skip : it
         test(missing.length > 0 ? `${c.name} (needs ${missing.join(", ")})` : c.name, () => {
-          const envelope = builtinTranslators.translateRequest(c.from, c.to, {
-            format: c.from,
-            model: c.model,
-            stream: c.stream,
-            body: structuredClone(c.request)
-          })
+          const envelope = builtinTranslators.translateRequest(
+            c.from,
+            c.to,
+            {
+              format: c.from,
+              model: c.model,
+              stream: c.stream,
+              body: structuredClone(c.request)
+            },
+            summaryHooks
+          )
           expect(envelope.error?.message).toBe(c.requestError)
           expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest))
 

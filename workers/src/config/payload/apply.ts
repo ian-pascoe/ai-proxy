@@ -9,8 +9,8 @@
  * Executors must call {@link applyPayloadRules} exactly once per attempt, on a body rebuilt from scratch, after all
  * built-in translation/normalisation, and must not mutate the business payload afterwards (see AGENTS.md).
  *
- * Not ported here: the Codex tool-schema integer normalisation for Codex user agents
- * (`NormalizeCodexToolIntegerTypes`), which belongs to the Codex executor slice.
+ * The Codex tool-schema integer normalisation for Codex user agents (`NormalizeCodexToolIntegerTypes`) runs just
+ * before this function in `executor/helps/payload.ts` (`finalizePayload`), which executors call instead.
  */
 import {
   asString,
