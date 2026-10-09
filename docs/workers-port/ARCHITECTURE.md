@@ -431,7 +431,7 @@ Deviations from Go: models are registered under the credential's **executor key*
 `PickRequest.providers` is matched against; the quota window starts at the model state's observation time; Go's
 `GetFirstAvailableModel` sorts with an inconsistent comparator for models without `created`, the port is deterministic
 (newest, then id); credential/catalog edits show up within the 5 s snapshot TTL (1 min for KV catalogs). Not ported: plugin
-models, the Antigravity per-account `fetchAvailableModels` list (static catalog is used until the Antigravity slice), and the
+models, and the
 Codex client catalog (`GET /v1/models?client_version=...`, `internal/client/codex/models`), which answers 501 until the Codex
 slice implements `ModelsOptions.codexClient` (the validated catalog is already refreshed into KV and exposed as
 `ModelCatalogs.codexClient`).
@@ -475,8 +475,8 @@ HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in
 Deviations from Go: credentials without a refresh token are never scheduled (Go loops every 30 s on an unchanged auth);
 Codex keeps `email`/`plan_type` when the new `id_token` lacks them; a cached xAI `token_endpoint` must be an https x.ai
 URL; Kimi/Claude device/uTLS headers are constants/subsets; `META_MINT_URL` and Devin's metadata refresh (protobuf quota
-probe, never scheduled) are not ported; Antigravity project discovery / credits probe and Claude device-id/profile
-preparation belong to their executor slices (use `patchCredentialMetadata`).
+probe, never scheduled) are not ported; Claude device-id/profile preparation belongs to its executor slice (use
+`patchCredentialMetadata`); Antigravity project discovery and the credits probe run in the Antigravity executor.
 
 ## Claude provider (`src/executor/claude/`, `src/translator/claude/`)
 
@@ -546,7 +546,7 @@ Deviations from Go (all deliberate, documented in code headers):
 - **Deviations from Go**: `TranslationError.body` returns the partially translated body for fixture parity only;
   `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
-  `PrepareAntigravityInteractions` is not ported (no Antigravity provider yet); a Vertex Imagen request without a prompt
+  `PrepareAntigravityInteractions` is not ported (see _Antigravity provider_); a Vertex Imagen request without a prompt
   answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
 
 ## Claude clients on Interactions providers (`src/translator/interactions/`)
@@ -762,6 +762,64 @@ schemas or `1.0` numbers sent by a client count slightly differently); Unicode p
 Go's `unicode` package, so characters assigned after the older table can be classified differently; a stream estimate error is
 silent (Go logs a warning).
 
+## Antigravity provider (`src/executor/antigravity/`, `src/translator/antigravity/`, `src/signature/`)
+
+Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `internal/signature`, `internal/cache/signature_cache.go`,
+`internal/misc/antigravity_version.go` and `sdk/cliproxy/antigravity_models.go`.
+
+- **Translators** (`translator/antigravity/{gemini,openai,claude}/`, registered by `antigravity/register.ts`): gemini, openai,
+  openai-response (a request *envelope* transform: native web search depends on the resolved model info) and claude -> antigravity,
+  each with request, stream, non-stream (and token count) transforms, all golden-tested against Go (`corpus/antigravity-*.json`,
+  `test/translator-fixtures{,-ids}.test.ts`). `ResponseContext.alt` carries the Gemini `alt` option the Go handlers put in the context
+  (the Gemini response translator emits nothing without it; streams always use `""`). Claude clients get Gemini signatures as
+  *carrier* thinking blocks (`cpa-gemini-carrier-v1:<direction>:<kind>:<b64>`, `claude/carrier.ts`), Claude models keep R/Q-form
+  signatures, and `web_search_*` tools map to native Google Search (`claude/web-search.ts`, request building and grounding -> `web_search_tool_result`
+  blocks; the capability comes from the registry record, `supportsWebSearch`).
+- **Signatures** (`src/signature/`): `claude.ts` ports the E/R/Q/CAIS validation including the strict protobuf-tree mode
+  (`signature-bypass-strict`, default off) and `compatibleAntigravityClaudeThinkingSignature`; `provider.ts` the provider detection and
+  `decideSignatureCompatibility` decision table for every target (claude, gemini, gpt, kimi, swe, grok); the Gemini replay sanitiser already
+  lived in `translator/gemini/common/signature.ts`. `go run ./workers/tools/fixturegen/signature` drives the real Go package over a corpus of
+  synthetic envelopes (`test/fixtures/signature.json`, `test/signature-fixtures.test.ts`).
+- **Signature cache** (`cache.ts`, `store.ts`): translators are synchronous, so the cache they read is a bounded per-isolate map with the Go
+  semantics (3 h sliding TTL, 50 char minimum, gpt/claude/gemini buckets, Gemini sentinel on a miss). It is installed around the synchronous
+  translator calls with `withSignatureContext` (like `withModelInfoLookup`); persistence is the `CACHE` KV namespace behind the
+  `SignatureStore` interface (`sig:<group>:<sha256(text)[:16]>`, `expirationTtl` 3 h): the executor *prefetches* the signatures a Claude request
+  needs (thinking blocks without a usable signature) before translating and *flushes* the writes recorded by the response translator through
+  `waitUntil`. Every store failure is swallowed. `antigravity.signature-cache-enabled` / `signature-bypass-strict` switch cache and bypass mode.
+- **Executor** (`executor/executor.ts`): per attempt `validate Claude signatures -> prefetch -> translate -> thinking -> sensitive words ->
+  Gemini signature sanitising (+ function-response role normalisation) -> credits flag -> boundary user turns -> envelope (project, requestType,
+  requestId, sessionId) -> model shaping (maxOutputTokens cap/removal, schema cleaning at schema locations only, Claude `VALIDATED`) ->
+  payload rules (root `request`, always last) -> fetch`. Daily endpoint unless `base_url` is set (no cross-tier fallback), header whitelist
+  (`Content-Type`, `Authorization`, short `User-Agent`, `header:*` attributes). Claude, `gemini-3-pro` and `gemini-3.1-flash-image` models
+  stream upstream and the SSE is merged for non-stream callers (`stream.ts`); streams filter usage (non-terminal usage becomes
+  `cpaUsageMetadata`, the stop-chunk bookkeeping is per stream), join JSON split over several lines, map in-stream `error` objects to status
+  errors and synthesise the terminal event only after a clean EOF. `countTokens` posts the bare request. The conductor refreshes the token
+  (`needsPreparation`/401 loop); a credential without `project_id` is completed through `loadCodeAssist`/`onboardUser` (the OAuth flow code) and
+  persisted with `patchCredentialMetadata`.
+- **429 handling** (`errors.ts`, `state.ts`): the Go decision table (`decideAntigravity429`) and `ParseRetryDelay`; a rate limit with a delay
+  under 5 min records a per-(credential, model) short cooldown (KV `ag:sc:*`, memory without a binding) and later calls answer
+  `429 auth in short cooldown` without an upstream request; `retryAfterMs` of every 429 reaches the ControlPlane cooldown bookkeeping.
+- **Credits** (`credits.ts`, `handlers/conductor.ts`): `quota-exceeded.antigravity-credits` enables one extra *credits round* after the normal
+  rotation failed with 429/503/`auth_not_found|auth_unavailable|model_cooldown` for Claude models: the conductor picks Antigravity credentials
+  again with `PickRequest.ignoreCooldown` (cooling credentials stay selectable), skips credentials whose stored balance is known to be empty and
+  asks the executor for `enabledCreditTypes: ["GOOGLE_ONE_AI"]` through `ExecutorOptions.metadata.antigravityCredits`
+  (`attemptOptions`). `INSUFFICIENT_G1_CREDITS_BALANCE` marks the credential out of credits (KV `ag:credits:<id>`, 30 min); the balance probe
+  (`loadCodeAssist`, prod endpoint, 10 min lock, `waitUntil`) refreshes it. Deviation: candidates are not split into known-available/unknown
+  groups (the picker order is used and known-unavailable ones are skipped).
+- **Cron** (`scheduled.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
+  through a 60 s isolate cache) and `antigravity-models` probes `fetchAvailableModels` for every enabled credential (first endpoint only, global
+  user agent, failures keep the last good list and back off 2-30 min with jitter) into KV `ag:models:<id>`. The registry snapshot attaches
+  the stored entitlements to the credential's `ModelSource` (`antigravityHints`): registered models = static list intersected with the fetched
+  ids, `webSearchModelIds` set `supportsWebSearch`; credentials without a record serve the static list (like Go before the probe finishes).
+  The Go 1-minute scan is replaced by the 3 h cron (= the Go catalog TTL).
+
+Deviations from Go / not ported: the Gemini **reasoning-replay ledger** (`antigravity_reasoning_replay.go`: per-session signature/functionCall
+re-insertion; the translators' bypass sentinel, carriers and the cache cover Claude Code, and OpenAI/Responses clients get
+`skip_thought_signature_validator` on function calls) is a follow-up that needs the `SessionState` Durable Object; the **compaction capsule**
+(`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies;
+**interactions -> antigravity** (and the Interactions continuation sessions, `PrepareAntigravityInteractions`) are a follow-up; short-cooldown
+state and signature persistence are KV (eventually consistent), not the Go home KV.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot
@@ -811,8 +869,8 @@ Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_fil
   they only act on the `state` of a pending *callback* login of the route's provider and answer with a static page (no-store,
   never containing code/state/tokens/errors); everything else is a neutral 400.
 
-Deviations from Go: Antigravity's client version is the Go fallback (`2.9.1`, no Hub manifest polling) and project discovery runs
-inside the login (non-fatal); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
+Deviations from Go: the Antigravity login uses the Go fallback client version `2.9.1` (the executor reads the polled Hub version, see
+_Antigravity provider_) and project discovery runs inside the login (non-fatal; the executor repeats it when `project_id` is missing); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
 exchange errors include the (scrubbed) upstream status/body like Go but cap it at 512 chars; device-flow states carry a random
 suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
 Claude provider). Not ported: `POST /oauth/import?provider=vertex` (belongs to the Vertex/Gemini slice; service-account files can be
