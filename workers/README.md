@@ -47,8 +47,9 @@ See the architecture document. Currently implemented:
   `/v1/chat/completions` and `/v1/completions` (`openai/`), service wiring (`layer.ts`).
 - `src/usage/` — usage records, per-attempt `UsageReporter`, `UsageSink` (no-op until persistence lands).
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
-  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator`; the latter reads
-  `tools/fixturegen/translator/corpus/*.json`).
+  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator` (reads
+  `tools/fixturegen/translator/corpus/*.json`); `pnpm catalog:sync` runs `…/registry`, which also refreshes the
+  embedded model catalogs in `src/registry/catalog/`).
 
 ## Cloudflare Access
 

@@ -190,6 +190,51 @@ Core contracts every provider slice implements (Go references in each module hea
 - One attempt per request for now; retries across credentials, cooldown waits and bootstrap retries are added by
   the execution-retry slice around `runAttempt` in `handlers/execute.ts`.
 
+## Model registry and `/models` endpoints (`src/registry/`)
+
+Port of `internal/registry` plus the model registration in `sdk/cliproxy/service_models.go`. The Go registry is a mutable
+process-wide singleton that the service keeps in sync with credentials; on Workers it is a pure function of three inputs,
+evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySnapshot`):
+
+- **Credentials**: `ControlPlane.listModelSources()` returns a `ModelSource` per credential (provider, executor key, prefix,
+  plan tier, exclusions, per-account aliases, the `models:` of config entries, credential/model runtime state; no secrets).
+- **Config**: `ConfigReader` (global `oauth.model-alias`, `oauth.settings`, `routing.force-model-prefix`,
+  `upstream.claude.disable-cloaking-model-list`).
+- **Catalogs**: `models.json`, `codex_client_models.json`, `devin_models.json`. Embedded copies live in
+  `src/registry/catalog/` (checked in; `pnpm catalog:sync` = `go run ./workers/tools/fixturegen/registry` re-copies them
+  from `internal/registry/models/` and regenerates `builtins.json`, the hard-coded Codex/xAI/Devin definitions that Go
+  upserts into every catalog). The cron job (`src/scheduled.ts`, every 3 h like `ModelsRefreshInterval`) fetches the
+  official URLs (or the single `models.<x>` URL), validates them like Go (`validateModelsCatalog`,
+  `ValidateCodexClientModelsJSON`, `ValidateDevinModelsJSON`; 8 MiB limit), keeps the previous `meta` section when the new
+  catalog has none, and stores the text in KV `CACHE` (`registry/*.json`). Invalid/unreachable sources keep the last valid
+  catalog; a KV entry that fails validation falls back per catalog to the embedded copy. Isolates re-read KV every minute.
+- **Assembly** (`credential-models.ts`): `registerModelsForAuth` per credential: base list (provider catalog, Codex plan
+  tier, config `models:`), exclusions, OAuth aliases (`fork`, display names, per-credential first), `oauth.settings`
+  context length, prefixes (`force-model-prefix`). OpenAI-compatibility models keep duplicate aliases (model pools) and skip
+  exclusions/aliases like Go.
+- **Index** (`registry.ts`): provider counts, per-provider records ("last registered wins", credentials registered in id
+  order), the 5 min quota window and suspension rules of `modelRegistrationAvailability`, `GetModelProviders`,
+  `GetModelInfo`, `LookupModelInfo` (registry, then static catalogs), `GetFirstAvailableModel`, native web-search capability.
+  Records are camelCase `ModelInfo`s that satisfy `ThinkingModelInfo`; `snapshot.lookupModelInfo` is the `ModelInfoLookup`
+  for `applyThinking`, `snapshot.providersForModel` is `util.GetProviderName` (the pipeline's `ModelProviders`).
+- **Listings** (`listings.ts`, `models-api.ts`, `routes.ts`): `GET /v1/models[/{id}]` dispatches Grok shell UA -> `client_version`
+  query -> Anthropic (`Anthropic-Version` or `claude-cli` UA, with ID cloaking `claude-fable-5-dd-<reversed id>`) -> OpenAI;
+  detail routes pick the entry whose `id` equals the path remainder (ids may contain `/`). `GET /v1beta/models[/{model}]` is
+  the Gemini shape. Bodies are serialised like Go's `encoding/json` (sorted keys, `\u003c` escapes) so they are byte-identical
+  to the Go server's; lists are sorted by model id (Go's order is map iteration order).
+- Fixtures: `go run ./workers/tools/fixturegen/registry` drives the real Go handlers (`OpenAIModels`, `ClaudeModels`,
+  `GeminiModels`, `GeminiGetHandler`, `WriteModelListResponse` detail mode) against a real `registry.ModelRegistry` and records
+  bodies and registry queries (`test/fixtures/registry.json`).
+
+Deviations from Go: models are registered under the credential's **executor key** (`kimi.com` -> `kimi`), which is what
+`PickRequest.providers` is matched against; the quota window starts at the model state's observation time; Go's
+`GetFirstAvailableModel` sorts with an inconsistent comparator for models without `created`, the port is deterministic
+(newest, then id); credential/catalog edits show up within the 5 s snapshot TTL (1 min for KV catalogs). Not ported: plugin
+models, the Antigravity per-account `fetchAvailableModels` list (static catalog is used until the Antigravity slice), and the
+Codex client catalog (`GET /v1/models?client_version=...`, `internal/client/codex/models`), which answers 501 until the Codex
+slice implements `ModelsOptions.codexClient` (the validated catalog is already refreshed into KV and exposed as
+`ModelCatalogs.codexClient`).
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

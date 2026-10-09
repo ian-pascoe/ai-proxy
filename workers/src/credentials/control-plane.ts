@@ -7,6 +7,7 @@ import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts"
 import { Lease, PickRequest, ReportResult, type PickResult, type ReportOutcome } from "./selection/types.ts"
 import { CredentialStore } from "./store.ts"
 import type { CredentialSummary } from "./summary.ts"
+import type { ModelSource } from "../registry/source.ts"
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
 const decodeLease = Schema.decodeUnknownSync(Lease)
@@ -74,6 +75,11 @@ export class ControlPlane extends DurableObject<Env> {
   /** Reports the outcome of the attempt that used `lease`. */
   report(lease: Lease, result: ReportResult): ReportOutcome {
     return this.#pool.report(decodeLease(lease), decodeReportResult(result))
+  }
+
+  /** What the model registry needs from every credential (provider, prefix, exclusions, aliases, model state); no secrets. */
+  listModelSources(): ModelSource[] {
+    return this.#pool.modelSources()
   }
 
   /** All credentials with runtime state; token material is redacted. */

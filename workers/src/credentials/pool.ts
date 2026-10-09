@@ -22,6 +22,7 @@ import type { Lease, PickRequest, PickResult, ReportOutcome, ReportResult } from
 import type { UpsertOptions, UpsertOutcome } from "./store.ts"
 import { summarizeCredential, toSnapshot, type CredentialSummary } from "./summary.ts"
 import { synthesizeConfigCredentials } from "./synthesize.ts"
+import { type ModelSource, toModelSource } from "../registry/source.ts"
 
 /** Storage the pool needs (implemented by `CredentialStore`; tests may fake it). */
 export interface PoolStore {
@@ -134,6 +135,12 @@ export class CredentialPool {
 
   #state(id: string): CredentialState {
     return this.#states.get(id) ?? emptyState()
+  }
+
+  /** Model-registration view of every credential (no secrets): see `registry/source.ts`. */
+  modelSources(): ModelSource[] {
+    const view = this.#current()
+    return [...view.credentials.values()].map((credential) => toModelSource(credential, this.#state(credential.id)))
   }
 
   pick(request: PickRequest): PickResult {

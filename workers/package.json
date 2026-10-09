@@ -15,7 +15,8 @@
     "test": "vitest run",
     "lint": "oxlint && prettier --check .",
     "format": "prettier --write .",
-    "types": "wrangler types --strict-vars=false"
+    "types": "wrangler types --strict-vars=false",
+    "catalog:sync": "cd .. && go run ./workers/tools/fixturegen/registry"
   },
   "dependencies": {
     "effect": "4.0.2",

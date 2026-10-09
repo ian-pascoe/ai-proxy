@@ -52,6 +52,6 @@
     "run_worker_first": true
   },
 
-  // Placeholder: model catalog refresh (3 h in Go) and credential refresh safety sweep.
+  // Model catalog refresh (3 h like Go) and, later, the credential refresh safety sweep: see src/scheduled.ts.
   "triggers": { "crons": ["0 */3 * * *"] }
 }
