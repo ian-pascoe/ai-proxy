@@ -264,3 +264,48 @@ describe("OpenAI client -> Gemini credential", () => {
     expect(text.trimEnd().endsWith("data: [DONE]")).toBe(true)
   })
 })
+
+describe("OpenAI Responses client -> Gemini credential", () => {
+  it("translates a non-stream response and echoes the request fields", async () => {
+    const h = harness(() => jsonResponse(GEMINI_RESPONSE))
+    afterAll(h.dispose)
+    const response = await h.call(
+      "/v1/responses",
+      postJson({ model: "gemini-2.5-flash", input: "hi", instructions: "be brief", max_output_tokens: 50 })
+    )
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      id: string
+      status: string
+      instructions: string
+      output: Array<{ type: string; content: Array<{ text: string }> }>
+      usage: { input_tokens: number; output_tokens: number }
+    }
+    expect(body.id).toBe("resp_r1")
+    expect(body.status).toBe("completed")
+    expect(body.instructions).toBe("be brief")
+    expect(body.output[0]?.content[0]?.text).toBe("Hello")
+    expect(body.usage).toMatchObject({ input_tokens: 4, output_tokens: 3 })
+    const upstream = JSON.parse(h.calls[0]?.body ?? "{}")
+    expect(upstream.systemInstruction.parts[0].text).toBe("be brief")
+    expect(upstream.contents[0]).toEqual({ role: "user", parts: [{ text: "hi" }] })
+    expect(upstream.generationConfig.maxOutputTokens).toBe(50)
+  })
+
+  it("streams Responses events ending with response.completed", async () => {
+    const h = harness(() =>
+      sseResponse([
+        `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "Hi" }] }, index: 0 }], responseId: "r" })}\n\n`,
+        `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "!" }] }, finishReason: "STOP", index: 0 }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 2, totalTokenCount: 3 }, responseId: "r" })}\n\n`
+      ])
+    )
+    afterAll(h.dispose)
+    const response = await h.call("/v1/responses", postJson({ model: "gemini-2.5-pro", stream: true, input: "hi" }))
+    expect(response.status).toBe(200)
+    const text = await response.text()
+    expect(text).toContain("event: response.created")
+    expect(text).toContain("event: response.output_text.delta")
+    expect(text).toContain("event: response.completed")
+    expect(h.records[0]?.detail.totalTokens).toBe(3)
+  })
+})

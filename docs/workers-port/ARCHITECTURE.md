@@ -401,6 +401,46 @@ Deviations from Go (all deliberate, documented in code headers):
   ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
 - `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
 
+## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
+
+- **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
+  (API key, `x-goog-api-key`), `gemini-interactions` (same key, native `POST /v1beta/interactions` with the
+  `Api-Revision` header) and `vertex` (API key against the project-less host, or a service account against the regional
+  `projects/<id>/locations/<loc>` endpoint; Imagen models go through `:predict` with the request/response converters).
+  Request shaping (`shaping.ts`: model/suffix handling, `maxOutputTokens` cap, content-turn splitting) and usage parsing
+  (`usage.ts`: `usageMetadata`/Interactions usage, intermediate-usage filtering) follow the Go executors. Payload rules
+  stay the last mutation of the body in every path (stream, count, Imagen, native Interactions).
+- **Routes**: `POST /v1beta/models/*` (`generateContent`, `streamGenerateContent`, `countTokens`, Gemini SSE or raw
+  chunks for other `alt`s) and `POST /v1beta/interactions` (exactly one of `model`/`agent`; agent requests are forced to
+  the `gemini-interactions` provider and select credentials as for `gemini-2.5-flash`, the Go `auth_selection_model`).
+  `ExecutionInput.forcedProvider`/`authSelectionModel` and `PickRequest.selectionModel` carry that through the conductor.
+- **Vertex tokens**: service-account access tokens are minted by the ControlPlane (`ensureFresh`) before the attempt by
+  the conductor's credential preparation (`needsPreparation` for `vertex` without `metadata.access_token`); the executor
+  only reads `metadata.access_token` (401 `credentialScoped` when missing). API-key vs service-account is decided by the
+  `api_key` attribute (a minted `access_token` next to a `service_account` is a bearer token, not an API key).
+- **Translators** (all golden-fixture tested against Go, `tools/fixturegen/translator/corpus/*-gemini.json`,
+  `gemini-interactions.json`, `interactions-*.json`): gemini->gemini, claude->gemini, openai->gemini,
+  openai-response->gemini, interactions<->gemini, interactions->interactions (passthrough). Shared Gemini pieces live
+  in `translator/gemini/{common,util}`: contents merging, thought-signature replay policy (Gemini target only; other
+  providers' signatures are never replayable for Gemini, so only the Gemini decision table is ported), JSON-schema
+  cleaners and the MIME table.
+- **Responses (`translator/gemini/openai/responses/`)**: request/response ported file by file (carrier, trailing
+  signature, tools, media, web search, streaming and non-streaming). Gemini returns whole function calls, so the
+  apply_patch bridge is reduced to strict `{"input": ...}` validation (`finishApplyPatchArguments`) plus the event
+  helpers it needs; a retained failure sets `state.toolInputError` (stream: `response.failed`, non-stream: translation
+  failure -> 502). Hidden text signatures (a signature that trails the visible text) go to a `ReplayCache`
+  (`replay-cache.ts`): per-isolate, 1 h TTL, 10240 entries, injected clock for tests. TODO(SessionState Durable
+  Object): back it with the session state DO so carriers survive isolate recycling and span isolates; until then a
+  continuation that lands elsewhere degrades to the bypass signature, never to an error.
+- **Fixtures**: cases with generated ids/timestamps are tagged `needs: ["id-normalization"]` and run by
+  `test/translator-fixtures-ids.test.ts` (ids and `created_at` masked on both sides; thinking-summary cases apply the
+  real summary hooks); everything else must match the Go bytes exactly (`test/translator-fixtures.test.ts`).
+- **Deviations from Go**: `TranslationError.body` returns the partially translated body for fixture parity only;
+  `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
+  (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
+  `PrepareAntigravityInteractions` is not ported (no Antigravity provider yet); a Vertex Imagen request without a prompt
+  answers 400; logging of signature decisions is dropped. Not ported: claude->interactions (not in the slice).
+
 ## Management API and control panel (`src/management/`)
 
 Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; response shapes follow
