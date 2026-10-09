@@ -155,6 +155,41 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   of the session cache are independent keys; the LCP conversation matcher and session-id extraction are left to the
   pipeline slice (`PickRequest.session` carries the extracted id).
 
+## Request pipeline
+
+Core contracts every provider slice implements (Go references in each module header):
+
+- **Translators (`src/translator/`)**: `TranslatorRegistry` keyed by `(client format, provider format)` with named
+  `client`/`provider` arguments (Go's inverted `TranslateStream(from=provider, to=client)` order does not leak).
+  Request transforms are pure functions over a private copy of the parsed body (refusals throw `TranslationError`,
+  a request-scoped 400); response transforms take raw text (one upstream SSE line, or the whole body) and return
+  complete client chunks as text (bare JSON for OpenAI/Gemini, `event:`/`data:` framed for Claude/Responses/
+  Interactions). Per-attempt state is `TranslationState` (Go `param *any`), incl. `toolInputError` and
+  `canFinalize`. Go fallbacks are kept (force `model`; passthrough stream/non-stream; raw usage for token counts).
+  The thinking summary hooks are injected (`SummaryHooks`). Pairs are registered in `translator/builtin.ts`;
+  golden fixtures come from `go run ./workers/tools/fixturegen/translator` (corpus files under
+  `workers/tools/fixturegen/translator/corpus/`, one fixture file per corpus file, picked up automatically by
+  `test/translator-fixtures.test.ts`; cases may declare `needs` to be skipped until a capability lands).
+- **Executors (`src/executor/`)**: `ProviderExecutor { execute, executeStream, countTokens }` over
+  `ExecutorRequest`/`ExecutorOptions` (Go `Request`/`Options`, typed `ExecutionMetadata`) and an `ExecutionContext`
+  (credential snapshot, config snapshot, `UsageReporter`). Streams are `Stream<string, ExecutionError>` of client
+  chunks. All failures are `ExecutionError` (status, upstream body as message, `retryAfterMs`, `credentialScoped`,
+  `requestScoped`, `terminalAuth`, `direct`, `code`). Order inside executors: translate -> `Thinking.apply` (no-op
+  service until the thinking slice) -> provider shaping -> `applyPayloadRules` (last) -> `HttpClient` (tracing
+  propagation disabled so no `traceparent` reaches providers). Shared helpers live in `executor/helps/`.
+- **Credential selection**: `CredentialPicker { pick, report }` (`executor/picker.ts`, contract documented there);
+  `static-picker.ts` is a config-only stand-in (round-robin over `api-keys.openai-compatibility`) until the
+  ControlPlane implementation lands. Per-credential model resolution (prefix strip, alias pools, suffix kept) is a
+  pure Worker-side function (`executor/models.ts`), so the picker only returns snapshots + leases.
+- **Handlers (`src/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: config-backed until the
+  registry slice) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
+  stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
+  open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
+  `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`.
+  Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
+- One attempt per request for now; retries across credentials, cooldown waits and bootstrap retries are added by
+  the execution-retry slice around `runAttempt` in `handlers/execute.ts`.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

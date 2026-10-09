@@ -39,8 +39,16 @@ See the architecture document. Currently implemented:
 - `src/thinking/` — thinking pipeline port (`applyThinking`, suffix parsing, validation, provider appliers, reasoning-summary helpers).
 - `src/config/` — config schema, YAML/JSON codec, normalisation, `ConfigReader`, and `payload/` (`applyPayloadRules`).
 - `src/credentials/control-plane.ts` — `ControlPlane` Durable Object (config storage so far; credentials come later).
+- `src/translator/` — translator registry (`registry.ts`), built-in pairs (`builtin.ts`), `openai/openai` passthrough.
+- `src/executor/` — executor contracts (`types.ts`, `errors.ts`), `CredentialPicker` (`picker.ts`, config-only
+  `static-picker.ts`), `Thinking` hook (`thinking.ts`), per-credential model resolution and the OpenAI-compatible
+  executor (`openai-compat/`).
+- `src/handlers/` — shared execution pipeline (`execute.ts`), SSE responder and framers (`respond.ts`, `framing.ts`),
+  `/v1/chat/completions` and `/v1/completions` (`openai/`), service wiring (`layer.ts`).
+- `src/usage/` — usage records, per-attempt `UsageReporter`, `UsageSink` (no-op until persistence lands).
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
-  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload` and `…/thinking`).
+  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator`; the latter reads
+  `tools/fixturegen/translator/corpus/*.json`).
 
 ## Cloudflare Access
 
