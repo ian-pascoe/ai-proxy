@@ -15,10 +15,11 @@
     "test": "vitest run",
     "lint": "oxlint && prettier --check .",
     "format": "prettier --write .",
-    "types": "wrangler types"
+    "types": "wrangler types --strict-vars=false"
   },
   "dependencies": {
-    "effect": "4.0.2"
+    "effect": "4.0.2",
+    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.0",

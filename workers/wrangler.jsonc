@@ -10,6 +10,20 @@
   "workers_dev": false,
   "preview_urls": false,
 
+  // Cloudflare Access verification (see src/access). Empty defaults fail closed: protected routes answer 500 until
+  // ACCESS_TEAM_DOMAIN and ACCESS_AUD are set. Override per environment with `wrangler secret`/dashboard vars.
+  //   ACCESS_TEAM_DOMAIN: team name or domain, e.g. "myteam" or "myteam.cloudflareaccess.com"
+  //   ACCESS_AUD: comma separated Access application AUD tags
+  //   ACCESS_ADMIN_EMAILS / ACCESS_ADMIN_SERVICE_TOKENS: comma separated management admin allow-lists
+  //   ACCESS_DEV_BYPASS: local `wrangler dev` only (set it in .dev.vars, never here); honoured for loopback hosts only
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    "ACCESS_ADMIN_EMAILS": "",
+    "ACCESS_ADMIN_SERVICE_TOKENS": "",
+    "ACCESS_DEV_BYPASS": ""
+  },
+
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 300000 },
 

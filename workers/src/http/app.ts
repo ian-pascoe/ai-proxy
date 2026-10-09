@@ -1,10 +1,14 @@
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
-import { CorsLayer } from "./cors.ts"
+import { AccessLayer } from "../access/layer.ts"
 import { RootRoutes } from "./routes.ts"
 
-/** All routes and global middleware of the Worker. Later slices merge their route layers here. */
-export const AppLayer = Layer.mergeAll(RootRoutes, CorsLayer)
+/**
+ * All routes and global middleware of the Worker. Later slices merge their route layers here. Route layers whose
+ * handlers use `AccessPrincipal` are wrapped with `withAccess(...)` (src/access/layer.ts); protected prefixes are
+ * authenticated by `AccessLayer` regardless.
+ */
+export const AppLayer = Layer.mergeAll(RootRoutes, AccessLayer)
 
 /**
  * Creates the Web `Request` handler. Per-request services (`WorkerEnv`, `WorkerExecutionContext`) are supplied as

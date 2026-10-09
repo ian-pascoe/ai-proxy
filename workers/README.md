@@ -32,6 +32,26 @@ See the architecture document. Currently implemented:
 - `src/platform/env.ts` — `WorkerEnv` / `WorkerExecutionContext` services, provided per request via `requestContext`.
 - `src/platform/logging.ts` — logging conventions and header redaction.
 - `src/errors.ts` — base tagged errors.
+- `src/access/` — Cloudflare Access authentication: JWT verification with `jose` (`verify.ts`), per-isolate JWKS cache
+  (`jwks.ts`), principal service `AccessPrincipal` (`principal.ts`), global gate (`middleware.ts`, `layer.ts`), path policy
+  (`routes.ts`) and env config (`config.ts`).
+
+## Cloudflare Access
+
+`/v1*`, `/openai/v1*`, `/backend-api/codex*` and `/v8/management*` require a valid `Cf-Access-Jwt-Assertion`; `/healthz`
+and `/` are public. Management additionally requires an admin. Configure (vars in `wrangler.jsonc`, or secrets):
+
+| Variable                      | Meaning                                                                      |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `ACCESS_TEAM_DOMAIN`          | `myteam` or `myteam.cloudflareaccess.com` (issuer + JWKS location)           |
+| `ACCESS_AUD`                  | comma separated Access application AUD tags                                  |
+| `ACCESS_ADMIN_EMAILS`         | comma separated admin emails (case-insensitive)                              |
+| `ACCESS_ADMIN_SERVICE_TOKENS` | comma separated admin service token client ids (`common_name`)               |
+| `ACCESS_DEV_BYPASS`           | `wrangler dev` only (put in `.dev.vars`): fake admin user for loopback hosts |
+
+Empty defaults fail closed (protected routes answer 500 `Authentication service error`). Route layers whose handlers
+read the principal wrap themselves with `withAccess(routes)` (`src/access/layer.ts`) and use `yield* AccessPrincipal`
+(`{ principal, principalId, callerScope }`).
 
 ## Conventions
 

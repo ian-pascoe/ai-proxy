@@ -95,6 +95,11 @@ client -> Cloudflare Access -> Worker
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
 - Management routes require the principal to match a configured admin allow-list (emails / service token ids), in
   addition to Access policy.
+- Implementation notes (`workers/src/access/`): the gate is a *global* router middleware that matches protected path
+  prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
+  slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
+  JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
+  workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `wrangler dev`).
 - Machine clients use Access service tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access
   single-header mode via `x-api-key`).
 
