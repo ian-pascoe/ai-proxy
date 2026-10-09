@@ -61,3 +61,12 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 - Avoid wall-clock `time.Sleep` in TTL, expiration, ordering, or cache-eviction unit tests due to platform timer granularity (e.g. Windows default timer resolution of ~15.6ms) and CI jitter under load; prefer controllable clocks (`nowFunc` / mock clock), explicit timestamp manipulation, or deterministic synchronization primitives.
 - Note: if modifying features that involve CLIProxyAPIHome, check if corresponding updates are needed in the CLIProxyAPIHome repository.
 - Endpoints under the `/v0/management` base URL are deprecated and no longer maintained. For any feature changes, do not modify endpoints under `/v0/management` unless necessary to fix compilation errors.
+
+## workers/ (TypeScript port)
+- `workers/` is a pnpm package: TypeScript strict + Effect v4 (`effect@4.0.2`) on plain Cloudflare Workers. Design: `docs/workers-port/ARCHITECTURE.md`; Go code remains the behavioural source of truth. Read `workers/node_modules/effect/AGENTS.md` and the effect source (APIs differ from Effect 3).
+- Commands (run before finishing): `pnpm -C workers typecheck && pnpm -C workers lint && pnpm -C workers test && pnpm -C workers build`; `pnpm -C workers format` to format; `pnpm -C workers types` after editing `wrangler.jsonc`.
+- Code under `workers/src/`; tests under `workers/test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
+- Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); never capture them in layers.
+- Translators/thinking/payload rules are pure sync functions over parsed JSON; cite the Go source path at the top of each ported module. Payload rules stay the final mutation before upstream requests.
+- Never log tokens/API keys/JWTs (`redactHeaders`); no wall-clock sleeps in tests (use `TestClock`); no `any` without a justifying comment.
+- Do not edit `internal/translator/` or Go code from workers slices; golden fixtures come from `workers/tools/fixturegen`.

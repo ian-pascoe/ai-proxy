@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cliproxy-workers",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Access is the only client authentication mechanism: never expose the Worker
+  // on workers.dev or preview URLs (see docs/workers-port/ARCHITECTURE.md).
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": { "enabled": true },
+  "limits": { "cpu_ms": 300000 },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "CONTROL_PLANE", "class_name": "ControlPlane" },
+      { "name": "SESSION_STATE", "class_name": "SessionState" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ControlPlane", "SessionState"] }],
+
+  "kv_namespaces": [{ "binding": "CACHE", "id": "00000000000000000000000000000000" }],
+
+  "d1_databases": [
+    {
+      "binding": "USAGE",
+      "database_name": "cliproxy-usage",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+
+  // Management control panel. The Worker runs first so proxy routes are never shadowed by assets.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+
+  // Placeholder: model catalog refresh (3 h in Go) and credential refresh safety sweep.
+  "triggers": { "crons": ["0 */3 * * *"] }
+}

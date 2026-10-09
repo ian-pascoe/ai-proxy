@@ -80,7 +80,7 @@ client -> Cloudflare Access -> Worker
   top of each ported module.
 - Payload rules remain the final semantic mutation before the upstream request in every executor path (see AGENTS.md).
 - No wall-clock sleeps in tests; use Effect `TestClock`.
-- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-pool-workers`.
+- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`).
   Translators and the thinking pipeline are verified against golden fixtures produced by `workers/tools/fixturegen`
   from the Go implementation (`go run ./workers/tools/fixturegen`), checked in under `workers/test/fixtures/`.
 - Never log tokens, API keys or JWTs.

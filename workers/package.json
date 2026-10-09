@@ -1,0 +1,33 @@
+{
+  "name": "cliproxy-workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLIProxyAPI TypeScript/Effect port for Cloudflare Workers",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint && prettier --check .",
+    "format": "prettier --write .",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "effect": "4.0.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.0",
+    "@effect/vitest": "4.0.2",
+    "@types/node": "^22.20.5",
+    "oxlint": "^1.87.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "vitest": "5.0.3",
+    "wrangler": "4.149.0"
+  }
+}

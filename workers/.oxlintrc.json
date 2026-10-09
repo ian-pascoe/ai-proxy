@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": { "correctness": "error", "suspicious": "warn" },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "no-console": "error",
+    "no-underscore-dangle": "off"
+  },
+  "ignorePatterns": ["node_modules", "dist", ".wrangler", "worker-configuration.d.ts", "test/fixtures"]
+}
