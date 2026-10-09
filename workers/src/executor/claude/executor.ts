@@ -30,6 +30,7 @@ import {
 import { isObj, str } from "../../translator/common/gjson.ts"
 import { claudeCreds, isAnthropicUpstreamBase } from "./credentials.ts"
 import { type ContinuityStore, makeMemoryContinuityStore } from "./continuity.ts"
+import { type ClaudeUpstreamProfile, restoreResponseModel } from "./profile.ts"
 import { restoreToolNamesInResponse, AliasRestoreError, restoreToolNamesInStreamLine } from "./mcp-alias.ts"
 import {
   type PipelineServices,
@@ -59,6 +60,8 @@ export interface ClaudeExecutorOptions {
   readonly replay?: ThinkingReplayStore
   /** Injected clock for date reminders (tests). */
   readonly now?: () => Date
+  /** Delegating provider profile (Kimi embeds this executor with its own model naming). */
+  readonly profile?: ClaudeUpstreamProfile
 }
 
 const transportError = (error: HttpClientError.HttpClientError) =>
@@ -139,8 +142,10 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     registry,
     continuity: executorOptions.continuity ?? defaultContinuity,
     replay: executorOptions.replay ?? defaultReplay,
-    now: executorOptions.now ?? (() => new Date())
+    now: executorOptions.now ?? (() => new Date()),
+    profile: executorOptions.profile
   }
+  const profile = executorOptions.profile
 
   const unsupportedCompaction = (options: ExecutorOptions) =>
     options.alt === "responses/compact"
@@ -247,7 +252,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
             context.usage.observeResponseModel(
               responseModelOf(tryParseJson(line.trim().startsWith("data:") ? line.trim().slice(5).trim() : ""))
             )
-            return restoreToolNamesInStreamLine(line, prepared.reverseMap)
+            return restoreResponseModel(profile, restoreToolNamesInStreamLine(line, prepared.reverseMap), request.model)
           }),
         catch: (error) =>
           error instanceof AliasRestoreError
@@ -280,6 +285,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
         })
         data = JSON.stringify(parsed)
       }
+      data = restoreResponseModel(profile, data, request.model)
       usage = parseClaudeUsage(data)
       replayContent = get(parsed, "content")
     }
@@ -317,6 +323,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       responseFormat,
       context: responseContext(request, options, prepared),
       reverseMap: prepared.reverseMap,
+      restoreLine: (line) => restoreResponseModel(profile, line, request.model),
       onUsage: (detail) => context.usage.publish(detail),
       onResponseModel: (model) => context.usage.observeResponseModel(model)
     })
@@ -369,7 +376,11 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       options,
       upstreamStream: false
     }
-    if (apiKey.trim() !== "" && isAnthropicUpstreamBase(baseURL === "" ? "https://api.anthropic.com" : baseURL)) {
+    if (
+      apiKey.trim() !== "" &&
+      (profile?.upstreamCountTokens === true ||
+        isAnthropicUpstreamBase(baseURL === "" ? "https://api.anthropic.com" : baseURL))
+    ) {
       const prepared = yield* prepareCountTokensRequest(input)
       const response = yield* send(context, prepared, false)
       const data = yield* response.text.pipe(Effect.mapError(readError))

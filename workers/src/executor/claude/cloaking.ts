@@ -382,20 +382,41 @@ export const reconcileContextManagement = (body: JsonObject, state: ContextManag
 
 const ZERO_WIDTH_SPACE = "\u200B"
 
-/** `BuildSensitiveWordMatcher` + `ObfuscateSensitiveWords` for system blocks and message text. */
-export const obfuscateSensitiveWords = (body: JsonObject, words: readonly string[]): void => {
+export interface SensitiveWordMatcher {
+  /** `Matches`: the text contains a configured word. */
+  readonly matches: (text: string) => boolean
+  /** `ObfuscateText`: inserts a zero-width space after the first character of every match. */
+  readonly obfuscate: (text: string) => string
+}
+
+/**
+ * `BuildSensitiveWordMatcher`: case-insensitive, longest word first, words of at least two characters;
+ * `undefined` when no usable word is configured.
+ */
+export const buildSensitiveWordMatcher = (words: readonly string[]): SensitiveWordMatcher | undefined => {
   const valid = words
     .map((word) => word.trim())
     .filter((word) => [...word].length >= 2 && !word.includes(ZERO_WIDTH_SPACE))
     .toSorted((a, b) => new TextEncoder().encode(b).length - new TextEncoder().encode(a).length)
-  if (valid.length === 0) return
-  const regex = new RegExp(valid.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "giu")
-  const obfuscate = (text: string): string =>
-    text.replace(regex, (word) => {
-      if (word.includes(ZERO_WIDTH_SPACE)) return word
-      const first = [...word][0] as string
-      return word.length <= first.length ? word : first + ZERO_WIDTH_SPACE + word.slice(first.length)
-    })
+  if (valid.length === 0) return undefined
+  const pattern = valid.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+  const regex = new RegExp(pattern, "giu")
+  const probe = new RegExp(pattern, "iu")
+  return {
+    matches: (text) => probe.test(text),
+    obfuscate: (text) =>
+      text.replace(regex, (word) => {
+        if (word.includes(ZERO_WIDTH_SPACE)) return word
+        const first = [...word][0] as string
+        return word.length <= first.length ? word : first + ZERO_WIDTH_SPACE + word.slice(first.length)
+      })
+  }
+}
+
+/** `ObfuscateSensitiveWords` for system blocks and message text. */
+export const obfuscateSensitiveWords = (body: JsonObject, words: readonly string[]): void => {
+  const obfuscate = buildSensitiveWordMatcher(words)?.obfuscate
+  if (obfuscate === undefined) return
   const system = body.system
   if (isArr(system)) {
     for (const block of system) {

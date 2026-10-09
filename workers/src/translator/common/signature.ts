@@ -123,3 +123,20 @@ export const isReplaySafeGrokEncryptedContent = (raw: string): boolean => {
   }
   return decoded.length >= 32 && entropyRatio(decoded) >= 0.85
 }
+
+const CLAUDE_ENVELOPE = /^[ER][A-Za-z0-9+/_-]{40,}={0,2}$/
+
+/**
+ * `DetectSignatureProvider(raw) != unknown`: whether `raw` is recognisably another provider's signature (GPT, Claude
+ * envelopes, SWE sealed blobs, the Gemini bypass sentinel or a known cache prefix). Structural approximation: the
+ * Claude/Gemini protobuf provenance probes of `internal/signature` are replaced by shape checks.
+ */
+export const isKnownProviderSignature = (raw: string): boolean => {
+  const sig = raw.trim()
+  if (sig === "") return false
+  if (sig === "skip_thought_signature_validator" || sig.startsWith("sealed.v1.")) return true
+  const split = splitProviderPrefix(sig)
+  if (split !== undefined) return !split[1].includes("#") && split[1] !== ""
+  if (sig.includes("#")) return false
+  return sig.startsWith("gAAAA") || CLAUDE_ENVELOPE.test(sig)
+}

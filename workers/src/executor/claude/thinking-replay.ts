@@ -34,7 +34,7 @@ export interface ThinkingReplayStore {
   readonly deleteIfUnchanged: (family: string, session: string, snapshot: ReplaySnapshot | undefined) => boolean
 }
 
-export const makeMemoryReplayStore = (now: () => number = Date.now): ThinkingReplayStore => {
+export const makeMemoryReplayStore = (now: () => number = Date.now, ttlMs: number = TTL_MS): ThinkingReplayStore => {
   const entries = new Map<string, { contents: Json[]; generation: number; expiresAt: number }>()
   let generation = 0
   const key = (family: string, session: string): string => `${family}\u0000${session}`
@@ -57,7 +57,7 @@ export const makeMemoryReplayStore = (now: () => number = Date.now): ThinkingRep
       const k = key(family, session)
       if (currentGeneration(k) !== (snapshot?.generation ?? 0)) return false
       if (entries.size >= MAX_ENTRIES && !entries.has(k)) entries.delete(entries.keys().next().value as string)
-      entries.set(k, { contents: [content], generation: ++generation, expiresAt: now() + TTL_MS })
+      entries.set(k, { contents: [content], generation: ++generation, expiresAt: now() + ttlMs })
       return true
     },
     deleteIfUnchanged: (family, session, snapshot) => {

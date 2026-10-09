@@ -8,7 +8,11 @@
 import { Context, Layer } from "effect"
 import { makeClaudeExecutor } from "./claude/executor.ts"
 import { makeCodexExecutor } from "./codex/executor.ts"
+import { makeDevinExecutor } from "./devin/executor.ts"
 import { makeGeminiExecutor, makeGeminiInteractionsExecutor, makeVertexExecutor } from "./gemini/index.ts"
+import { withApiKeyScope } from "./helps/oauth-scope.ts"
+import { makeKimiExecutor } from "./kimi/executor.ts"
+import { makeMetaExecutor } from "./meta/executor.ts"
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts"
 import type { ProviderExecutor } from "./types.ts"
 
@@ -31,7 +35,11 @@ const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
   claude: makeClaudeExecutor,
   gemini: makeGeminiExecutor,
   "gemini-interactions": makeGeminiInteractionsExecutor,
-  vertex: makeVertexExecutor
+  vertex: makeVertexExecutor,
+  devin: makeDevinExecutor,
+  meta: makeMetaExecutor,
+  kimi: makeKimiExecutor,
+  "kimi-ai": makeKimiExecutor
 }
 
 export const makeExecutorRegistry = (): { readonly get: (provider: string) => ProviderExecutor | undefined } => {
@@ -44,8 +52,10 @@ export const makeExecutorRegistry = (): { readonly get: (provider: string) => Pr
       const fixed = Object.hasOwn(FIXED_EXECUTORS, key) ? FIXED_EXECUTORS[key] : undefined
       if (fixed === undefined && !isOpenAICompatProvider(key)) return undefined
       const executor = fixed === undefined ? makeOpenAICompatExecutor(key) : fixed()
-      cache.set(key, executor)
-      return executor
+      // `ForAPIKey` (oauth_scope_executor.go): API-key credentials see the config without OAuth-only settings.
+      const scoped = withApiKeyScope(key, executor)
+      cache.set(key, scoped)
+      return scoped
     }
   }
 }

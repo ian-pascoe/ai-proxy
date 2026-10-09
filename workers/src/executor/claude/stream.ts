@@ -29,6 +29,8 @@ export interface ClaudeStreamOptions {
   readonly responseFormat: Format
   readonly context: ResponseContext
   readonly reverseMap: ReadonlyMap<string, string>
+  /** Per-line rewrite after tool-name restoring (Kimi restores the requested model name). */
+  readonly restoreLine?: (line: string) => string
   readonly onUsage: (detail: UsageDetail) => void
   readonly onResponseModel: (model: string | undefined) => void
 }
@@ -80,6 +82,7 @@ export class ClaudeStreamReader {
     let restored = line
     try {
       restored = restoreToolNamesInStreamLine(line, this.options.reverseMap)
+      if (this.options.restoreLine !== undefined) restored = this.options.restoreLine(restored)
     } catch (error) {
       if (error instanceof AliasRestoreError) {
         return this.#fail(`restore Claude OAuth tool name from streaming response: ${error.message}`)

@@ -547,6 +547,49 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `requestId`) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
   annotations. Headers, bodies, query strings and credentials are never logged.
 
+## Kimi, Meta and Devin providers (`src/executor/{kimi,meta,devin}/`)
+
+Ported from `kimi_executor.go`/`kimi_thinking_replay.go`, `meta_executor*.go`, `devin_executor.go` and the `helps/devin_*`
+helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
+
+- **Kimi** routes by the client protocol: Claude -> the embedded Claude executor (`makeClaudeExecutor({ profile })`, see
+  `claude/profile.ts`: Kimi model naming incl. `[1m]`/K2.x aliases, the response model restored to the requested one, the
+  Claude Code attribution system block stripped unless the CLI fingerprint profile is on, `count_tokens` always upstream, base
+  URL = the Messages base `.../coding`); OpenAI Responses -> `{base}/v1/responses` (body kept, `NormalizeKimiResponsesInput`,
+  tool schemas, temperature); everything else -> `{base}/v1/chat/completions` (`normalizeKimiToolMessageLinks`, tool schema
+  inlining via `helps/inline-refs.ts`, temperature rule, `stream_options.include_usage`). Device headers: the login-time
+  `metadata.device_id` (persisted in the ControlPlane with the credential) else a UUIDv5 of the credential id; device
+  name/model are constants. Thinking replay for Claude callers (`kimi/replay.ts`) reuses the matcher/accumulator of
+  `claude/thinking-replay.ts` over a per-isolate store (TTL 1 h, isolated per caller scope; TODO(SessionState)).
+- **Meta** is the Codex Responses pipeline without replay/images: `meta/request.ts` (translate to `codex`, thinking, model/stream,
+  field deletions, instructions, keep-foreign reasoning sanitising via `codex/request.ts`, `search_content_types` removal,
+  payload rules with protocol `meta`), `meta/errors.ts` (`resets_at` retry, 5 min 404 cooldown, credential-scoped
+  subscription quota), always-streaming upstream aggregated for non-stream callers. The lazy DCA -> API-key mint is the
+  conductor's `ensureFresh` (see Token refresh); the executor only reads the minted key.
+- **Devin** (`devin/`): `protobuf.ts` (varint/bytes/fixed codec), `wire.ts` (`GetChatMessageRequest`, frame decoding, trailer
+  mapping, system prompt sanitising), `connect.ts` (streaming 5-byte frame parser, gzip via `DecompressionStream`),
+  `interactions.ts` (client Interactions body -> prompts/tools, incl. original-request supplements), `models.ts` (UID
+  resolution over the embedded/registry catalog), `payload.ts` (payload rules run on the JSON view of the protobuf business
+  fields and only those fields are re-encoded), `stream.ts` (frames -> Interactions events / aggregate, tool-call ordering,
+  deferred thought stops, 128 tool call cap, EOS trailer required) and `executor.ts`. Non-Interactions clients need the
+  `client -> interactions` translators registered in the translator registry (`gemini` and `interactions` exist; `openai`/
+  `openai-response` belong to the OpenAI-compatibility slice; **`claude -> interactions`** (`internal/translator/interactions/claude`)
+  is not ported by any slice yet and is what Claude Code needs to use Devin); without one the body is parsed as-is (`messages`
+  fallback) and the response passes through untranslated.
+- **Fixtures**: `go run ./workers/tools/fixturegen/devin` runs the real Go `DevinExecutor` against an `httptest` Connect-RPC
+  server (request bytes, Interactions events, aggregates, trailer/model-UID/frame/system-prompt helpers) into
+  `test/fixtures/devin.json`; `test/devin-*.test.ts` compare the TypeScript output with it.
+- **API-key scoping**: `withApiKeyScope` (registry) gives API-key credentials the config without `oauth.providers.*`
+  (Codex, Claude, Meta, Kimi, xAI, OpenAI-compatible; not Devin). Settings imported from aliased `upstream.*` spellings lose their
+  OAuth-only origin and stay global (the Go `OAuthOnlyFields` provenance is not kept).
+
+Deviations from Go: Devin's per-session turn counter and Kimi's replay store are per isolate; `fetch` always sends a
+User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
+error; `internal/signature` provenance detection used for Devin thought signatures is approximated by structural checks.
+Not ported: the apply_patch bridge (Kimi/Meta/Devin), Claude stream input-token estimates, local token counting for Meta
+(`countTokens` answers 501), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
+`X-Msh-Device-Name/Model` of the real host, request/response debug logs.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

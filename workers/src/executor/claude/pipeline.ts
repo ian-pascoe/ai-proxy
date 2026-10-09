@@ -63,6 +63,7 @@ import {
   type FingerprintPolicy
 } from "./credentials.ts"
 import { buildClaudeHeaders, cachedSessionId, defaultDeviceProfile } from "./headers.ts"
+import { type ClaudeUpstreamProfile, upstreamModelOf } from "./profile.ts"
 import { agentSessionUuid, applyCLIIdentity, IdentityError } from "./identity.ts"
 import { remapToolNames, DEFAULT_ALIAS_SECRET } from "./mcp-alias.ts"
 import { sanitizeForClaudeUpstream } from "./sanitize.ts"
@@ -82,6 +83,8 @@ export interface PipelineServices {
   readonly continuity: ContinuityStore
   readonly replay: ThinkingReplayStore
   readonly now: () => Date
+  /** Delegating provider profile (Kimi); `undefined` for the Claude provider itself. */
+  readonly profile?: ClaudeUpstreamProfile | undefined
 }
 
 export interface PrepareInput {
@@ -307,7 +310,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   if (translated.error !== undefined) return yield* requestScoped(translated.error.status, translated.error.message)
   const originalTranslated = options.originalRequest === undefined ? translated : translate(options.originalRequest)
   if (!isObj(translated.body)) return yield* requestScoped(400, "invalid Claude request body")
-  translated.body.model = baseModel
+  translated.body.model = upstreamModelOf(services.profile, baseModel)
   const thinkingBody = yield* thinking.apply({
     body: translated.body,
     model: request.model,
@@ -402,6 +405,10 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
           : ""
       ensureBillingCCHPlaceholder(body, fallback)
     }
+    // Kimi treats the Claude Code attribution block as prompt text (`stripDefaultKimiClaudeCodeAttribution`).
+    if (services.profile?.stripDefaultAttribution === true && !fingerprint.profileClaudeCodeCLI) {
+      stripAttributionSystem(body)
+    }
 
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
@@ -478,7 +485,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
   if (translated.error !== undefined) return yield* requestScoped(translated.error.status, translated.error.message)
   const originalTranslated = options.originalRequest === undefined ? translated : translate(options.originalRequest)
   if (!isObj(translated.body)) return yield* requestScoped(400, "invalid Claude request body")
-  translated.body.model = baseModel
+  translated.body.model = upstreamModelOf(services.profile, baseModel)
   const thinkingBody = yield* thinking.apply({
     body: translated.body,
     model: request.model,

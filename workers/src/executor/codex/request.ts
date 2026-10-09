@@ -8,7 +8,7 @@
  * All functions mutate the parsed body in place and return it.
  */
 import { asBool, asString, del, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts"
-import { isValidGptReasoningSignature } from "../../translator/common/signature.ts"
+import { isKnownProviderSignature, isValidGptReasoningSignature } from "../../translator/common/signature.ts"
 import { uuidV5Oid } from "../helps/uuid.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -78,9 +78,10 @@ const summaryIsEmpty = (summary: Json | undefined): boolean =>
 /**
  * `sanitizeOpenAIResponsesReasoningEncryptedContent` (non-compat): reasoning `content` is cleared (cleartext is
  * promoted into an empty `summary`), invalid or foreign `encrypted_content` is dropped and, with `store` disabled,
- * orphan reasoning ids are removed so the backend does not look them up.
+ * orphan reasoning ids are removed so the backend does not look them up. With `keepForeign` (Meta) blobs of unknown
+ * provenance are replayed as they are; only recognisably other providers' signatures are dropped.
  */
-export const sanitizeReasoningEncryptedContent = (body: Json): Json => {
+export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = false): Json => {
   const input = get(body, "input")
   if (!isJsonArray(input)) return body
   const stripOrphanIds = !asBool(get(body, "store"))
@@ -105,7 +106,10 @@ export const sanitizeReasoningEncryptedContent = (body: Json): Json => {
     }
     const encrypted = item["encrypted_content"]
     const valid =
-      typeof encrypted === "string" && encrypted === encrypted.trim() && isValidGptReasoningSignature(encrypted)
+      typeof encrypted === "string" &&
+      encrypted === encrypted.trim() &&
+      (isValidGptReasoningSignature(encrypted) ||
+        (keepForeign && encrypted !== "" && !isKnownProviderSignature(encrypted)))
     if (valid) continue
     delete item["encrypted_content"]
     if (stripOrphanIds && "id" in item) delete item["id"]
