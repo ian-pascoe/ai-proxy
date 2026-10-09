@@ -18,6 +18,7 @@ interface FixtureCase {
   readonly model: string
   readonly stream: boolean
   readonly needs?: ReadonlyArray<string>
+  readonly alt?: string
   readonly request: Json
   readonly responseLines?: ReadonlyArray<string>
   readonly responseBodyText?: string
@@ -110,7 +111,8 @@ describe("translator golden fixtures", () => {
               originalRequest: c.request,
               translatedRequest: envelope.body,
               // The Go corpus runs the raw translators; the Claude input token estimate has its own fixtures.
-              state: { ...makeTranslationState(), claudeInputTokensHandled: true }
+              state: { ...makeTranslationState(), claudeInputTokensHandled: true },
+              ...(c.alt !== undefined ? { alt: c.alt } : {})
             }
             const outputs = c.responseLines.map((line) =>
               builtinTranslators.translateStream(c.from, c.to, context, line).map(normalizeChunk)
@@ -122,7 +124,8 @@ describe("translator golden fixtures", () => {
               model: c.model,
               originalRequest: c.request,
               translatedRequest: envelope.body,
-              state: makeTranslationState()
+              state: makeTranslationState(),
+              ...(c.alt !== undefined ? { alt: c.alt } : {})
             }
             const out = builtinTranslators.translateNonStream(c.from, c.to, context, c.responseBodyText)
             expect(out === undefined ? undefined : normalizeChunk(out)).toEqual(

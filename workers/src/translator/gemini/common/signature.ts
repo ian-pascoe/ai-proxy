@@ -141,7 +141,7 @@ const field2Field1Value = (decoded: Uint8Array): Uint8Array | undefined => {
 }
 
 /** `IsValidGeminiThoughtSignature(sig, {RequireKnownEnvelope: true})` (the bypass sentinel is not accepted here). */
-const isKnownGeminiEnvelope = (raw: string): boolean => {
+export const isKnownGeminiEnvelope = (raw: string): boolean => {
   const sig = raw.trim()
   if (sig === "" || isGeminiThoughtSignatureBypass(sig)) return false
   const decoded = decodeBase64(sig)

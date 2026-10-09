@@ -171,7 +171,8 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
       candidate.route.selectionModel,
       now
     )
-    if (!block.blocked) {
+    // The credits fallback may use credentials that are cooling down because their model quota is exhausted.
+    if (!block.blocked || (request.ignoreCooldown === true && block.reason === "cooldown")) {
       available.push(candidate)
       continue
     }

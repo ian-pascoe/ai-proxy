@@ -1,0 +1,555 @@
+[
+  {
+    "name": "request: system, conversation, tool calls and responses, tools, config",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "model": "x",
+      "reasoning_effort": "High",
+      "temperature": 0.5,
+      "top_p": 0.9,
+      "top_k": 40,
+      "max_completion_tokens": 2048,
+      "n": 2,
+      "modalities": [
+        "text",
+        "image"
+      ],
+      "image_config": {
+        "aspect_ratio": "16:9",
+        "image_size": "2K"
+      },
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "be brief"
+        },
+        {
+          "role": "developer",
+          "content": [
+            {
+              "type": "text",
+              "text": "dev rules"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "hi"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,AAAA"
+              }
+            },
+            {
+              "type": "file",
+              "file": {
+                "filename": "a.pdf",
+                "file_data": "data:application/pdf;base64,BBBB"
+              }
+            },
+            {
+              "type": "input_audio",
+              "input_audio": {
+                "data": "CCCC",
+                "format": "mp3"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "reasoning_content": "thinking",
+          "content": "calling",
+          "tool_calls": [
+            {
+              "id": "call_1",
+              "type": "function",
+              "function": {
+                "name": "get weather",
+                "arguments": "{\"city\":\"Paris\"}"
+              }
+            },
+            {
+              "id": "call 2",
+              "type": "function",
+              "function": {
+                "name": "noop",
+                "arguments": "not json"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_1",
+          "content": "sunny"
+        },
+        {
+          "role": "user",
+          "content": "thanks"
+        },
+        {
+          "role": "system",
+          "content": "mid system"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "ok"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,ZZZZ"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "description": "Get",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            },
+            "strict": true
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "noop"
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "google_search": {}
+        },
+        {
+          "code_execution": {}
+        },
+        {
+          "url_context": {}
+        }
+      ],
+      "tool_choice": {
+        "type": "function",
+        "function": {
+          "name": "get weather"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: tool_choice none removes tools; thinking config keys normalised",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "t",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "tool_choice": "none",
+      "generationConfig": {
+        "thinking_config": {
+          "include_thoughts": true,
+          "thinking_budget": 1024,
+          "thinking_level": "low"
+        },
+        "includeThoughts": true,
+        "maxOutputTokens": 10
+      },
+      "max_tokens": 55
+    }
+  },
+  {
+    "name": "request: reasoning_effort auto, system only conversation, response_format json_object",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "reasoning_effort": "auto",
+      "response_format": {
+        "type": "json_object"
+      },
+      "generation_config": {
+        "responseSchema": {
+          "type": "string"
+        },
+        "response_json_schema": {}
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "only system"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: Claude model strips function-call signature carriers",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "c1",
+              "type": "function",
+              "function": {
+                "name": "t",
+                "arguments": "{}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "c1",
+          "content": "done"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "t",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "tool_choice": "required"
+    }
+  },
+  {
+    "name": "request: remote image only user turn is refused",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-flash",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "https://x/y.png"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: demoted system text keeps system reminder",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-flash",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "a"
+        },
+        {
+          "role": "developer",
+          "content": "later rule"
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: reasoning, text, images, tool calls and final usage",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"think\",\"thought\":true},{\"thoughtSignature\":\"sig\"}]}}],\"modelVersion\":\"gemini-3\",\"responseId\":\"rid\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"cpaUsageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0}},\"traceId\":\"t\"}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"IMG\"}}]}}],\"responseId\":\"rid\"},\"traceId\":\"t\"}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"}}},{\"functionCall\":{\"name\":\"noop\",\"args\":{}}}]}}]},\"traceId\":\"t\"}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\".\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":4}},\"traceId\":\"t\"}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: [DONE] synthesises the terminal chunk with pending usage",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"think\",\"thought\":true},{\"thoughtSignature\":\"sig\"}]}}],\"modelVersion\":\"gemini-3\",\"responseId\":\"rid\",\"createTime\":\"2025-08-15T02:52:03.884209Z\",\"cpaUsageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0}},\"traceId\":\"t\"}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"IMG\"}}]}}],\"responseId\":\"rid\"},\"traceId\":\"t\"}",
+      "[DONE]",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: MAX_TOKENS and empty streams",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"max_tokens\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1,\"totalTokenCount\":2}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: [DONE] alone yields nothing",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: unwrapped Gemini response converted",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "why",
+                  "thought": true
+                },
+                {
+                  "text": "answer"
+                },
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "city": "x"
+                    }
+                  }
+                }
+              ]
+            },
+            "finishReason": "STOP"
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 4,
+          "totalTokenCount": 7
+        },
+        "modelVersion": "v",
+        "responseId": "r",
+        "createTime": "2025-01-01T00:00:00Z"
+      },
+      "traceId": "t"
+    }
+  },
+  {
+    "name": "non-stream: body without response is empty",
+    "from": "openai",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get weather",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "candidates": []
+    }
+  }
+]

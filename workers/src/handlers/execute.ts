@@ -21,7 +21,7 @@ import { filterUpstreamHeaders } from "../http/headers.ts"
 import { get, type Json } from "../json/index.ts"
 import type { Format } from "../translator/formats.ts"
 import type { WorkerEnv } from "../platform/env.ts"
-import { type Attempt, conduct, lifecycleError, type Prepared } from "./conductor.ts"
+import { type Attempt, attemptOptions, conduct, lifecycleError, type Prepared } from "./conductor.ts"
 import { rewriteResponseModel, rewriteStreamChunk } from "./model-rewrite.ts"
 import { resolveModel } from "./resolve.ts"
 import { extractSessionInfo } from "./session.ts"
@@ -186,7 +186,11 @@ export const executeNonStream = Effect.fnUntraced(function* (input: ExecutionInp
   const prepared = yield* prepare(input, false)
   const result = yield* conduct(prepared, (attempt) =>
     Effect.gen(function* () {
-      const response = yield* attempt.executor.execute(attempt.context, attempt.request, prepared.options)
+      const response = yield* attempt.executor.execute(
+        attempt.context,
+        attempt.request,
+        attemptOptions(prepared, attempt)
+      )
       yield* attempt.finish(undefined, response.headers)
       return {
         payload:
@@ -227,7 +231,11 @@ const readBootstrap = (pull: Pull.Pull<ReadonlyArray<string>, ExecutionError>) =
 const runStreamAttempt = (prepared: Prepared, attempt: Attempt) =>
   Effect.gen(function* () {
     prepared.onSelected?.(attempt.context.credential)
-    const result = yield* attempt.executor.executeStream(attempt.context, attempt.request, prepared.options)
+    const result = yield* attempt.executor.executeStream(
+      attempt.context,
+      attempt.request,
+      attemptOptions(prepared, attempt)
+    )
     // The pull lives in a child of the request scope: failed attempts close it, the winner stays open until the
     // response body is consumed.
     const parent = yield* Scope.Scope
@@ -291,7 +299,11 @@ export const executeCountTokens = Effect.fnUntraced(function* (input: ExecutionI
   const prepared: Prepared = { ...(yield* prepare(input, false)), countTokens: true }
   const result = yield* conduct(prepared, (attempt) =>
     Effect.gen(function* () {
-      const response = yield* attempt.executor.countTokens(attempt.context, attempt.request, prepared.options)
+      const response = yield* attempt.executor.countTokens(
+        attempt.context,
+        attempt.request,
+        attemptOptions(prepared, attempt)
+      )
       yield* attempt.finish(undefined, response.headers)
       return {
         payload: response.payload,

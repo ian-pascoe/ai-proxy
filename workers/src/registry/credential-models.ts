@@ -27,6 +27,7 @@ import {
   sectionModels,
   type Section
 } from "./catalog.ts"
+import { applyAntigravityHints } from "./antigravity-hints.ts"
 import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts"
 import type { ModelSource } from "./source.ts"
 
@@ -431,7 +432,10 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
     case "aistudio":
       return applyExcludedModels(sectionModels(catalogs, "aistudio"), excluded)
     case "antigravity":
-      return applyExcludedModels(sectionModels(catalogs, "antigravity"), excluded)
+      return applyExcludedModels(
+        applyAntigravityHints(sectionModels(catalogs, "antigravity"), source.antigravityHints),
+        excluded
+      )
     case "claude":
       return applyExcludedModels(
         configured.length > 0

@@ -6,6 +6,7 @@
  * (sdk/cliproxy/service_models.go) and `clientModelProjectionForAuth` (sdk/cliproxy/auth/conductor_models.go).
  */
 import type { ModelEntry, OAuthModelAlias } from "../config/schema.ts"
+import type { AntigravityModelHints } from "./antigravity-hints.ts"
 import { type Credential, type CredentialState, executorKey } from "../credentials/model.ts"
 
 export interface ModelSource {
@@ -27,6 +28,8 @@ export interface ModelSource {
   readonly modelAliases: ReadonlyArray<OAuthModelAlias>
   /** Config API keys: the `models` list of the owning entry/group. */
   readonly models?: ReadonlyArray<ModelEntry>
+  /** Antigravity credentials: the entitlements of the last `fetchAvailableModels` probe (KV), when known. */
+  readonly antigravityHints?: AntigravityModelHints
   readonly state: Omit<CredentialState, "rejectedAccessToken">
 }
 

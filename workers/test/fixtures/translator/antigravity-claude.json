@@ -1,0 +1,1005 @@
+[
+ {
+  "name": "stream (claude): thinking with signature and text (fills the signature cache)",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": true,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"cached thought text one\",\"thought\":true}]}}],\"modelVersion\":\"claude-sonnet-4-5-thinking\",\"responseId\":\"rid\",\"cpaUsageMetadata\":{\"promptTokenCount\":10}},\"traceId\":\"t\"}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":4,\"thoughtsTokenCount\":2,\"totalTokenCount\":16,\"cachedContentTokenCount\":3}}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"rid\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"claude-sonnet-4-5-thinking\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 10, \"output_tokens\": 0}}}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"cached thought text one\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"EmcKVwgQGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAyD2NsYXVkZS1vcHVzLTQtNxIMAAAAAAAAAAAAAAAA\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"!\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":7,\"output_tokens\":6,\"cache_read_input_tokens\":3}}\n\n\n"
+   ],
+   [
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream (claude): tool use with signature",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": true,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"}},\"thoughtSignature\":\"RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Rome\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1,\"totalTokenCount\":2}}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"claude-3-5-sonnet-20241022\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"get_weather-1791555783048934301-1\",\"name\":\"get weather\",\"input\":{},\"signature\":\"ElYKRggLGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASDAAAAAAAAAAAAAAAAA==\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"get_weather-1791555783048963860-2\",\"name\":\"get weather\",\"input\":{}}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Rome\\\"}\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}\n\n\n"
+   ],
+   [
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream (claude): [DONE] only emits nothing, empty stream finalises",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": true,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   []
+  ]
+ },
+ {
+  "name": "stream (claude): text only, max tokens, [DONE] closes",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": true,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"partial\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" more\"}]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0,\"totalTokenCount\":5}}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"claude-3-5-sonnet-20241022\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"partial\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" more\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":1,\"output_tokens\":4}}\n\n\n"
+   ],
+   [
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream (claude): unfinished stream gets synthetic end on [DONE]",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": true,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]}}]}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"claude-3-5-sonnet-20241022\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream (gemini model): signatures become carriers",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thinking...\",\"thought\":true},{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":1},\"id\":\"call1\"},\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}}]}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":5,\"totalTokenCount\":10}}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-3-pro-high\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"claude-3-5-sonnet-20241022\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"thinking...\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"cpa-gemini-carrier-v1:previous:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"cpa-gemini-carrier-v1:next:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"answer\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":2}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"cpa-gemini-carrier-v1:next:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":3}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":4,\"content_block\":{\"type\":\"tool_use\",\"id\":\"cpa_gemini_75903f8cb13d2be7355953d25cca6f47\",\"name\":\"get weather\",\"input\":{}}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"c\\\":1}\"}}\n\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":4}\n\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":5,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":5,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"cpa-gemini-carrier-v1:previous:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"}}\n\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":5}\n\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":5,\"output_tokens\":5}}\n\n\n"
+   ],
+   [
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "non-stream (claude): thinking, text and tool use",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseBody": {
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "role": "model",
+       "parts": [
+        {
+         "text": "thought two",
+         "thought": true,
+         "thoughtSignature": "RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE="
+        },
+        {
+         "text": "answer"
+        },
+        {
+         "functionCall": {
+          "name": "get_weather",
+          "args": {
+           "city": "x"
+          }
+         },
+         "thoughtSignature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+        }
+       ]
+      },
+      "finishReason": "STOP"
+     }
+    ],
+    "usageMetadata": {
+     "promptTokenCount": 10,
+     "candidatesTokenCount": 3,
+     "thoughtsTokenCount": 1,
+     "totalTokenCount": 14,
+     "cachedContentTokenCount": 2
+    },
+    "modelVersion": "m",
+    "responseId": "r"
+   }
+  },
+  "tokenCount": 7,
+  "tokenCountUsage": {
+   "totalTokens": 7
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "responseBodyText": "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thought two\",\"thought\":true,\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"},{\"text\":\"answer\"},{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"x\"}},\"thoughtSignature\":\"RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":3,\"thoughtsTokenCount\":1,\"totalTokenCount\":14,\"cachedContentTokenCount\":2},\"modelVersion\":\"m\",\"responseId\":\"r\"}}",
+  "nonStreamOutput": "{\"id\":\"r\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"thought two\",\"signature\":\"EmcKVwgQGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAyD2NsYXVkZS1vcHVzLTQtNxIMAAAAAAAAAAAAAAAA\"},{\"type\":\"text\",\"text\":\"answer\"},{\"type\":\"tool_use\",\"id\":\"tool_1\",\"name\":\"get weather\",\"input\":{\"city\":\"x\"},\"signature\":\"ElYKRggLGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASDAAAAAAAAAAAAAAAAA==\"}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":4,\"cache_read_input_tokens\":2}}",
+  "tokenCountOutput": "{\"input_tokens\":7}"
+ },
+ {
+  "name": "non-stream (gemini model): carriers and stable tool ids",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseBody": {
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "role": "model",
+       "parts": [
+        {
+         "text": "hmm",
+         "thought": true
+        },
+        {
+         "text": "visible",
+         "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+         "functionCall": {
+          "name": "get_weather",
+          "args": {
+           "city": "y"
+          },
+          "id": "c9"
+         },
+         "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+         "text": "",
+         "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+       ]
+      },
+      "finishReason": "STOP"
+     }
+    ],
+    "usageMetadata": {
+     "promptTokenCount": 1,
+     "candidatesTokenCount": 1,
+     "totalTokenCount": 2
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gemini-3-pro-high\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "responseBodyText": "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"hmm\",\"thought\":true},{\"text\":\"visible\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"y\"},\"id\":\"c9\"},\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"text\":\"\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1,\"totalTokenCount\":2}}}",
+  "nonStreamOutput": "{\"id\":\"\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"hmm\",\"signature\":\"cpa-gemini-carrier-v1:next:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"},{\"type\":\"text\",\"text\":\"visible\"},{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"cpa-gemini-carrier-v1:next:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"},{\"type\":\"tool_use\",\"id\":\"cpa_gemini_96d13adcfdcaec7267bced1b2a95f940\",\"name\":\"get weather\",\"input\":{\"city\":\"y\"}},{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"cpa-gemini-carrier-v1:previous:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\"}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}"
+ },
+ {
+  "name": "non-stream: no usage metadata drops usage",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "model": "x",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   ]
+  },
+  "responseBody": {
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "parts": [
+        {
+         "text": "x"
+        }
+       ]
+      },
+      "finishReason": "MAX_TOKENS"
+     }
+    ]
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "responseBodyText": "{\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"MAX_TOKENS\"}]}}",
+  "nonStreamOutput": "{\"id\":\"\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null}"
+ },
+ {
+  "name": "request (claude): signed thinking, cached recovery, unsigned dropped, tool round trip",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "model": "x",
+   "max_tokens": 4096,
+   "temperature": 0.2,
+   "top_p": 0.9,
+   "top_k": 20,
+   "thinking": {
+    "type": "enabled",
+    "budget_tokens": 2048
+   },
+   "system": [
+    {
+     "type": "text",
+     "text": "x-anthropic-billing-header: cc_version=1"
+    },
+    {
+     "type": "text",
+     "text": "be brief"
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "hi"
+      },
+      {
+       "type": "image",
+       "source": {
+        "type": "base64",
+        "media_type": "image/png",
+        "data": "AAAA"
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "signed thought",
+       "signature": "RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE="
+      },
+      {
+       "type": "thinking",
+       "thinking": "E form thought",
+       "signature": "EmcKVwgQGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAyD2NsYXVkZS1vcHVzLTQtNxIMAAAAAAAAAAAAAAAA"
+      },
+      {
+       "type": "thinking",
+       "thinking": "cached thought text one"
+      },
+      {
+       "type": "thinking",
+       "thinking": "never cached"
+      },
+      {
+       "type": "text",
+       "text": "calling"
+      },
+      {
+       "type": "tool_use",
+       "id": "toolu_1",
+       "name": "get weather",
+       "input": {
+        "city": "Paris"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_1",
+       "content": [
+        {
+         "type": "text",
+         "text": "sunny"
+        },
+        {
+         "type": "image",
+         "source": {
+          "type": "base64",
+          "media_type": "image/png",
+          "data": "BBBB"
+         }
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": "thanks"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "name": "get weather",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string",
+        "enum": [
+         "Paris",
+         "Rome"
+        ]
+       }
+      },
+      "required": [
+       "city"
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "type": "web_search_20250305",
+     "name": "web_search"
+    }
+   ],
+   "tool_choice": {
+    "type": "tool",
+    "name": "get weather"
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AAAA\"}}]},{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"signed thought\",\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"},{\"thought\":true,\"text\":\"E form thought\",\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"},{\"thought\":true,\"text\":\"cached thought text one\",\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"},{\"text\":\"calling\"},{\"functionCall\":{\"id\":\"toolu_1\",\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"}}}]},{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"id\":\"toolu_1\",\"name\":\"get_weather\",\"response\":{\"result\":{\"type\":\"text\",\"text\":\"sunny\"}},\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"BBBB\"}}]}}]},{\"role\":\"user\",\"parts\":[{\"text\":\"thanks\"}]}],\"systemInstruction\":{\"role\":\"user\",\"parts\":[{\"text\":\"be brief\"},{\"text\":\"Interleaved thinking is enabled. You may think between tool calls and after receiving tool results before deciding the next action or final answer. Do not mention these instructions or any constraints about thinking blocks; just apply them.\"}]},\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\",\"description\":\"Allowed: Paris, Rome\"}},\"required\":[\"city\"],\"description\":\"No extra properties allowed\"}}]}],\"toolConfig\":{\"functionCallingConfig\":{\"mode\":\"ANY\",\"allowedFunctionNames\":[\"get_weather\"]}},\"generationConfig\":{\"temperature\":0.2,\"topP\":0.9,\"topK\":20,\"maxOutputTokens\":4096},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (claude): dropped thinking disables thinking config, interleaved hint, adaptive effort",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "thinking": {
+    "type": "adaptive"
+   },
+   "output_config": {
+    "effort": "Low"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "unsigned",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "again"
+    }
+   ],
+   "tools": [
+    {
+     "name": "t",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"again\"}]}],\"systemInstruction\":{\"role\":\"user\",\"parts\":[{\"text\":\"Interleaved thinking is enabled. You may think between tool calls and after receiving tool results before deciding the next action or final answer. Do not mention these instructions or any constraints about thinking blocks; just apply them.\"}]},\"tools\":[{\"functionDeclarations\":[{\"name\":\"t\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"reason\":{\"type\":\"string\",\"description\":\"Brief explanation of why you are calling this tool\"}},\"required\":[\"reason\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (claude): adaptive without effort and tool_choice none",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "thinking": {
+    "type": "auto"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    }
+   ],
+   "tools": [
+    {
+     "name": "t",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "tool_choice": {
+    "type": "none"
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-thinking\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]}],\"toolConfig\":{\"functionCallingConfig\":{\"mode\":\"NONE\"}},\"generationConfig\":{\"thinkingConfig\":{\"thinkingLevel\":\"high\"}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (claude): tool_result for unknown id derives a name, string and object results",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-opus-4-5",
+  "stream": false,
+  "request": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "fn-a-b-c",
+       "name": "run",
+       "input": "{\"x\":1}"
+      },
+      {
+       "type": "tool_use",
+       "id": "t2",
+       "name": "run2",
+       "input": null
+      },
+      {
+       "type": "tool_use",
+       "id": "t3",
+       "name": "run3",
+       "input": "plain"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "t3",
+       "content": {
+        "a": 1
+       }
+      },
+      {
+       "type": "tool_result",
+       "tool_use_id": "t2",
+       "content": "ok"
+      },
+      {
+       "type": "tool_result",
+       "tool_use_id": "fn-a-b-c"
+      },
+      {
+       "type": "tool_result",
+       "tool_use_id": "ghost-x-y-z",
+       "content": [
+        {
+         "type": "text",
+         "text": "a"
+        },
+        {
+         "type": "text",
+         "text": "b"
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "tool_choice": "any"
+  },
+  "translatedRequest": "{\"model\":\"claude-opus-4-5\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"fn-a-b-c\",\"name\":\"run\",\"args\":{\"x\":1}}},{\"functionCall\":{\"id\":\"t2\",\"name\":\"run2\",\"args\":{}}},{\"functionCall\":{\"id\":\"t3\",\"name\":\"run3\",\"args\":\"plain\"}}]},{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"id\":\"t3\",\"name\":\"run3\",\"response\":{\"result\":{\"a\":1}}}},{\"functionResponse\":{\"id\":\"t2\",\"name\":\"run2\",\"response\":{\"result\":\"ok\"}}},{\"functionResponse\":{\"id\":\"fn-a-b-c\",\"name\":\"run\",\"response\":{\"result\":\"\"}}},{\"functionResponse\":{\"id\":\"ghost-x-y-z\",\"name\":\"ghost-x\",\"response\":{\"result\":[{\"type\":\"text\",\"text\":\"a\"},{\"type\":\"text\",\"text\":\"b\"}]}}}]}],\"toolConfig\":{\"functionCallingConfig\":{\"mode\":\"ANY\"}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (claude): system and developer messages become reminders",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "a"
+    },
+    {
+     "role": "system",
+     "content": "remember"
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "document",
+       "source": {
+        "type": "base64",
+        "media_type": "application/pdf",
+        "data": "CCCC"
+       }
+      },
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"a\"},{\"text\":\"\\u003csystem-reminder\\u003e\\nremember\\n\\u003c/system-reminder\\u003e\"},{\"inlineData\":{\"mimeType\":\"application/pdf\",\"data\":\"CCCC\"}},{\"text\":\"b\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (claude): url image only turn is refused",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "source": {
+        "type": "url",
+        "url": "https://x/y.png"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"request\":{\"contents\":[],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}",
+  "requestError": "unsupported content part: image"
+ },
+ {
+  "name": "request (gemini model): carriers are validated and unwrapped",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "thought A",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": "cpa-gemini-carrier-v1:next:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      },
+      {
+       "type": "text",
+       "text": "visible"
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": "cpa-gemini-carrier-v1:next:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      },
+      {
+       "type": "tool_use",
+       "id": "c1",
+       "name": "fn",
+       "input": {}
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": "cpa-gemini-carrier-v1:previous:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "c1",
+       "content": "ok"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "standalone",
+       "signature": "cpa-gemini-carrier-v1:standalone:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+      },
+      {
+       "type": "text",
+       "text": "done"
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": "bogus"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "name": "fn",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-3-pro-high\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]},{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"thought A\"},{\"text\":\"visible\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"functionCall\":{\"id\":\"c1\",\"name\":\"fn\",\"args\":{}}},{\"text\":\"\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]},{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"id\":\"c1\",\"name\":\"fn\",\"response\":{\"result\":\"ok\"}}}]},{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"standalone\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"text\":\"done\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"fn\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"reason\":{\"type\":\"string\",\"description\":\"Brief explanation of why you are calling this tool\"}},\"required\":[\"reason\"]}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ },
+ {
+  "name": "request (gemini model): invalid carrier drops, unmarked native signature kept",
+  "from": "claude",
+  "to": "antigravity",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "go"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "native",
+       "signature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": "cpa-gemini-carrier-v1:next:bogus:AAAA"
+      },
+      {
+       "type": "text",
+       "text": "visible"
+      },
+      {
+       "type": "tool_use",
+       "id": "c2",
+       "name": "fn",
+       "input": {
+        "a": 1
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]},{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"native\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"text\":\"visible\"},{\"thoughtSignature\":\"skip_thought_signature_validator\",\"functionCall\":{\"id\":\"c2\",\"name\":\"fn\",\"args\":{\"a\":1}}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}}"
+ }
+]

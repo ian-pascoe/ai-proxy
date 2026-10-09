@@ -91,7 +91,7 @@ export const compatibleGptSignature = (raw: string): string | undefined => {
 
 const KIMI_LENGTHS = new Set([12946, 4340])
 
-const entropyRatio = (bytes: Uint8Array): number => {
+export const entropyRatio = (bytes: Uint8Array): number => {
   if (bytes.length === 0) return 0
   const counts = Array.from({ length: 256 }, () => 0)
   for (const b of bytes) counts[b] = (counts[b] ?? 0) + 1

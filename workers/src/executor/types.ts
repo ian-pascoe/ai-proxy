@@ -59,6 +59,11 @@ export interface ExecutionMetadata {
   readonly sessionId?: string
   /** Set for requests that arrive over the Responses WebSocket (`handlers/responses/websocket`). */
   readonly websocket?: WebsocketExecution
+  /**
+   * Antigravity credits fallback round: the attempt asks for `enabledCreditTypes: ["GOOGLE_ONE_AI"]`
+   * (Go `cliproxyauth.WithAntigravityCredits`).
+   */
+  readonly antigravityCredits?: boolean
 }
 
 /** Go `executor.Options`. */

@@ -33,7 +33,9 @@ type corpusCase struct {
 	Stream bool   `json:"stream"`
 	// Needs lists TypeScript capabilities the case depends on (e.g. "thinking-summary"); the TS harness skips
 	// cases whose needs are not implemented yet.
-	Needs   []string        `json:"needs,omitempty"`
+	Needs []string `json:"needs,omitempty"`
+	// Alt is the Gemini `alt` request option the handlers put into the translator context (`ctx.Value("alt")`).
+	Alt     *string         `json:"alt,omitempty"`
 	Request json.RawMessage `json:"request"`
 	// ResponseLines are raw upstream SSE lines (without line terminators) for the stream translator.
 	ResponseLines []string `json:"responseLines,omitempty"`
@@ -71,6 +73,9 @@ func compactJSON(raw []byte) []byte {
 
 func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 	ctx := context.Background()
+	if c.Alt != nil {
+		ctx = context.WithValue(ctx, "alt", *c.Alt)
+	}
 	c.Request = compactJSON(c.Request)
 	from := sdktranslator.FromString(c.From)
 	to := sdktranslator.FromString(c.To)

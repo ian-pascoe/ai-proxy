@@ -72,6 +72,11 @@ export interface ResponseContext {
   /** The translated (provider-format) request body. */
   readonly translatedRequest: Json | undefined
   readonly state: TranslationState
+  /**
+   * The Gemini `alt` request option (Go `ctx.Value("alt")`): `""` = SSE, another value = raw chunks, `undefined` =
+   * not a Gemini-entry request. Only the Antigravity Gemini response translator reads it.
+   */
+  readonly alt?: string
 }
 
 /** One upstream line -> zero or more complete client chunks. */

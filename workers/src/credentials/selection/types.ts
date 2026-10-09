@@ -39,6 +39,8 @@ export const PickRequest = Schema.Struct({
   disallowFreeCodex: optional(Schema.Boolean),
   /** Downstream WebSocket request: prefer Codex credentials with `websockets=true`. */
   preferWebsockets: optional(Schema.Boolean),
+  /** Antigravity credits fallback: credentials in a quota cooldown stay selectable (disabled/expired ones do not). */
+  ignoreCooldown: optional(Schema.Boolean),
   session: optional(SessionRef)
 })
 export type PickRequest = typeof PickRequest.Type

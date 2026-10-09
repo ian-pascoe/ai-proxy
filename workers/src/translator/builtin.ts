@@ -2,6 +2,7 @@
  * Built-in translator registrations (Go: internal/translator/init.go imports every pair's `init.go`).
  * Provider slices add their pairs here.
  */
+import { registerAntigravityTranslators } from "./antigravity/register.ts"
 import { registerClaudeTranslators } from "./claude/register.ts"
 import { Formats } from "./formats.ts"
 import { registerGeminiTranslators } from "./gemini/register.ts"
@@ -19,6 +20,7 @@ export const registerBuiltinTranslators = (registry: TranslatorRegistry): Transl
   registerGeminiTranslators(registry)
   registerInteractionsTranslators(registry)
   registerOpenAICompatTranslators(registry)
+  registerAntigravityTranslators(registry)
   return registry
 }
 

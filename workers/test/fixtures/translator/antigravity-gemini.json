@@ -1,0 +1,797 @@
+[
+ {
+  "name": "request: system instruction, roles, tools renamed, duplicate declarations removed",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "system_instruction": {
+    "parts": [
+     {
+      "text": "be brief"
+     }
+    ]
+   },
+   "contents": [
+    {
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "role": "bot",
+     "parts": [
+      {
+       "text": "hello"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "weather?"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "description": "d",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        }
+       }
+      },
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "function_declarations": []
+    },
+    {
+     "functionDeclarations": []
+    }
+   ],
+   "toolConfig": {
+    "functionCallingConfig": {
+     "mode": "ANY",
+     "allowedFunctionNames": [
+      "get weather"
+     ]
+    }
+   },
+   "generationConfig": {
+    "responseJsonSchema": {
+     "type": "object"
+    },
+    "maxOutputTokens": 100
+   }
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"parts\":[{\"text\":\"hi\"}],\"role\":\"user\"},{\"role\":\"model\",\"parts\":[{\"text\":\"hello\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"weather?\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}}]}],\"toolConfig\":{\"functionCallingConfig\":{\"mode\":\"ANY\",\"allowedFunctionNames\":[\"get_weather\"]}},\"generationConfig\":{\"maxOutputTokens\":100,\"responseSchema\":{\"type\":\"object\"}},\"systemInstruction\":{\"parts\":[{\"text\":\"be brief\"}]},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}"
+ },
+ {
+  "name": "request: snake case config keys and function name references",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "call"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "function_call": {
+        "name": "a.b/c",
+        "args": {}
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "function_response": {
+        "name": "a.b/c",
+        "response": {
+         "r": 1
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "function_declarations": [
+      {
+       "name": "a.b/c",
+       "parameters": {
+        "type": "object"
+       }
+      },
+      {
+       "name": "a.b_c",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ],
+   "tool_config": {
+    "function_calling_config": {
+     "allowed_function_names": [
+      "a.b/c"
+     ]
+    }
+   },
+   "generation_config": {
+    "response_json_schema": {
+     "type": "string"
+    }
+   }
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"call\"}]},{\"role\":\"model\",\"parts\":[{\"function_call\":{\"name\":\"a.b_c_852ca9bbeda8\",\"args\":{}}}]},{\"role\":\"user\",\"parts\":[{\"function_response\":{\"name\":\"a.b_c_852ca9bbeda8\",\"response\":{\"r\":1}}}]}],\"tools\":[{\"function_declarations\":[{\"name\":\"a.b_c_852ca9bbeda8\",\"parametersJsonSchema\":{\"type\":\"object\"}},{\"name\":\"a.b_c_f1c5a1030c5b\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"tool_config\":{\"function_calling_config\":{\"allowed_function_names\":[\"a.b_c_852ca9bbeda8\"]}},\"generation_config\":{\"responseSchema\":{\"type\":\"string\"}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-2.5-pro\"}"
+ },
+ {
+  "name": "request: function responses grouped FIFO, names backfilled, sibling inline data attached",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-flash",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "go"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "functionCall": {
+        "name": "first",
+        "args": {
+         "a": 1
+        }
+       }
+      },
+      {
+       "functionCall": {
+        "name": "second",
+        "args": {}
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "",
+        "response": {
+         "ok": true
+        }
+       }
+      },
+      {
+       "inline_data": {
+        "mime_type": "image/jpeg",
+        "data": "AAAA"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "dropped with responses"
+      },
+      {
+       "functionResponse": {
+        "name": "second",
+        "response": {
+         "ok": 2
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "done"
+      }
+     ]
+    },
+    "not an object",
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "again"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"go\"}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"first\",\"args\":{\"a\":1}},\"thoughtSignature\":\"skip_thought_signature_validator\"},{\"functionCall\":{\"name\":\"second\",\"args\":{}}}]},{\"parts\":[{\"functionResponse\":{\"name\":\"first\",\"response\":{\"ok\":true},\"parts\":[{\"inlineData\":{\"mimeType\":\"image/jpeg\",\"data\":\"AAAA\"}}]}},{\"functionResponse\":{\"name\":\"second\",\"response\":{\"ok\":2}}}],\"role\":\"user\"},{\"role\":\"model\",\"parts\":[{\"text\":\"done\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"again\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-flash\"}"
+ },
+ {
+  "name": "request: contents without function responses stay untouched",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "safetySettings": [
+    {
+     "category": "X",
+     "threshold": "BLOCK_NONE"
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"safetySettings\":[{\"category\":\"X\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-2.5-flash\"}"
+ },
+ {
+  "name": "request: thought signatures sanitised for Gemini targets",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "run"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "thinking",
+       "thought": true,
+       "thoughtSignature": "CAISYQpfCBAYAipAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADINY2xhdWRlLW9wdXMtNUIIdGhpbmtpbmcYAQ=="
+      },
+      {
+       "functionCall": {
+        "name": "t",
+        "args": {}
+       },
+       "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      {
+       "functionCall": {
+        "name": "u",
+        "args": {}
+       },
+       "thoughtSignature": "ElYKRggLGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASDAAAAAAAAAAAAAAAAA=="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "t",
+        "response": {}
+       },
+       "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"run\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"thinking\",\"thought\":true},{\"functionCall\":{\"name\":\"t\",\"args\":{}},\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"functionCall\":{\"name\":\"u\",\"args\":{}}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}"
+ },
+ {
+  "name": "request: Claude model keeps strict Claude thinking signatures and strips the rest",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "run"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "good thought",
+       "thought": true,
+       "thoughtSignature": "EmcKVwgQGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAyD2NsYXVkZS1vcHVzLTQtNxIMAAAAAAAAAAAAAAAA"
+      },
+      {
+       "text": "r form",
+       "thought": true,
+       "thought_signature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+      },
+      {
+       "text": "gemini sig",
+       "thought": true,
+       "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      {
+       "text": "   ",
+       "thought": true,
+       "thoughtSignature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+      },
+      {
+       "text": "answer",
+       "thoughtSignature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+      },
+      {
+       "functionCall": {
+        "name": "t",
+        "args": {
+         "thoughtSignature": "x",
+         "n": 12345678901234567890
+        }
+       },
+       "thoughtSignature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "t",
+        "response": {}
+       },
+       "thoughtSignature": "abc"
+      },
+      {
+       "text": "hello",
+       "thoughtSignature": "x"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "only bad",
+       "thought": true,
+       "thoughtSignature": "nope"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"run\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"good thought\",\"thought\":true,\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"},{\"text\":\"r form\",\"thought\":true,\"thoughtSignature\":\"RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09\"},{\"text\":\"answer\"},{\"functionCall\":{\"args\":{\"n\":12345678901234567890,\"thoughtSignature\":\"x\"},\"name\":\"t\"}}]},{\"parts\":[{\"functionResponse\":{\"name\":\"t\",\"response\":{}}}],\"role\":\"user\"}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"claude-sonnet-4-5-thinking\"}"
+ },
+ {
+  "name": "request: Claude model with CAQS signature",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "Claude-Opus-5",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "run"
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "deep",
+       "thought": true,
+       "thoughtSignature": "claude#Q0FRUzRRZ0tFZ2dTRUFJWUFqZ0JRZ2gwYUdsdWEybHVaeElNQUFBQUFBQUFBQUFBQUFBQUdnd0FBQUFBQUFBQUFBQUFBQUFpTUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFDcjhCd0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUJnQg=="
+      },
+      {
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"run\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"deep\",\"thought\":true,\"thoughtSignature\":\"Q0FRUzRRZ0tFZ2dTRUFJWUFqZ0JRZ2gwYUdsdWEybHVaeElNQUFBQUFBQUFBQUFBQUFBQUdnd0FBQUFBQUFBQUFBQUFBQUFpTUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFDcjhCd0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUJnQg==\"},{\"text\":\"ok\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"Claude-Opus-5\"}"
+ },
+ {
+  "name": "stream: SSE unwraps response, restores usage and names",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "alt": "",
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},\"traceId\":\"t\"}",
+   "",
+   "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":\"x\"}}}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":2,\"totalTokenCount\":5}},\"traceId\":\"t\"}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\",\"usageMetadata\":{\"promptTokenCount\":3}}"
+   ],
+   [
+    ""
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get weather\",\"args\":{\"c\":\"x\"}}}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":2,\"totalTokenCount\":5}}"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: synthesised terminal chunk when upstream never finishes",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "alt": "",
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},\"traceId\":\"t\"}",
+   "data: [DONE]",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\",\"usageMetadata\":{\"promptTokenCount\":3}}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"}"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: [DONE] without any response yields nothing",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "alt": "",
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   [
+    ""
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: non-SSE alt collects array items",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "alt": "json",
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "[{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},\"traceId\":\"t\"},{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":\"x\"}}}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":2,\"totalTokenCount\":5}},\"traceId\":\"t\"}]",
+   "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},\"traceId\":\"t\"}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   [
+    "[{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":\"x\"}}}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":2,\"totalTokenCount\":5}}]"
+   ],
+   [
+    "[]"
+   ],
+   [
+    "[{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"}]"
+   ]
+  ]
+ },
+ {
+  "name": "stream: not a Gemini entry produces no chunks",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"cpaUsageMetadata\":{\"promptTokenCount\":3},\"modelVersion\":\"gemini-3\",\"responseId\":\"r1\"},\"traceId\":\"t\"}"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   []
+  ]
+ },
+ {
+  "name": "non-stream: response unwrapped, finishReason defaulted, names restored",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseBody": {
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "role": "model",
+       "parts": [
+        {
+         "functionCall": {
+          "name": "get_weather",
+          "args": {}
+         }
+        }
+       ]
+      }
+     },
+     {
+      "content": {
+       "parts": []
+      },
+      "finishReason": "MAX_TOKENS"
+     }
+    ],
+    "cpaUsageMetadata": {
+     "totalTokenCount": 2
+    }
+   },
+   "traceId": "x"
+  },
+  "tokenCount": 42,
+  "tokenCountUsage": {
+   "totalTokens": 42
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "responseBodyText": "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{}}}]}},{\"content\":{\"parts\":[]},\"finishReason\":\"MAX_TOKENS\"}],\"cpaUsageMetadata\":{\"totalTokenCount\":2}},\"traceId\":\"x\"}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get weather\",\"args\":{}}}]},\"finishReason\":\"STOP\"},{\"content\":{\"parts\":[]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"totalTokenCount\":2}}",
+  "tokenCountOutput": "{\"totalTokens\":42,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":42}]}"
+ },
+ {
+  "name": "non-stream: unwrapped body passes through",
+  "from": "gemini",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get weather",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "responseBody": {
+   "candidates": [
+    {
+     "content": {
+      "role": "model",
+      "parts": [
+       {
+        "text": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"parametersJsonSchema\":{\"type\":\"object\"}}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "responseBodyText": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]}}]}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"STOP\"}]}"
+ }
+]

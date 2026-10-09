@@ -1,0 +1,265 @@
+[
+ {
+  "name": "request: instructions, tools, function call history",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "request": {
+   "model": "x",
+   "instructions": "be brief",
+   "reasoning": {
+    "effort": "high"
+   },
+   "max_output_tokens": 500,
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "d",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call",
+     "call_id": "c1",
+     "name": "get_weather",
+     "arguments": "{\"city\":\"Paris\"}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "c1",
+     "output": "sunny"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "and Berlin?"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"},\"id\":\"c1\"},\"thoughtSignature\":\"skip_thought_signature_validator\"}]},{\"parts\":[{\"functionResponse\":{\"name\":\"get_weather\",\"response\":{\"result\":\"sunny\"},\"id\":\"c1\"}}],\"role\":\"user\"},{\"role\":\"user\",\"parts\":[{\"text\":\"and Berlin?\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"get_weather\",\"description\":\"d\",\"parametersJsonSchema\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}}]}],\"systemInstruction\":{\"parts\":[{\"text\":\"be brief\"}]},\"generationConfig\":{\"maxOutputTokens\":500,\"thinkingConfig\":{\"thinkingLevel\":\"high\",\"includeThoughts\":true}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}"
+ },
+ {
+  "name": "request: reasoning effort none keeps summary untouched",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "reasoning": {
+    "effort": "none"
+   },
+   "input": "hello"
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\"}]}],\"generationConfig\":{\"thinkingConfig\":{\"thinkingLevel\":\"none\"}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-2.5-flash\"}"
+ },
+ {
+  "name": "request: explicit summary visibility is kept",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-3-flash",
+  "stream": false,
+  "request": {
+   "reasoning": {
+    "effort": "low",
+    "summary": "detailed"
+   },
+   "input": "hello"
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\"}]}],\"generationConfig\":{\"thinkingConfig\":{\"thinkingLevel\":\"low\",\"includeThoughts\":true}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-flash\"}"
+ },
+ {
+  "name": "request: Claude model rewrites reasoning signatures",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "claude-sonnet-4-5-thinking",
+  "stream": false,
+  "request": {
+   "reasoning": {
+    "effort": "medium"
+   },
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go"
+      }
+     ]
+    },
+    {
+     "type": "reasoning",
+     "summary": [
+      {
+       "type": "summary_text",
+       "text": "deep thought"
+      }
+     ],
+     "encrypted_content": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "type": "reasoning",
+     "summary": [
+      {
+       "type": "summary_text",
+       "text": "bad one"
+      }
+     ],
+     "encrypted_content": "junk"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "second"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "more"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"parts\":[{\"text\":\"go\"}],\"role\":\"user\"},{\"parts\":[{\"text\":\"deep thought\",\"thought\":true,\"thoughtSignature\":\"RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09\"},{\"text\":\"answer\"},{\"text\":\"second\"}],\"role\":\"model\"},{\"parts\":[{\"text\":\"more\"}],\"role\":\"user\"}],\"generationConfig\":{\"thinkingConfig\":{\"thinkingLevel\":\"medium\",\"includeThoughts\":true}},\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"claude-sonnet-4-5-thinking\"}"
+ },
+ {
+  "name": "request: web search tool without native capability falls back to a plain request",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-3-flash",
+  "stream": false,
+  "request": {
+   "tools": [
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "search me"
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"search me\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-flash\"}"
+ },
+ {
+  "name": "stream: Gemini events unwrapped into Responses events",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": true,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "input": "hi"
+  },
+  "responseLines": [
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]}}],\"modelVersion\":\"g\",\"responseId\":\"r1\"}}",
+   "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":2,\"totalTokenCount\":3}}}",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"resp_r1\",\"object\":\"response\",\"created_at\":1791555783,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gemini-3-pro-high\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"resp_r1\",\"object\":\"response\",\"created_at\":1791555783,\"status\":\"in_progress\",\"output\":[],\"model\":\"gemini-3-pro-high\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"msg_resp_r1_0\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"role\":\"assistant\"}}\n\n",
+    "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":4,\"item_id\":\"msg_resp_r1_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\n",
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_resp_r1_0\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hel\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":6,\"item_id\":\"msg_resp_r1_0\",\"output_index\":0,\"content_index\":0,\"delta\":\"lo\",\"logprobs\":[]}\n\n",
+    "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":7,\"item_id\":\"msg_resp_r1_0\",\"output_index\":0,\"content_index\":0,\"text\":\"Hello\",\"logprobs\":[]}\n\n",
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":8,\"item_id\":\"msg_resp_r1_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":9,\"output_index\":0,\"item\":{\"id\":\"msg_resp_r1_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello\"}],\"role\":\"assistant\"}}\n\n",
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":10,\"response\":{\"id\":\"resp_r1\",\"object\":\"response\",\"created_at\":1791555783,\"status\":\"completed\",\"background\":false,\"error\":null,\"output\":[{\"id\":\"msg_resp_r1_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello\"}],\"role\":\"assistant\"}],\"usage\":{\"input_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":3}}}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "non-stream: response unwrapped",
+  "from": "openai-response",
+  "to": "antigravity",
+  "model": "gemini-3-pro-high",
+  "stream": false,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "input": "hi"
+  },
+  "responseBody": {
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "role": "model",
+       "parts": [
+        {
+         "text": "Hi"
+        }
+       ]
+      },
+      "finishReason": "STOP"
+     }
+    ],
+    "usageMetadata": {
+     "promptTokenCount": 1,
+     "candidatesTokenCount": 1,
+     "totalTokenCount": 2
+    },
+    "responseId": "r",
+    "modelVersion": "m"
+   }
+  },
+  "translatedRequest": "{\"project\":\"\",\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]},\"model\":\"gemini-3-pro-high\"}",
+  "responseBodyText": "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1,\"totalTokenCount\":2},\"responseId\":\"r\",\"modelVersion\":\"m\"}}",
+  "nonStreamOutput": "{\"id\":\"resp_r\",\"object\":\"response\",\"created_at\":1791555783,\"status\":\"completed\",\"background\":false,\"error\":null,\"incomplete_details\":null,\"model\":\"m\",\"output\":[{\"id\":\"msg_r_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hi\"}],\"role\":\"assistant\"}],\"usage\":{\"input_tokens\":1,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":2}}"
+ }
+]

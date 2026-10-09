@@ -1,0 +1,916 @@
+[
+  {
+    "name": "stream (claude): thinking with signature and text (fills the signature cache)",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": true,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"cached thought text one\",\"thought\":true}]}}],\"modelVersion\":\"claude-sonnet-4-5-thinking\",\"responseId\":\"rid\",\"cpaUsageMetadata\":{\"promptTokenCount\":10}},\"traceId\":\"t\"}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE=\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":4,\"thoughtsTokenCount\":2,\"totalTokenCount\":16,\"cachedContentTokenCount\":3}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream (claude): tool use with signature",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"}},\"thoughtSignature\":\"RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Rome\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1,\"totalTokenCount\":2}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream (claude): [DONE] only emits nothing, empty stream finalises",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": true,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream (claude): text only, max tokens, [DONE] closes",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": true,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"partial\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" more\"}]},\"finishReason\":\"MAX_TOKENS\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":0,\"totalTokenCount\":5}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream (claude): unfinished stream gets synthetic end on [DONE]",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": true,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]}}]}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream (gemini model): signatures become carriers",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"thinking...\",\"thought\":true},{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":1},\"id\":\"call1\"},\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}}]}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":5,\"totalTokenCount\":10}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream (claude): thinking, text and tool use",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "thought two",
+                  "thought": true,
+                  "thoughtSignature": "RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE="
+                },
+                {
+                  "text": "answer"
+                },
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "city": "x"
+                    }
+                  },
+                  "thoughtSignature": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+                }
+              ]
+            },
+            "finishReason": "STOP"
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 10,
+          "candidatesTokenCount": 3,
+          "thoughtsTokenCount": 1,
+          "totalTokenCount": 14,
+          "cachedContentTokenCount": 2
+        },
+        "modelVersion": "m",
+        "responseId": "r"
+      }
+    },
+    "tokenCount": 7,
+    "tokenCountUsage": {
+      "totalTokens": 7
+    }
+  },
+  {
+    "name": "non-stream (gemini model): carriers and stable tool ids",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "hmm",
+                  "thought": true
+                },
+                {
+                  "text": "visible",
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "city": "y"
+                    },
+                    "id": "c9"
+                  },
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "text": "",
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                }
+              ]
+            },
+            "finishReason": "STOP"
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1,
+          "candidatesTokenCount": 1,
+          "totalTokenCount": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: no usage metadata drops usage",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "model": "x",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "x"
+                }
+              ]
+            },
+            "finishReason": "MAX_TOKENS"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "request (claude): signed thinking, cached recovery, unsigned dropped, tool round trip",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "model": "x",
+      "max_tokens": 4096,
+      "temperature": 0.2,
+      "top_p": 0.9,
+      "top_k": 20,
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 2048
+      },
+      "system": [
+        {
+          "type": "text",
+          "text": "x-anthropic-billing-header: cc_version=1"
+        },
+        {
+          "type": "text",
+          "text": "be brief"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "hi"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "AAAA"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "signed thought",
+              "signature": "RW1jS1Z3Z1FHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBeUQyTnNZWFZrWlMxdmNIVnpMVFF0TnhJTUFBQUFBQUFBQUFBQUFBQUE="
+            },
+            {
+              "type": "thinking",
+              "thinking": "E form thought",
+              "signature": "EmcKVwgQGAIqQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAyD2NsYXVkZS1vcHVzLTQtNxIMAAAAAAAAAAAAAAAA"
+            },
+            {
+              "type": "thinking",
+              "thinking": "cached thought text one"
+            },
+            {
+              "type": "thinking",
+              "thinking": "never cached"
+            },
+            {
+              "type": "text",
+              "text": "calling"
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_1",
+              "name": "get weather",
+              "input": {
+                "city": "Paris"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_1",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "sunny"
+                },
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "BBBB"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "thanks"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "name": "get weather",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "enum": [
+                  "Paris",
+                  "Rome"
+                ]
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "web_search_20250305",
+          "name": "web_search"
+        }
+      ],
+      "tool_choice": {
+        "type": "tool",
+        "name": "get weather"
+      }
+    }
+  },
+  {
+    "name": "request (claude): dropped thinking disables thinking config, interleaved hint, adaptive effort",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "thinking": {
+        "type": "adaptive"
+      },
+      "output_config": {
+        "effort": "Low"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "unsigned",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "x"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "again"
+        }
+      ],
+      "tools": [
+        {
+          "name": "t",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "request (claude): adaptive without effort and tool_choice none",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "thinking": {
+        "type": "auto"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ],
+      "tools": [
+        {
+          "name": "t",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "tool_choice": {
+        "type": "none"
+      }
+    }
+  },
+  {
+    "name": "request (claude): tool_result for unknown id derives a name, string and object results",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-opus-4-5",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "fn-a-b-c",
+              "name": "run",
+              "input": "{\"x\":1}"
+            },
+            {
+              "type": "tool_use",
+              "id": "t2",
+              "name": "run2",
+              "input": null
+            },
+            {
+              "type": "tool_use",
+              "id": "t3",
+              "name": "run3",
+              "input": "plain"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "t3",
+              "content": {
+                "a": 1
+              }
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "t2",
+              "content": "ok"
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "fn-a-b-c"
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "ghost-x-y-z",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "a"
+                },
+                {
+                  "type": "text",
+                  "text": "b"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tool_choice": "any"
+    }
+  },
+  {
+    "name": "request (claude): system and developer messages become reminders",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "a"
+        },
+        {
+          "role": "system",
+          "content": "remember"
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "CCCC"
+              }
+            },
+            {
+              "type": "text",
+              "text": "b"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request (claude): url image only turn is refused",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image",
+              "source": {
+                "type": "url",
+                "url": "https://x/y.png"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request (gemini model): carriers are validated and unwrapped",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "thought A",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "cpa-gemini-carrier-v1:next:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+            },
+            {
+              "type": "text",
+              "text": "visible"
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "cpa-gemini-carrier-v1:next:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+            },
+            {
+              "type": "tool_use",
+              "id": "c1",
+              "name": "fn",
+              "input": {}
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "cpa-gemini-carrier-v1:previous:function:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "c1",
+              "content": "ok"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "standalone",
+              "signature": "cpa-gemini-carrier-v1:standalone:text:RWlzS0tRRUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB"
+            },
+            {
+              "type": "text",
+              "text": "done"
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "bogus"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "name": "fn",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "request (gemini model): invalid carrier drops, unmarked native signature kept",
+    "from": "claude",
+    "to": "antigravity",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "go"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "native",
+              "signature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": "cpa-gemini-carrier-v1:next:bogus:AAAA"
+            },
+            {
+              "type": "text",
+              "text": "visible"
+            },
+            {
+              "type": "tool_use",
+              "id": "c2",
+              "name": "fn",
+              "input": {
+                "a": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

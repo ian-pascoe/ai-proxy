@@ -39,7 +39,7 @@ const parseCreateTime = (value: Json | undefined): number | undefined => {
   return Number.isNaN(ms) ? undefined : Math.floor(ms / 1000)
 }
 
-const usageFields = (usage: Json, out: JsonObject): void => {
+export const usageFields = (usage: Json, out: JsonObject): void => {
   const outUsage: JsonObject = {}
   outUsage["completion_tokens"] = asInt(get(usage, "candidatesTokenCount")) + asInt(get(usage, "thoughtsTokenCount"))
   const total = get(usage, "totalTokenCount")

@@ -33,11 +33,13 @@ import {
 } from "../executor/classify.ts"
 import { withCredentialRefresh } from "../executor/helps/credential-refresh.ts"
 import { CredentialPicker, type CredentialSnapshot, type PickResult, type PickSession } from "../executor/picker.ts"
+import { creditsEnabled, creditsModel, shouldAttemptCreditsFallback } from "../executor/antigravity/credits.ts"
+import { antigravityStateFor, creditsAvailable } from "../executor/antigravity/state.ts"
 import { ExecutorRegistry } from "../executor/registry.ts"
 import { parseSuffix } from "../executor/suffix.ts"
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest, ProviderExecutor } from "../executor/types.ts"
 import type { Json } from "../json/index.ts"
-import type { WorkerEnv } from "../platform/env.ts"
+import { WorkerEnv } from "../platform/env.ts"
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts"
 import { UsageReporter } from "../usage/reporter.ts"
 import { UsageSink } from "../usage/sink.ts"
@@ -104,6 +106,15 @@ export interface Prepared {
   readonly countTokens?: boolean
 }
 
+/**
+ * Executor options of an attempt: the request's own options, plus the credits flag during the Antigravity credits
+ * fallback round (Go `cliproxyauth.WithAntigravityCredits`).
+ */
+export const attemptOptions = (prepared: Prepared, attempt: Attempt): ExecutorOptions =>
+  attempt.credits
+    ? { ...prepared.options, metadata: { ...prepared.options.metadata, antigravityCredits: true } }
+    : prepared.options
+
 /** One credential/upstream-model attempt handed to `run`. */
 export interface Attempt {
   readonly picked: PickResult
@@ -116,6 +127,8 @@ export interface Attempt {
   readonly rewriteTo: string
   /** Closes the usage record of an attempt rejected with 401 and returns the context of its repeat. */
   readonly restart: (error: ExecutionError, refreshed: CredentialSnapshot) => Effect.Effect<ExecutionContext>
+  /** Antigravity credits fallback round: the executor adds `enabledCreditTypes` (see {@link attemptOptions}). */
+  readonly credits: boolean
   /** Set by `run` when a stream failed before its first byte (handler-level bootstrap retries apply). */
   bootstrapFailed: boolean
   /**
@@ -179,7 +192,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
     const compact = prepared.options.alt === "responses/compact"
     let upstreamAttempts = 0
 
-    const buildAttempt = (picked: PickResult, executor: ProviderExecutor, upstreamModel: string) =>
+    const buildAttempt = (picked: PickResult, executor: ProviderExecutor, upstreamModel: string, credits = false) =>
       Effect.gen(function* () {
         const { credential, route, lease } = picked
         const newUsage = (now: number) =>
@@ -242,6 +255,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           request: { model: upstreamModel, payload: prepared.body, modelInfo, modelLookup: lookup },
           context: { credential, config: prepared.config, usage: newUsage(yield* Clock.currentTimeMillis) },
           rewriteTo: route.forceMapping && route.originalAlias.trim() !== "" ? route.originalAlias : "",
+          credits,
           bootstrapFailed: false,
           finish,
           restart: (error, refreshed) =>
@@ -262,8 +276,15 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         return attempt
       })
 
+    /** `tryAntigravityCreditsExecute` ordering rule: credentials with a known empty balance are skipped (unknown = optimistic). */
+    const creditsCandidateAvailable = (credentialId: string) =>
+      Effect.gen(function* () {
+        const env = yield* WorkerEnv
+        return creditsAvailable(yield* Effect.promise(() => antigravityStateFor(env).credits(credentialId)))
+      })
+
     /** One retry round: pick credentials until success, a stop condition, or nothing left. */
-    const runRound = (round: number) =>
+    const runRound = (round: number, credits = false) =>
       Effect.gen(function* () {
         const tried: string[] = []
         const attempted: string[] = []
@@ -291,8 +312,9 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           }
           const pick = yield* Effect.result(
             picker.pick({
-              providers: prepared.providers,
+              providers: credits ? ["antigravity"] : prepared.providers,
               model: prepared.routeModel,
+              ...(credits ? { ignoreCooldown: true } : {}),
               callerScope: prepared.callerScope,
               excludedIds: tried,
               retryRound: round,
@@ -322,12 +344,20 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           }
           const models = picked.route.upstreamModels
           if (models.length === 0) continue
+          if (credits && !(yield* creditsCandidateAvailable(picked.credential.id))) {
+            // Known to be out of credits: not an upstream attempt, never penalised.
+            yield* picker.report(
+              picked.lease,
+              failureReport(lifecycleError(), { provider: picked.credential.provider })
+            )
+            continue
+          }
           attempted.push(picked.credential.id)
 
           let credentialError: ExecutionError | undefined
           for (const upstreamModel of models) {
             upstreamAttempts += 1
-            const attempt = yield* buildAttempt(picked, executor, upstreamModel)
+            const attempt = yield* buildAttempt(picked, executor, upstreamModel, credits)
             // Prepares the credential (`prepareRequestAuth`) and, after a 401, refreshes it and repeats the attempt once
             // (`tryRefreshAfterUnauthorized`) before the failure is reported.
             const result = yield* Effect.result(
@@ -406,6 +436,19 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
     const last = lastFailure as Extract<RoundOutcome<T>, { ok: false }>
     // Stops return their own error; exhausted retries answer with the error of the last real upstream attempt.
     const error = last.stop ? last.error : (preferredUpstream ?? last.error)
+    // Google One AI credits (`quota-exceeded.antigravity-credits`): after the normal rotation failed for capacity
+    // reasons, Claude models get one more pass over the Antigravity credentials with credits enabled.
+    if (
+      !last.stop &&
+      error.status !== 499 &&
+      creditsEnabled(prepared.config) &&
+      prepared.providers.some((provider) => provider.trim().toLowerCase() === "antigravity") &&
+      creditsModel(parseSuffix(prepared.routeModel).modelName) &&
+      shouldAttemptCreditsFallback(error)
+    ) {
+      const credited = yield* runRound(0, true)
+      if (credited.ok) return { ok: true, value: credited.value } satisfies ConductResult<T>
+    }
     return {
       ok: false,
       error: withRetryAfter(error, recoveryHintMs),

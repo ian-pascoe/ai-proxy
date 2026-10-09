@@ -1,0 +1,239 @@
+[
+  {
+    "name": "request: instructions, tools, function call history",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "model": "x",
+      "instructions": "be brief",
+      "reasoning": {
+        "effort": "high"
+      },
+      "max_output_tokens": 500,
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "d",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "name": "get_weather",
+          "arguments": "{\"city\":\"Paris\"}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "c1",
+          "output": "sunny"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "and Berlin?"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: reasoning effort none keeps summary untouched",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "reasoning": {
+        "effort": "none"
+      },
+      "input": "hello"
+    }
+  },
+  {
+    "name": "request: explicit summary visibility is kept",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-3-flash",
+    "stream": false,
+    "request": {
+      "reasoning": {
+        "effort": "low",
+        "summary": "detailed"
+      },
+      "input": "hello"
+    }
+  },
+  {
+    "name": "request: Claude model rewrites reasoning signatures",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "claude-sonnet-4-5-thinking",
+    "stream": false,
+    "request": {
+      "reasoning": {
+        "effort": "medium"
+      },
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "deep thought"
+            }
+          ],
+          "encrypted_content": "RWxZS1JnZ0xHQUlxUUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBU0RBQUFBQUFBQUFBQUFBQUFBQT09"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "bad one"
+            }
+          ],
+          "encrypted_content": "junk"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "second"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "more"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: web search tool without native capability falls back to a plain request",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-3-flash",
+    "stream": false,
+    "request": {
+      "tools": [
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "search me"
+    }
+  },
+  {
+    "name": "stream: Gemini events unwrapped into Responses events",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "input": "hi"
+    },
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]}}],\"modelVersion\":\"g\",\"responseId\":\"r1\"}}",
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":2,\"totalTokenCount\":3}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: response unwrapped",
+    "from": "openai-response",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "input": "hi"
+    },
+    "responseBody": {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "Hi"
+                }
+              ]
+            },
+            "finishReason": "STOP"
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 1,
+          "candidatesTokenCount": 1,
+          "totalTokenCount": 2
+        },
+        "responseId": "r",
+        "modelVersion": "m"
+      }
+    }
+  }
+]

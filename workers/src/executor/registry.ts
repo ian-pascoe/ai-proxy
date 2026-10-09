@@ -6,6 +6,7 @@
  * executors in {@link makeExecutorRegistry}.
  */
 import { Context, Layer } from "effect"
+import { makeAntigravityExecutor } from "./antigravity/executor.ts"
 import { makeClaudeExecutor } from "./claude/executor.ts"
 import { makeCodexExecutor } from "./codex/executor.ts"
 import { makeDevinExecutor } from "./devin/executor.ts"
@@ -32,6 +33,7 @@ const isOpenAICompatProvider = (provider: string): boolean =>
 
 /** Fixed provider keys (one executor each). */
 const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
+  antigravity: makeAntigravityExecutor,
   codex: makeCodexExecutor,
   xai: makeXaiExecutor,
   claude: makeClaudeExecutor,

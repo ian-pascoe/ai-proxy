@@ -17,6 +17,7 @@ import { WorkerEnv } from "../platform/env.ts"
 import { projectModel } from "./availability.ts"
 import { assembleCredentialModels } from "./credential-models.ts"
 import { CatalogStore } from "./catalog-store.ts"
+import { withAntigravityHints } from "../executor/antigravity/models.ts"
 import type { ModelCatalogs } from "./catalog.ts"
 import type { ModelInfo } from "./model-info.ts"
 import { type ClientRegistration, ModelRegistryIndex } from "./registry.ts"
@@ -130,7 +131,9 @@ export class ModelRegistry extends Context.Service<
           { concurrency: "unbounded" }
         )
         const now = yield* Clock.currentTimeMillis
-        return buildSnapshot({ sources, config, catalogs, now })
+        // Antigravity credentials serve the entitlements of their last `fetchAvailableModels` probe (KV).
+        const enriched = yield* Effect.promise(() => withAntigravityHints(env.CACHE, sources))
+        return buildSnapshot({ sources: enriched, config, catalogs, now })
       })
 
       const snapshot = Effect.gen(function* () {

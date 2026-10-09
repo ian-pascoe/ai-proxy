@@ -84,6 +84,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
           ...(request.pinnedId === undefined ? {} : { pinnedAuthId: request.pinnedId }),
           ...(request.disallowFreeAuth === true ? { disallowFreeCodex: true } : {}),
           ...(request.preferWebsockets === true ? { preferWebsockets: true } : {}),
+          ...(request.ignoreCooldown === true ? { ignoreCooldown: true } : {}),
           ...(request.session === undefined
             ? {}
             : {

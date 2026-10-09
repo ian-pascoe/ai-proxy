@@ -76,6 +76,8 @@ export interface PickRequest {
   readonly disallowFreeAuth?: boolean
   /** Downstream WebSocket request: prefer Codex credentials with `websockets=true`. */
   readonly preferWebsockets?: boolean
+  /** Antigravity credits fallback: cooling credentials stay selectable (credits are billed outside the model quota). */
+  readonly ignoreCooldown?: boolean
 }
 
 /** Routing of the requested model through the picked credential. */

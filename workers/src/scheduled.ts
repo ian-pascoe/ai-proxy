@@ -7,6 +7,8 @@
 import { Cause, Effect, Layer } from "effect"
 import { FetchHttpClient, type HttpClient } from "effect/http"
 import { ConfigReader } from "./config/reader.ts"
+import { refreshAntigravityModels } from "./executor/antigravity/models.ts"
+import { refreshAntigravityVersion } from "./executor/antigravity/version.ts"
 import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts"
 import { CatalogStore } from "./registry/catalog-store.ts"
 import { refreshXaiClientVersion } from "./executor/xai/version.ts"
@@ -24,6 +26,10 @@ export interface ScheduledTask {
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   // internal/registry catalog updaters (3 h): general, Codex client and Devin catalogs into KV.
   { name: "model-catalog-refresh", run: refreshCatalogs },
+  // Antigravity client version (Hub updater manifest, KV `antigravity:version`) and per-credential model entitlements
+  // (`fetchAvailableModels`, KV `ag:models:<credential>`); the version first so the probes use the fresh user agent.
+  { name: "antigravity-version", run: refreshAntigravityVersion },
+  { name: "antigravity-models", run: refreshAntigravityModels },
   // Usage history older than `USAGE_RETENTION_DAYS` is deleted from D1.
   { name: "usage-retention", run: pruneExpiredUsage },
   // helps.StartXAIVersionUpdater (3 h): latest Grok CLI version from npm into KV for the chat-proxy identity headers.

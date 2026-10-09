@@ -11,3 +11,5 @@ tools/fixturegen/translator/corpus/codex-*.json
 tools/fixturegen/translator/corpus/*-gemini.json
 tools/fixturegen/translator/corpus/gemini-*.json
 tools/fixturegen/translator/corpus/interactions-interactions.json
+# Antigravity corpus requests are compact on purpose (raw JSON text embedded verbatim by Go).
+tools/fixturegen/translator/corpus/antigravity-*.json

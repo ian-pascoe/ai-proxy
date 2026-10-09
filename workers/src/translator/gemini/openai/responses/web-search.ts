@@ -44,6 +44,14 @@ export const hasResponsesWebSearchTool = (root: Json | undefined): boolean => {
   return isJsonArray(tools) && tools.some((tool) => isWebSearchToolType(asString(get(tool, "type"))))
 }
 
+/** `HasOnlyResponsesWebSearchTools`: every tool is a web search tool (and there is at least one). */
+export const hasOnlyResponsesWebSearchTools = (root: Json | undefined): boolean => {
+  const tools = get(root, "tools")
+  return (
+    isJsonArray(tools) && tools.length > 0 && tools.every((tool) => isWebSearchToolType(asString(get(tool, "type"))))
+  )
+}
+
 /** `AllowsResponsesWebSearchToolChoice`. */
 export const allowsResponsesWebSearchToolChoice = (root: Json | undefined): boolean => {
   const toolChoice = get(root, "tool_choice")
