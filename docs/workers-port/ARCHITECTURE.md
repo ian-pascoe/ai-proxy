@@ -477,7 +477,27 @@ Deviations from Go (all deliberate, documented in code headers):
   `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
   `PrepareAntigravityInteractions` is not ported (no Antigravity provider yet); a Vertex Imagen request without a prompt
-  answers 400; logging of signature decisions is dropped. Not ported: claude->interactions (not in the slice).
+  answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
+
+## Claude clients on Interactions providers (`src/translator/interactions/`)
+
+Port of `internal/translator/interactions/claude` (registered as `claude -> interactions` by
+`interactions/register.ts`): Claude Messages requests served by `gemini-interactions` (native `POST /v1beta/interactions`) and Devin.
+
+- **Request** (`claude/request.ts`): `system` -> `system_instruction` (blocks joined with `\n`, attribution blocks kept like Go),
+  `max_tokens`/`temperature`/`top_p`/`stop_sequences`/`thinking`/`output_config.effort`/`tool_choice` -> `generation_config`,
+  messages -> `input` steps (`user_input`, `model_output`, `thought`, `function_call`, `function_result`), message-level `system`
+  entries -> `<system-reminder>` user steps (held back behind pending tool results), tool results re-aligned with their `tool_use`
+  order (`alignClaudeToolResults`), `tools` -> function declarations. Only inline base64 media is forwarded; a user turn emptied
+  by unsendable parts is refused with a request-scoped 400 (`UserTurnDrops`). `convertClaudeRequestToInteractionsWithCompat`
+  keeps empty thinking blocks but has no caller yet (the compat executor path is not ported).
+- **Response** (`claude/response.ts`): Interactions stream events/aggregates -> Claude `message_start`/`content_block_*`/
+  `message_delta`/`message_stop`/`error` frames (each frame ends with three newlines like Go) and Claude `message` bodies;
+  `status: incomplete`/length finish reasons -> `max_tokens`, function calls -> `tool_use`, usage re-based so that Claude's
+  `input_tokens` excludes cache reads/writes.
+- **Fixtures**: `corpus/claude-interactions.json` (101 cases: Go tests ported plus edge cases); the golden harness now also masks
+  the wall-clock `msg_<unixnano>` ids. End-to-end: `test/claude-interactions-pipeline.test.ts` (gemini-interactions through the
+  full pipeline, Devin through its executor with a Claude source).
 
 ## OpenAI-compatible upstream for every client protocol (`src/translator/openai/`, `src/executor/openai-compat/`)
 
@@ -611,9 +631,9 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
   fields and only those fields are re-encoded), `stream.ts` (frames -> Interactions events / aggregate, tool-call ordering,
   deferred thought stops, 128 tool call cap, EOS trailer required) and `executor.ts`. Non-Interactions clients need the
   `client -> interactions` translators registered in the translator registry (`gemini` and `interactions` exist; `openai`/
-  `openai-response` belong to the OpenAI-compatibility slice; **`claude -> interactions`** (`internal/translator/interactions/claude`)
-  is not ported by any slice yet and is what Claude Code needs to use Devin); without one the body is parsed as-is (`messages`
-  fallback) and the response passes through untranslated.
+  `openai-response` belong to the OpenAI-compatibility slice; `claude -> interactions` is what Claude Code needs to use Devin, see
+  _Claude clients on Interactions providers_); without one the body is parsed as-is (`messages` fallback) and the response
+  passes through untranslated.
 - **Fixtures**: `go run ./workers/tools/fixturegen/devin` runs the real Go `DevinExecutor` against an `httptest` Connect-RPC
   server (request bytes, Interactions events, aggregates, trailer/model-UID/frame/system-prompt helpers) into
   `test/fixtures/devin.json`; `test/devin-*.test.ts` compare the TypeScript output with it.

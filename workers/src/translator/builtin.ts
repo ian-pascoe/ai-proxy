@@ -6,6 +6,7 @@ import { registerClaudeTranslators } from "./claude/register.ts"
 import { Formats } from "./formats.ts"
 import { registerGeminiTranslators } from "./gemini/register.ts"
 import { convertOpenAIRequestToOpenAI, openAIToOpenAIResponse } from "./openai/openai/chat-completions.ts"
+import { registerInteractionsTranslators } from "./interactions/register.ts"
 import { registerOpenAICompatTranslators } from "./openai/register.ts"
 import { TranslatorRegistry } from "./registry.ts"
 import { registerCodexTranslators } from "./codex/register.ts"
@@ -16,6 +17,7 @@ export const registerBuiltinTranslators = (registry: TranslatorRegistry): Transl
   registerCodexTranslators(registry)
   registerClaudeTranslators(registry)
   registerGeminiTranslators(registry)
+  registerInteractionsTranslators(registry)
   registerOpenAICompatTranslators(registry)
   return registry
 }

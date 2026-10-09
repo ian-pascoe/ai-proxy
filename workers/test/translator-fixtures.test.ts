@@ -54,8 +54,8 @@ const normalizeClock = (value: unknown): unknown => {
               typeof item === "string" &&
               /^\d{4}-\d\d-\d\dT/.test(item)
             ? "<time>"
-            : typeof item === "string" && /^interaction_\d{15,}$/.test(item)
-              ? "interaction_<n>"
+            : typeof item === "string" && /^(interaction|msg)_\d{15,}$/.test(item)
+              ? item.replace(/\d+$/, "<n>")
               : normalizeClock(item)
       ])
     )
