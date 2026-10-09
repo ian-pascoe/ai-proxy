@@ -7,6 +7,8 @@ import { Formats } from "../formats.ts"
 import type { TranslatorRegistry } from "../registry.ts"
 import { convertClaudeRequestToAntigravity } from "./claude/request.ts"
 import { antigravityToClaudeResponse } from "./claude/response.ts"
+import { convertInteractionsRequestToAntigravity } from "./interactions/request.ts"
+import { antigravityToInteractionsResponse } from "./interactions/response.ts"
 import { convertGeminiRequestToAntigravity } from "./gemini/request.ts"
 import { antigravityToGeminiResponse } from "./gemini/response.ts"
 import { convertOpenAIRequestToAntigravity } from "./openai/chat-request.ts"
@@ -18,6 +20,12 @@ export const registerAntigravityTranslators = (registry: TranslatorRegistry): Tr
   registry
     .register(Formats.Gemini, Formats.Antigravity, convertGeminiRequestToAntigravity, antigravityToGeminiResponse)
     .register(Formats.Claude, Formats.Antigravity, convertClaudeRequestToAntigravity, antigravityToClaudeResponse)
+    .register(
+      Formats.Interactions,
+      Formats.Antigravity,
+      convertInteractionsRequestToAntigravity,
+      antigravityToInteractionsResponse
+    )
     .register(Formats.OpenAI, Formats.Antigravity, convertOpenAIRequestToAntigravity, antigravityToOpenAIResponse)
     .register(Formats.OpenAIResponse, Formats.Antigravity, undefined, antigravityToOpenAIResponsesResponse)
     .registerRequestEnvelope(

@@ -177,6 +177,24 @@ describe("antigravity executor: non-stream", () => {
   })
 })
 
+describe("antigravity executor: Interactions clients", () => {
+  it("serves /v1beta/interactions through the Interactions -> Antigravity translators", async () => {
+    const h = harness(() => jsonResponse(upstream([{ text: "Hello" }])))
+    afterAll(h.dispose)
+    const response = await h.call(
+      "/v1beta/interactions",
+      postJson({ model: "gemini-3-pro-high", input: "hi", system_instruction: "be brief" })
+    )
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { object: string; steps: Array<{ type: string }> }
+    expect(body.object).toBe("interaction")
+    expect(body.steps[0]?.type).toBe("model_output")
+    const sent = JSON.parse(h.calls[0]?.body ?? "{}")
+    expect(sent.request.contents[0].parts[0].text).toBe("hi")
+    expect(sent.request.systemInstruction.parts[0].text).toBe("be brief")
+  })
+})
+
 describe("antigravity executor: stream", () => {
   it("translates SSE lines, renames non-terminal usage and synthesises the terminal event", async () => {
     resetMemoryAntigravityState()

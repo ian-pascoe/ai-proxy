@@ -546,7 +546,7 @@ Deviations from Go (all deliberate, documented in code headers):
 - **Deviations from Go**: `TranslationError.body` returns the partially translated body for fixture parity only;
   `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
-  `PrepareAntigravityInteractions` is not ported (see _Antigravity provider_); a Vertex Imagen request without a prompt
+  `PrepareAntigravityInteractions` (continuation sessions) is not ported (see _Antigravity provider_); a Vertex Imagen request without a prompt
   answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
 
 ## Claude clients on Interactions providers (`src/translator/interactions/`)
@@ -767,8 +767,8 @@ silent (Go logs a warning).
 Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `internal/signature`, `internal/cache/signature_cache.go`,
 `internal/misc/antigravity_version.go` and `sdk/cliproxy/antigravity_models.go`.
 
-- **Translators** (`translator/antigravity/{gemini,openai,claude}/`, registered by `antigravity/register.ts`): gemini, openai,
-  openai-response (a request *envelope* transform: native web search depends on the resolved model info) and claude -> antigravity,
+- **Translators** (`translator/antigravity/{gemini,openai,claude,interactions}/`, registered by `antigravity/register.ts`): gemini, openai,
+  openai-response (a request *envelope* transform: native web search depends on the resolved model info), claude and interactions -> antigravity,
   each with request, stream, non-stream (and token count) transforms, all golden-tested against Go (`corpus/antigravity-*.json`,
   `test/translator-fixtures{,-ids}.test.ts`). `ResponseContext.alt` carries the Gemini `alt` option the Go handlers put in the context
   (the Gemini response translator emits nothing without it; streams always use `""`). Claude clients get Gemini signatures as
@@ -817,7 +817,8 @@ Deviations from Go / not ported: the Gemini **reasoning-replay ledger** (`antigr
 re-insertion; the translators' bypass sentinel, carriers and the cache cover Claude Code, and OpenAI/Responses clients get
 `skip_thought_signature_validator` on function calls) is a follow-up that needs the `SessionState` Durable Object; the **compaction capsule**
 (`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies;
-**interactions -> antigravity** (and the Interactions continuation sessions, `PrepareAntigravityInteractions`) are a follow-up; short-cooldown
+the Interactions **continuation sessions** (`PrepareAntigravityInteractions`, needs `SessionState`); a bare `[DONE]` line yields nothing in the
+Interactions response translator (as in Go), so the Interactions stream ends with `interaction.completed` only; short-cooldown
 state and signature persistence are KV (eventually consistent), not the Go home KV.
 
 ## Authentication (Cloudflare Access)

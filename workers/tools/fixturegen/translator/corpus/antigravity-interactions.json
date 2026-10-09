@@ -1,0 +1,413 @@
+[
+  {
+    "name": "request: string input, system instruction and generation config",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "input": "hello",
+      "system_instruction": "be brief",
+      "generation_config": {
+        "temperature": 0.2,
+        "max_output_tokens": 100,
+        "top_p": 0.9,
+        "stop_sequences": [],
+        "thinking_level": "high",
+        "thinking_summaries": "auto",
+        "tool_choice": "auto"
+      }
+    }
+  },
+  {
+    "name": "request: steps with thought signatures, function calls and results",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-flash",
+    "stream": false,
+    "request": {
+      "stream": true,
+      "input": [
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "text",
+              "text": "weather?"
+            },
+            {
+              "type": "image",
+              "mime_type": "image/png",
+              "data": "AAAA"
+            },
+            {
+              "type": "document",
+              "uri": "gs://b/f.pdf",
+              "mime_type": "application/pdf"
+            }
+          ]
+        },
+        {
+          "type": "thought",
+          "signature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "content": [
+            {
+              "type": "text",
+              "text": "thinking"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "name": "get weather",
+          "arguments": {
+            "city": "Paris"
+          },
+          "signature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "type": "function_call",
+          "call_id": "c2",
+          "name": "get weather",
+          "arguments": "{\"city\":\"Rome\"}"
+        },
+        {
+          "type": "function_result",
+          "call_id": "c1",
+          "name": "get weather",
+          "result": {
+            "t": 20
+          }
+        },
+        {
+          "type": "function_result",
+          "call_id": "c2",
+          "name": "get weather",
+          "result": "sunny"
+        },
+        {
+          "type": "model_output",
+          "content": [
+            {
+              "type": "text",
+              "text": "ok"
+            }
+          ]
+        },
+        {
+          "type": "user_input",
+          "parts": [
+            {
+              "text": "native"
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "BBBB"
+              }
+            },
+            {
+              "fileData": {
+                "mime_type": "video/mp4",
+                "file_uri": "gs://x/v.mp4"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "name": "get weather",
+          "description": "d",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "functionDeclarations": [
+            {
+              "name": "get weather"
+            },
+            {
+              "name": "other",
+              "parametersJsonSchema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "type": "url_context"
+        },
+        {
+          "type": "google_search",
+          "google_search": {
+            "x": 1
+          }
+        },
+        {
+          "code_execution": {}
+        }
+      ],
+      "tool_choice": {
+        "type": "function",
+        "function": {
+          "name": "get weather"
+        }
+      },
+      "reasoning": {
+        "effort": "low",
+        "summary": "none"
+      },
+      "response_modalities": [
+        "text",
+        "image",
+        "audio",
+        "video"
+      ]
+    }
+  },
+  {
+    "name": "request: steps container with roles and nested steps",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "input": {
+        "role": "user",
+        "steps": [
+          {
+            "type": "user_input",
+            "content": "first"
+          },
+          {
+            "role": "model",
+            "steps": [
+              {
+                "type": "model_output",
+                "content": "answer"
+              },
+              {
+                "type": "thought",
+                "summary": [
+                  {
+                    "type": "text",
+                    "text": "reason"
+                  }
+                ]
+              }
+            ]
+          },
+          "follow up"
+        ]
+      }
+    }
+  },
+  {
+    "name": "request: developer steps stay instructions and unsupported attachments refuse the user turn",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "input": [
+        {
+          "role": "developer",
+          "content": [
+            {
+              "type": "image",
+              "url": "https://x/y.png"
+            }
+          ]
+        },
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "image",
+              "url": "https://x/y.png"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice none removes tools and snake case config keys convert",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "input": "hi",
+      "tools": [
+        {
+          "type": "function",
+          "name": "t"
+        }
+      ],
+      "tool_choice": "none",
+      "generation_config": {
+        "response_mime_type": "application/json",
+        "response_schema": {
+          "type": "object",
+          "required_fields": [
+            "a"
+          ]
+        },
+        "seed": 7
+      }
+    }
+  },
+  {
+    "name": "stream: steps, deltas, completion and done",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "input": "hi",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get weather"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"think\",\"thought\":true,\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]}}],\"cpaUsageMetadata\":{\"promptTokenCount\":3}}}",
+      "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]}}]}}",
+      "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"c\":1},\"id\":\"x1\"},\"thoughtSignature\":\"EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"},{\"functionResponse\":{\"name\":\"get_weather\",\"response\":{\"r\":1}}}]}}]}}",
+      "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":4,\"thoughtsTokenCount\":1,\"totalTokenCount\":8,\"cachedContentTokenCount\":1}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: array payloads, [DONE] without usage completes",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "input": "hi",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get weather"
+        }
+      ]
+    },
+    "responseLines": [
+      "[{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]}}]}},{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]}}]}}]",
+      "[DONE]",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: data [DONE] completes the interaction and ends the stream",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": true,
+    "needs": [
+      "id-normalization"
+    ],
+    "request": {
+      "input": "hi",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get weather"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"},{\"text\":\"lo\"}]}}]}}",
+      "data: [DONE]",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: steps with signatures, calls, inline data and usage",
+    "from": "interactions",
+    "to": "antigravity",
+    "model": "gemini-3-pro-high",
+    "stream": false,
+    "request": {
+      "input": "hi",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get weather"
+        }
+      ]
+    },
+    "responseBody": {
+      "response": {
+        "responseId": "r1",
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "why",
+                  "thought": true,
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "text": "visible",
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "functionCall": {
+                    "name": "get_weather",
+                    "args": {
+                      "c": 1
+                    },
+                    "id": "x1"
+                  },
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "inlineData": {
+                    "mimeType": "image/png",
+                    "data": "AA"
+                  }
+                },
+                {
+                  "text": "",
+                  "thoughtSignature": "EisKKQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                },
+                {
+                  "text": ""
+                }
+              ]
+            }
+          }
+        ],
+        "cpaUsageMetadata": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 4,
+          "thoughtsTokenCount": 1,
+          "totalTokenCount": 8,
+          "cachedContentTokenCount": 1
+        }
+      }
+    }
+  }
+]
