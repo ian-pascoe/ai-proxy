@@ -8,7 +8,8 @@
  * everything else -> `{base}/v1/chat/completions`. Order inside the Chat/Responses paths: translate -> upstream
  * model -> thinking -> shaping -> payload rules (final barrier) -> fetch.
  *
- * Not ported: the apply_patch bridge, multi-agent-v2 rewriting, outbound proxies. The token refresh runs in the
+ * Multi-agent v2 / orphan delegation rewriting runs in `translateRequestForExecutor`. Not ported: the apply_patch Responses
+ * bridge for `/responses` (translated chat requests have it), outbound proxies. The token refresh runs in the
  * ControlPlane (credentials/refresh/kimi.ts); 401 recovery is done by the conductor.
  */
 import { translateRequestForExecutor } from "../helps/translate.ts"

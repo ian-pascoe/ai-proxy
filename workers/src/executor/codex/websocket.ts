@@ -14,8 +14,7 @@
  * WebSockets); terminal events get the same normalisation as the SSE path (`response.done` -> `response.completed`,
  * rebuilt `response.output`, usage detail objects).
  *
- * Not ported: response steering / full duplex (`codex.response-steering`, off by default), multi-agent-v2 request
- * rewriting, stream bootstrap buffering, and non-stream execution over WebSocket (the downstream handler only streams).
+ * Not ported: response steering / full duplex (`codex.response-steering`, off by default), stream bootstrap buffering, and non-stream execution over WebSocket (the downstream handler only streams).
  */
 import { Clock, Effect, Option, Stream } from "effect"
 import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts"

@@ -5,7 +5,8 @@
  * helps/meta_tools.go (`SanitizeMetaWebSearchTools`), openai_responses_signature.go (keep-foreign reasoning
  * sanitising, in `executor/codex/request.ts`). Order: translate -> thinking -> model/stream fields -> instructions ->
  * reasoning sanitising -> tool sanitising -> payload rules (final barrier). The apply_patch bridge
- * (`NormalizeApplyPatchResponsesRequest` + response bridge) is not ported (see ARCHITECTURE.md, Codex follow-ups).
+ * (`NormalizeApplyPatchResponsesRequest` + response bridge) is not ported (see ARCHITECTURE.md, xAI follow-ups); `is-compat`
+ * models use the compat request transforms (`helps/translate.ts`).
  */
 import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Effect } from "effect"

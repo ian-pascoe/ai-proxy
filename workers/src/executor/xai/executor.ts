@@ -9,7 +9,7 @@
  *
  * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
  *
- * Not ported (documented follow-ups): the apply_patch response bridge and multi-agent-v2 input rewriting.
+ * Multi-agent v2 input rewriting is shared with Codex. Not ported (documented follow-ups): the apply_patch Responses bridge.
  * `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the
  * conductor (`withCredentialRefresh`), not by the executor.
  */

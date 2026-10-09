@@ -8,8 +8,9 @@
  *
  * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
  *
- * Not ported (documented follow-ups): bootstrap buffering and retries (retry slice), multi-agent-v2 rewriting and
- * `is-compat` model handling. `CountTokens` counts locally (`helps/token-count.ts`).
+ * Multi-agent v2 (`helps/codex-multi-agent-v2.ts`) and `is-compat` models (`helps/translate.ts`) are handled in `prepare`.
+ * Not ported (documented follow-ups): bootstrap buffering and retries. `CountTokens` counts locally
+ * (`helps/token-count.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
