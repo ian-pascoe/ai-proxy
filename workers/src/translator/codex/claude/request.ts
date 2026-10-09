@@ -29,7 +29,8 @@ import {
 } from "../../common/claude-messages.ts"
 import { isHttpUrl, UserTurnDrops } from "../../common/parts.ts"
 import { hasUnsupportedUnicodePropertyEscape, SCHEMA_MAP_KEYWORDS, SCHEMA_VALUE_KEYWORDS } from "../../common/schema.ts"
-import { compatibleGptSignature, isReplaySafeGrokEncryptedContent } from "../../common/signature.ts"
+import { isValidGrokEncryptedContent } from "../../../signature/grok.ts"
+import { compatibleSignatureForProvider } from "../../../signature/provider.ts"
 
 const NAME_LIMIT = 64
 
@@ -321,10 +322,10 @@ export const convertClaudeRequestToCodex = (modelName: string, request: Json, _s
       const appendReasoningContent = (part: Json) => {
         if (messageRole !== "assistant") return
         const rawSignature = asString(get(part, "signature"))
-        let signature = compatibleGptSignature(rawSignature)
+        let signature = compatibleSignatureForProvider("gpt", rawSignature)
         if (signature === undefined) {
           if (!targetAcceptsGrokSignature(modelName)) return
-          if (!isReplaySafeGrokEncryptedContent(rawSignature)) return
+          if (!isValidGrokEncryptedContent(rawSignature)) return
           signature = rawSignature
         }
         flushMessage()

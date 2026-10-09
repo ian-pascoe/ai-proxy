@@ -7,8 +7,8 @@
  */
 import { asBool, asFloat, asInt, asString, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { unwrapApplyPatchInput } from "../../../common/apply-patch.ts"
-import { sortKeysDeep } from "../../util/json-schema.ts"
-import type { ResponsesToolIdentity } from "./tools.ts"
+import { sortKeysDeep } from "../../../common/go-json.ts"
+import type { ResponsesToolIdentity } from "../../../common/responses-tools.ts"
 
 // --- identifiers -------------------------------------------------------------------------------------------------------
 
@@ -189,62 +189,11 @@ const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[
 export const finishApplyPatchArguments = (
   argumentsText: string
 ): { readonly input: string } | { readonly error: string } => {
-  const input = unwrapApplyPatchInput(argumentsText)
-  if (input === undefined) return { error: "invalid apply_patch arguments" }
-  if (LONE_SURROGATE.test(input)) return { error: "invalid character in apply_patch input" }
-  return { input }
+  const unwrapped = unwrapApplyPatchInput(argumentsText)
+  if ("error" in unwrapped) return { error: "invalid apply_patch arguments" }
+  if (LONE_SURROGATE.test(unwrapped.input)) return { error: "invalid character in apply_patch input" }
+  return { input: unwrapped.input }
 }
-
-const eventIdentity = (payload: JsonObject, call: ApplyPatchCall, sequence: number): void => {
-  payload["item_id"] = call.itemId
-  payload["call_id"] = call.callId
-  payload["output_index"] = call.outputIndex
-  payload["sequence_number"] = sequence
-}
-
-export const applyPatchInputDelta = (call: ApplyPatchCall, delta: string, sequence: number): JsonObject => {
-  const payload: JsonObject = {
-    type: "response.custom_tool_call_input.delta",
-    item_id: "",
-    call_id: "",
-    output_index: 0,
-    sequence_number: 0,
-    delta: ""
-  }
-  eventIdentity(payload, call, sequence)
-  payload["delta"] = delta
-  return payload
-}
-
-export const applyPatchInputDone = (call: ApplyPatchCall, input: string, sequence: number): JsonObject => {
-  const payload: JsonObject = {
-    type: "response.custom_tool_call_input.done",
-    item_id: "",
-    call_id: "",
-    output_index: 0,
-    sequence_number: 0,
-    input: ""
-  }
-  eventIdentity(payload, call, sequence)
-  payload["input"] = input
-  return payload
-}
-
-export const applyPatchFailure = (responseId: string, sequence: number): JsonObject => ({
-  type: "response.failed",
-  sequence_number: sequence,
-  response: {
-    id: responseId,
-    object: "response",
-    status: "failed",
-    error: {
-      type: "server_error",
-      code: "invalid_tool_arguments",
-      message: "Invalid apply_patch tool arguments received from upstream.",
-      param: null
-    }
-  }
-})
 
 /** `SetResponsesToolCallIdentity`. */
 export const setToolCallIdentity = (item: JsonObject, name: string, namespace: string): void => {

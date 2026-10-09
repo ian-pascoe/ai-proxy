@@ -19,16 +19,15 @@ import {
   reorderGeminiUserParts,
   setGeminiFunctionResponseResult
 } from "../common/contents.ts"
-import { countSendableGeminiParts, UserTurnDrops } from "../common/parts.ts"
+import { countSendableGeminiParts, UserTurnDrops } from "../../common/parts.ts"
 import { attachDefaultSafetySettings } from "../common/safety.ts"
 import { geminiReplaySignatureOrBypass } from "../common/signature.ts"
 import {
   alignClaudeToolResults,
   claudeMessageSystemReminderText,
-  convertClaudeToolResultContent,
-  isClaudeCodeAttributionSystemText,
-  sanitizeFunctionName
-} from "../util/claude.ts"
+  isClaudeCodeAttributionSystemText
+} from "../../common/claude-messages.ts"
+import { convertClaudeToolResultContent, sanitizeFunctionName } from "../util/claude.ts"
 import { cleanJsonSchemaForGeminiJsonSchema } from "../util/json-schema.ts"
 import { lookupModelInfo } from "../util/model-info.ts"
 
@@ -289,7 +288,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
   if (Object.keys(generationConfig).length > 0) out["generationConfig"] = generationConfig
 
   const result = attachDefaultSafetySettings(out, "safetySettings")
-  const error = drops.error(result)
+  const error = drops.err(result)
   if (error !== undefined) throw error
   return result
 }

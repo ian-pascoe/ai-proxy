@@ -8,7 +8,7 @@ import { applyTranslatedSummaryToClaude, convertLevelToBudget } from "../../../t
 import { lookupModelInfo } from "../../model-info.ts"
 import { ClaudeMessageAccumulator } from "../../common/claude-messages.ts"
 import { normalizeClaudeToolInputSchema, sanitizeClaudeFunctionName } from "../../common/claude-util.ts"
-import { sanitizeClaudeToolId } from "../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../common/tool-names.ts"
 import { exists, isArr, isObj, isStr, str } from "../../common/gjson.ts"
 import { interactionsAttachmentType, isHttpUrl, isInteractionsInstructionStep, UserRun } from "../../common/parts.ts"
 

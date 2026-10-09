@@ -7,7 +7,7 @@
 import { asInt, get, type Json, type JsonObject } from "../../../../json/index.ts"
 import type { ResponseContext, ResponseTransform } from "../../../registry.ts"
 import { antigravityUpstreamToolNameToClient } from "../../common/antigravity-tools.ts"
-import { interactionsUsage } from "../../common/interactions-usage.ts"
+import { interactionsUsage } from "../../../common/interactions-usage.ts"
 import { getStr, isArr, raw } from "../../common/read.ts"
 import { firstNonEmpty, isAntigravityModel, jsonStringValue, parseJsonOrUndefined, ssePayloadOf } from "./shared.ts"
 

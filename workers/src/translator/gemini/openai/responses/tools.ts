@@ -5,24 +5,17 @@
  * MapResponsesToolName, ConvertResponsesToolChoiceToGemini, UnwrapResponsesCustomToolInput).
  */
 import { createHash } from "node:crypto"
-import { asString, get, isJsonObject, type Json, type JsonObject, set, tryParseJson } from "../../../../json/index.ts"
+import { asString, get, isJsonObject, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
 import {
   collectResponsesToolDescriptors,
   collectResponsesToolWinners,
   qualifyResponsesNamespaceToolName,
-  type ResponsesToolDescriptor
+  type ResponsesToolDescriptor,
+  type ResponsesToolIdentity
 } from "../../../common/responses-tools.ts"
 import { sanitizeFunctionName } from "../../util/claude.ts"
 import { cleanJsonSchemaForGeminiJsonSchema } from "../../util/json-schema.ts"
-
-export interface ResponsesToolIdentity {
-  readonly name: string
-  readonly namespace: string
-  readonly custom: boolean
-  /** Resolved from the winning original declaration, never from the upstream name. */
-  readonly applyPatch: boolean
-}
 
 const sha256Hex = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex")
 
@@ -204,17 +197,4 @@ export const convertResponsesToolChoiceToGemini = (
   const config: JsonObject = { mode }
   if (allowed.length > 0) set(config, "allowedFunctionNames", allowed)
   return config
-}
-
-/** `UnwrapResponsesCustomToolInput`: the raw input string of custom tool arguments (JSON envelope or plain text). */
-export const unwrapResponsesCustomToolInput = (argumentsText: string): string => {
-  const trimmed = argumentsText.trim()
-  if (trimmed === "" || trimmed === "{}") return ""
-  const parsed = tryParseJson(trimmed)
-  if (parsed !== undefined) {
-    const input = get(parsed, "input")
-    if (input !== undefined) return typeof input === "string" ? input : JSON.stringify(input)
-    if (typeof parsed === "string") return parsed
-  }
-  return trimmed
 }

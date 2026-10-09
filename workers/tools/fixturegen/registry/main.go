@@ -10,11 +10,14 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +26,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	claudemodels "github.com/router-for-me/CLIProxyAPI/v8/internal/client/claude/models"
+	codexmodels "github.com/router-for-me/CLIProxyAPI/v8/internal/client/codex/models"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/client/grokbuild"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
@@ -137,10 +141,24 @@ type registryResult struct {
 	First     string              `json:"first"`
 }
 
+// codexClientResult records what the real /v1/models?client_version= handler answered: a hash of the full body and a
+// readable per-model summary (the bodies themselves are megabytes of Codex prompt templates).
+type codexClientResult struct {
+	Variant string `json:"variant"`
+	Version string `json:"version"`
+	Status  int    `json:"status"`
+	Size    int    `json:"size"`
+	SHA256  string `json:"sha256"`
+	// Entries maps each slug to the hash of its compact JSON (entry order is map-iteration order for equal priorities).
+	Entries map[string]string `json:"entries"`
+	Models  []map[string]any  `json:"models"`
+}
+
 type scenarioOut struct {
 	scenarioSpec
-	Requests []requestResult `json:"requests"`
-	Registry registryResult  `json:"registry"`
+	Requests    []requestResult     `json:"requests"`
+	CodexClient []codexClientResult `json:"codexClient"`
+	Registry    registryResult      `json:"registry"`
 }
 
 type output struct {
@@ -258,9 +276,17 @@ type harness struct {
 	gemini *gemini.GeminiAPIHandler
 }
 
-func newHarness(disableCloaking bool) *harness {
+func newHarness(disableCloaking bool, codexVariant ...string) *harness {
 	cfg := &config.SDKConfig{}
 	cfg.ClaudeCode.DisableCloakingModelList = disableCloaking
+	for _, variant := range codexVariant {
+		switch variant {
+		case "multi-agent-v2":
+			cfg.Client.Codex.OptimizeMultiAgentV2 = true
+		case "apply-patch-flag":
+			cfg.Client.Codex.EnableApplyPatch = true
+		}
+	}
 	base := handlers.NewBaseAPIHandlers(cfg, nil)
 	return &harness{
 		openai: openai.NewOpenAIAPIHandler(base),
@@ -368,6 +394,19 @@ func runScenario(spec scenarioSpec) scenarioOut {
 		out.Requests = append(out.Requests, h.serve(req))
 	}
 
+	for _, variant := range []string{"default", "multi-agent-v2", "apply-patch-flag"} {
+		vh := newHarness(spec.DisableCloaking, variant)
+		for _, version := range []string{"", "0.100.0", "0.150.0", "v0.144.0-beta", "cpa"} {
+			res := vh.serve(requestSpec{Name: "codex-client", Path: "/v1/models?client_version=" + url.QueryEscape(version)})
+			result := summarizeCodexClient(variant, version, res)
+			// The large catalog keeps per-model summaries for two requests only; the others compare by hash.
+			if spec.Name == "catalog-all" && !(variant == "default" && (version == "" || version == "cpa")) {
+				result.Models = nil
+			}
+			out.CodexClient = append(out.CodexClient, result)
+		}
+	}
+
 	// Registry queries: every model id ever registered, case variants and unknowns.
 	queryIDs := map[string]struct{}{"unknown-model": {}, "": {}}
 	providerSet := map[string]struct{}{"": {}, "alpha": {}, "beta": {}, "claude": {}, "codex": {}}
@@ -407,6 +446,43 @@ func runScenario(spec scenarioSpec) scenarioOut {
 	out.Registry.Available = wire(available)
 	if first, err := reg.GetFirstAvailableModel(""); err == nil {
 		out.Registry.First = first
+	}
+	return out
+}
+
+func summarizeCodexClient(variant, version string, res requestResult) codexClientResult {
+	sum := sha256.Sum256([]byte(res.Body))
+	out := codexClientResult{Variant: variant, Version: version, Status: res.Status, Size: len(res.Body), SHA256: hex.EncodeToString(sum[:])}
+	var payload struct {
+		Models []map[string]any `json:"models"`
+	}
+	if err := json.Unmarshal([]byte(res.Body), &payload); err != nil {
+		return out
+	}
+	out.Entries = map[string]string{}
+	for _, model := range payload.Models {
+		encoded, errMarshal := codexmodels.MarshalCompact(model)
+		if errMarshal != nil {
+			panic(errMarshal)
+		}
+		entrySum := sha256.Sum256(encoded)
+		slug, _ := model["slug"].(string)
+		out.Entries[slug] = hex.EncodeToString(entrySum[:])
+	}
+	keys := []string{"slug", "priority", "display_name", "description", "supported_reasoning_levels", "default_reasoning_level",
+		"input_modalities", "supports_image_detail_original", "visibility", "apply_patch_tool_type", "supports_search_tool",
+		"prefer_websockets", "multi_agent_version", "cpa_capabilities", "context_window", "max_context_window", "max_tokens",
+		"service_tiers", "available_in_plans", "upgrade", "availability_nux"}
+	for _, model := range payload.Models {
+		summary := map[string]any{}
+		for _, key := range keys {
+			if value, ok := model[key]; ok {
+				summary[key] = value
+			} else {
+				summary[key] = "<absent>"
+			}
+		}
+		out.Models = append(out.Models, summary)
 	}
 	return out
 }

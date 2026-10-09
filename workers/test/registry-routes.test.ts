@@ -117,10 +117,38 @@ describe("model routes with a fixed registry", () => {
     }
   })
 
-  it("answers client_version with an explicit not-implemented error until the Codex catalog lands", async () => {
-    const response = await call("/v1/models?client_version=0.1.0")
-    expect(response.status).toBe(501)
-    expect(await response.json()).toMatchObject({ error: { type: "not_implemented" } })
+  it("answers client_version with the Codex client catalog (compact JSON, per-model entries, detail by slug)", async () => {
+    const codexSnapshot = buildSnapshot({
+      config: configOf("client:\n  codex:\n    enable-apply-patch: true\n    optimize-multi-agent-v2: true\n"),
+      catalogs,
+      now: NOW,
+      sources: [source("codex-a.json", "codex", { planType: "pro" }), source("claude-a.json", "claude")]
+    })
+    const codexHandler = makeHandler(
+      Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: Effect.succeed(codexSnapshot) }))
+    )
+    const codexCall = caller(codexHandler)
+    const response = await codexCall("/v1/models?client_version=0.150.0")
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toContain("application/json")
+    const text = await response.text()
+    expect(text).not.toContain("\n")
+    const body = JSON.parse(text) as { models: Array<Record<string, unknown>> }
+    const gpt = body.models.find((entry) => String(entry.slug).startsWith("gpt-5"))
+    const claude = body.models.find((entry) => String(entry.slug).startsWith("claude-"))
+    expect(gpt).toMatchObject({ multi_agent_version: "v2", apply_patch_tool_type: "freeform" })
+    // Non-Codex models get the compact fallback instructions and never advertise Codex-only features.
+    expect(claude).toMatchObject({
+      base_instructions: "You are Codex, a coding agent. You and the user share one workspace.",
+      supports_search_tool: false,
+      prefer_websockets: false,
+      service_tiers: [],
+      upgrade: null
+    })
+    const detail = await codexCall(`/v1/models/${String(gpt?.slug)}?client_version=0.150.0`)
+    expect(detail.status).toBe(200)
+    expect(await detail.json()).toMatchObject({ slug: gpt?.slug })
+    expect((await codexCall("/v1/models?client_version=")).status).toBe(200)
   })
 
   it("lists Gemini models and serves details with or without the models/ prefix", async () => {

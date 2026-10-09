@@ -3,17 +3,19 @@
  *
  * Go source: internal/signature/provider_compatibility.go (`SignatureProviderFromModelName`,
  * `DetectSignatureProviderForBlock`, `DecideSignatureCompatibility*`, `CompatibleSignatureForProviderBlock`).
- * Claude envelopes are validated by `claude.ts`, Gemini envelopes by `translator/gemini/common/signature.ts`, GPT
- * Fernet payloads by `translator/common/signature.ts`; this module only orders the probes and decides.
+ * Claude envelopes are validated by `claude.ts`, Gemini envelopes by `gemini.ts`, GPT Fernet payloads by `gpt.ts`,
+ * Grok blobs by `grok.ts`; this module only orders the probes and decides.
  */
-import { entropyRatio, isValidGptReasoningSignature } from "../translator/common/signature.ts"
+import { decodeBase64Std } from "./base64.ts"
+import { entropyRatio } from "./entropy.ts"
 import {
   GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR,
   isGeminiThoughtSignatureBypass,
   isKnownGeminiEnvelope
-} from "../translator/gemini/common/signature.ts"
-import { decodeBase64Std } from "./base64.ts"
+} from "./gemini.ts"
+import { isValidGptReasoningSignature } from "./gpt.ts"
 import {
+  inspectClaudeCaisSignature,
   isValidClaudeCaisSignature,
   isValidClaudeThinkingSignature,
   normalizeClaudeProviderNativeThinkingSignature
@@ -33,6 +35,7 @@ export interface SignatureCompatibilityDecision {
   readonly action: SignatureAction
   readonly replacementSignature: string
   readonly normalizedSignature: string
+  readonly reason: string
 }
 
 /** `SignatureProviderFromModelName`. */
@@ -207,11 +210,37 @@ const normalizeForProvider = (target: SignatureProvider, raw: string): string =>
   }
 }
 
-/** `DecideSignatureCompatibility`: the safe handling policy for replaying a signed block into `targetProvider`. */
+/** `claudeCompatibleSignatureReason`: why a matching signature is replayable (traceability only). */
+const matchReason = (target: SignatureProvider, raw: string, targetModel: string): string => {
+  const generic = "signature provider matches target provider"
+  if (target !== "claude") return generic
+  let info
+  try {
+    info = inspectClaudeCaisSignature(signaturePayloadWithoutProviderPrefix(raw))
+  } catch {
+    return generic
+  }
+  let reason: string
+  if (info.modelText !== "") {
+    reason = `valid Claude CAIS signature with embedded model ${info.modelText} is compatible with any Claude target`
+  } else if (info.envelopeVersion >= 4) {
+    reason = "valid Claude CAQS signature is compatible with any Claude target"
+  } else {
+    reason = "valid Claude CAIS signature is compatible with any Claude target"
+  }
+  const model = targetModel.trim()
+  return model === "" ? reason : `${reason}, including target model ${model}`
+}
+
+/**
+ * `DecideSignatureCompatibility[ForModel]`: the safe handling policy for replaying a signed block into
+ * `targetProvider` (`targetModel` only appears in the reason).
+ */
 export const decideSignatureCompatibility = (
   targetProvider: SignatureProvider,
   raw: string,
-  blockKind: SignatureBlockKind = "unknown"
+  blockKind: SignatureBlockKind = "unknown",
+  targetModel = ""
 ): SignatureCompatibilityDecision => {
   const target: SignatureProvider = targetProvider === "gemini_bypass" ? "gemini" : targetProvider
   const detected = detectSignatureProvider(raw, blockKind)
@@ -220,7 +249,13 @@ export const decideSignatureCompatibility = (
 
   // Recognising a Claude envelope does not authorise a Google transport wrapper on native Claude endpoints.
   if (target === "claude" && detected === "claude" && signaturePayloadWithoutProviderPrefix(raw).startsWith("Q")) {
-    return { ...base, ...none, compatible: false, action: "drop_block" }
+    return {
+      ...base,
+      ...none,
+      compatible: false,
+      action: "drop_block",
+      reason: "Antigravity CAQS wrapper requires Antigravity replay"
+    }
   }
   if (providerMatchesTarget(target, detected)) {
     const normalized = normalizeForProvider(target, raw)
@@ -230,7 +265,8 @@ export const decideSignatureCompatibility = (
         replacementSignature: "",
         normalizedSignature: normalized,
         compatible: true,
-        action: "preserve"
+        action: "preserve",
+        reason: matchReason(target, raw, targetModel)
       }
     }
   }
@@ -242,20 +278,54 @@ export const decideSignatureCompatibility = (
           ...incompatible,
           replacementSignature: GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR,
           normalizedSignature: "",
-          action: "replace_with_gemini_bypass"
+          action: "replace_with_gemini_bypass",
+          reason: "missing or incompatible signature"
         }
       }
-      return { ...incompatible, ...none, action: "drop_block" }
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_block",
+        reason: "signature is not compatible with Gemini and this block is not a bypass-safe Gemini model part"
+      }
     case "kimi":
       // Kimi never reads the field back, so only the signature is dropped.
-      return { ...incompatible, ...none, action: "drop_signature" }
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_signature",
+        reason: "Kimi does not validate replayed thinking signatures, so the block survives without one"
+      }
     case "claude":
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_block",
+        reason: "Claude has no cross-provider bypass sentinel for thinking blocks"
+      }
     case "gpt":
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_block",
+        reason: "GPT reasoning encrypted_content cannot be synthesized from another provider signature"
+      }
     case "swe":
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_block",
+        reason: "SWE requires sealed.v1 signature from its own backend"
+      }
     case "grok":
-      return { ...incompatible, ...none, action: "drop_block" }
+      return {
+        ...incompatible,
+        ...none,
+        action: "drop_block",
+        reason: "xAI verifies encrypted_content on replay and rejects foreign or mutated blobs"
+      }
     default:
-      return { ...incompatible, ...none, action: "no_compatible_replacement" }
+      return { ...incompatible, ...none, action: "no_compatible_replacement", reason: "unknown target provider" }
   }
 }
 

@@ -5,9 +5,9 @@
  * responses_tool_index.go,shell_tool.go}.
  */
 import { cloneJson, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
-import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../common/apply-patch.ts"
+import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
-import { setResponsesToolCallIdentity } from "../../common/responses.ts"
+import { setResponsesToolCallIdentity } from "../../../common/responses.ts"
 
 /** Chat Completions function-name limit enforced by strict upstreams. */
 export const RESPONSES_CHAT_TOOL_NAME_LIMIT = 64

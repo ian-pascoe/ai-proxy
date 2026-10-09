@@ -69,6 +69,10 @@ func geminiField2(opaque []byte) []byte {
 }
 
 type result struct {
+	Grok           bool              `json:"grok"`
+	Recognized     bool              `json:"recognized"`
+	GPT            bool              `json:"gpt"`
+	GeminiReplay   map[string]string `json:"geminiReplay"`
 	Name           string            `json:"name"`
 	Signature      string            `json:"signature"`
 	Detected       map[string]string `json:"detected"`
@@ -85,6 +89,186 @@ type decision struct {
 	Detected   string `json:"detected"`
 	Normalized string `json:"normalized"`
 	Replace    string `json:"replacement"`
+	Reason     string `json:"reason"`
+}
+
+type sanitizeCase struct {
+	Name   string          `json:"name"`
+	Mode   string          `json:"mode"`
+	Model  string          `json:"model"`
+	Input  any             `json:"input"`
+	Output json.RawMessage `json:"output"`
+	Report map[string]any  `json:"report"`
+}
+
+type geminiCase struct {
+	Name     string          `json:"name"`
+	Input    json.RawMessage `json:"input"`
+	Thought  string          `json:"thought"`
+	Pairing  string          `json:"pairing"`
+	Sanitize json.RawMessage `json:"sanitize"`
+}
+
+type namedSignature struct{ name, sig string }
+
+func samples2names(samples []struct{ name, sig string }) []namedSignature {
+	out := make([]namedSignature, 0, len(samples))
+	for _, s := range samples {
+		out = append(out, namedSignature{name: s.name, sig: s.sig})
+	}
+	return out
+}
+
+func mustJSON(value any) json.RawMessage {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return encoded
+}
+
+func reportOf(r signature.SignatureSanitizeReport) map[string]any {
+	reasons := make([]string, 0, len(r.Decisions))
+	for _, d := range r.Decisions {
+		reasons = append(reasons, d.Reason)
+	}
+	return map[string]any{
+		"targetProvider":     string(r.TargetProvider),
+		"preserved":          r.Preserved,
+		"droppedBlocks":      r.DroppedBlocks,
+		"droppedSignatures":  r.DroppedSignatures,
+		"replacedSignatures": r.ReplacedSignatures,
+		"decisions":          len(r.Decisions),
+		"reasons":            reasons,
+	}
+}
+
+// buildSanitizeCases runs the Claude messages sanitisers over one history per signature sample.
+func buildSanitizeCases(samples []namedSignature) []sanitizeCase {
+	history := func(sig string) map[string]any {
+		return map[string]any{
+			"model": "claude-sonnet-4-5",
+			"messages": []any{
+				map[string]any{"role": "user", "content": "hi"},
+				map[string]any{"role": "assistant", "content": []any{
+					map[string]any{"type": "thinking", "thinking": "t", "signature": sig},
+					map[string]any{"type": "text", "text": "x"},
+					map[string]any{
+						"type": "tool_use", "id": "1", "name": "n", "input": map[string]any{},
+						"signature": sig, "thoughtSignature": sig, "model": "m",
+						"extra_content": map[string]any{"google": map[string]any{"thought_signature": sig}},
+					},
+				}},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "thinking", "thinking": "only", "signature": sig}}},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "thinking", "thinking": "", "signature": ""}}},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "thinking", "thinking": "words", "signature": ""}}},
+				map[string]any{"role": "assistant", "content": "plain"},
+			},
+		}
+	}
+	models := []string{"claude-sonnet-4-5", "gemini-3-pro-high", "gpt-5", "kimi-k2", "grok-4", "mystery"}
+	var cases []sanitizeCase
+	run := func(name, mode, model string, apply func(payload []byte) ([]byte, signature.SignatureSanitizeReport)) {
+		input := mustJSON(history(name2sig(samples, name)))
+		out, report := apply(input)
+		cases = append(cases, sanitizeCase{Name: name, Mode: mode, Model: model, Output: json.RawMessage(out), Report: reportOf(report)})
+	}
+	for _, s := range samples {
+		for _, model := range models {
+			model := model
+			run(s.name, "forModel", model, func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+				return signature.SanitizeClaudeMessagesSignaturesForModel(payload, model)
+			})
+		}
+		run(s.name, "claudeUpstream", "claude-sonnet-4-5", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.SanitizeClaudeMessagesForClaudeUpstream(payload, "claude-sonnet-4-5")
+		})
+		run(s.name, "claudeUpstreamPreserve", "claude-sonnet-4-5", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.SanitizeClaudeMessagesForClaudeUpstream(payload, "claude-sonnet-4-5", true)
+		})
+		run(s.name, "targetKeepEmpty", "", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.SanitizeClaudeMessagesSignaturesForTarget(payload, signature.ClaudeMessagesSignatureSanitizeOptions{TargetProvider: signature.SignatureProviderClaude})
+		})
+		run(s.name, "targetModelOnly", "gemini-3-flash", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.SanitizeClaudeMessagesSignaturesForTarget(payload, signature.ClaudeMessagesSignatureSanitizeOptions{TargetProvider: signature.SignatureProviderUnknown, TargetModel: "gemini-3-flash", DropEmptyMessages: true})
+		})
+		run(s.name, "stripEmpty", "", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.StripInvalidClaudeThinkingBlocksAndEmptyMessages(payload, signature.ClaudeSignatureValidationOptions{AllowEmptySignatureWithEmptyText: true}), signature.SignatureSanitizeReport{}
+		})
+		run(s.name, "stripInvalid", "", func(payload []byte) ([]byte, signature.SignatureSanitizeReport) {
+			return signature.StripInvalidClaudeThinkingBlocks(payload, signature.ClaudeSignatureValidationOptions{Strict: true}), signature.SignatureSanitizeReport{}
+		})
+	}
+	return cases
+}
+
+func name2sig(samples []namedSignature, name string) string {
+	for _, s := range samples {
+		if s.name == name {
+			return s.sig
+		}
+	}
+	return ""
+}
+
+// buildGeminiCases checks the Gemini validators and the request sanitiser on hand-written contents.
+func buildGeminiCases(samples []namedSignature) []geminiCase {
+	part := func(fn string, sig any) map[string]any {
+		p := map[string]any{"functionCall": map[string]any{"name": fn, "args": map[string]any{}, "id": "c-" + fn}}
+		if sig != nil {
+			p["thoughtSignature"] = sig
+		}
+		return p
+	}
+	resp := func(fn string) map[string]any {
+		return map[string]any{"functionResponse": map[string]any{"name": fn, "id": "c-" + fn, "response": map[string]any{}}}
+	}
+	var cases []geminiCase
+	add := func(name string, payload any) {
+		raw := mustJSON(payload)
+		c := geminiCase{Name: name, Input: raw}
+		if err := signature.ValidateGeminiThoughtSignatures(raw, signature.GeminiThoughtSignatureValidationOptions{AllowBypassSentinel: true, RequireKnownEnvelope: true}); err != nil {
+			c.Thought = err.Error()
+		}
+		if err := signature.ValidateGeminiFunctionCallPairing(raw); err != nil {
+			c.Pairing = err.Error()
+		}
+		c.Sanitize = signature.SanitizeGeminiRequestThoughtSignatures(append([]byte(nil), raw...), "contents")
+		cases = append(cases, c)
+	}
+	contents := func(items ...any) map[string]any { return map[string]any{"contents": items} }
+	modelTurn := func(parts ...any) map[string]any { return map[string]any{"role": "model", "parts": parts} }
+	userTurn := func(parts ...any) map[string]any { return map[string]any{"role": "user", "parts": parts} }
+	for _, s := range samples {
+		add("sig/"+s.name, contents(
+			userTurn(map[string]any{"text": "go"}),
+			modelTurn(part("a", s.sig), part("b", nil), part("c", s.sig)),
+			userTurn(resp("a"), resp("b"), resp("c")),
+		))
+		add("text-sig/"+s.name, contents(modelTurn(map[string]any{"text": "t", "thought": true, "thoughtSignature": s.sig})))
+	}
+	add("empty", map[string]any{})
+	add("no-contents-array", map[string]any{"contents": "x"})
+	add("request-contents", map[string]any{"request": contents(userTurn(map[string]any{"text": "go"}), modelTurn(part("a", nil)))})
+	add("pending-final", contents(userTurn(map[string]any{"text": "go"}), modelTurn(part("a", nil))))
+	add("response-without-call", contents(userTurn(resp("a"))))
+	add("count-mismatch", contents(modelTurn(part("a", nil), part("b", nil)), userTurn(resp("a"))))
+	add("id-mismatch", contents(modelTurn(part("a", nil)), userTurn(map[string]any{"functionResponse": map[string]any{"name": "a", "id": "zzz"}})))
+	add("missing-response-id", contents(modelTurn(part("a", nil)), userTurn(map[string]any{"functionResponse": map[string]any{"name": "a"}})))
+	add("name-mismatch", contents(modelTurn(map[string]any{"functionCall": map[string]any{"name": "a"}}), userTurn(map[string]any{"functionResponse": map[string]any{"name": "b"}})))
+	add("missing-response-name", contents(modelTurn(map[string]any{"functionCall": map[string]any{"name": "a"}}), userTurn(map[string]any{"functionResponse": map[string]any{"id": "x"}})))
+	add("missing-call-name", contents(modelTurn(map[string]any{"functionCall": map[string]any{"args": map[string]any{}}})))
+	add("interleaved", contents(modelTurn(part("a", nil), resp("a"))))
+	add("call-before-pending", contents(modelTurn(part("a", nil)), modelTurn(part("b", nil))))
+	add("model-before-response", contents(modelTurn(part("a", nil)), modelTurn(map[string]any{"text": "oops"})))
+	add("user-before-response", contents(modelTurn(part("a", nil)), userTurn(map[string]any{"text": "note"}), userTurn(resp("a"))))
+	add("empty-parts-while-pending", contents(modelTurn(part("a", nil)), map[string]any{"role": "user", "parts": []any{}}))
+	add("bypass-on-sibling", contents(modelTurn(part("a", "skip_thought_signature_validator"), part("b", "skip_thought_signature_validator"))))
+	add("empty-signature-first", contents(modelTurn(part("a", ""))))
+	add("response-with-signature", contents(modelTurn(part("a", nil)), userTurn(map[string]any{"functionResponse": map[string]any{"name": "a", "id": "c-a"}, "thoughtSignature": "x"})))
+	add("snake-case-signature", contents(modelTurn(map[string]any{"functionCall": map[string]any{"name": "a", "id": "c-a"}, "thought_signature": "skip_thought_signature_validator"})))
+	add("server-tool-block", contents(modelTurn(map[string]any{"toolCall": map[string]any{"x": 1}, "thoughtSignature": "junk"})))
+	return cases
 }
 
 func main() {
@@ -130,7 +314,23 @@ func main() {
 		return b64([]byte(b64(payload)))
 	}()
 
+	grokRaw := make([]byte, 0, 192)
+	for block := sha256.Sum256([]byte("grok")); len(grokRaw) < 192; block = sha256.Sum256(block[:]) {
+		grokRaw = append(grokRaw, block[:]...)
+	}
+	grokLike := base64.RawStdEncoding.EncodeToString(grokRaw[:150])
+	grokShort := base64.RawStdEncoding.EncodeToString(grokRaw[:20])
+	grokLowEntropy := base64.RawStdEncoding.EncodeToString(make([]byte, 90))
+	grokPadded := base64.StdEncoding.EncodeToString(grokRaw[:100])
+
 	samples := []struct{ name, sig string }{
+		{"grok-like-150", grokLike},
+		{"grok-like-prefixed", "claude#" + grokLike},
+		{"grok-too-short", grokShort},
+		{"grok-low-entropy", grokLowEntropy},
+		{"grok-padded", grokPadded},
+		{"grok-leading-space", " " + grokLike},
+		{"grok-url-chars", "abc-_" + grokLike},
 		{"empty", ""},
 		{"whitespace", "   "},
 		{"classic-E-channel11", classicE},
@@ -204,6 +404,7 @@ func main() {
 					Detected:   string(d.DetectedProvider),
 					Normalized: d.NormalizedSignature,
 					Replace:    d.ReplacementSignature,
+					Reason:     d.Reason,
 				}
 			}
 		}
@@ -232,6 +433,13 @@ func main() {
 				r.Compatible[string(provider)] = nil
 			}
 		}
+		r.Grok = signature.IsValidGrokEncryptedContent(s.sig)
+		r.Recognized = signature.IsRecognizedReasoningSignature(s.sig)
+		r.GPT = signature.IsValidGPTReasoningSignature(s.sig)
+		r.GeminiReplay = map[string]string{}
+		for _, kind := range kinds {
+			r.GeminiReplay[string(kind)] = signature.GeminiReplaySignatureOrBypass(s.sig, kind)
+		}
 		results = append(results, r)
 	}
 
@@ -242,7 +450,14 @@ func main() {
 		modelProviders[m] = string(signature.SignatureProviderFromModelName(m))
 	}
 
-	encoded, err := json.MarshalIndent(map[string]any{"samples": results, "modelProviders": modelProviders}, "", " ")
+	sanitizeCases := buildSanitizeCases(samples2names(samples))
+	geminiCases := buildGeminiCases(samples2names(samples))
+	encoded, err := json.MarshalIndent(map[string]any{
+		"samples":        results,
+		"modelProviders": modelProviders,
+		"sanitize":       sanitizeCases,
+		"gemini":         geminiCases,
+	}, "", " ")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

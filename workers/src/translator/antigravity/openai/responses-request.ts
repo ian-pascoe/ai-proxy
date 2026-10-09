@@ -16,7 +16,7 @@ import {
   hasOnlyResponsesWebSearchTools
 } from "../../gemini/openai/responses/web-search.ts"
 import { convertOpenAIResponsesRequestToGemini } from "../../gemini/openai/responses/request.ts"
-import { sortKeysDeep } from "../../openai/common/go-json.ts"
+import { sortKeysDeep } from "../../common/go-json.ts"
 import { convertGeminiRequestToAntigravity } from "../gemini/request.ts"
 
 export const ANTIGRAVITY_WEB_SEARCH_SYSTEM_INSTRUCTION =

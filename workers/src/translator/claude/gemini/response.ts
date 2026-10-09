@@ -4,7 +4,7 @@
  * Go source: internal/translator/claude/gemini/claude_gemini_response.go.
  */
 import { asInt, get, type Json, type JsonObject, tryParseJson } from "../../../json/index.ts"
-import { geminiReplaySignatureOrBypass } from "../../common/gemini-signature.ts"
+import { geminiReplaySignatureOrBypass } from "../../../signature/gemini.ts"
 import { exists, isObj, str } from "../../common/gjson.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
 

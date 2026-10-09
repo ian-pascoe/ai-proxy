@@ -25,7 +25,7 @@ import {
   setGeminiFunctionResponseRaw,
   setGeminiFunctionResponseResult
 } from "../../common/contents.ts"
-import { UserTurnDrops } from "../../common/parts.ts"
+import { UserTurnDrops } from "../../../common/parts.ts"
 import {
   compatibleGeminiSignature,
   geminiReplaySignatureOrBypass,
@@ -33,7 +33,8 @@ import {
   isGeminiSignatureModel,
   sanitizeGeminiRequestThoughtSignatures
 } from "../../common/signature.ts"
-import { sanitizeFunctionName, systemReminderText } from "../../util/claude.ts"
+import { systemReminderText } from "../../../common/claude-messages.ts"
+import { sanitizeFunctionName } from "../../util/claude.ts"
 import {
   assistantVisibleText,
   CARRIER_ANY,
@@ -953,7 +954,7 @@ export const convertOpenAIResponsesRequestToGemini = (modelName: string, request
   let result = attachDefaultSafetySettings(out, "safetySettings")
   if (useNativeLayout) result = sanitizeGeminiRequestThoughtSignatures(result, "contents")
   result = stripTrailingModelPrefill(result)
-  const error = drops.error(result)
+  const error = drops.err(result)
   if (error !== undefined) throw error
   return result
 }

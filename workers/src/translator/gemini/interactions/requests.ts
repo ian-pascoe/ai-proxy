@@ -25,8 +25,8 @@ import {
   isInteractionsInstructionStep,
   UserRun,
   UserTurnDrops
-} from "../common/parts.ts"
-import { sortKeysDeep } from "../util/json-schema.ts"
+} from "../../common/parts.ts"
+import { sortKeysDeep } from "../../common/go-json.ts"
 import {
   convertCamelCaseKeysToSnakeCase,
   convertSnakeCaseKeysToCamelCase,
@@ -187,7 +187,7 @@ export const convertGeminiRequestToInteractions = (modelName: string, request: J
   }
   out["input"] = inputItems
   out["stream"] = stream
-  const error = drops.error(out)
+  const error = drops.err(out)
   if (error !== undefined) throw error
   return out
 }
@@ -713,7 +713,7 @@ const appendInteractionsInput = (items: JsonObject[], input: Json | undefined, p
   }
   flushPendingGeminiSignature(ctx)
   ctx.run.end()
-  const error = ctx.run.error(partial())
+  const error = ctx.run.err(partial())
   if (error !== undefined) throw error
 }
 

@@ -1,5 +1,6 @@
 // Meta (Muse) executor against a mocked `/responses` upstream: request shaping, SSE aggregation, error rules and
 // credential resolution.
+import { claudeSignature } from "./support/signatures.ts"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { metaCreds, requireMetaToken } from "../src/executor/meta/credentials.ts"
@@ -174,7 +175,7 @@ describe("Meta executor", () => {
             input: [
               { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
               { type: "reasoning", id: "rs_foreign", summary: [], encrypted_content: "opaque-muse-state" },
-              { type: "reasoning", id: "rs_claude", summary: [], encrypted_content: `${"E".repeat(60)}` }
+              { type: "reasoning", id: "rs_claude", summary: [], encrypted_content: claudeSignature() }
             ]
           })
         )

@@ -17,7 +17,7 @@ import {
   tryParseJson
 } from "../../../json/index.ts"
 import { claudeInputTokensJson, sseEventLines } from "../../common/bytes.ts"
-import { sanitizeClaudeToolId } from "../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../common/tool-names.ts"
 import type { ResponseContext } from "../../registry.ts"
 import { buildShortNameMap, shortenCodexCallIdIfNeeded } from "./request.ts"
 

@@ -7,7 +7,13 @@ import { asInt, get, type Json, type JsonObject } from "../../../json/index.ts"
 import { sseEvent } from "../../../http/sse.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
 import { getStr, isArr, isObj, present, str } from "../common/read.ts"
-import { fixJson, mapToolName, sanitizeClaudeToolId, toolNameMapFromClaudeRequest } from "../common/tool-names.ts"
+import {
+  fixJson,
+  mapToolName,
+  type NameMap,
+  sanitizeClaudeToolId,
+  toolNameMapFromClaudeRequest
+} from "../../common/tool-names.ts"
 
 interface InterleavedContentChunk {
   readonly type: "text" | "thinking"
@@ -27,7 +33,7 @@ export interface ClaudeStreamParams {
   messageId: string
   model: string
   createdAt: number
-  toolNameMap: Map<string, string> | undefined
+  toolNameMap: NameMap
   toolNameMapResolved: boolean
   /** True once at least one tool_use content_block_start has been emitted on the wire. */
   sawToolCall: boolean

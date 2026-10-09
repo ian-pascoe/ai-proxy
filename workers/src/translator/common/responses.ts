@@ -3,7 +3,7 @@
  *
  * Go source: internal/translator/common/responses.go.
  */
-import { get, type Json, type JsonObject } from "../../json/index.ts"
+import { del, get, type Json, type JsonObject, set } from "../../json/index.ts"
 import { isObj, str } from "./gjson.ts"
 
 /** `ExtractResponsesCallID`: call_id -> tool_call_id -> callId -> id (excluding `fco_` output item ids). */
@@ -115,4 +115,14 @@ export const normalizeResponsesToolCallOutputs = (items: readonly Json[]): Json[
     }
   }
   return normalized
+}
+
+/** `SetResponsesToolCallIdentity`: writes a resolved Responses tool name and namespace (mutates `item`). */
+export const setResponsesToolCallIdentity = (item: Json, name: string, namespace: string, itemPath: string): Json => {
+  const namePath = itemPath !== "" ? `${itemPath}.name` : "name"
+  const namespacePath = itemPath !== "" ? `${itemPath}.namespace` : "namespace"
+  set(item, namePath, name)
+  if (namespace !== "") set(item, namespacePath, namespace)
+  else del(item, namespacePath)
+  return item
 }

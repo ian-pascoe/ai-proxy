@@ -16,7 +16,7 @@ import {
   set,
   tryParseJson
 } from "../../json/index.ts"
-import { sortKeysDeep } from "../../translator/openai/common/go-json.ts"
+import { sortKeysDeep } from "../../translator/common/go-json.ts"
 import { jsonPayload, stripUsageMetadataFromJson } from "../gemini/usage.ts"
 import { ExecutionError } from "../errors.ts"
 import { antigravityStatusError } from "./errors.ts"

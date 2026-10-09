@@ -499,7 +499,8 @@ export const validateClaudeThinkingSignatures = (
   return undefined
 }
 
-const thinkingBlockText = (part: Json): string => {
+/** `claudeThinkingBlockText`. */
+export const thinkingBlockText = (part: Json): string => {
   const text = get(part, "text")
   if (typeof text === "string") return text
   const thinking = get(part, "thinking")
@@ -513,15 +514,13 @@ const thinkingBlockText = (part: Json): string => {
   return ""
 }
 
+/** `isEmptyClaudeThinkingPlaceholder`: no signature and no thinking text. */
+export const isEmptyClaudeThinkingPlaceholder = (part: Json): boolean =>
+  asString(get(part, "signature")).trim() === "" && thinkingBlockText(part).trim() === ""
+
 const shouldStripThinkingBlock = (part: Json, options: ClaudeSignatureValidationOptions): boolean => {
   const signature = asString(get(part, "signature"))
-  if (
-    options.allowEmptySignatureWithEmptyText === true &&
-    signature.trim() === "" &&
-    thinkingBlockText(part).trim() === ""
-  ) {
-    return false
-  }
+  if (options.allowEmptySignatureWithEmptyText === true && isEmptyClaudeThinkingPlaceholder(part)) return false
   return !isValidClaudeThinkingSignature(signature, options)
 }
 
@@ -541,6 +540,34 @@ export const stripInvalidClaudeThinkingBlocks = (
     )
     if (kept.length !== content.length) message["content"] = kept
   }
+  return payload
+}
+
+/**
+ * `StripInvalidClaudeThinkingBlocksAndEmptyMessages`: also removes messages whose content array became empty because
+ * invalid thinking blocks were stripped (messages that were already empty stay untouched only when nothing changed).
+ */
+export const stripInvalidClaudeThinkingBlocksAndEmptyMessages = (
+  payload: Json,
+  options: ClaudeSignatureValidationOptions = {}
+): Json => {
+  const messages = get(payload, "messages")
+  if (!isJsonArray(messages)) return payload
+  const before = messages.map((message) => {
+    const content = get(message, "content")
+    return isJsonArray(content) ? content.length : -1
+  })
+  stripInvalidClaudeThinkingBlocks(payload, options)
+  const changed = messages.some((message, index) => {
+    const content = get(message, "content")
+    return isJsonArray(content) && content.length !== before[index]
+  })
+  if (!changed) return payload
+  const root = payload as Record<string, Json>
+  root["messages"] = messages.filter((message) => {
+    const content = get(message, "content")
+    return !(isJsonArray(content) && content.length === 0)
+  })
   return payload
 }
 

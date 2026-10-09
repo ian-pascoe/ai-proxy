@@ -17,18 +17,16 @@ import {
 import { convertBudgetToLevel } from "../../../thinking/convert.ts"
 import { getThinkingText } from "../../../thinking/text.ts"
 import { alignOpenAIToolCallMessages } from "../common/openai-tools.ts"
-import { sortKeysDeep } from "../common/go-json.ts"
+import { sortKeysDeep } from "../../common/go-json.ts"
 import { getStr, isArr, isObj, present, raw, str } from "../common/read.ts"
 import {
   alignClaudeToolResults,
   claudeMessageSystemReminderText,
-  hasUnsupportedUnicodePropertyEscape,
-  isClaudeCodeAttributionSystemText,
-  SCHEMA_MAP_KEYWORDS,
-  SCHEMA_VALUE_KEYWORDS
-} from "../common/claude-util.ts"
-import { isCompatibleGptSignature } from "../common/signature.ts"
-import { UserTurnDrops } from "../common/user-turn-drops.ts"
+  isClaudeCodeAttributionSystemText
+} from "../../common/claude-messages.ts"
+import { hasUnsupportedUnicodePropertyEscape, SCHEMA_MAP_KEYWORDS, SCHEMA_VALUE_KEYWORDS } from "../../common/schema.ts"
+import { compatibleSignatureForProvider } from "../../../signature/provider.ts"
+import { UserTurnDrops } from "../../common/parts.ts"
 
 /** `toolResultImagePlaceholder`: keeps the OpenAI tool message non-empty for image-only tool results. */
 const TOOL_RESULT_IMAGE_PLACEHOLDER = "[Tool returned image content; the images follow in the next user message.]"
@@ -84,7 +82,7 @@ const shouldMapClaudeThinkingToGptReasoning = (part: Json, preserveThinkingBlock
   if (preserveThinkingBlocks) return true
   const signature = get(part, "signature")
   if (signature === undefined || str(signature).trim() === "") return false
-  return isCompatibleGptSignature(str(signature))
+  return compatibleSignatureForProvider("gpt", str(signature)) !== undefined
 }
 
 /** `convertClaudeContentPart`. */

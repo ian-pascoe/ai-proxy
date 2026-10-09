@@ -20,12 +20,13 @@ import {
   set,
   tryParseJson
 } from "../../../json/index.ts"
-import { countSendableGeminiParts, UserTurnDrops } from "../common/parts.ts"
-import { normalizeOpenAIFileData } from "../common/file-data.ts"
+import { countSendableGeminiParts, UserTurnDrops } from "../../common/parts.ts"
+import { normalizeOpenAIFileData } from "../../common/file-data.ts"
 import { attachDefaultSafetySettings } from "../common/safety.ts"
 import { geminiReplaySignatureOrBypass } from "../common/signature.ts"
 import { renameKey } from "../gemini/gemini.ts"
-import { sanitizeFunctionName, systemReminderText } from "../util/claude.ts"
+import { systemReminderText } from "../../common/claude-messages.ts"
+import { sanitizeFunctionName } from "../util/claude.ts"
 import { cleanJsonSchemaForGeminiJsonSchema } from "../util/json-schema.ts"
 
 const GEMINI_FUNCTION_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
@@ -454,7 +455,7 @@ export const convertOpenAIRequestToGemini = (modelName: string, request: Json, _
   }
 
   const result = attachDefaultSafetySettings(out, "safetySettings")
-  const error = drops.error(result)
+  const error = drops.err(result)
   if (error !== undefined) throw error
   return result
 }

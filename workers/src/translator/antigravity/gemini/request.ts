@@ -22,8 +22,8 @@ import { TranslationError } from "../../registry.ts"
 import { contentHasGeminiFunctionResponse } from "../../gemini/common/contents.ts"
 import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts"
 import { sanitizeGeminiRequestThoughtSignatures } from "../../gemini/common/signature.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../gemini/util/tool-names.ts"
-import { sortKeysDeep } from "../../openai/common/go-json.ts"
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts"
+import { sortKeysDeep } from "../../common/go-json.ts"
 
 const DECLARATION_KEYS = ["functionDeclarations", "function_declarations"] as const
 const FUNCTION_NAME_FIELDS = ["functionCall", "functionResponse", "function_call", "function_response"] as const

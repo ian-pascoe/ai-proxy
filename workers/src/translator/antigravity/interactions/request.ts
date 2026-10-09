@@ -23,9 +23,9 @@ import {
   UserRun
 } from "../../common/parts.ts"
 import { reorderGeminiUserParts, setGeminiFunctionResponseResult } from "../../gemini/common/contents.ts"
-import { normalizeOpenAIFileData } from "../../gemini/common/file-data.ts"
+import { normalizeOpenAIFileData } from "../../common/file-data.ts"
 import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../gemini/util/tool-names.ts"
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts"
 import { deduplicateFunctionDeclarations } from "../openai/chat-request.ts"
 
 type NameMap = ReadonlyMap<string, string> | undefined

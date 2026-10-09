@@ -21,16 +21,16 @@ import {
   applyPatchInputDelta,
   applyPatchInputDone,
   isApplyPatchCustomTool
-} from "../../common/apply-patch.ts"
-import { requestModelNameOf } from "../../common/request-model.ts"
+} from "../../../common/apply-patch.ts"
+import { requestModelNameOf } from "../../../common/request.ts"
 import { eachEntry, getStr, isObj } from "../../common/read.ts"
-import { interactionsUsage } from "../../common/interactions-usage.ts"
+import { interactionsUsage } from "../../../common/interactions-usage.ts"
 import {
   type ResponsesToolIdentity,
   collectResponsesToolWinners,
   unwrapResponsesCustomToolInput
-} from "../../common/responses-tools.ts"
-import { setResponsesToolCallIdentity } from "../../common/responses.ts"
+} from "../../../common/responses-tools.ts"
+import { setResponsesToolCallIdentity } from "../../../common/responses.ts"
 import {
   firstExisting,
   firstNonEmpty,

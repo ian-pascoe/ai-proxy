@@ -22,7 +22,7 @@ import {
   resolveBackend
 } from "../../session-state/client.ts"
 import type { SessionAddress } from "../../session-state/protocol.ts"
-import { isReplaySafeGrokEncryptedContent } from "../../translator/common/signature.ts"
+import { isValidGrokEncryptedContent } from "../../signature/grok.ts"
 import { alignToolCallIds, comparableCallIds, insertIndexFor, replaySessionKey, toolCallKeys } from "../codex/replay.ts"
 import { parseSuffix } from "../suffix.ts"
 
@@ -71,11 +71,7 @@ const normalizeItem = (item: Json): Json | undefined => {
   switch (asString(get(item, "type")).trim()) {
     case "reasoning": {
       const encrypted = get(item, "encrypted_content")
-      if (
-        typeof encrypted !== "string" ||
-        encrypted !== encrypted.trim() ||
-        !isReplaySafeGrokEncryptedContent(encrypted)
-      ) {
+      if (typeof encrypted !== "string" || encrypted !== encrypted.trim() || !isValidGrokEncryptedContent(encrypted)) {
         return undefined
       }
       return { type: "reasoning", summary: [], content: null, encrypted_content: encrypted }

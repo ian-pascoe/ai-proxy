@@ -16,7 +16,7 @@ import {
   type JsonObject,
   set
 } from "../../../json/index.ts"
-import { normalizeOpenAIFileData } from "../common/file-data.ts"
+import { normalizeOpenAIFileData } from "../../common/file-data.ts"
 
 /** `strings.TrimSpace` + first non-empty (returns the trimmed value). */
 export const firstNonEmptyString = (...values: string[]): string => {

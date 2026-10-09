@@ -24,7 +24,7 @@ import {
   sanitizedToolNameMap,
   toolNameMapFromClaudeRequest,
   type NameMap
-} from "../util/tool-names.ts"
+} from "../../common/tool-names.ts"
 
 /** Go `Params`. */
 interface Params {

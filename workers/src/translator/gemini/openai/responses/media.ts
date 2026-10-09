@@ -7,8 +7,8 @@
  * function response parts.
  */
 import { asString, get, type Json, type JsonObject } from "../../../../json/index.ts"
-import { normalizeOpenAIFileData } from "../../common/file-data.ts"
-import { MIME_TYPES } from "../../common/mime-types.ts"
+import { normalizeOpenAIFileData } from "../../../common/file-data.ts"
+import { MIME_TYPES } from "../../../common/mime-types.ts"
 
 export interface MediaBlock {
   readonly mimeType: string

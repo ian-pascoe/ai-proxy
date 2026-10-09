@@ -8,10 +8,10 @@
 import { asBool, asFloat, asInt, get, type Json, type JsonObject } from "../../../../json/index.ts"
 import { sseEvent } from "../../../../http/sse.ts"
 import type { ResponseContext, ResponseTransform, TranslationState } from "../../../registry.ts"
-import { ApplyPatchCallState, applyPatchInputDelta, applyPatchInputDone } from "../../common/apply-patch.ts"
-import { sortKeysDeep } from "../../common/go-json.ts"
+import { ApplyPatchCallState, applyPatchInputDelta, applyPatchInputDone } from "../../../common/apply-patch.ts"
+import { sortKeysDeep } from "../../../common/go-json.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
-import { requestModelNameOf } from "../../common/request-model.ts"
+import { requestModelNameOf } from "../../../common/request.ts"
 import { responsesToolInputFailure, shellCallItem, shellCallPlaceholder } from "./shell.ts"
 import { pickRequestJson, ResponsesToolIndex, unwrapCustomToolInput } from "./tools.ts"
 

@@ -272,7 +272,7 @@ export const convertOpenAIRequestToCodex = (modelName: string, body: Json, strea
         if (callType === "custom" && name.trim() === "apply_patch") {
           // Only normalized function history carries the JSON envelope. Explicit custom input is raw.
           const unwrapped = unwrapApplyPatchInput(input)
-          if (unwrapped !== undefined) input = unwrapped
+          if ("input" in unwrapped) input = unwrapped.input
         }
         return { callType, name, input }
       }

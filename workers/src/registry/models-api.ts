@@ -6,7 +6,16 @@
  * with `ModelDetailIDContextKey`).
  */
 import type { Json, JsonObject } from "../json/index.ts"
-import { claudeList, geminiDetail, geminiList, goJson, goStructJson, grokList, openaiList } from "./listings.ts"
+import {
+  claudeList,
+  geminiDetail,
+  geminiList,
+  goCompactJson,
+  goJson,
+  goStructJson,
+  grokList,
+  openaiList
+} from "./listings.ts"
 import type { ModelInfo } from "./model-info.ts"
 
 export interface ModelsReply {
@@ -57,8 +66,8 @@ const selectDetail = (payload: JsonObject, id: string, render: (value: Json) => 
 export interface ModelsOptions {
   /** `upstream.claude.disable-cloaking-model-list`. */
   readonly disableCloaking: boolean
-  /** Renders the Codex client catalog (`client_version` queries); `undefined` while that port is missing. */
-  readonly codexClient?: (models: ReadonlyArray<ModelInfo>, clientVersion: string) => JsonObject
+  /** Builds the Codex client catalog for `client_version` queries (`registry/codex-client-models.ts`). */
+  readonly codexClient: (models: ReadonlyArray<ModelInfo>, clientVersion: string) => JsonObject
 }
 
 /**
@@ -79,21 +88,10 @@ export const respondModels = (
       payload = grokList(models)
       render = goStructJson
       break
-    case "codex-client": {
-      if (options.codexClient === undefined) {
-        return {
-          status: 501,
-          body: goJson({
-            error: {
-              message: "The Codex client model catalog (client_version) is not available yet",
-              type: "not_implemented"
-            }
-          })
-        }
-      }
+    case "codex-client":
       payload = options.codexClient(models, request.clientVersion ?? "")
+      render = goCompactJson
       break
-    }
     case "claude":
       payload = claudeList(models, options.disableCloaking)
       break

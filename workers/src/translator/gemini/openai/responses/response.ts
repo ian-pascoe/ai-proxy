@@ -19,7 +19,7 @@ import {
 import { sseEvent } from "../../../../http/sse.ts"
 import { requestModelNameOf } from "../../../common/request.ts"
 import type { ResponseContext } from "../../../registry.ts"
-import { restoreSanitizedToolName, sanitizedToolNameMap, type NameMap } from "../../util/tool-names.ts"
+import { restoreSanitizedToolName, sanitizedToolNameMap, type NameMap } from "../../../common/tool-names.ts"
 import {
   CARRIER_ANY,
   CARRIER_FUNCTION,
@@ -29,10 +29,8 @@ import {
   CARRIER_TEXT,
   encodeCarrier
 } from "./carrier.ts"
+import { applyPatchFailure, applyPatchInputDelta, applyPatchInputDone } from "../../../common/apply-patch.ts"
 import {
-  applyPatchFailure,
-  applyPatchInputDelta,
-  applyPatchInputDone,
   type ApplyPatchCall,
   echoRequestFields,
   type EvidenceState,
@@ -53,7 +51,8 @@ import {
   usageJson
 } from "./response-common.ts"
 import { cacheTextSignatures } from "./trailing-signature.ts"
-import { responsesToolReverseIdentityMap, type ResponsesToolIdentity, unwrapResponsesCustomToolInput } from "./tools.ts"
+import { type ResponsesToolIdentity, unwrapResponsesCustomToolInput } from "../../../common/responses-tools.ts"
+import { responsesToolReverseIdentityMap } from "./tools.ts"
 import {
   allowsResponsesWebSearchToolChoice,
   buildResponsesUrlCitationsForMessages,

@@ -40,6 +40,15 @@ export interface FixtureScenario {
   readonly events?: ReadonlyArray<FixtureEvent>
   readonly disableCloaking?: boolean
   readonly requests: ReadonlyArray<FixtureRequest>
+  readonly codexClient: ReadonlyArray<{
+    readonly variant: string
+    readonly version: string
+    readonly status: number
+    readonly size: number
+    readonly sha256: string
+    readonly entries: Record<string, string>
+    readonly models: ReadonlyArray<Record<string, unknown>> | null
+  }>
   readonly registry: {
     readonly providers: Record<string, string[]>
     readonly infos: ReadonlyArray<InfoQuery>

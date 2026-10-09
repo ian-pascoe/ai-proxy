@@ -1,5 +1,5 @@
 /** Go source: internal/translator/common/interactions_usage.go. */
-import { get, type Json } from "../../../json/index.ts"
+import { get, type Json } from "../../json/index.ts"
 
 const PATHS = [
   "interaction.usage",

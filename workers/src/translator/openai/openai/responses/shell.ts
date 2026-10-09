@@ -5,7 +5,7 @@
  * responsesToolInputFailure).
  */
 import { asFloat, get, isJsonObject, type Json, type JsonObject, set } from "../../../../json/index.ts"
-import { applyPatchFailure } from "../../common/apply-patch.ts"
+import { applyPatchFailure } from "../../../common/apply-patch.ts"
 import { isArr } from "../../common/read.ts"
 
 export const INVALID_SHELL_ACTION_MESSAGE =

@@ -16,7 +16,7 @@ import {
   tryParseJson
 } from "../../../../json/index.ts"
 import type { ResponseContext } from "../../../registry.ts"
-import { restoreSanitizedToolName, sanitizedToolNameMap } from "../../util/tool-names.ts"
+import { restoreSanitizedToolName, sanitizedToolNameMap } from "../../../common/tool-names.ts"
 import {
   CARRIER_ANY,
   CARRIER_FUNCTION,
@@ -44,7 +44,8 @@ import {
   unwrapRequestRoot,
   usageJson
 } from "./response-common.ts"
-import { responsesToolReverseIdentityMap, type ResponsesToolIdentity, unwrapResponsesCustomToolInput } from "./tools.ts"
+import { type ResponsesToolIdentity, unwrapResponsesCustomToolInput } from "../../../common/responses-tools.ts"
+import { responsesToolReverseIdentityMap } from "./tools.ts"
 import {
   buildResponsesUrlCitationsForMessages,
   buildResponsesWebSearchCallItem,

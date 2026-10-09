@@ -18,13 +18,13 @@ import {
   tryParseJson
 } from "../../../json/index.ts"
 import { extractSummaryConfig, applySummaryConfig } from "../../../thinking/index.ts"
-import { sanitizeClaudeToolId } from "../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../common/tool-names.ts"
 import { countSendableGeminiParts, UserTurnDrops } from "../../common/parts.ts"
-import { systemReminderText } from "../../gemini/util/claude.ts"
-import { normalizeOpenAIFileData } from "../../gemini/common/file-data.ts"
+import { systemReminderText } from "../../common/claude-messages.ts"
+import { normalizeOpenAIFileData } from "../../common/file-data.ts"
 import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts"
 import { renameKey } from "../../gemini/gemini/gemini.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../gemini/util/tool-names.ts"
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts"
 import { sanitizeAntigravityClaudeGeminiRequestSignatures } from "../gemini/request.ts"
 
 const FUNCTION_THOUGHT_SIGNATURE = "skip_thought_signature_validator"

@@ -15,8 +15,8 @@
 import { createHash } from "node:crypto"
 import { Effect } from "effect"
 import { asString, cloneJson, get, isJsonArray, type Json, type JsonObject, set } from "../../json/index.ts"
-import { isValidGptReasoningSignature } from "../../translator/common/signature.ts"
-import { sanitizeClaudeToolId } from "../../translator/common/claude-messages.ts"
+import { isValidGptReasoningSignature } from "../../signature/gpt.ts"
+import { sanitizeClaudeToolId } from "../../translator/common/tool-names.ts"
 import { shortenCodexCallIdIfNeeded } from "../../translator/codex/claude/request.ts"
 import {
   type BackendResolver,

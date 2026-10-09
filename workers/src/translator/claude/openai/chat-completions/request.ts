@@ -21,7 +21,7 @@ import { buildClaudeStructuredOutputInstruction } from "../../../common/claude-s
 import { deriveClaudeUserID } from "../../../common/claude-user-id.ts"
 import { normalizeClaudeToolInputSchema, sanitizeClaudeFunctionName } from "../../../common/claude-util.ts"
 import { generateClaudeToolCallId } from "../../../common/request.ts"
-import { sanitizeClaudeToolId } from "../../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../../common/tool-names.ts"
 import { exists, isArr, isObj, str, toArray, trimmed } from "../../../common/gjson.ts"
 import { UserTurnDrops } from "../../../common/parts.ts"
 

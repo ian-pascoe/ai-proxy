@@ -8,7 +8,7 @@ import { asString, del, get, isJsonArray, type Json, set, tryParseJson } from ".
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
 import { hasAntigravityResponsePayload as hasResponsePayload, USAGE_PATHS } from "../common/payload.ts"
 import { geminiTokenCountJson } from "../../gemini/common/contents.ts"
-import { disambiguatedToolNameMap, restoreSanitizedToolName } from "../../gemini/util/tool-names.ts"
+import { disambiguatedToolNameMap, restoreSanitizedToolName } from "../../common/tool-names.ts"
 
 interface GeminiStreamState {
   sawResponse: boolean

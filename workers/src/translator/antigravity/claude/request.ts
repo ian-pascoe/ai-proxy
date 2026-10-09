@@ -42,9 +42,9 @@ import {
   GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR,
   sanitizeGeminiRequestThoughtSignatures
 } from "../../gemini/common/signature.ts"
-import { isClaudeCodeAttributionSystemText } from "../../gemini/util/claude.ts"
+import { isClaudeCodeAttributionSystemText } from "../../common/claude-messages.ts"
 import { cleanJsonSchemaForAntigravity } from "../../gemini/util/json-schema.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../gemini/util/tool-names.ts"
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts"
 import { deduplicateFunctionDeclarations } from "../openai/chat-request.ts"
 import {
   buildAntigravityWebSearchRequest,

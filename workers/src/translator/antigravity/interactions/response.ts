@@ -17,7 +17,7 @@ import {
 } from "../../../json/index.ts"
 import { sseEventData } from "../../common/bytes.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
-import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../gemini/util/tool-names.ts"
+import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../common/tool-names.ts"
 
 interface StreamState {
   started: boolean

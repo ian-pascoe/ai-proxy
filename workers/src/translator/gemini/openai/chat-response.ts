@@ -16,7 +16,7 @@ import {
   tryParseJson
 } from "../../../json/index.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
-import { restoreSanitizedToolName, sanitizedToolNameMap, type NameMap } from "../util/tool-names.ts"
+import { restoreSanitizedToolName, sanitizedToolNameMap, type NameMap } from "../../common/tool-names.ts"
 
 interface Params {
   unixTimestamp: number

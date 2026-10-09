@@ -16,7 +16,7 @@ import {
   type JsonObject,
   set
 } from "../../../../json/index.ts"
-import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../common/apply-patch.ts"
+import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
 import { antigravityToolNameToUpstream } from "../../common/antigravity-tools.ts"
 import { isDevinCodexAppAutomationUpdate, sanitizeDevinToolDescription } from "../../common/devin-tools.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
@@ -26,8 +26,8 @@ import {
   qualifyResponsesNamespaceToolName,
   responsesToolDescriptionOf,
   responsesToolParametersOf
-} from "../../common/responses-tools.ts"
-import { UserTurnDrops } from "../../common/user-turn-drops.ts"
+} from "../../../common/responses-tools.ts"
+import { UserTurnDrops } from "../../../common/parts.ts"
 import {
   firstExisting,
   firstNonEmpty,

@@ -88,10 +88,13 @@ export class ClaudeMessageAccumulator {
 
 /**
  * `AlignClaudeToolResults`: orders `tool_result` blocks by the preceding `tool_use` ids, keeping other blocks at
- * their indexes. Without a complete one-to-one match the original content is returned.
+ * their indexes. Without a complete one-to-one match (or when `content` is not an array) the original content is
+ * returned.
  */
-export const alignClaudeToolResults = (content: Json[], toolUseIds: readonly string[]): Json[] => {
-  if (toolUseIds.length === 0) return content
+export function alignClaudeToolResults(content: Json[], toolUseIds: readonly string[]): Json[]
+export function alignClaudeToolResults(content: Json | undefined, toolUseIds: readonly string[]): Json | undefined
+export function alignClaudeToolResults(content: Json | undefined, toolUseIds: readonly string[]): Json | undefined {
+  if (!isJsonArray(content) || toolUseIds.length === 0) return content
   const results: Json[] = []
   const indices: number[] = []
   content.forEach((part, index) => {
@@ -116,12 +119,4 @@ export const alignClaudeToolResults = (content: Json[], toolUseIds: readonly str
     ordered[slot] = reordered[i] as Json
   })
   return ordered
-}
-
-let toolIdCounter = 0
-
-/** `SanitizeClaudeToolID` (`^[a-zA-Z0-9_-]+$`; an empty result gets a generated fallback). */
-export const sanitizeClaudeToolId = (id: string): string => {
-  const sanitized = id.replace(/[^a-zA-Z0-9_-]/gu, "_")
-  return sanitized !== "" ? sanitized : `toolu_${Date.now()}_${++toolIdCounter}`
 }

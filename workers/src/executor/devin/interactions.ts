@@ -5,9 +5,7 @@
  * `extractInteractionsStepText`, `extractFunctionResultContent`, `extractFunctionResultTarget`, `extractDevinImage`,
  * `supplementSignaturesFromOriginal`, `supplementImagesFromOriginal`, `parseSignatureBytes`, `detectSignatureType`,
  * `normalizeDevinUUID`), internal/runtime/executor/helps/devin_user_turn.go (`CheckDevinUserTurns`).
- * Simplification: `internal/signature` provenance detection is approximated by the structural checks available in
- * `translator/common/signature.ts` and `executor/claude/sanitize.ts` (GPT `gAAAA…` envelopes, Claude `E…`/`R…`
- * envelopes) plus the prefix/heuristic fallbacks of the Go code.
+ * Signature provenance uses the full `internal/signature` port (`signature/provider.ts`, `DetectSignatureProvider`).
  */
 import { randomUUID } from "node:crypto"
 import {
@@ -20,9 +18,9 @@ import {
   type Json,
   type JsonObject
 } from "../../json/index.ts"
-import { isValidGptReasoningSignature } from "../../translator/common/signature.ts"
+import { bytesToBinaryString } from "../../signature/base64.ts"
+import { detectSignatureProvider } from "../../signature/provider.ts"
 import { UserRun } from "../../translator/common/parts.ts"
-import { hasDecodableThinkingSignature } from "../claude/sanitize.ts"
 import { uuidV5Oid } from "../helps/uuid.ts"
 import {
   DEVIN_DEFAULT_MAX_TOKENS,
@@ -265,10 +263,18 @@ const extractFunctionResultContent = (
 // Signatures
 // ---------------------------------------------------------------------------------------------------------------
 
-const detectProvider = (signature: string): "claude" | "gpt" | "" => {
-  if (isValidGptReasoningSignature(signature)) return "gpt"
-  if (hasDecodableThinkingSignature(signature)) return "claude"
-  return ""
+/** `DetectSignatureProvider` restricted to the families Devin distinguishes. */
+const detectProvider = (signature: string): "claude" | "gpt" | "gemini" | "" => {
+  switch (detectSignatureProvider(signature)) {
+    case "claude":
+      return "claude"
+    case "gpt":
+      return "gpt"
+    case "gemini":
+      return "gemini"
+    default:
+      return ""
+  }
 }
 
 const detectSignatureType = (signature: string): string => {
@@ -282,6 +288,8 @@ const detectSignatureType = (signature: string): string => {
       return "anthropic"
     case "gpt":
       return "openai"
+    case "gemini":
+      return "gemini"
   }
   if (s.startsWith("CAQS") || s.startsWith("CAIS")) return "anthropic"
   if (s.startsWith("gAAAA")) return "openai"
@@ -311,17 +319,21 @@ export const parseSignatureBytes = (signature: string): { readonly bytes: Uint8A
       return { bytes: utf8.encode(s), type: "anthropic" }
     case "gpt":
       return { bytes: utf8.encode(s), type: "openai" }
+    case "gemini":
+      return { bytes: utf8.encode(s), type: "gemini" }
   }
   if (s.startsWith("AY")) return { bytes: utf8.encode(s), type: "gemini" }
   const decoded = decodeStdBase64(s)
   if (decoded !== undefined && decoded.length > 0) {
-    const text = new TextDecoder().decode(decoded)
+    const text = bytesToBinaryString(decoded)
     if (text.startsWith("sealed.v1.")) return { bytes: decoded, type: "sealed" }
     switch (detectProvider(text)) {
       case "claude":
         return { bytes: decoded, type: "anthropic" }
       case "gpt":
         return { bytes: decoded, type: "openai" }
+      case "gemini":
+        return { bytes: utf8.encode(s), type: "gemini" }
     }
     if (text.startsWith("CAQS") || text.startsWith("CAIS")) return { bytes: decoded, type: "anthropic" }
     if (text.startsWith("gAAAA")) return { bytes: decoded, type: "openai" }

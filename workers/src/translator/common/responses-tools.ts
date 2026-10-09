@@ -2,9 +2,20 @@
  * Responses tool declarations: namespace qualification and per-name winners.
  *
  * Go source: internal/util/responses_tools.go (QualifyResponsesNamespaceToolName, CollectResponsesToolDescriptors,
- * CollectResponsesToolWinners).
+ * CollectResponsesToolWinners, UnwrapResponsesCustomToolInput, ResponsesToolIdentity, ResponsesToolDescription). The
+ * Gemini declaration builders of that file live in `translator/gemini/openai/responses/tools.ts`.
  */
 import { asString, get, isJsonArray, type Json } from "../../json/index.ts"
+import { isApplyPatchCustomTool } from "./apply-patch.ts"
+
+/** Resolved identity of a tool in OpenAI Responses format (`util.ResponsesToolIdentity`). */
+export interface ResponsesToolIdentity {
+  readonly name: string
+  readonly namespace: string
+  readonly custom: boolean
+  /** Resolved from the winning original declaration, never from the upstream name. */
+  readonly applyPatch: boolean
+}
 
 export interface ResponsesToolDescriptor {
   /** Qualified name (e.g. `functions__exec`). */
@@ -34,6 +45,14 @@ const responsesToolName = (tool: Json | undefined): string => {
   const name = asString(get(tool, "name")).trim()
   return name !== "" ? name : asString(get(tool, "function.name")).trim()
 }
+
+/** `util.ResponsesToolDescription`. */
+export const responsesToolDescriptionOf = (tool: Json | undefined): string => {
+  const description = asString(get(tool, "description"))
+  return description !== "" ? description : asString(get(tool, "function.description"))
+}
+
+export { responsesToolParameters as responsesToolParametersOf } from "../openai/openai/responses/tools.ts"
 
 const toolSources = (root: Json | undefined): Array<{ readonly tools: Json[]; readonly priority: number }> => {
   const sources: Array<{ readonly tools: Json[]; readonly priority: number }> = []
@@ -123,3 +142,24 @@ export const collectResponsesToolWinners = (root: Json | undefined): Map<string,
   }
   return winners
 }
+
+/** `util.UnwrapResponsesCustomToolInput`. */
+export const unwrapResponsesCustomToolInput = (argumentsText: string): string => {
+  const trimmed = argumentsText.trim()
+  if (trimmed === "" || trimmed === "{}") return ""
+  let parsed: Json
+  try {
+    parsed = JSON.parse(trimmed) as Json
+  } catch {
+    return trimmed
+  }
+  if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const input = parsed.input
+    if (input !== undefined) return typeof input === "string" ? input : JSON.stringify(input)
+  }
+  if (typeof parsed === "string") return parsed
+  return trimmed
+}
+
+export const isApplyPatchDescriptor = (descriptor: ResponsesToolDescriptor): boolean =>
+  isApplyPatchCustomTool(descriptor.tool)

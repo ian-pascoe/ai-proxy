@@ -11,6 +11,7 @@
  * sorts keys the same way in those two cases.
  */
 import { asString, del, get, isJsonArray, isJsonObject, type Json, type JsonObject, set } from "../../../json/index.ts"
+import { sortKeysDeep } from "../../common/go-json.ts"
 
 const PLACEHOLDER_REASON_DESCRIPTION = "Brief explanation of why you are calling this tool"
 
@@ -192,21 +193,6 @@ const sortByDepth = (paths: string[]): void => {
 const strings = (doc: Doc, path: string): string[] => {
   const arr = getAt(doc, path)
   return isJsonArray(arr) ? arr.map(asString) : []
-}
-
-/** Go re-marshals decoded maps with sorted keys. */
-export const sortKeysDeep = (value: Json): Json => {
-  if (isJsonArray(value)) return value.map(sortKeysDeep)
-  if (!isJsonObject(value)) return value
-  const out: JsonObject = {}
-  for (const key of Object.keys(value).sort())
-    Object.defineProperty(out, key, {
-      value: sortKeysDeep(value[key] as Json),
-      enumerable: true,
-      writable: true,
-      configurable: true
-    })
-  return out
 }
 
 // --- malformed schema repair (normalizeMalformedSchemaObjects) ----------------------------------------------------

@@ -17,7 +17,7 @@ import {
 } from "../../../json/index.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
 import { convertGeminiResponseToOpenAINonStream, usageFields } from "../../gemini/openai/chat-response.ts"
-import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../gemini/util/tool-names.ts"
+import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../common/tool-names.ts"
 import { hasAntigravityResponsePayload } from "../common/payload.ts"
 
 interface Params {

@@ -8,7 +8,8 @@
  * All functions mutate the parsed body in place and return it.
  */
 import { asBool, asString, del, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts"
-import { isKnownProviderSignature, isValidGptReasoningSignature } from "../../translator/common/signature.ts"
+import { isValidGptReasoningSignature } from "../../signature/gpt.ts"
+import { detectSignatureProvider } from "../../signature/provider.ts"
 import { uuidV5Oid } from "../helps/uuid.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -109,7 +110,7 @@ export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = fals
       typeof encrypted === "string" &&
       encrypted === encrypted.trim() &&
       (isValidGptReasoningSignature(encrypted) ||
-        (keepForeign && encrypted !== "" && !isKnownProviderSignature(encrypted)))
+        (keepForeign && encrypted !== "" && detectSignatureProvider(encrypted) === "unknown"))
     if (valid) continue
     delete item["encrypted_content"]
     if (stripOrphanIds && "id" in item) delete item["id"]

@@ -14,14 +14,14 @@ import {
   hasLevel,
   mapToClaudeEffort
 } from "../../../../thinking/index.ts"
-import { hasDecodableThinkingSignature, stripSignaturePrefix } from "../../../../executor/claude/sanitize.ts"
+import { compatibleSignatureForProvider } from "../../../../signature/provider.ts"
 import { lookupModelInfo } from "../../../model-info.ts"
 import { attachCacheControl } from "../../../common/cache-control.ts"
 import { buildClaudeStructuredOutputInstruction } from "../../../common/claude-system.ts"
 import { deriveClaudeUserID } from "../../../common/claude-user-id.ts"
 import { normalizeClaudeToolInputSchema, sanitizeClaudeFunctionName } from "../../../common/claude-util.ts"
 import { generateClaudeToolCallId } from "../../../common/request.ts"
-import { sanitizeClaudeToolId } from "../../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../../common/tool-names.ts"
 import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts"
 import { UserTurnDrops } from "../../../common/parts.ts"
 import { extractResponsesCallID, normalizeResponsesToolCallOutputs } from "../../../common/responses.ts"
@@ -573,7 +573,8 @@ const reasoningToClaudeThinking = (item: Json, preserveEmpty: boolean): JsonObje
     return data === "" ? undefined : { type: "redacted_thinking", data }
   }
   let signature: string
-  if (hasDecodableThinkingSignature(encrypted)) signature = stripSignaturePrefix(encrypted)
+  const compatible = compatibleSignatureForProvider("claude", encrypted)
+  if (compatible !== undefined) signature = compatible
   else if (preserveEmpty) signature = encrypted
   else return undefined
   return { type: "thinking", thinking: reasoningText(item), signature }

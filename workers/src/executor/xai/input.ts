@@ -18,7 +18,7 @@ import {
   type JsonObject,
   set
 } from "../../json/index.ts"
-import { isReplaySafeGrokEncryptedContent } from "../../translator/common/signature.ts"
+import { isValidGrokEncryptedContent } from "../../signature/grok.ts"
 import { hasFunctionToolNamed, qualifyNamespaceToolName } from "./tools.ts"
 
 const trimmed = (value: Json | undefined, path: string): string => asString(get(value, path)).trim()
@@ -213,7 +213,7 @@ export const sanitizeInputEncryptedContent = (body: Json): Json => {
       continue
     }
     const encrypted = item["encrypted_content"]
-    if (typeof encrypted === "string" && isReplaySafeGrokEncryptedContent(encrypted)) {
+    if (typeof encrypted === "string" && isValidGrokEncryptedContent(encrypted)) {
       items.push(item)
       continue
     }

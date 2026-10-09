@@ -1,13 +1,101 @@
 /**
  * Tool-name maps between clients and Gemini function declarations.
  *
- * Go source: internal/util/translator.go (CanonicalToolName, ToolNameMapFromClaudeRequest, MapToolName,
+ * Go source: internal/util/translator.go (FixJSON, CanonicalToolName, ToolNameMapFromClaudeRequest, MapToolName,
  * SanitizedFunctionNameMap, MapSanitizedFunctionName, DisambiguatedToolNameMap, SanitizedToolNameMap,
  * RestoreSanitizedToolName), internal/util/claude_tool_id.go (SanitizeClaudeToolID).
  */
 import { createHash } from "node:crypto"
-import { asString, get, isJsonArray, type Json } from "../../../json/index.ts"
-import { sanitizeFunctionName } from "./claude.ts"
+import { asString, get, isJsonArray, type Json } from "../../json/index.ts"
+import { sanitizeFunctionName } from "../gemini/util/claude.ts"
+
+/**
+ * `FixJSON`: converts single-quoted strings to double-quoted ones (best effort) so partially malformed tool
+ * arguments can still be parsed. Everything else is forwarded unchanged.
+ */
+export const fixJson = (input: string): string => {
+  let out = ""
+  let inDouble = false
+  let inSingle = false
+  let escaped = false
+  const runes = Array.from(input)
+  for (let i = 0; i < runes.length; i++) {
+    const r = runes[i] as string
+    if (inDouble) {
+      out += r
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (r === "\\") {
+        escaped = true
+        continue
+      }
+      if (r === '"') inDouble = false
+      continue
+    }
+    if (inSingle) {
+      if (escaped) {
+        escaped = false
+        switch (r) {
+          case "n":
+          case "r":
+          case "t":
+          case "b":
+          case "f":
+          case "/":
+          case '"':
+            out += `\\${r}`
+            break
+          case "\\":
+            out += "\\\\"
+            break
+          case "'":
+            out += "'"
+            break
+          case "u": {
+            out += "\\u"
+            for (let k = 0; k < 4 && i + 1 < runes.length; k++) {
+              const peek = runes[i + 1] as string
+              if (/^[0-9a-fA-F]$/.test(peek)) {
+                out += peek
+                i++
+              } else break
+            }
+            break
+          }
+          default:
+            out += `\\${r}`
+        }
+        continue
+      }
+      if (r === "\\") {
+        escaped = true
+        continue
+      }
+      if (r === "'") {
+        out += '"'
+        inSingle = false
+        continue
+      }
+      out += r === '"' ? '\\"' : r
+      continue
+    }
+    if (r === '"') {
+      inDouble = true
+      out += r
+      continue
+    }
+    if (r === "'") {
+      inSingle = true
+      out += '"'
+      continue
+    }
+    out += r
+  }
+  if (inSingle) out += '"'
+  return out
+}
 
 /** Name -> name lookup (Go `map[string]string`; `undefined` = nil map). */
 export type NameMap = ReadonlyMap<string, string> | undefined

@@ -6,14 +6,14 @@
  */
 import { cloneJson, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { antigravityToolNameToUpstream, antigravityUpstreamToolNameToClient } from "../../common/antigravity-tools.ts"
-import { normalizeOpenAIFileData } from "../../common/file-data.ts"
+import { normalizeOpenAIFileData } from "../../../common/file-data.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
 import {
   type ResponsesToolIdentity,
   qualifyResponsesNamespaceToolName,
   unwrapResponsesCustomToolInput
-} from "../../common/responses-tools.ts"
-import { isRecognizedReasoningSignature } from "../../common/signature.ts"
+} from "../../../common/responses-tools.ts"
+import { isRecognizedReasoningSignature } from "../../../../signature/grok.ts"
 import { firstNonEmpty, jsonStringValue } from "../chat-completions/shared.ts"
 
 export {

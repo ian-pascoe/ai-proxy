@@ -5,9 +5,9 @@
  */
 import { asBool, asInt, cloneJson, get, isJsonObject, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { antigravityToolNameToUpstream } from "../../common/antigravity-tools.ts"
-import { normalizeOpenAIFileData } from "../../common/file-data.ts"
+import { normalizeOpenAIFileData } from "../../../common/file-data.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
-import { UserTurnDrops } from "../../common/user-turn-drops.ts"
+import { UserTurnDrops } from "../../../common/parts.ts"
 import {
   firstExisting,
   firstNonEmpty,

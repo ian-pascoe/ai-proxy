@@ -3,8 +3,8 @@
  * `map[string]any`) through `sjson.SetBytes`, which marshals with object keys sorted alphabetically. The fixtures keep
  * key order, so those call sites use {@link sortKeysDeep} to reproduce the same order.
  */
-import { isJsonArray, isJsonObject, type Json, type JsonObject } from "../../../json/index.ts"
-import { setOwn } from "../../../json/value.ts"
+import { isJsonArray, isJsonObject, type Json, type JsonObject } from "../../json/index.ts"
+import { setOwn } from "../../json/value.ts"
 
 /** Deep copy with every object's keys sorted (Go `json.Marshal` of a `map[string]any`). */
 export const sortKeysDeep = (value: Json): Json => {

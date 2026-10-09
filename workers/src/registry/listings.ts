@@ -40,6 +40,13 @@ const escapeLikeGo = (json: string): string => json.replace(/[<>&\u2028\u2029]/g
 /** `json.Marshal` of a Go map tree: sorted keys, HTML-safe escaping, compact. */
 export const goJson = (value: Json): string => escapeLikeGo(JSON.stringify(sortKeys(value)))
 
+/**
+ * `MarshalCompact` of the Codex client catalog: a Go map tree with sorted keys through an encoder with HTML escaping
+ * disabled (so `<`, `>` and `&` stay literal; U+2028/U+2029 are still escaped).
+ */
+export const goCompactJson = (value: Json): string =>
+  JSON.stringify(sortKeys(value)).replace(/[\u2028\u2029]/g, (char) => GO_ESCAPES[char] as string)
+
 /** `json.Marshal` of a Go struct tree: keys keep their declaration order (insertion order here). */
 export const goStructJson = (value: Json): string => escapeLikeGo(JSON.stringify(value))
 

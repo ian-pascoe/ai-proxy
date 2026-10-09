@@ -20,9 +20,9 @@ import { cacheSignature, getModelGroup } from "../../../signature/cache.ts"
 import { signatureProviderFromModelName } from "../../../signature/provider.ts"
 import { sseEventLines, claudeInputTokensJson } from "../../common/bytes.ts"
 import { geminiClaudeToolUseID } from "../../common/claude-util.ts"
-import { sanitizeClaudeToolId } from "../../common/claude-messages.ts"
+import { sanitizeClaudeToolId } from "../../common/tool-names.ts"
 import type { ResponseContext, ResponseTransform } from "../../registry.ts"
-import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../gemini/util/tool-names.ts"
+import { disambiguatedToolNameMap, type NameMap, restoreSanitizedToolName } from "../../common/tool-names.ts"
 import { CarrierDirection, CarrierKind, encodeGeminiClaudeCarrierSignature } from "./carrier.ts"
 import {
   antigravityGroundingMetadata,

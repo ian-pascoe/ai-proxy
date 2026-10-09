@@ -6,10 +6,10 @@
 import { asBool, cloneJson, get, type Json, type JsonObject } from "../../../../json/index.ts"
 import { goMarshal } from "../../../../http/json-text.ts"
 import { alignOpenAIToolCallMessages } from "../../common/openai-tools.ts"
-import { sortKeysDeep } from "../../common/go-json.ts"
+import { sortKeysDeep } from "../../../common/go-json.ts"
 import { getStr, isArr, isObj, raw, str } from "../../common/read.ts"
-import { extractResponsesCallId, normalizeResponsesToolCallOutputs } from "../../common/responses.ts"
-import { UserTurnDrops } from "../../common/user-turn-drops.ts"
+import { extractResponsesCallID, normalizeResponsesToolCallOutputs } from "../../../common/responses.ts"
+import { UserTurnDrops } from "../../../common/parts.ts"
 import { ResponsesToolIndex, responsesToolOutputText } from "./tools.ts"
 
 const REASONING_UNAVAILABLE = "[reasoning unavailable]"
@@ -298,7 +298,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
     for (const item of rawInputArray) {
       const itemType = getStr(item, "type")
       if (itemType === "function_call_output" || itemType === "custom_tool_call_output") {
-        const id = extractResponsesCallId(item)
+        const id = extractResponsesCallID(item)
         if (id !== "") explicitOutputCounts.set(id, (explicitOutputCounts.get(id) ?? 0) + 1)
         else missingIdOutputsCount++
       }
@@ -307,7 +307,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
     for (const item of rawInputArray) {
       const itemType = getStr(item, "type")
       if (itemType === "function_call" || itemType === "custom_tool_call") {
-        const id = extractResponsesCallId(item)
+        const id = extractResponsesCallID(item)
         if (id !== "" && (explicitOutputCounts.get(id) ?? 0) === 0) unclaimedCalls.add(id)
       }
     }
@@ -317,7 +317,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       inputItems.forEach((item, idx) => {
         const itemType = getStr(item, "type")
         if (itemType === "function_call_output" || itemType === "custom_tool_call_output") {
-          if (idx < rawInputArray.length && extractResponsesCallId(rawInputArray[idx]) === "") {
+          if (idx < rawInputArray.length && extractResponsesCallID(rawInputArray[idx]) === "") {
             const copy = structuredClone(item) as JsonObject
             delete copy.call_id
             delete copy.tool_call_id
@@ -428,7 +428,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       if (count > 1) duplicateOutputIds.add(callId)
     }
     const pushToolCall = (item: Json, name: string, argumentsText: string | undefined): void => {
-      const callId = extractResponsesCallId(item)
+      const callId = extractResponsesCallID(item)
       pendingToolCalls.push({
         function: { arguments: argumentsText ?? "", name },
         id: callId,
@@ -438,7 +438,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
     }
     const emitToolOutput = (item: Json, setContent: (message: JsonObject, output: Json) => JsonObject): void => {
       mergeableAssistantIndex = -1
-      const callId = extractResponsesCallId(item)
+      const callId = extractResponsesCallID(item)
       recordOutputCount(callId)
       const output = get(item, "output")
       if (!awaitingToolOutputs.has(callId)) {

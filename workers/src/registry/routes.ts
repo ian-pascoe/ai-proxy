@@ -7,6 +7,7 @@
 import type { Context } from "effect"
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { buildCodexClientModels, supportsApplyPatchProviders } from "./codex-client-models.ts"
 import { respondGeminiDetail, respondGeminiList, respondModels, type ModelsReply } from "./models-api.ts"
 import { ModelRegistry } from "./service.ts"
 
@@ -46,7 +47,25 @@ const v1Models = (registry: Registry) =>
         anthropicVersion: request.headers["anthropic-version"] ?? "",
         clientVersion: url.searchParams.get("client_version") ?? undefined
       },
-      { disableCloaking: snapshot.config.upstream.claude["disable-cloaking-model-list"] },
+      {
+        disableCloaking: snapshot.config.upstream.claude["disable-cloaking-model-list"],
+        codexClient: (models, clientVersion) =>
+          buildCodexClientModels({
+            catalog: snapshot.catalogs.codexClient,
+            models,
+            providersForModel: snapshot.providersForModel,
+            lookupModelInfo: (modelId, provider = "") => snapshot.lookupModelInfo(modelId, provider),
+            webSearchCapability: snapshot.responsesWebSearchCapability,
+            ...(snapshot.config.client.codex["enable-apply-patch"]
+              ? {
+                  applyPatchCapability: (modelId: string) =>
+                    supportsApplyPatchProviders(snapshot.providersForModel(modelId))
+                }
+              : {}),
+            optimizeMultiAgentV2: snapshot.config.client.codex["optimize-multi-agent-v2"],
+            clientVersion
+          })
+      },
       remainder(url.pathname, "/v1/models")
     )
     return toResponse(reply)

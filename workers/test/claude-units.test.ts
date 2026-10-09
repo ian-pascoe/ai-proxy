@@ -31,7 +31,8 @@ import {
   headersIndicateUnifiedRejection,
   parseRateLimitResetMs
 } from "../src/executor/claude/ratelimit.ts"
-import { sanitizeClaudeMessages } from "../src/executor/claude/sanitize.ts"
+import { sanitizeForClaudeUpstream } from "../src/executor/claude/sanitize.ts"
+import { claudeSignature } from "./support/signatures.ts"
 import { ensureBillingCCHPlaceholder, normalizeCchInput, serializeAndSign } from "../src/executor/claude/signing.ts"
 import { xxh64 } from "../src/executor/claude/xxhash64.ts"
 import { claudeCodeLocalDate } from "../src/executor/claude/cloaking.ts"
@@ -419,18 +420,18 @@ describe("history sanitising", () => {
           content: [
             { type: "thinking", thinking: "x", signature: "gemini-signature" },
             { type: "thinking", thinking: "y", signature: "" },
-            { type: "thinking", thinking: "ok", signature: "EhQ=" },
+            { type: "thinking", thinking: "ok", signature: claudeSignature() },
             { type: "tool_use", id: "t", name: "n", input: {}, thought_signature: "s", model: "gemini" }
           ]
         },
         { role: "assistant", content: [{ type: "thinking", thinking: "", signature: "" }] }
       ]
     }
-    sanitizeClaudeMessages(body, false)
+    sanitizeForClaudeUpstream(body, "claude-sonnet-4-5", false)
     const messages = body.messages as JsonObject[]
     expect(messages).toHaveLength(2)
     expect(messages[1]?.content).toEqual([
-      { type: "thinking", thinking: "ok", signature: "EhQ=" },
+      { type: "thinking", thinking: "ok", signature: claudeSignature() },
       { type: "tool_use", id: "t", name: "n", input: {} }
     ])
   })
@@ -449,9 +450,13 @@ describe("Responses reasoning replay", () => {
       ]
     })
     const blocks = (body: JsonObject): unknown => (body.messages as JsonObject[])[1]?.content as unknown
-    const native = convertOpenAIResponsesRequestToClaude("claude-sonnet-4-5", input("EhQ="), false) as JsonObject
+    const native = convertOpenAIResponsesRequestToClaude(
+      "claude-sonnet-4-5",
+      input(claudeSignature()),
+      false
+    ) as JsonObject
     expect(blocks(native)).toEqual([
-      { type: "thinking", thinking: "why", signature: "EhQ=" },
+      { type: "thinking", thinking: "why", signature: claudeSignature() },
       { type: "text", text: "a" }
     ])
     const foreign = convertOpenAIResponsesRequestToClaude("claude-sonnet-4-5", input("opaque"), false) as JsonObject
