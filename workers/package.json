@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "effect": "4.0.2",
-    "jose": "^6.2.12"
+    "jose": "^6.2.12",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.0",

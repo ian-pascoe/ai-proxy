@@ -1,0 +1,2763 @@
+{
+ "get": [
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.last",
+   "exists": true,
+   "raw": "\"Anderson\"",
+   "string": "Anderson",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "age",
+   "exists": true,
+   "raw": "37",
+   "string": "37",
+   "int": 37,
+   "float": 37,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children",
+   "exists": true,
+   "raw": "[\"Sara\",\"Alex\",\"Jack\"]",
+   "string": "[\"Sara\",\"Alex\",\"Jack\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.1",
+   "exists": true,
+   "raw": "\"Alex\"",
+   "string": "Alex",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.5",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "child*.2",
+   "exists": true,
+   "raw": "\"Jack\"",
+   "string": "Jack",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "c?ildren.0",
+   "exists": true,
+   "raw": "\"Sara\"",
+   "string": "Sara",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "fav\\.movie",
+   "exists": true,
+   "raw": "\"Deer Hunter\"",
+   "string": "Deer Hunter",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.first",
+   "exists": true,
+   "raw": "[\"Dale\",\"Roger\",\"Jane\"]",
+   "string": "[\"Dale\",\"Roger\",\"Jane\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.1.last",
+   "exists": true,
+   "raw": "\"Craig\"",
+   "string": "Craig",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.1.nets.#",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.nets.0",
+   "exists": true,
+   "raw": "[\"ig\",\"fb\",\"ig\"]",
+   "string": "[\"ig\",\"fb\",\"ig\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.nope",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.nets.#",
+   "exists": true,
+   "raw": "[3,2,2]",
+   "string": "[3,2,2]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\").first",
+   "exists": true,
+   "raw": "\"Dale\"",
+   "string": "Dale",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\")#.first",
+   "exists": true,
+   "raw": "[\"Dale\",\"Jane\"]",
+   "string": "[\"Dale\",\"Jane\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\")#",
+   "exists": true,
+   "raw": "[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]",
+   "string": "[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age\u003e45)#.last",
+   "exists": true,
+   "raw": "[\"Craig\",\"Murphy\"]",
+   "string": "[\"Craig\",\"Murphy\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age\u003e=47).first",
+   "exists": true,
+   "raw": "\"Roger\"",
+   "string": "Roger",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age\u003c45)#.first",
+   "exists": true,
+   "raw": "[\"Dale\"]",
+   "string": "[\"Dale\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age\u003c=44).first",
+   "exists": true,
+   "raw": "\"Dale\"",
+   "string": "Dale",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age!=44)#.first",
+   "exists": true,
+   "raw": "[\"Roger\",\"Jane\"]",
+   "string": "[\"Roger\",\"Jane\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(first%\"D*\").last",
+   "exists": true,
+   "raw": "\"Murphy\"",
+   "string": "Murphy",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(first!%\"D*\")#.last",
+   "exists": true,
+   "raw": "[\"Craig\",\"Murphy\"]",
+   "string": "[\"Craig\",\"Murphy\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(first%\"?o*\")#.first",
+   "exists": true,
+   "raw": "[\"Roger\"]",
+   "string": "[\"Roger\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(nets.#(==\"fb\"))#.first",
+   "exists": true,
+   "raw": "[\"Dale\",\"Roger\"]",
+   "string": "[\"Dale\",\"Roger\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(nets.#(==\"fb\")).first",
+   "exists": true,
+   "raw": "\"Dale\"",
+   "string": "Dale",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Nobody\")",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Nobody\")#",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Nobody\").first",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(first)#.first",
+   "exists": true,
+   "raw": "[\"Dale\",\"Roger\",\"Jane\"]",
+   "string": "[\"Dale\",\"Roger\",\"Jane\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(nope)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age)#",
+   "exists": true,
+   "raw": "[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]",
+   "string": "[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "@this",
+   "exists": true,
+   "raw": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "string": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "@reverse",
+   "exists": true,
+   "raw": "{\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}],\"fav.movie\":\"Deer Hunter\",\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"age\":37,\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"}}",
+   "string": "{\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}],\"fav.movie\":\"Deer Hunter\",\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"age\":37,\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"}}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.@reverse",
+   "exists": true,
+   "raw": "[\"Jack\",\"Alex\",\"Sara\"]",
+   "string": "[\"Jack\",\"Alex\",\"Sara\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.@keys",
+   "exists": true,
+   "raw": "[\"first\",\"last\"]",
+   "string": "[\"first\",\"last\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.@values",
+   "exists": true,
+   "raw": "[\"Tom\",\"Anderson\"]",
+   "string": "[\"Tom\",\"Anderson\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.first|@reverse",
+   "exists": true,
+   "raw": "[\"Jane\",\"Roger\",\"Dale\"]",
+   "string": "[\"Jane\",\"Roger\",\"Dale\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "@keys",
+   "exists": true,
+   "raw": "[\"name\",\"age\",\"children\",\"fav.movie\",\"friends\"]",
+   "string": "[\"name\",\"age\",\"children\",\"fav.movie\",\"friends\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children|1",
+   "exists": true,
+   "raw": "\"Alex\"",
+   "string": "Alex",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children|#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends|0|first",
+   "exists": true,
+   "raw": "\"Dale\"",
+   "string": "Dale",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#.first|1",
+   "exists": true,
+   "raw": "\"Roger\"",
+   "string": "Roger",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\")#|1",
+   "exists": true,
+   "raw": "{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}",
+   "string": "{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\")#|#",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(last==\"Murphy\")#.first|0",
+   "exists": true,
+   "raw": "\"Dale\"",
+   "string": "Dale",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.*",
+   "exists": true,
+   "raw": "\"Tom\"",
+   "string": "Tom",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "n*.last",
+   "exists": true,
+   "raw": "\"Anderson\"",
+   "string": "Anderson",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.l?st",
+   "exists": true,
+   "raw": "\"Anderson\"",
+   "string": "Anderson",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "nam?.first",
+   "exists": true,
+   "raw": "\"Tom\"",
+   "string": "Tom",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": ".",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "nope",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name.nope.x",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "age.x",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.x",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.-1",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.01",
+   "exists": true,
+   "raw": "\"Alex\"",
+   "string": "Alex",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.0.nets.2",
+   "exists": true,
+   "raw": "\"tw\"",
+   "string": "tw",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "@flatten",
+   "exists": true,
+   "raw": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "string": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "@this|name",
+   "exists": true,
+   "raw": "{\"first\":\"Tom\",\"last\":\"Anderson\"}",
+   "string": "{\"first\":\"Tom\",\"last\":\"Anderson\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "name|@this|last",
+   "exists": true,
+   "raw": "\"Anderson\"",
+   "string": "Anderson",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "children.#.x",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"name\":{\"first\":\"Tom\",\"last\":\"Anderson\"},\"age\":37,\"children\":[\"Sara\",\"Alex\",\"Jack\"],\"fav.movie\":\"Deer Hunter\",\"friends\":[{\"first\":\"Dale\",\"last\":\"Murphy\",\"age\":44,\"nets\":[\"ig\",\"fb\",\"tw\"]},{\"first\":\"Roger\",\"last\":\"Craig\",\"age\":68,\"nets\":[\"fb\",\"tw\"]},{\"first\":\"Jane\",\"last\":\"Murphy\",\"age\":47,\"nets\":[\"ig\",\"tw\"]}]}",
+   "path": "friends.#(age\u003e40)#.nets.#(==\"ig\")",
+   "exists": true,
+   "raw": "[\"ig\",\"ig\"]",
+   "string": "[\"ig\",\"ig\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "model",
+   "exists": true,
+   "raw": "\"gpt-5\"",
+   "string": "gpt-5",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#",
+   "exists": true,
+   "raw": "4",
+   "string": "4",
+   "int": 4,
+   "float": 4,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.0.role",
+   "exists": true,
+   "raw": "\"system\"",
+   "string": "system",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#.role",
+   "exists": true,
+   "raw": "[\"system\",\"user\",\"assistant\",\"tool\"]",
+   "string": "[\"system\",\"user\",\"assistant\",\"tool\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#.content",
+   "exists": true,
+   "raw": "[\"be nice\",[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}],null,\"ok\"]",
+   "string": "[\"be nice\",[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}],null,\"ok\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"user\").content",
+   "exists": true,
+   "raw": "[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]",
+   "string": "[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"user\").content.0.text",
+   "exists": true,
+   "raw": "\"hi\"",
+   "string": "hi",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"system\").content",
+   "exists": true,
+   "raw": "\"be nice\"",
+   "string": "be nice",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"tool\").tool_call_id",
+   "exists": true,
+   "raw": "\"call_1\"",
+   "string": "call_1",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"assistant\").tool_calls.0.function.arguments",
+   "exists": true,
+   "raw": "\"{}\"",
+   "string": "{}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"assistant\").tool_calls.0.id",
+   "exists": true,
+   "raw": "\"call_1\"",
+   "string": "call_1",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"assistant\").content",
+   "exists": true,
+   "raw": "null",
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"user\")#",
+   "exists": true,
+   "raw": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]}]",
+   "string": "[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role!=\"user\")#.role",
+   "exists": true,
+   "raw": "[\"system\",\"assistant\",\"tool\"]",
+   "string": "[\"system\",\"assistant\",\"tool\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.1.content.#(type==image_url).image_url.url",
+   "exists": true,
+   "raw": "\"x\"",
+   "string": "x",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.1.content.#(type=image_url)",
+   "exists": true,
+   "raw": "{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}",
+   "string": "{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.1.content.#(type==\"text\")#.text",
+   "exists": true,
+   "raw": "[\"hi\"]",
+   "string": "[\"hi\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.1.content.#.type",
+   "exists": true,
+   "raw": "[\"text\",\"image_url\"]",
+   "string": "[\"text\",\"image_url\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(type==\"x_search\")",
+   "exists": true,
+   "raw": "{\"type\":\"x_search\"}",
+   "string": "{\"type\":\"x_search\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name==\"apply_patch\")",
+   "exists": true,
+   "raw": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "string": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name==\"exec\").description",
+   "exists": true,
+   "raw": "\"d\"",
+   "string": "d",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(type==\"function\")#.name",
+   "exists": true,
+   "raw": "[\"exec\",\"apply_patch\"]",
+   "string": "[\"exec\",\"apply_patch\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(x_search)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#.name",
+   "exists": true,
+   "raw": "[\"exec\",\"apply_patch\"]",
+   "string": "[\"exec\",\"apply_patch\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name)#.name",
+   "exists": true,
+   "raw": "[\"exec\",\"apply_patch\"]",
+   "string": "[\"exec\",\"apply_patch\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name==\"nope\")",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "stream",
+   "exists": true,
+   "raw": "true",
+   "string": "true",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "temperature",
+   "exists": true,
+   "raw": "0.5",
+   "string": "0.5",
+   "int": 0,
+   "float": 0.5,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "max_tokens",
+   "exists": true,
+   "raw": "100",
+   "string": "100",
+   "int": 100,
+   "float": 100,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "flag",
+   "exists": true,
+   "raw": "false",
+   "string": "false",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "nothing",
+   "exists": true,
+   "raw": "null",
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "nothing.x",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(~true)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name%\"*_patch\")",
+   "exists": true,
+   "raw": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "string": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "stream.x",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.2.tool_calls.#",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.2.tool_calls.0.function.name",
+   "exists": true,
+   "raw": "\"f\"",
+   "string": "f",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.2",
+   "exists": true,
+   "raw": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "string": "{\"type\":\"function\",\"name\":\"apply_patch\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.3",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.3.content",
+   "exists": true,
+   "raw": "\"ok\"",
+   "string": "ok",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "temperature|@this",
+   "exists": true,
+   "raw": "0.5",
+   "string": "0.5",
+   "int": 0,
+   "float": 0.5,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"user\").content.#",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(content==\"ok\")",
+   "exists": true,
+   "raw": "{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}",
+   "string": "{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(role==\"tool\")#.content",
+   "exists": true,
+   "raw": "[\"ok\"]",
+   "string": "[\"ok\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(content==null)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "messages.#(content~null)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"system\",\"content\":\"be nice\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"x\"}}]},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"},{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"apply_patch\"}],\"stream\":true,\"temperature\":0.5,\"max_tokens\":100,\"flag\":false,\"nothing\":null}",
+   "path": "tools.#(name==\"exec\")#",
+   "exists": true,
+   "raw": "[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"}]",
+   "string": "[{\"type\":\"function\",\"name\":\"exec\",\"description\":\"d\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\")#",
+   "exists": true,
+   "raw": "[{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]}]",
+   "string": "[{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\")#.tools",
+   "exists": true,
+   "raw": "[[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}],[{\"type\":\"function\",\"name\":\"z\"}]]",
+   "string": "[[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}],[{\"type\":\"function\",\"name\":\"z\"}]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\")#.tools.#(type==\"x_search\")",
+   "exists": true,
+   "raw": "[{\"type\":\"x_search\"}]",
+   "string": "[{\"type\":\"x_search\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\")#.tools.#(name==\"z\")",
+   "exists": true,
+   "raw": "[{\"type\":\"function\",\"name\":\"z\"}]",
+   "string": "[{\"type\":\"function\",\"name\":\"z\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"reasoning\")",
+   "exists": true,
+   "raw": "{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]}",
+   "string": "{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(call_id==\"call_dropped\")",
+   "exists": true,
+   "raw": "{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}",
+   "string": "{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#.id",
+   "exists": true,
+   "raw": "[\"rs_1\"]",
+   "string": "[\"rs_1\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"message\").content.0.text",
+   "exists": true,
+   "raw": "\"a\"",
+   "string": "a",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.0.content.#",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.0.content.#(type==\"input_text\")",
+   "exists": true,
+   "raw": "{\"type\":\"input_text\",\"text\":\"a\"}",
+   "string": "{\"type\":\"input_text\",\"text\":\"a\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "tools.#(type==\"image_generation\")",
+   "exists": true,
+   "raw": "{\"type\":\"image_generation\"}",
+   "string": "{\"type\":\"image_generation\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "tools.#(type==\"image_generation\")#",
+   "exists": true,
+   "raw": "[{\"type\":\"image_generation\"}]",
+   "string": "[{\"type\":\"image_generation\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.2.summary.#",
+   "exists": true,
+   "raw": "0",
+   "string": "0",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.2.summary",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\").tools.#(name==\"q\")",
+   "exists": true,
+   "raw": "{\"type\":\"function\",\"name\":\"q\"}",
+   "string": "{\"type\":\"function\",\"name\":\"q\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"a\"}]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"x_search\"},{\"type\":\"function\",\"name\":\"q\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]},{\"type\":\"additional_tools\",\"tools\":[{\"type\":\"function\",\"name\":\"z\"}]},{\"type\":\"function_call_output\",\"call_id\":\"call_dropped\",\"output\":\"x\"}],\"tools\":[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"wait\"}]}",
+   "path": "input.#(type==\"additional_tools\")#.tools.#.name",
+   "exists": true,
+   "raw": "[[\"q\"],[\"z\"]]",
+   "string": "[[\"q\"],[\"z\"]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#(role==\"user\")",
+   "exists": true,
+   "raw": "{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]}",
+   "string": "{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#.parts.#(thought=true)#",
+   "exists": true,
+   "raw": "[[{\"text\":\"hello\",\"thought\":true}],[{\"thought\":true,\"text\":\"t\"}]]",
+   "string": "[[{\"text\":\"hello\",\"thought\":true}],[{\"thought\":true,\"text\":\"t\"}]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#.parts.#(thought==true)#",
+   "exists": true,
+   "raw": "[[{\"text\":\"hello\",\"thought\":true}],[{\"thought\":true,\"text\":\"t\"}]]",
+   "string": "[[{\"text\":\"hello\",\"thought\":true}],[{\"thought\":true,\"text\":\"t\"}]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#.parts.#(thought=false)#",
+   "exists": true,
+   "raw": "[[{\"text\":\"b\",\"thought\":false}],[]]",
+   "string": "[[{\"text\":\"b\",\"thought\":false}],[]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#.parts.#.text",
+   "exists": true,
+   "raw": "[[\"hello\",\"b\"],[\"t\"]]",
+   "string": "[[\"hello\",\"b\"],[\"t\"]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.1.parts.0.functionCall.name",
+   "exists": true,
+   "raw": "\"lookup\"",
+   "string": "lookup",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.0.parts.0.thoughtSignature",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.tools.#(googleSearch)",
+   "exists": true,
+   "raw": "{\"googleSearch\":{}}",
+   "string": "{\"googleSearch\":{}}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.tools.#(googleSearch)#",
+   "exists": true,
+   "raw": "[{\"googleSearch\":{}}]",
+   "string": "[{\"googleSearch\":{}}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.tools.#.functionDeclarations.#(name==\"lookup\")",
+   "exists": true,
+   "raw": "[{\"name\":\"lookup\"}]",
+   "string": "[{\"name\":\"lookup\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.tools.#.functionDeclarations.#(name==\"lookup\")#",
+   "exists": true,
+   "raw": "[[{\"name\":\"lookup\"}]]",
+   "string": "[[{\"name\":\"lookup\"}]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.tools.#.functionDeclarations.#.name",
+   "exists": true,
+   "raw": "[[\"lookup\",\"other\"]]",
+   "string": "[[\"lookup\",\"other\"]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "systemInstruction.parts.#(text%\"x-anthropic-billing-header:*\")",
+   "exists": true,
+   "raw": "{\"text\":\"x-anthropic-billing-header: abc\"}",
+   "string": "{\"text\":\"x-anthropic-billing-header: abc\"}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "systemInstruction.parts.#(text%\"x-anthropic-billing-header:*\")#",
+   "exists": true,
+   "raw": "[{\"text\":\"x-anthropic-billing-header: abc\"}]",
+   "string": "[{\"text\":\"x-anthropic-billing-header: abc\"}]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "systemInstruction.parts.#(text!%\"x-anthropic-billing-header:*\").text",
+   "exists": true,
+   "raw": "\"real\"",
+   "string": "real",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "generationConfig.temperature",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.0.parts.#(thought).text",
+   "exists": true,
+   "raw": "\"hello\"",
+   "string": "hello",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#(parts.#(thought==true))",
+   "exists": true,
+   "raw": "{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]}",
+   "string": "{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"request\":{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hello\",\"thought\":true},{\"text\":\"b\",\"thought\":false}]},{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"lookup\"},\"thoughtSignature\":\"sig\"},{\"thought\":true,\"text\":\"t\"}]}],\"tools\":[{\"googleSearch\":{}},{\"functionDeclarations\":[{\"name\":\"lookup\"},{\"name\":\"other\"}]}]},\"systemInstruction\":{\"parts\":[{\"text\":\"x-anthropic-billing-header: abc\"},{\"text\":\"real\"}]},\"generationConfig\":{\"temperature\":1}}",
+   "path": "request.contents.#(parts.#(thought==true))#.role",
+   "exists": true,
+   "raw": "[\"user\",\"model\"]",
+   "string": "[\"user\",\"model\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a\\.b",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.b",
+   "exists": true,
+   "raw": "{\"c\":[1,2,3]}",
+   "string": "{\"c\":[1,2,3]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.b.c",
+   "exists": true,
+   "raw": "[1,2,3]",
+   "string": "[1,2,3]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.b.c.#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.b.c.2",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.\\*",
+   "exists": true,
+   "raw": "\"star\"",
+   "string": "star",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.\\?",
+   "exists": true,
+   "raw": "\"q\"",
+   "string": "q",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "a.*",
+   "exists": true,
+   "raw": "{\"c\":[1,2,3]}",
+   "string": "{\"c\":[1,2,3]}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.#.#",
+   "exists": true,
+   "raw": "[2,2,0]",
+   "string": "[2,2,0]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.1.1.0",
+   "exists": true,
+   "raw": "4",
+   "string": "4",
+   "int": 4,
+   "float": 4,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.1.1.1",
+   "exists": true,
+   "raw": "5",
+   "string": "5",
+   "int": 5,
+   "float": 5,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.2.#",
+   "exists": true,
+   "raw": "0",
+   "string": "0",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.#.0",
+   "exists": true,
+   "raw": "[1,3]",
+   "string": "[1,3]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.#.1",
+   "exists": true,
+   "raw": "[2,[4,5]]",
+   "string": "[2,[4,5]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e5)",
+   "exists": true,
+   "raw": "10",
+   "string": "10",
+   "int": 10,
+   "float": 10,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e5)#",
+   "exists": true,
+   "raw": "[10,15]",
+   "string": "[10,15]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e=5)#",
+   "exists": true,
+   "raw": "[5,10,15]",
+   "string": "[5,10,15]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003c5)",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(==10)",
+   "exists": true,
+   "raw": "10",
+   "string": "10",
+   "int": 10,
+   "float": 10,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(!=1)#",
+   "exists": true,
+   "raw": "[5,10,15]",
+   "string": "[5,10,15]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e100)",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e100)#",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "flags.#(==true)#",
+   "exists": true,
+   "raw": "[true,true]",
+   "string": "[true,true]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "flags.#(==false)",
+   "exists": true,
+   "raw": "false",
+   "string": "false",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "flags.#(!=true)#",
+   "exists": true,
+   "raw": "[false]",
+   "string": "[false]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(==\"banana\")",
+   "exists": true,
+   "raw": "\"banana\"",
+   "string": "banana",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(\u003e\"b\")#",
+   "exists": true,
+   "raw": "[\"banana\",\"cherry\"]",
+   "string": "[\"banana\",\"cherry\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(%\"*an*\")",
+   "exists": true,
+   "raw": "\"banana\"",
+   "string": "banana",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(!%\"*an*\")#",
+   "exists": true,
+   "raw": "[\"apple\",\"cherry\"]",
+   "string": "[\"apple\",\"cherry\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(==\"x\")",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(\u003c\"b\")",
+   "exists": true,
+   "raw": "\"apple\"",
+   "string": "apple",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.@keys",
+   "exists": true,
+   "raw": "[\"x\",\"y\",\"z\"]",
+   "string": "[\"x\",\"y\",\"z\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.@values",
+   "exists": true,
+   "raw": "[1,2,3]",
+   "string": "[1,2,3]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.@reverse",
+   "exists": true,
+   "raw": "{\"z\":3,\"y\":2,\"x\":1}",
+   "string": "{\"z\":3,\"y\":2,\"x\":1}",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.@reverse.@keys",
+   "exists": true,
+   "raw": "[\"z\",\"y\",\"x\"]",
+   "string": "[\"z\",\"y\",\"x\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.@flatten",
+   "exists": true,
+   "raw": "[1,2,3,[4,5]]",
+   "string": "[1,2,3,[4,5]]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "arr.@flatten:{\"deep\":true}",
+   "exists": true,
+   "raw": "[1,2,3,4,5]",
+   "string": "[1,2,3,4,5]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.@reverse|0",
+   "exists": true,
+   "raw": "15",
+   "string": "15",
+   "int": 15,
+   "float": 15,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "e",
+   "exists": true,
+   "raw": "\"\"",
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "big",
+   "exists": true,
+   "raw": "12345678901",
+   "string": "12345678901",
+   "int": 12345678901,
+   "float": 12345678901,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "neg",
+   "exists": true,
+   "raw": "-4.5",
+   "string": "-4.5",
+   "int": -4,
+   "float": -4.5,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "s",
+   "exists": true,
+   "raw": "\"he said \\\"hi\\\"\"",
+   "string": "he said \"hi\"",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "w.1",
+   "exists": true,
+   "raw": "\"one\"",
+   "string": "one",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "w.two",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "w.#",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "u",
+   "exists": true,
+   "raw": "\"héllo\"",
+   "string": "héllo",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.#",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.x",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj.*",
+   "exists": true,
+   "raw": "1",
+   "string": "1",
+   "int": 1,
+   "float": 1,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "o?j.y",
+   "exists": true,
+   "raw": "2",
+   "string": "2",
+   "int": 2,
+   "float": 2,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "ob*.z",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.1",
+   "exists": true,
+   "raw": "5",
+   "string": "5",
+   "int": 5,
+   "float": 5,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.-1",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.4",
+   "exists": false,
+   "string": "",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#.x",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums|@reverse",
+   "exists": true,
+   "raw": "[15,10,5,1]",
+   "string": "[15,10,5,1]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "obj|@keys",
+   "exists": true,
+   "raw": "[\"x\",\"y\",\"z\"]",
+   "string": "[\"x\",\"y\",\"z\"]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e=5)#|#",
+   "exists": true,
+   "raw": "3",
+   "string": "3",
+   "int": 3,
+   "float": 3,
+   "bool": true
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "flags.#(~true)#",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "strs.#(~*)#",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(~false)#",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  },
+  {
+   "json": "{\"a.b\":1,\"a\":{\"b\":{\"c\":[1,2,3]},\"*\":\"star\",\"?\":\"q\"},\"arr\":[[1,2],[3,[4,5]],[]],\"nums\":[1,5,10,15],\"flags\":[true,false,true],\"strs\":[\"apple\",\"banana\",\"cherry\"],\"obj\":{\"x\":1,\"y\":2,\"z\":3},\"e\":\"\",\"big\":12345678901,\"neg\":-4.5,\"s\":\"he said \\\"hi\\\"\",\"w\":{\"1\":\"one\",\"two\":2},\"u\":\"héllo\"}",
+   "path": "nums.#(\u003e5)#.x",
+   "exists": true,
+   "raw": "[]",
+   "string": "[]",
+   "int": 0,
+   "float": 0,
+   "bool": false
+  }
+ ],
+ "set": [
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": 2,
+   "out": "{\"a\":2}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b",
+   "kind": "value",
+   "value": "x",
+   "out": "{\"a\":1,\"b\":\"x\"}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.c.d",
+   "kind": "value",
+   "value": true,
+   "out": "{\"a\":1,\"b\":{\"c\":{\"d\":true}}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.0",
+   "kind": "value",
+   "value": "x",
+   "out": "{\"a\":1,\"b\":[\"x\"]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.2",
+   "kind": "value",
+   "value": "x",
+   "out": "{\"a\":1,\"b\":[null,null,\"x\"]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.-1",
+   "kind": "value",
+   "value": "x",
+   "out": "{\"a\":1,\"b\":[\"x\"]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.-1.c",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"b\":[{\"c\":1}]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.1.c.0",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"b\":[null,{\"c\":[1]}]}"
+  },
+  {
+   "json": "{\"a\":{\"b\":\"str\"}}",
+   "path": "a.b.c",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":{\"b\":{\"c\":1}}}"
+  },
+  {
+   "json": "{\"a\":\"str\"}",
+   "path": "a.0",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":[1]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.0",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[9,2]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.1",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[1,9]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.2",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[1,2,9]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.4",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[1,2,null,null,9]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.-1",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[1,2,9]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.-1.x",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[1,2,{\"x\":9}]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.x",
+   "kind": "value",
+   "value": 9,
+   "error": true
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.:0",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":[9,2]}"
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.:x",
+   "kind": "value",
+   "value": 9,
+   "error": true
+  },
+  {
+   "json": "{\"a\":{\"0\":1}}",
+   "path": "a.0",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"0\":9}}"
+  },
+  {
+   "json": "{\"a\":{}}",
+   "path": "a.0",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"0\":9}}"
+  },
+  {
+   "json": "{\"a\":{}}",
+   "path": "a.-1",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"-1\":9}}"
+  },
+  {
+   "json": "{\"a\":{}}",
+   "path": "a.:0",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"0\":9}}"
+  },
+  {
+   "json": "{\"a\":{}}",
+   "path": "a.b\\.c",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"b.c\":9}}"
+  },
+  {
+   "json": "{\"a\":{}}",
+   "path": "a.b\\\\.c",
+   "kind": "value",
+   "value": 9,
+   "out": "{\"a\":{\"b\\\\\":{\"c\":9}}}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1},{\"b\":2}]}",
+   "path": "a.1.b",
+   "kind": "value",
+   "value": 3,
+   "out": "{\"a\":[{\"b\":1},{\"b\":3}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1},{\"b\":2}]}",
+   "path": "a.1.c",
+   "kind": "value",
+   "value": 3,
+   "out": "{\"a\":[{\"b\":1},{\"b\":2,\"c\":3}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1},{\"b\":2}]}",
+   "path": "a.2.c",
+   "kind": "value",
+   "value": 3,
+   "out": "{\"a\":[{\"b\":1},{\"b\":2},{\"c\":3}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1},{\"b\":2}]}",
+   "path": "a.0",
+   "kind": "value",
+   "value": {
+    "z": 1
+   },
+   "out": "{\"a\":[{\"z\":1},{\"b\":2}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1},{\"b\":2}]}",
+   "path": "a.0",
+   "kind": "value",
+   "value": [
+    1,
+    2
+   ],
+   "out": "{\"a\":[[1,2],{\"b\":2}]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": null,
+   "out": "{\"a\":null}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": {
+    "nested": {
+     "k": [
+      1,
+      2,
+      {
+       "x": null
+      }
+     ]
+    }
+   },
+   "out": "{\"a\":{\"nested\":{\"k\":[1,2,{\"x\":null}]}}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": "he said \"hi\" \u003cb\u003e\u0026",
+   "out": "{\"a\":\"he said \\\"hi\\\" \\u003cb\\u003e\\u0026\"}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": 1.5,
+   "out": "{\"a\":1.5}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "value",
+   "value": false,
+   "out": "{\"a\":false}"
+  },
+  {
+   "json": "{}",
+   "path": "a",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1}"
+  },
+  {
+   "json": "",
+   "path": "a",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1}"
+  },
+  {
+   "json": "",
+   "path": "0",
+   "kind": "value",
+   "value": 1,
+   "out": "[1]"
+  },
+  {
+   "json": "",
+   "path": "2",
+   "kind": "value",
+   "value": 1,
+   "out": "[null,null,1]"
+  },
+  {
+   "json": "",
+   "path": "-1",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"-1\":1}"
+  },
+  {
+   "json": "",
+   "path": "a.b",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":{\"b\":1}}"
+  },
+  {
+   "json": "",
+   "path": "a.0.b",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":[{\"b\":1}]}"
+  },
+  {
+   "json": "[]",
+   "path": "0",
+   "kind": "value",
+   "value": 1,
+   "out": "[1]"
+  },
+  {
+   "json": "[]",
+   "path": "-1",
+   "kind": "value",
+   "value": 1,
+   "out": "[1]"
+  },
+  {
+   "json": "[]",
+   "path": "a",
+   "kind": "value",
+   "value": 1,
+   "error": true
+  },
+  {
+   "json": "[1]",
+   "path": "0",
+   "kind": "value",
+   "value": 2,
+   "out": "[2]"
+  },
+  {
+   "json": "[1]",
+   "path": "3",
+   "kind": "value",
+   "value": 2,
+   "out": "[1,null,null,2]"
+  },
+  {
+   "json": "[1]",
+   "path": "-1",
+   "kind": "value",
+   "value": 2,
+   "out": "[1,2]"
+  },
+  {
+   "json": "[1]",
+   "path": "-1.a",
+   "kind": "value",
+   "value": 2,
+   "out": "[1,{\"a\":2}]"
+  },
+  {
+   "json": "[[1],[2]]",
+   "path": "1.-1",
+   "kind": "value",
+   "value": 3,
+   "out": "[[1],[2,3]]"
+  },
+  {
+   "json": "\"str\"",
+   "path": "a",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1}"
+  },
+  {
+   "json": "\"str\"",
+   "path": "0",
+   "kind": "value",
+   "value": 1,
+   "out": "[1]"
+  },
+  {
+   "json": "5",
+   "path": "a.b",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":{\"b\":1}}"
+  },
+  {
+   "json": "{\"a\":1,\"b\":2,\"c\":3}",
+   "path": "b",
+   "kind": "value",
+   "value": "two",
+   "out": "{\"a\":1,\"b\":\"two\",\"c\":3}"
+  },
+  {
+   "json": "{\"z\":1,\"a\":2}",
+   "path": "m",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"z\":1,\"a\":2,\"m\":1}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "",
+   "kind": "value",
+   "value": 1,
+   "error": true
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a.",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":[1]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": ".a",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"\":{\"a\":1}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "\\*",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"*\":1}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "\\#",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"#\":1}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a.\\@x",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":{\"@x\":1}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a.:b",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":{\"b\":1}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": ":a",
+   "kind": "value",
+   "value": 2,
+   "out": "{\"a\":2}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "é.ü",
+   "kind": "value",
+   "value": 1,
+   "out": "{\"a\":1,\"é\":{\"ü\":1}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "raw",
+   "value": {
+    "x": 1.5
+   },
+   "out": "{\"a\":{\"x\":1.5}}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "b.-1",
+   "kind": "raw",
+   "value": [
+    1,
+    2
+   ],
+   "out": "{\"a\":1,\"b\":[[1,2]]}"
+  },
+  {
+   "json": "{\"a\":[1]}",
+   "path": "a.-1",
+   "kind": "raw",
+   "value": "s",
+   "out": "{\"a\":[1,\"s\"]}"
+  },
+  {
+   "json": "{\"a\":[1]}",
+   "path": "a.-1",
+   "kind": "raw",
+   "value": {
+    "type": "text",
+    "text": "hello"
+   },
+   "out": "{\"a\":[1,{\"type\":\"text\",\"text\":\"hello\"}]}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "raw",
+   "value": null,
+   "out": "{\"a\":null}"
+  },
+  {
+   "json": "{\"a\":1,\"b\":2}",
+   "path": "a",
+   "kind": "delete",
+   "out": "{\"b\":2}"
+  },
+  {
+   "json": "{\"a\":1,\"b\":2}",
+   "path": "b",
+   "kind": "delete",
+   "out": "{\"a\":1}"
+  },
+  {
+   "json": "{\"a\":1,\"b\":2}",
+   "path": "c",
+   "kind": "delete",
+   "out": "{\"a\":1,\"b\":2}"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a",
+   "kind": "delete",
+   "out": "{}"
+  },
+  {
+   "json": "{\"a\":[1,2,3]}",
+   "path": "a.0",
+   "kind": "delete",
+   "out": "{\"a\":[2,3]}"
+  },
+  {
+   "json": "{\"a\":[1,2,3]}",
+   "path": "a.1",
+   "kind": "delete",
+   "out": "{\"a\":[1,3]}"
+  },
+  {
+   "json": "{\"a\":[1,2,3]}",
+   "path": "a.2",
+   "kind": "delete",
+   "out": "{\"a\":[1,2]}"
+  },
+  {
+   "json": "{\"a\":[1,2,3]}",
+   "path": "a.3",
+   "kind": "delete",
+   "out": "{\"a\":[1,2,3]}"
+  },
+  {
+   "json": "{\"a\":[1,2,3]}",
+   "path": "a.-1",
+   "kind": "delete",
+   "out": "{\"a\":[1,2]}"
+  },
+  {
+   "json": "{\"a\":[]}",
+   "path": "a.-1",
+   "kind": "delete",
+   "out": "{\"a\":[]}"
+  },
+  {
+   "json": "{\"a\":{\"-1\":1,\"b\":2}}",
+   "path": "a.-1",
+   "kind": "delete",
+   "out": "{\"a\":{\"b\":2}}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1,\"c\":2}]}",
+   "path": "a.0.b",
+   "kind": "delete",
+   "out": "{\"a\":[{\"c\":2}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1,\"c\":2}]}",
+   "path": "a.0.x",
+   "kind": "delete",
+   "out": "{\"a\":[{\"b\":1,\"c\":2}]}"
+  },
+  {
+   "json": "{\"a\":[{\"b\":1,\"c\":2}]}",
+   "path": "a.1.b",
+   "kind": "delete",
+   "out": "{\"a\":[{\"b\":1,\"c\":2}]}"
+  },
+  {
+   "json": "{\"a\":\"str\"}",
+   "path": "a.b",
+   "kind": "delete",
+   "out": "{\"a\":\"str\"}"
+  },
+  {
+   "json": "{\"a\":{\"b.c\":1}}",
+   "path": "a.b\\.c",
+   "kind": "delete",
+   "out": "{\"a\":{}}"
+  },
+  {
+   "json": "[1,2,3]",
+   "path": "1",
+   "kind": "delete",
+   "out": "[1,3]"
+  },
+  {
+   "json": "[1,2,3]",
+   "path": "-1",
+   "kind": "delete",
+   "out": "[1,2]"
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "a.#",
+   "kind": "delete",
+   "error": true
+  },
+  {
+   "json": "{\"a\":[1,2]}",
+   "path": "a.#(\u003e1)",
+   "kind": "delete",
+   "error": true
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "",
+   "kind": "delete",
+   "error": true
+  },
+  {
+   "json": "{\"a\":1}",
+   "path": "nope.deeper",
+   "kind": "delete",
+   "out": "{\"a\":1}"
+  },
+  {
+   "json": "{\"a\":null,\"b\":1}",
+   "path": "a",
+   "kind": "delete",
+   "out": "{\"b\":1}"
+  }
+ ]
+}

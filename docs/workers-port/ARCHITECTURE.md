@@ -85,6 +85,31 @@ client -> Cloudflare Access -> Worker
   from the Go implementation (`go run ./workers/tools/fixturegen`), checked in under `workers/test/fixtures/`.
 - Never log tokens, API keys or JWTs.
 
+## JSON values, config and payload rules
+
+- **Path engine (`src/json/`)**: gjson/sjson semantics over parsed `JSON.parse` values instead of raw bytes, verified
+  against the real tidwall libraries through golden fixtures (`go run ./workers/tools/fixturegen/jsonpath`). `get`
+  returns `undefined` for "does not exist" (`null` exists); `set`, `setRaw` and `del` mutate containers in place and
+  return the root; values are inserted by reference (clone shared values). Known differences from Go: integer-like
+  object keys are enumerated first by the JS engine, numbers are doubles (raw text such as `1.0` is not preserved),
+  and sets/deletes on complex paths (`#`, `|`, `@`, `*`, `?`) throw `JsonPathError` (sjson silently rewrites matches;
+  nothing in the Go code relies on it, payload rules expand `#(...)` queries into index paths first). Reads support
+  `#`, `#.key`, `#(q)`, `#(q)#`, wildcards, pipes and the modifiers `@this @reverse @keys @values @flatten`.
+- **Config (`src/config/`)**: the canonical document is the v8 layout restricted to keys that apply on Workers
+  (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
+  spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
+  exports YAML (defaults omitted). Added keys without a Go counterpart: `access.admin-emails` and
+  `access.admin-service-tokens` (management allow-list, see Authentication). `requests.proxy-url` is accepted but
+  ignored. Unknown/inapplicable keys are dropped on import.
+- **Storage**: the `ControlPlane` DO (`src/credentials/control-plane.ts`) stores the canonical JSON in a SQLite table
+  with a monotonically increasing version. RPC: `getConfig(sinceVersion?)` (returns `unchanged: true` when the caller
+  is current) and `putConfig(yamlOrJson, expectedVersion?)` (validates; returns a structured result with `invalid` /
+  `conflict` instead of throwing). The Worker reads through `ConfigReader` (`src/config/reader.ts`): per-isolate
+  snapshot, 5 s TTL then a version check, stale-if-error.
+- **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
+  it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
+  integer normalisation that Go performs inside the same function belongs to the Codex executor slice.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

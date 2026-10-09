@@ -1,12 +1,12 @@
 import { DurableObject } from "cloudflare:workers"
+import { ControlPlane } from "./credentials/control-plane.ts"
 import { makeWebHandler } from "./http/app.ts"
 import { requestContext } from "./platform/env.ts"
 
 // The handler (and its router) is built once per isolate; `env`/`ctx` are provided per request.
 const { handler } = makeWebHandler()
 
-/** Stub: credential, config and cooldown state (see docs/workers-port/ARCHITECTURE.md). Filled in by later slices. */
-export class ControlPlane extends DurableObject<Env> {}
+export { ControlPlane }
 
 /** Stub: per-session reasoning replay caches and Responses WebSocket state. Filled in by later slices. */
 export class SessionState extends DurableObject<Env> {}

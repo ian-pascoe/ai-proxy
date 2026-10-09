@@ -27,7 +27,7 @@ Run from `workers/` (or use `pnpm -C workers <script>`):
 
 See the architecture document. Currently implemented:
 
-- `src/index.ts` — Worker entry (`fetch`, `scheduled` placeholder, stub `ControlPlane` / `SessionState` Durable Objects).
+- `src/index.ts` — Worker entry (`fetch`, `scheduled` placeholder, `ControlPlane` export, stub `SessionState` Durable Object).
 - `src/http/` — `HttpRouter` app (`app.ts`), CORS middleware matching Go (`cors.ts`), `/healthz` and `/` (`routes.ts`).
 - `src/platform/env.ts` — `WorkerEnv` / `WorkerExecutionContext` services, provided per request via `requestContext`.
 - `src/platform/logging.ts` — logging conventions and header redaction.
@@ -35,6 +35,11 @@ See the architecture document. Currently implemented:
 - `src/access/` — Cloudflare Access authentication: JWT verification with `jose` (`verify.ts`), per-isolate JWKS cache
   (`jwks.ts`), principal service `AccessPrincipal` (`principal.ts`), global gate (`middleware.ts`, `layer.ts`), path policy
   (`routes.ts`) and env config (`config.ts`).
+- `src/json/` — gjson/sjson-compatible path engine over parsed JSON (`get`, `set`, `setRaw`, `del`, coercions).
+- `src/config/` — config schema, YAML/JSON codec, normalisation, `ConfigReader`, and `payload/` (`applyPayloadRules`).
+- `src/credentials/control-plane.ts` — `ControlPlane` Durable Object (config storage so far; credentials come later).
+- `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
+  `go run ./workers/tools/fixturegen/jsonpath` and `go run ./workers/tools/fixturegen/payload`).
 
 ## Cloudflare Access
 

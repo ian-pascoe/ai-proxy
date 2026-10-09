@@ -1,0 +1,4548 @@
+[
+ {
+  "name": "default sets missing and skips present",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "gpt-*"
+        }
+       ],
+       "params": {
+        "top_p": 0.9,
+        "temperature": 1,
+        "nested.deep.value": "x",
+        "arr.2": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "arr": [
+    null,
+    null,
+    true
+   ],
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nested": {
+    "deep": {
+     "value": "x"
+    }
+   },
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ],
+   "top_p": 0.9
+  },
+  "touched": []
+ },
+ {
+  "name": "default checks the original payload",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "present": "user default",
+        "missing": "user default"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "present": "built-in",
+   "missing": "built-in2",
+   "other": 1
+  },
+  "original": {
+   "present": "caller"
+  },
+  "out": {
+   "missing": "user default",
+   "other": 1,
+   "present": "built-in"
+  },
+  "touched": []
+ },
+ {
+  "name": "default first write wins across rules",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "x.y": "first"
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "x.y": "second"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "x": {
+    "y": "first"
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "default with root",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "gemini-*"
+        }
+       ],
+       "params": {
+        "generationConfig.topP": 0.8,
+        "generationConfig.temperature": 2,
+        "newField": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gemini-3",
+   "protocol": "antigravity",
+   "root": "request"
+  },
+  "payload": {
+   "request": {
+    "contents": [
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "a"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "b"
+       }
+      ]
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ],
+    "tool_choice": {
+     "type": "tool",
+     "name": "image_generation"
+    }
+   },
+   "model": "x"
+  },
+  "out": {
+   "model": "x",
+   "request": {
+    "contents": [
+     {
+      "parts": [
+       {
+        "text": "a"
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "parts": [
+       {
+        "text": "b"
+       }
+      ],
+      "role": "user"
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1,
+     "topP": 0.8
+    },
+    "newField": 1,
+    "tool_choice": {
+     "name": "image_generation",
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ]
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "default with leading dot path and root",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        ".a.b": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "x",
+   "root": "request"
+  },
+  "payload": {
+   "request": {}
+  },
+  "out": {
+   "request": {
+    "a": {
+     "b": 1
+    }
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "default query path first match",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "tools.#(type==\"function\").strict": false
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "original": {
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ]
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "default query path all matches",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "messages.#(role==\"user\")#.cache": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "cache": true,
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "cache": true,
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "default query no match",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "messages.#(role==\"nobody\")#.cache": true,
+        "tools.#(name==\"zzz\").x": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "default-raw strings are raw json",
+  "config": {
+   "requests": {
+    "payload": {
+     "default-raw": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "a": "{\"k\":[1,2,{\"z\":null}]}",
+        "b": "true",
+        "c": "\"str\"",
+        "d": {
+         "obj": 1
+        },
+        "e": 12,
+        "f": null
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "keep": 1
+  },
+  "out": {
+   "a": {
+    "k": [
+     1,
+     2,
+     {
+      "z": null
+     }
+    ]
+   },
+   "b": true,
+   "c": "str",
+   "d": {
+    "obj": 1
+   },
+   "e": 12,
+   "keep": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "default-raw skips present",
+  "config": {
+   "requests": {
+    "payload": {
+     "default-raw": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "keep": "2",
+        "new": "3"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "keep": 1
+  },
+  "original": {
+   "keep": 1
+  },
+  "out": {
+   "keep": 1,
+   "new": 3
+  },
+  "touched": []
+ },
+ {
+  "name": "override replaces and creates",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "gpt-*"
+        }
+       ],
+       "params": {
+        "temperature": 0.1,
+        "stream": false,
+        "metadata": {
+         "b": 2
+        },
+        "model": "forced",
+        "nothing": "now",
+        "brand.new": [
+         1,
+         2
+        ],
+        "messages.0.content": "changed"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "brand": {
+    "new": [
+     1,
+     2
+    ]
+   },
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "changed",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "b": 2
+   },
+   "model": "forced",
+   "nothing": "now",
+   "stream": false,
+   "temperature": 0.1,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override null and equal values",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "nothing": null,
+        "temperature": 0.5,
+        "stream": true,
+        "metadata": {
+         "a": 1
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai",
+   "trackedPaths": [
+    "temperature",
+    "metadata"
+   ]
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": [
+   "metadata",
+   "temperature"
+  ]
+ },
+ {
+  "name": "override last write wins",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "x": "first"
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "x": "second"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "x": 0
+  },
+  "out": {
+   "x": "second"
+  },
+  "touched": []
+ },
+ {
+  "name": "override query all matches",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "messages.#(role==\"user\")#.content": "redacted",
+        "tools.#(type==\"function\")#.strict": false
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "redacted",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "redacted",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": false,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "strict": false,
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override query first match",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "messages.#(role==\"user\").content": "first user"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "first user",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override query with and/or",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "tools.#(type==\"function\" \u0026\u0026 name==\"f2\").x": 1,
+        "messages.#(role==\"system\" || role==\"assistant\")#.tag": "t"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system",
+     "tag": "t"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant",
+     "tag": "t"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function",
+     "x": 1
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override query with numeric comparison and pattern",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "items.#(n\u003e1)#.big": true,
+        "items.#(s%\"a*\").starts": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "items": [
+    {
+     "n": 1,
+     "s": "abc"
+    },
+    {
+     "n": 2,
+     "s": "bcd"
+    },
+    {
+     "n": 3,
+     "s": "axe"
+    }
+   ]
+  },
+  "out": {
+   "items": [
+    {
+     "n": 1,
+     "s": "abc",
+     "starts": true
+    },
+    {
+     "big": true,
+     "n": 2,
+     "s": "bcd"
+    },
+    {
+     "big": true,
+     "n": 3,
+     "s": "axe"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override-raw",
+  "config": {
+   "requests": {
+    "payload": {
+     "override-raw": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "tools": "[{\"type\":\"function\",\"name\":\"only\"}]",
+        "tool_choice": "{\"type\":\"auto\"}",
+        "max_tokens": "7",
+        "fresh": "\"x\""
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "fresh": "x",
+   "max_tokens": 7,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tool_choice": {
+    "type": "auto"
+   },
+   "tools": [
+    {
+     "name": "only",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "override-raw equal value is applied",
+  "config": {
+   "requests": {
+    "payload": {
+     "override-raw": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "metadata": "{\"a\":1}"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai",
+   "trackedPaths": [
+    "metadata"
+   ]
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": [
+   "metadata"
+  ]
+ },
+ {
+  "name": "filter removes paths",
+  "config": {
+   "requests": {
+    "payload": {
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "temperature",
+        "metadata.a",
+        "messages.0",
+        "nope",
+        "tools.1"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {},
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "filter query all matches deletes in reverse",
+  "config": {
+   "requests": {
+    "payload": {
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "tools.#(type==\"image_generation\")#",
+        "messages.#(role==\"user\")#"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "filter query first match",
+  "config": {
+   "requests": {
+    "payload": {
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "messages.#(role==\"user\")",
+        "tools.#(type==\"nothing\")"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "filter with root",
+  "config": {
+   "requests": {
+    "payload": {
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "contents.0",
+        "generationConfig"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gemini",
+   "protocol": "antigravity",
+   "root": "request"
+  },
+  "payload": {
+   "request": {
+    "contents": [
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "a"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "b"
+       }
+      ]
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ],
+    "tool_choice": {
+     "type": "tool",
+     "name": "image_generation"
+    }
+   },
+   "model": "x"
+  },
+  "out": {
+   "model": "x",
+   "request": {
+    "contents": [
+     {
+      "parts": [
+       {
+        "text": "b"
+       }
+      ],
+      "role": "user"
+     }
+    ],
+    "tool_choice": {
+     "name": "image_generation",
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ]
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "filter nested field of query match",
+  "config": {
+   "requests": {
+    "payload": {
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "tools.#(type==\"function\")#.strict"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "model name wildcards",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "gemini-*-pro"
+        }
+       ],
+       "params": {
+        "hit1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*-5"
+        }
+       ],
+       "params": {
+        "hit2": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "claude-*"
+        }
+       ],
+       "params": {
+        "hit3": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "gpt-5"
+        }
+       ],
+       "params": {
+        "hit4": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "g*t-?"
+        }
+       ],
+       "params": {
+        "hit5": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "hit2": 1,
+   "hit4": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "model name wildcard gemini",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "gemini-*-pro"
+        }
+       ],
+       "params": {
+        "hit1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*-pro"
+        }
+       ],
+       "params": {
+        "hit2": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*flash*"
+        }
+       ],
+       "params": {
+        "hit3": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gemini-2.5-pro",
+   "protocol": "gemini"
+  },
+  "payload": {},
+  "out": {
+   "hit1": 1,
+   "hit2": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "requested model aliases and suffix",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "my-alias"
+        }
+       ],
+       "params": {
+        "alias": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "my-alias(high)"
+        }
+       ],
+       "params": {
+        "withSuffix": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "upstream"
+        }
+       ],
+       "params": {
+        "upstream": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "upstream",
+   "requestedModel": "my-alias(high)",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "alias": 1,
+   "upstream": 1,
+   "withSuffix": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "requested model only",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "only-requested"
+        }
+       ],
+       "params": {
+        "hit": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "",
+   "requestedModel": "only-requested",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "hit": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "no model nothing applied",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "hit": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {},
+  "touched": []
+ },
+ {
+  "name": "protocol filter",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "protocol": "claude"
+        }
+       ],
+       "params": {
+        "claude": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "protocol": "OPENAI"
+        }
+       ],
+       "params": {
+        "openai": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "protocol": "gemini"
+        }
+       ],
+       "params": {
+        "gemini": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "openai": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "protocol empty runtime ignores rule protocol",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "protocol": "claude"
+        }
+       ],
+       "params": {
+        "claude": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": ""
+  },
+  "payload": {},
+  "out": {
+   "claude": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "from-protocol aliases",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "from-protocol": "openai-response"
+        }
+       ],
+       "params": {
+        "a": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "from-protocol": "responses"
+        }
+       ],
+       "params": {
+        "b": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "from-protocol": "claude"
+        }
+       ],
+       "params": {
+        "c": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "from-protocol": "RESPONSE"
+        }
+       ],
+       "params": {
+        "d": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "codex",
+   "fromProtocol": "openai-responses"
+  },
+  "payload": {},
+  "out": {
+   "a": 1,
+   "b": 1,
+   "d": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "from-protocol rule with empty runtime from",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "from-protocol": "claude"
+        }
+       ],
+       "params": {
+        "c": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "any": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "codex"
+  },
+  "payload": {},
+  "out": {
+   "any": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "headers wildcard all must match",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "headers": {
+          "X-Client-Tier": "tenant-*-region-*"
+         }
+        }
+       ],
+       "params": {
+        "tier": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "headers": {
+          "x-client-tier": "tenant-*",
+          "X-Other": "*"
+         }
+        }
+       ],
+       "params": {
+        "both": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "headers": {
+          "user-agent": "codex_*"
+         }
+        }
+       ],
+       "params": {
+        "ua": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai",
+   "headers": {
+    "User-Agent": [
+     "Mozilla",
+     "codex_cli_rs/0.1"
+    ],
+    "X-Client-Tier": [
+     "tenant-alpha-region-us"
+    ]
+   }
+  },
+  "payload": {},
+  "out": {
+   "tier": 1,
+   "ua": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "headers missing never match",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "headers": {
+          "X-Missing": "*"
+         }
+        }
+       ],
+       "params": {
+        "hit": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {},
+  "touched": []
+ },
+ {
+  "name": "match conditions",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 100
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 100.0
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m2": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 101
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m3": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "metadata": {
+            "a": 1
+           }
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m4": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "stream": true,
+           "temperature": 0.5
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m5": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "stream": true,
+           "temperature": 0.6
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m6": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "messages.#(role==\"user\")#.content": [
+            "u1",
+            "u2"
+           ]
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m7": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "nothing": null
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m8": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "m1": 1,
+   "m2": 1,
+   "m4": 1,
+   "m5": 1,
+   "m8": 1,
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "match with string numeric mismatch",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": "100"
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "model": "gpt-5"
+          }
+         ]
+        }
+       ],
+       "params": {
+        "m2": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "m2": 1,
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "not-match conditions",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-match": [
+          {
+           "max_tokens": 100
+          }
+         ]
+        }
+       ],
+       "params": {
+        "n1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-match": [
+          {
+           "max_tokens": 5
+          }
+         ]
+        }
+       ],
+       "params": {
+        "n2": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-match": [
+          {
+           "missing.path": 5
+          }
+         ]
+        }
+       ],
+       "params": {
+        "n3": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "n2": 1,
+   "n3": 1,
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "exist and not-exist conditions",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "exist": [
+          "temperature",
+          "tools.#(type==\"image_generation\")"
+         ]
+        }
+       ],
+       "params": {
+        "e1": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "exist": [
+          "nothing"
+         ]
+        }
+       ],
+       "params": {
+        "e2": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-exist": [
+          "nothing"
+         ]
+        }
+       ],
+       "params": {
+        "e3": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-exist": [
+          "thinking",
+          "metadata.zzz"
+         ]
+        }
+       ],
+       "params": {
+        "e4": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-exist": [
+          "temperature"
+         ]
+        }
+       ],
+       "params": {
+        "e5": 1
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "exist": [
+          "tools.#(type==\"nope\")"
+         ]
+        }
+       ],
+       "params": {
+        "e6": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "model": "gpt-5",
+   "temperature": 0.5,
+   "max_tokens": 100,
+   "stream": true,
+   "metadata": {
+    "a": 1
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f1",
+     "strict": true
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f2"
+    }
+   ],
+   "messages": [
+    {
+     "role": "system",
+     "content": "s"
+    },
+    {
+     "role": "user",
+     "content": "u1"
+    },
+    {
+     "role": "assistant",
+     "content": "a"
+    },
+    {
+     "role": "user",
+     "content": "u2"
+    }
+   ],
+   "nothing": null
+  },
+  "out": {
+   "e1": 1,
+   "e3": 1,
+   "e4": 1,
+   "max_tokens": 100,
+   "messages": [
+    {
+     "content": "s",
+     "role": "system"
+    },
+    {
+     "content": "u1",
+     "role": "user"
+    },
+    {
+     "content": "a",
+     "role": "assistant"
+    },
+    {
+     "content": "u2",
+     "role": "user"
+    }
+   ],
+   "metadata": {
+    "a": 1
+   },
+   "model": "gpt-5",
+   "nothing": null,
+   "stream": true,
+   "temperature": 0.5,
+   "tools": [
+    {
+     "name": "f1",
+     "strict": true,
+     "type": "function"
+    },
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f2",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "conditions see earlier rules",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "not-exist": [
+          "added"
+         ]
+        }
+       ],
+       "params": {
+        "added": 1
+       }
+      }
+     ],
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "exist": [
+          "added"
+         ]
+        }
+       ],
+       "params": {
+        "sawAdded": true
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "sawAdded": true
+          }
+         ]
+        }
+       ],
+       "params": {
+        "sawSaw": true
+       }
+      }
+     ],
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "sawSaw": true
+          }
+         ]
+        }
+       ],
+       "params": [
+        "added"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "sawAdded": true,
+   "sawSaw": true
+  },
+  "touched": []
+ },
+ {
+  "name": "conditions with root",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "generationConfig.temperature": 1
+          }
+         ],
+         "exist": [
+          "contents.0.role"
+         ]
+        }
+       ],
+       "params": {
+        "generationConfig.temperature": 0.2
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "antigravity",
+   "root": "request"
+  },
+  "payload": {
+   "request": {
+    "contents": [
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "a"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "b"
+       }
+      ]
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ],
+    "tool_choice": {
+     "type": "tool",
+     "name": "image_generation"
+    }
+   },
+   "model": "x"
+  },
+  "out": {
+   "model": "x",
+   "request": {
+    "contents": [
+     {
+      "parts": [
+       {
+        "text": "a"
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "parts": [
+       {
+        "text": "b"
+       }
+      ],
+      "role": "user"
+     }
+    ],
+    "generationConfig": {
+     "temperature": 0.2
+    },
+    "tool_choice": {
+     "name": "image_generation",
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ]
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "model entries are OR",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "nope"
+        },
+        {
+         "name": "gpt-*",
+         "protocol": "claude"
+        },
+        {
+         "name": "gpt-*",
+         "protocol": "openai"
+        }
+       ],
+       "params": {
+        "hit": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {
+   "hit": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "entry without name is skipped",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "protocol": "openai"
+        },
+        {
+         "name": "  "
+        }
+       ],
+       "params": {
+        "hit": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai"
+  },
+  "payload": {},
+  "out": {},
+  "touched": []
+ },
+ {
+  "name": "tracked paths",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "diagnostics.user": true,
+        "other": 1,
+        "contextual": 2
+       }
+      }
+     ],
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": [
+        "context_management.inner"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "claude",
+   "trackedPaths": [
+    "diagnostics",
+    "context_management",
+    "contextual.deep",
+    "untouched"
+   ]
+  },
+  "payload": {
+   "context_management": {
+    "inner": 1
+   }
+  },
+  "out": {
+   "context_management": {},
+   "contextual": 2,
+   "diagnostics": {
+    "user": true
+   },
+   "other": 1
+  },
+  "touched": [
+   "context_management",
+   "contextual.deep",
+   "diagnostics"
+  ]
+ },
+ {
+  "name": "tracked default paths",
+  "config": {
+   "requests": {
+    "payload": {
+     "default": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "diagnostics.user": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "claude",
+   "trackedPaths": [
+    "diagnostics"
+   ]
+  },
+  "payload": {
+   "a": 1
+  },
+  "out": {
+   "a": 1,
+   "diagnostics": {
+    "user": true
+   }
+  },
+  "touched": [
+   "diagnostics"
+  ]
+ },
+ {
+  "name": "final body conditions and tracking",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 100
+          }
+         ]
+        }
+       ],
+       "params": {
+        "unexpected": true
+       }
+      },
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 300
+          }
+         ]
+        }
+       ],
+       "params": {
+        "diagnostics.user": true
+       }
+      }
+     ],
+     "filter": [
+      {
+       "models": [
+        {
+         "name": "*",
+         "match": [
+          {
+           "max_tokens": 300
+          }
+         ]
+        }
+       ],
+       "params": [
+        "context_management",
+        "messages.0"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "model",
+   "protocol": "claude",
+   "fromProtocol": "claude",
+   "trackedPaths": [
+    "diagnostics",
+    "context_management"
+   ]
+  },
+  "payload": {
+   "max_tokens": 300,
+   "context_management": {
+    "builtin": true
+   },
+   "messages": [
+    {},
+    {},
+    {}
+   ]
+  },
+  "original": {
+   "max_tokens": 100,
+   "messages": [
+    {},
+    {}
+   ]
+  },
+  "out": {
+   "diagnostics": {
+    "user": true
+   },
+   "max_tokens": 300,
+   "messages": [
+    {},
+    {}
+   ]
+  },
+  "touched": [
+   "context_management",
+   "diagnostics"
+  ]
+ },
+ {
+  "name": "escaped and special keys",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "a\\.b": 1,
+        "x.y\\.z": 2,
+        "weird key": 3
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "a.b": 0
+  },
+  "out": {
+   "a.b": 1,
+   "weird key": 3,
+   "x": {
+    "y.z": 2
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "append and numeric creation",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "list.-1": "tail",
+        "padded.3": 1,
+        "messages.-1": {
+         "role": "user",
+         "content": "new"
+        }
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "list": [
+    "a"
+   ],
+   "messages": []
+  },
+  "out": {
+   "list": [
+    "a",
+    "tail"
+   ],
+   "messages": [
+    {
+     "content": "new",
+     "role": "user"
+    }
+   ],
+   "padded": [
+    null,
+    null,
+    null,
+    1
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "scalar replaced by container",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "a.b": 1,
+        "s.0": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "a": "str",
+   "s": "x"
+  },
+  "out": {
+   "a": {
+    "b": 1
+   },
+   "s": [
+    1
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "invalid set path is skipped",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "list.name": 1,
+        "ok": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  "request": {
+   "model": "m",
+   "protocol": "openai"
+  },
+  "payload": {
+   "list": [
+    1
+   ]
+  },
+  "out": {
+   "list": [
+    1
+   ],
+   "ok": 1
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation all",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f1"
+    }
+   ],
+   "tool_choice": {
+    "type": "image_generation"
+   }
+  },
+  "out": {
+   "tools": [
+    {
+     "name": "f1",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation all tool_choice string",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    }
+   ],
+   "tool_choice": "image_generation"
+  },
+  "out": {
+   "tools": []
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation all tool_choice by name",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "function",
+     "name": "keep"
+    }
+   ],
+   "tool_choice": {
+    "type": "tool",
+    "name": "image_generation"
+   }
+  },
+  "out": {
+   "tools": [
+    {
+     "name": "keep",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation keeps other tool_choice",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "function",
+     "name": "keep"
+    }
+   ],
+   "tool_choice": {
+    "type": "function",
+    "name": "keep"
+   }
+  },
+  "out": {
+   "tool_choice": {
+    "name": "keep",
+    "type": "function"
+   },
+   "tools": [
+    {
+     "name": "keep",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation with root",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5.4",
+   "protocol": "antigravity",
+   "root": "request"
+  },
+  "payload": {
+   "request": {
+    "contents": [
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "a"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "parts": [
+       {
+        "text": "b"
+       }
+      ]
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1
+    },
+    "tools": [
+     {
+      "type": "image_generation"
+     },
+     {
+      "type": "function"
+     }
+    ],
+    "tool_choice": {
+     "type": "tool",
+     "name": "image_generation"
+    }
+   },
+   "model": "x"
+  },
+  "out": {
+   "model": "x",
+   "request": {
+    "contents": [
+     {
+      "parts": [
+       {
+        "text": "a"
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "parts": [
+       {
+        "text": "b"
+       }
+      ],
+      "role": "user"
+     }
+    ],
+    "generationConfig": {
+     "temperature": 1
+    },
+    "tools": [
+     {
+      "type": "function"
+     }
+    ]
+   }
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation chat strips non-images",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": "chat"
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response",
+   "requestPath": "/v1/responses"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function"
+    }
+   ],
+   "tool_choice": {
+    "type": "image_generation"
+   }
+  },
+  "out": {
+   "tools": [
+    {
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation chat keeps images endpoint",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": "chat"
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response",
+   "requestPath": "/v1/images/generations"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function"
+    }
+   ],
+   "tool_choice": {
+    "type": "image_generation"
+   }
+  },
+  "out": {
+   "tool_choice": {
+    "type": "image_generation"
+   },
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation chat keeps prefixed images endpoint",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": "chat"
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response",
+   "requestPath": "/openai/v1/images/edits"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    }
+   ]
+  },
+  "out": {
+   "tools": [
+    {
+     "type": "image_generation"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation passthrough",
+  "config": {
+   "requests": {
+    "payload": {}
+   },
+   "multimedia": {
+    "disable-image-generation": "passthrough"
+   }
+  },
+  "request": {
+   "model": "gpt-5",
+   "protocol": "openai-response",
+   "requestPath": "/v1/responses"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function"
+    }
+   ],
+   "tool_choice": {
+    "type": "image_generation"
+   }
+  },
+  "out": {
+   "tool_choice": {
+    "type": "image_generation"
+   },
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation override can restore",
+  "config": {
+   "requests": {
+    "payload": {
+     "override-raw": [
+      {
+       "models": [
+        {
+         "name": "gpt-5.4",
+         "protocol": "openai-response"
+        }
+       ],
+       "params": {
+        "tools": "[{\"type\":\"image_generation\"},{\"type\":\"function\",\"name\":\"f1\"}]",
+        "tool_choice": "{\"type\":\"image_generation\"}"
+       }
+      }
+     ]
+    }
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "gpt-5.4",
+   "protocol": "openai-response"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "type": "function",
+     "name": "f1"
+    }
+   ],
+   "tool_choice": {
+    "type": "image_generation"
+   }
+  },
+  "out": {
+   "tool_choice": {
+    "type": "image_generation"
+   },
+   "tools": [
+    {
+     "type": "image_generation"
+    },
+    {
+     "name": "f1",
+     "type": "function"
+    }
+   ]
+  },
+  "touched": []
+ },
+ {
+  "name": "disable image generation without model still strips",
+  "config": {
+   "requests": {
+    "payload": {
+     "override": [
+      {
+       "models": [
+        {
+         "name": "*"
+        }
+       ],
+       "params": {
+        "x": 1
+       }
+      }
+     ]
+    }
+   },
+   "multimedia": {
+    "disable-image-generation": true
+   }
+  },
+  "request": {
+   "model": "",
+   "protocol": "openai"
+  },
+  "payload": {
+   "tools": [
+    {
+     "type": "image_generation"
+    }
+   ]
+  },
+  "out": {
+   "tools": []
+  },
+  "touched": []
+ }
+]
