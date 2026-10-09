@@ -2,6 +2,7 @@ import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { AccessLayer, withAccess } from "../access/layer.ts"
 import { ProxyLayer } from "../handlers/layer.ts"
+import { ManagementRoutesLive } from "../management/routes.ts"
 import { ModelRoutesLive } from "../registry/live.ts"
 import { RootRoutes } from "./routes.ts"
 
@@ -10,7 +11,13 @@ import { RootRoutes } from "./routes.ts"
  * handlers use `AccessPrincipal` are wrapped with `withAccess(...)` (src/access/layer.ts); protected prefixes are
  * authenticated by `AccessLayer` regardless.
  */
-export const AppLayer = Layer.mergeAll(RootRoutes, AccessLayer, ProxyLayer, withAccess(ModelRoutesLive))
+export const AppLayer = Layer.mergeAll(
+  RootRoutes,
+  AccessLayer,
+  ProxyLayer,
+  withAccess(ModelRoutesLive),
+  withAccess(ManagementRoutesLive)
+)
 
 /**
  * Creates the Web `Request` handler. Per-request services (`WorkerEnv`, `WorkerExecutionContext`) are supplied as

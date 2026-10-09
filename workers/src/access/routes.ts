@@ -7,6 +7,9 @@ export const PROTECTED_PREFIXES = ["/v1", "/openai/v1", "/backend-api/codex", "/
 /** Paths under this prefix additionally require the principal to be on the admin allow-list. */
 export const MANAGEMENT_PREFIX = "/v8/management"
 
+/** The control panel page: static, but only administrators get it (Go serves it unauthenticated behind its login). */
+export const MANAGEMENT_PANEL_PATH = "/management.html"
+
 export type AccessZone = "public" | "protected" | "management"
 
 /**
@@ -27,6 +30,6 @@ export const classifyPath = (requestUrl: string): AccessZone => {
     // Keep the raw path when it is not valid percent-encoding.
   }
   path = path.replace(/\/{2,}/g, "/").toLowerCase()
-  if (path.startsWith(MANAGEMENT_PREFIX)) return "management"
+  if (path.startsWith(MANAGEMENT_PREFIX) || path.startsWith(MANAGEMENT_PANEL_PATH)) return "management"
   return PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "protected" : "public"
 }

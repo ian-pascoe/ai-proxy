@@ -12,16 +12,17 @@ the behavioural source of truth.
 
 Run from `workers/` (or use `pnpm -C workers <script>`):
 
-| Script           | Purpose                                                               |
-| ---------------- | --------------------------------------------------------------------- |
-| `pnpm install`   | Install dependencies                                                  |
-| `pnpm dev`       | `wrangler dev` (local Worker with local DO/KV/D1)                     |
-| `pnpm typecheck` | `tsc --noEmit` (strict)                                               |
-| `pnpm lint`      | `oxlint` + `prettier --check`                                         |
-| `pnpm format`    | `prettier --write`                                                    |
-| `pnpm test`      | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`) |
-| `pnpm build`     | `wrangler deploy --dry-run --outdir dist` (bundle + config check)     |
-| `pnpm types`     | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc` |
+| Script            | Purpose                                                                  |
+| ----------------- | ------------------------------------------------------------------------ |
+| `pnpm install`    | Install dependencies                                                     |
+| `pnpm dev`        | `wrangler dev` (local Worker with local DO/KV/D1)                        |
+| `pnpm typecheck`  | `tsc --noEmit` (strict)                                                  |
+| `pnpm lint`       | `oxlint` + `prettier --check`                                            |
+| `pnpm format`     | `prettier --write`                                                       |
+| `pnpm test`       | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)    |
+| `pnpm build`      | `wrangler deploy --dry-run --outdir dist` (bundle + config check)        |
+| `pnpm types`      | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`    |
+| `pnpm panel:sync` | Install `public/management.html` (control panel) from its GitHub release |
 
 ## Layout
 
@@ -51,6 +52,8 @@ See the architecture document. Currently implemented:
   and framers (`respond.ts`, `framing.ts`), `/v1/chat/completions` and `/v1/completions` (`openai/`), `/v1/messages` and
   `/v1/messages/count_tokens` (`claude/`), service wiring (`layer.ts`).
 - `src/usage/` — usage records, per-attempt `UsageReporter`, `UsageSink` (no-op until persistence lands).
+- `src/management/` — `/v8/management` API (config, credentials, api-call, model definitions, server info) and the
+  `/management.html` control panel route; `tools/panel-sync/` downloads the panel.
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
   `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator` (reads
   `tools/fixturegen/translator/corpus/*.json`); `pnpm catalog:sync` runs `…/registry`, which also refreshes the
@@ -84,6 +87,20 @@ and `/` are public. Management additionally requires an admin. Configure (vars i
 Empty defaults fail closed (protected routes answer 500 `Authentication service error`). Route layers whose handlers
 read the principal wrap themselves with `withAccess(routes)` (`src/access/layer.ts`) and use `yield* AccessPrincipal`
 (`{ principal, principalId, callerScope }`).
+
+## Management API and control panel
+
+`/v8/management/*` and `/management.html` are served to Access admins only (no management key, IP ban or
+`allow-remote`). The official panel ([Cli-Proxy-API-Management-Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center))
+is a single ~3 MB HTML file that is **not committed**: run `pnpm panel:sync` once (and before every deploy). It downloads
+`management.html` from the latest GitHub release into `public/` (git-ignored, served through the `ASSETS` binding) and
+refuses to install it unless its SHA-256 matches the release asset's `digest`. Options: `--tag vX.Y.Z`,
+`--repository owner/repo`, `--out path`, `--allow-unverified`; `GITHUB_TOKEN` raises the API rate limit.
+
+Local use: put `ACCESS_DEV_BYPASS=you@example.com` in `.dev.vars`, run `pnpm panel:sync` and `pnpm dev`, open
+`http://localhost:8787/management.html`. The login form asks for a "management key": Access already authenticated you,
+so any non-empty text works. Usage pages need the usage slice and OAuth login the OAuth slice (their routes answer 404
+until then).
 
 ## Conventions
 

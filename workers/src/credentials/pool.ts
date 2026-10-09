@@ -9,6 +9,7 @@
 import type { Config } from "../config/schema.ts"
 import { sessionAffinityTtlMs } from "../config/accessors.ts"
 import type { JsonObject } from "../json/index.ts"
+import { resetCooldownState } from "./cooldown-reset.ts"
 import { type StoredCredential, deriveFileCredential, sanitizeAliases } from "./derive.ts"
 import { parseAuthFile, type ImportFailureReason } from "./import.ts"
 import { type CooldownSettings, coolingDisabledFor, markResult } from "./cooldown/mark-result.ts"
@@ -324,6 +325,28 @@ export class CredentialPool {
       coolingDisabled: (credential) => coolingDisabledFor(credential, view.cooldown),
       now: this.#now()
     })
+  }
+
+  /** Every credential (stored files and config API keys) with its runtime state, ordered by id (management views). */
+  entries(): RefreshTarget[] {
+    return [...this.#current().credentials.values()]
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((credential) => ({ credential, state: this.#state(credential.id) }))
+  }
+
+  entry(id: string): RefreshTarget | undefined {
+    const credential = this.#current().credentials.get(id)
+    return credential === undefined ? undefined : { credential, state: this.#state(id) }
+  }
+
+  /** Clears the cooldown/quota timers of one credential (management "reset cooldown"); `undefined` when unknown. */
+  resetCooldown(id: string): { readonly models: ReadonlyArray<string> } | undefined {
+    const target = this.entry(id)
+    if (target === undefined) return undefined
+    const reset = resetCooldownState(target.state, this.#now())
+    this.#states.set(id, reset.state)
+    this.#store.saveState(id, reset.state)
+    return { models: reset.models }
   }
 
   list(): CredentialSummary[] {

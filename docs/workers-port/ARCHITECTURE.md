@@ -401,6 +401,38 @@ Deviations from Go (all deliberate, documented in code headers):
   ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
 - `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
 
+## Management API and control panel (`src/management/`)
+
+Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; response shapes follow
+the Go server so the official panel (`Cli-Proxy-API-Management-Center`, checked against v1.25.6) works unchanged. Auth is
+the Access admin gate only (`access/routes.ts` classifies `/v8/management*` **and `/management.html`** as `management`);
+the panel's "management key" is ignored (any text logs in).
+
+- **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
+  `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),
+  `/config.yaml` the sparse YAML export. Writes are read-modify-write over the JSON document with `putConfig(text,
+  expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
+  (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
+  injected into `api-keys` entries on read and stripped on write. The Go read-only Home revision paths and TURN secret
+  handling do not exist in the Workers schema.
+- **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
+  pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
+  tokens included), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
+  auth files are listed (config API keys are not auth files; toggling them answers 409). `auth_index` =
+  `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
+  entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
+  `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`).
+- **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
+  60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
+  (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
+- **Not here**: `/oauth/*` (OAuth slice), `/observability/usage/*` (usage slice), plugins, Home, `/v0/management`.
+- **Panel asset**: `GET /management.html` serves `public/management.html` through the `ASSETS` binding
+  (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
+  (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
+  file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
+- Deviations from Go: `recent_requests` buckets stay empty until the usage slice records history; cooldown `reason`s are
+  limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

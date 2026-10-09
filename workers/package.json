@@ -16,7 +16,8 @@
     "lint": "oxlint && prettier --check .",
     "format": "prettier --write .",
     "types": "wrangler types --strict-vars=false",
-    "catalog:sync": "cd .. && go run ./workers/tools/fixturegen/registry"
+    "catalog:sync": "cd .. && go run ./workers/tools/fixturegen/registry",
+    "panel:sync": "node --experimental-strip-types tools/panel-sync/cli.ts"
   },
   "dependencies": {
     "effect": "4.0.2",
