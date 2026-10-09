@@ -16,6 +16,7 @@ import { type CooldownSettings, coolingDisabledFor, markResult } from "./cooldow
 import { shouldSkipCredentialCooldown } from "./cooldown/classify.ts"
 import { type Credential, type CredentialState, emptyQuota, emptyState } from "./model.ts"
 import { hasUnauthorizedFailure } from "./selection/availability.ts"
+import { MerklePrefixMatcher } from "../session-routing/matcher.ts"
 import { SessionCache } from "./selection/affinity.ts"
 import { canonicalModelKey } from "./selection/model-name.ts"
 import { rotateRoute } from "./selection/routing.ts"
@@ -99,6 +100,7 @@ export class CredentialPool {
   readonly #decorate: (credential: Credential) => Credential
   readonly #rotation = new RotationState()
   readonly #affinity = new SessionCache()
+  readonly #lcp = new MerklePrefixMatcher()
   readonly #poolOffsets = new Map<string, number>()
   readonly #states: Map<string, CredentialState>
   #view: View | undefined
@@ -128,7 +130,7 @@ export class CredentialPool {
       if (!credentials.has(id)) {
         this.#states.delete(id)
         this.#store.deleteState(id)
-        this.#affinity.invalidateAuth(id)
+        this.#invalidateBindings(id)
       }
     }
     const oauthModelAlias: Record<string, ReturnType<typeof sanitizeAliases>> = {}
@@ -137,6 +139,7 @@ export class CredentialPool {
     }
     const ttl = sessionAffinityTtlMs(config)
     this.#affinity.setTtl(ttl)
+    this.#lcp.setTtl(ttl)
     this.#view = {
       configVersion: version,
       credentials,
@@ -154,6 +157,12 @@ export class CredentialPool {
       saveCooldown: config.routing.cooldown["save-cooldown-status"]
     }
     return this.#view
+  }
+
+  /** Session-affinity and LCP bindings of a credential that was removed, replaced or disabled. */
+  #invalidateBindings(id: string): void {
+    this.#affinity.invalidateAuth(id)
+    this.#lcp.invalidateAuth(id)
   }
 
   /** Drops the derived view so the next operation re-reads the store (after a credential write). */
@@ -181,7 +190,7 @@ export class CredentialPool {
       credentials: entries,
       request,
       settings: view.settings,
-      runtime: { rotation: this.#rotation, affinity: this.#affinity },
+      runtime: { rotation: this.#rotation, affinity: this.#affinity, lcp: this.#lcp },
       now
     })
     if (!outcome.ok) return outcome
@@ -202,7 +211,8 @@ export class CredentialPool {
       provider: credential.provider,
       model: stateModel,
       issuedAt: now,
-      ...(outcome.affinityKeys.length === 0 ? {} : { affinityKeys: outcome.affinityKeys })
+      ...(outcome.affinityKeys.length === 0 ? {} : { affinityKeys: outcome.affinityKeys }),
+      ...(outcome.lcp === undefined ? {} : { lcp: outcome.lcp })
     }
     return {
       ok: true,
@@ -217,7 +227,8 @@ export class CredentialPool {
         stateModel,
         pooled: route.pooled === true
       },
-      lease
+      lease,
+      ...(outcome.session === undefined ? {} : { session: outcome.session })
     }
   }
 
@@ -247,8 +258,20 @@ export class CredentialPool {
 
     if (result.success) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.touch(key, credential.id, now)
+      // A successful extension is recorded (or refreshed) as an LCP sequence of its own.
+      if (lease.lcp !== undefined) this.#lcp.touch(lease.lcp.namespace, lease.lcp.sequence, credential.id, now)
     } else if (next.lastError !== undefined && !shouldSkipCredentialCooldown(this.#affinityError(result, next))) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.compareAndDelete(key, credential.id)
+      // Credential-attributed failures drop only the sequence that was attempted, unless a newer request refreshed it.
+      if (lease.lcp !== undefined) {
+        this.#lcp.removeBefore(
+          lease.lcp.namespace,
+          lease.lcp.sequence.fingerprints,
+          credential.id,
+          lease.lcp.generation,
+          now
+        )
+      }
     }
     return { ok: true, applied: true }
   }
@@ -366,7 +389,7 @@ export class CredentialPool {
     if (outcome.credentialsChanged && !outcome.created) {
       this.#states.delete(parsed.id)
       this.#store.deleteState(parsed.id)
-      this.#affinity.invalidateAuth(parsed.id)
+      this.#invalidateBindings(parsed.id)
     }
     return {
       ok: true,
@@ -382,7 +405,7 @@ export class CredentialPool {
     const removed = this.#store.remove(id)
     if (removed) {
       this.#states.delete(id)
-      this.#affinity.invalidateAuth(id)
+      this.#invalidateBindings(id)
       this.#invalidate()
     }
     return removed
@@ -394,7 +417,7 @@ export class CredentialPool {
       return this.#current().credentials.has(id) ? "config_credential" : "not_found"
     }
     this.#store.setDisabled(id, disabled)
-    if (disabled) this.#affinity.invalidateAuth(id)
+    if (disabled) this.#invalidateBindings(id)
     this.#invalidate()
     return "ok"
   }

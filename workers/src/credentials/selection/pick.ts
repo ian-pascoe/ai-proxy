@@ -10,6 +10,8 @@
  * per-provider slot cursor is not reproduced.
  */
 import type { RoutingStrategy } from "../../config/schema.ts"
+import { boundSessionIdentity } from "../../session-routing/identity.ts"
+import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts"
 import { type Credential, type CredentialState, executorKey } from "../model.ts"
 import { affinityKey, isSubagentSession, type SessionCache } from "./affinity.ts"
 import { isBlockedForModel } from "./availability.ts"
@@ -18,7 +20,7 @@ import { canonicalModelKey } from "./model-name.ts"
 import { effectiveRequestRetry } from "./retry.ts"
 import { resolveModelRoute, type ModelRoute, type RoutingContext } from "./routing.ts"
 import type { RotationState } from "./strategies.ts"
-import type { PickFailure, PickRequest } from "./types.ts"
+import type { Lease, PickFailure, PickRequest, ResolvedSession } from "./types.ts"
 
 export interface CredentialEntry {
   readonly credential: Credential
@@ -35,6 +37,8 @@ export interface SelectionSettings extends Omit<RoutingContext, "knownPrefixes">
 export interface SelectionRuntime {
   readonly rotation: RotationState
   readonly affinity: SessionCache
+  /** LCP conversation matcher; without it requests with no explicit session are never bound by content. */
+  readonly lcp?: MerklePrefixMatcher
 }
 
 export interface SelectionInput {
@@ -52,6 +56,9 @@ export type SelectionOutcome =
       readonly route: ModelRoute
       /** Affinity cache keys bound by this pick (for `report`). */
       readonly affinityKeys: ReadonlyArray<string>
+      /** LCP binding of this pick (for `report`) and the session identity it produced. */
+      readonly lcp?: NonNullable<Lease["lcp"]>
+      readonly session?: ResolvedSession
     }
   | { readonly ok: false; readonly failure: PickFailure }
 
@@ -63,21 +70,22 @@ interface Candidate {
   readonly priority: number
 }
 
-const MAX_SESSION_ID = 256
+const boundSessionId = boundSessionIdentity
 
-/** `BoundSessionIdentity`: over-long identities are shortened with a stable digest. */
-const boundSessionId = (id: string): string => {
-  if (id.length <= MAX_SESSION_ID) return id
-  let h1 = 0xdeadbeef
-  let h2 = 0x41c6ce57
-  for (let index = 0; index < id.length; index += 1) {
-    const code = id.charCodeAt(index)
-    h1 = Math.imul(h1 ^ code, 2654435761)
-    h2 = Math.imul(h2 ^ code, 1597334677)
-  }
-  const digest = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0")
-  return `${id.slice(0, 190)}#${digest}`
-}
+/** The identity an LCP match/binding settled on (`sessionId`/`parentSessionId`/fork/compaction flags). */
+const resolved = (value: {
+  readonly sessionId: string
+  readonly parentSessionId: string
+  readonly isFork: boolean
+  readonly isCompaction: boolean
+  readonly nodeKind: string
+}): ResolvedSession => ({
+  id: value.sessionId,
+  ...(value.parentSessionId === "" ? {} : { parentId: value.parentSessionId }),
+  ...(value.isFork ? { isFork: true } : {}),
+  ...(value.isCompaction && !value.isFork ? { isCompaction: true } : {}),
+  ...(value.nodeKind === "" ? {} : { nodeKind: value.nodeKind })
+})
 
 const truthy = (value: unknown): boolean =>
   value === true || (typeof value === "string" && value.toLowerCase() === "true")
@@ -217,10 +225,57 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
       : { ok: true, entry: picked.entry, route: picked.route, affinityKeys }
 
   // 4. Session affinity: a binding outranks priority, an unavailable binding falls back to the highest tier.
-  const sessionId = settings.sessionAffinity ? (request.session?.id.trim() ?? "") : ""
+  if (!settings.sessionAffinity) return done(strategyPick(fallbackTier), [])
+  const explicit = (request.session?.id.trim() ?? "") === "" ? undefined : request.session
+  const find = (authId: string | undefined): Candidate | undefined =>
+    authId === undefined ? undefined : available.find((candidate) => candidate.id === authId)
+
+  // Explicit harness identities are absolute authority; the LCP matcher only sees requests without one.
+  const lcpRequest = explicit === undefined ? request.lcp : undefined
+  const lcpName =
+    runtime.lcp === undefined || lcpRequest === undefined
+      ? ""
+      : lcpNamespace(
+          providers.size === 1 ? (providers.values().next().value as string) : "mixed",
+          modelKey,
+          lcpRequest.callerScope
+        )
+  if (runtime.lcp !== undefined && lcpRequest !== undefined && lcpName !== "") {
+    const matcher = runtime.lcp
+    const sequence = {
+      fingerprints: lcpRequest.fingerprints,
+      minPrefixLength: lcpRequest.minPrefixLength,
+      tailFingerprints: lcpRequest.tailFingerprints,
+      envDigest: lcpRequest.envDigest
+    }
+    const lcpDone = (
+      picked: Candidate,
+      generation: number,
+      identity: Parameters<typeof resolved>[0]
+    ): SelectionOutcome => ({
+      ok: true,
+      entry: picked.entry,
+      route: picked.route,
+      affinityKeys: [],
+      lcp: { namespace: lcpName, generation, sequence },
+      session: resolved(identity)
+    })
+    const matched = matcher.match(lcpName, sequence, now)
+    const matchedCandidate = matched === undefined ? undefined : find(matched.authId)
+    if (matched !== undefined && matchedCandidate !== undefined) {
+      return lcpDone(matchedCandidate, matched.accessNumber, matched)
+    }
+    // No (usable) match: the strategy picks among the highest tier and the sequence is bound to that credential.
+    const fresh = strategyPick(fallbackTier)
+    if (fresh === undefined) return done(undefined, [])
+    const binding = matcher.bind(lcpName, sequence, fresh.id, now)
+    return binding === undefined ? done(fresh, []) : lcpDone(fresh, binding.accessNumber, binding)
+  }
+
+  const session = explicit ?? request.fallbackSession
+  const sessionId = session?.id.trim() ?? ""
   if (sessionId === "") return done(strategyPick(fallbackTier), [])
 
-  const session = request.session
   const scope = session?.callerScope ?? ""
   const primaryId = boundSessionId(sessionId)
   const parentRaw = session?.parentId?.trim() ?? ""
@@ -238,8 +293,6 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     }
     return [cacheKey]
   }
-  const find = (authId: string | undefined): Candidate | undefined =>
-    authId === undefined ? undefined : available.find((candidate) => candidate.id === authId)
 
   const cachedId = runtime.affinity.getAndRefresh(cacheKey, now)
   const bound = find(cachedId)

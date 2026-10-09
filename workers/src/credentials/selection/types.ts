@@ -18,6 +18,25 @@ export const SessionRef = Schema.Struct({
 })
 export type SessionRef = typeof SessionRef.Type
 
+/** A prepared LCP request sequence (`session-routing/canonical.ts#prepareFingerprints`). */
+export const LcpSequence = Schema.Struct({
+  fingerprints: Schema.Array(Schema.String),
+  minPrefixLength: Schema.Int,
+  tailFingerprints: Schema.Array(Schema.String),
+  envDigest: Schema.String
+})
+export type LcpSequence = typeof LcpSequence.Type
+
+/** The session identity the selection settled on (explicit, LCP match or LCP binding), for usage records. */
+export const ResolvedSession = Schema.Struct({
+  id: Schema.String,
+  parentId: optional(Schema.String),
+  isFork: optional(Schema.Boolean),
+  isCompaction: optional(Schema.Boolean),
+  nodeKind: optional(Schema.String)
+})
+export type ResolvedSession = typeof ResolvedSession.Type
+
 export const PickRequest = Schema.Struct({
   /** Executor provider keys able to serve the model (from the model registry). */
   providers: Schema.Array(Schema.String),
@@ -41,7 +60,12 @@ export const PickRequest = Schema.Struct({
   preferWebsockets: optional(Schema.Boolean),
   /** Antigravity credits fallback: credentials in a quota cooldown stay selectable (disabled/expired ones do not). */
   ignoreCooldown: optional(Schema.Boolean),
-  session: optional(SessionRef)
+  /** Explicit session identity (headers/body markers). Wins over `lcp` and `fallbackSession`. */
+  session: optional(SessionRef),
+  /** Conversation fingerprints for the LCP matcher; only used without an explicit `session`. */
+  lcp: optional(Schema.Struct({ ...LcpSequence.fields, callerScope: Schema.String })),
+  /** Derived content-hash / message-hash identity, used when the LCP matcher does not apply. */
+  fallbackSession: optional(SessionRef)
 })
 export type PickRequest = typeof PickRequest.Type
 
@@ -82,7 +106,15 @@ export const Lease = Schema.Struct({
   model: Schema.String,
   issuedAt: Schema.Number,
   /** Opaque session-affinity cache keys bound by this pick. */
-  affinityKeys: optional(Schema.Array(Schema.String))
+  affinityKeys: optional(Schema.Array(Schema.String)),
+  /** LCP binding made by this pick: the sequence to refresh on success or drop on failure (`generation` guards races). */
+  lcp: optional(
+    Schema.Struct({
+      namespace: Schema.String,
+      generation: Schema.Number,
+      sequence: LcpSequence
+    })
+  )
 })
 export type Lease = typeof Lease.Type
 
@@ -114,6 +146,8 @@ export type PickResult =
       readonly credential: CredentialSnapshot
       readonly route: ModelRouteSnapshot
       readonly lease: Lease
+      /** Set when the LCP matcher decided the session identity. */
+      readonly session?: ResolvedSession
     }
   | { readonly ok: false; readonly failure: PickFailure }
 

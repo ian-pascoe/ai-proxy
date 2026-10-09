@@ -4,8 +4,8 @@
  * Go source: internal/runtime/executor/claude_executor_request.go (applyClaudeHeadersWithNativeProfile,
  * copyClaudeCallerFingerprintHeaders), helps/claude_device_profile.go (ApplyClaudeLegacyDeviceHeaders,
  * defaultClaudeDeviceProfile). Workers `fetch` cannot control header order or casing and the TLS fingerprint is
- * Cloudflare's (see workers/README.md), so only names and values are reproduced. The device-profile stabilisation
- * feature (`claude-header-defaults.stabilize-device-profile`) is not ported.
+ * Cloudflare's (see workers/README.md), so only names and values are reproduced. With `stabilize-device-profile` the
+ * device headers come from the stabilised profile (`device-profile.ts`) instead of the legacy copy-or-baseline rules.
  */
 import { createHash } from "node:crypto"
 import type { Config } from "../../config/schema.ts"
@@ -96,6 +96,12 @@ export interface HeaderInput {
   readonly sessionId: string
   /** Session id for `$CPA-SESSION-ID` custom headers. */
   readonly cpaSessionId?: string | undefined
+  /**
+   * `stabilize-device-profile` is on: confirmed Claude Code requests use `stabilizedProfile` (resolved by the pipeline),
+   * everything else the configured baseline (`ApplyClaudeDeviceProfileHeaders` / `ApplyClaudeDefaultDeviceProfileHeaders`).
+   */
+  readonly stabilizeDeviceProfile?: boolean
+  readonly stabilizedProfile?: DeviceProfile | undefined
 }
 
 const COPIED_PREFIXES = ["anthropic-", "x-stainless-", "x-claude-code-", "x-claude-remote-"]
@@ -313,10 +319,18 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
   }
   applyTransportNegotiation()
 
-  // Legacy device headers (`ApplyClaudeLegacyDeviceHeaders`).
   const profile = defaultDeviceProfile(config)
   let usedIncomingUserAgent = false
-  if (confirmedClaudeCode) {
+  if (input.stabilizeDeviceProfile === true) {
+    const stabilized = confirmedClaudeCode ? (input.stabilizedProfile ?? profile) : profile
+    headers["user-agent"] = stabilized.userAgent
+    headers["x-stainless-package-version"] = stabilized.packageVersion
+    headers["x-stainless-runtime-version"] = stabilized.runtimeVersion
+    headers["x-stainless-os"] = stabilized.os
+    headers["x-stainless-arch"] = stabilized.arch
+    usedIncomingUserAgent = true
+  } else if (confirmedClaudeCode) {
+    // Legacy device headers (`ApplyClaudeLegacyDeviceHeaders`).
     const ensureValid = (name: string, fallback: string, valid?: (value: string) => boolean): void => {
       const current = (headers[name] ?? "").trim()
       if (current !== "" && (valid === undefined || valid(current))) return

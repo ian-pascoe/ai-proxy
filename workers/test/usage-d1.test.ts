@@ -339,3 +339,44 @@ describe("retention", () => {
     expect(scheduledTasks.map((task) => task.name)).toContain("usage-retention")
   })
 })
+
+describe("usage session identity and base URL", () => {
+  it("stores the session, parent and base URL and exports canonical UUIDs", async () => {
+    await insertUsageRecord(
+      db,
+      sampleRecord({
+        sessionId: "claude:123E4567-E89B-12D3-A456-426614174000",
+        parentSessionId: "lcp:v1:abcdef",
+        baseUrl: "https://api.example.test/v1"
+      })
+    )
+    const [row] = await rows()
+    expect(row).toMatchObject({
+      session_id: "claude:123E4567-E89B-12D3-A456-426614174000",
+      parent_session_id: "lcp:v1:abcdef",
+      base_url: "https://api.example.test/v1"
+    })
+    const payload = rowToPayload(row as UsageRow)
+    expect(payload).toMatchObject({
+      session_id: "123e4567-e89b-12d3-a456-426614174000",
+      base_url: "https://api.example.test/v1"
+    })
+    // A non-UUID parent is projected to a deterministic UUIDv8, like `NormalizeToCanonicalUUID`.
+    expect(payload["parent_session_id"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    )
+  })
+
+  it("omits the fields without a session and drops a parent equal to the session", async () => {
+    await insertUsageRecord(db, sampleRecord())
+    await insertUsageRecord(
+      db,
+      sampleRecord({ sessionId: "thread:abc", parentSessionId: "thread:abc", requestedAt: 1_700_000_000_001 })
+    )
+    const [plain, same] = (await rows()).map(rowToPayload)
+    expect(plain).not.toHaveProperty("session_id")
+    expect(plain).not.toHaveProperty("base_url")
+    expect(same).toHaveProperty("session_id")
+    expect(same).not.toHaveProperty("parent_session_id")
+  })
+})

@@ -263,6 +263,26 @@ describe("meta login", () => {
     }
   }
 
+  it.effect("mints through META_MINT_URL when it is set", () =>
+    Effect.gen(function* () {
+      yield* startClock
+      const h = makeOAuth(
+        routes({
+          [DEVICE]: deviceReply,
+          [TOKEN]: { body: { access_token: "dca:abc123", token_type: "Bearer", expires_in: 7200 } },
+          "POST https://mint.example.test/key": minted
+        }),
+        {},
+        { metaMintUrl: "https://mint.example.test/key" }
+      )
+      const started = yield* begin(h, "meta")
+      yield* TestClock.adjust(5_000)
+      assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
+      expect(h.requests.at(-1)?.url).toBe("https://mint.example.test/key")
+      expect(onlyFile(h).file).toMatchObject({ api_key: "meta-api-key" })
+    })
+  )
+
   it.effect("waits one interval before the first poll, mints the key and writes the Go file", () =>
     Effect.gen(function* () {
       yield* startClock

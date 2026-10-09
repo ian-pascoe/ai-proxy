@@ -23,7 +23,9 @@
     "ACCESS_ADMIN_SERVICE_TOKENS": "",
     "ACCESS_DEV_BYPASS": "",
     // Days of usage history kept in D1 by the cron retention job (src/usage/retention.ts); 0 keeps everything.
-    "USAGE_RETENTION_DAYS": "30"
+    "USAGE_RETENTION_DAYS": "30",
+    // Overrides the Meta key-mint endpoint (`https://api.meta.ai/muse-code/key`), like Go's META_MINT_URL (tests, gateways).
+    "META_MINT_URL": ""
   },
 
   "observability": { "enabled": true },

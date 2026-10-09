@@ -13,7 +13,11 @@ import { type MockHandler, mockHttp, T0 } from "./refresh.ts"
 
 export { jwt, routes, T0 } from "./refresh.ts"
 
-export const makeOAuth = (handler: MockHandler, seed: Record<string, JsonObject> = {}) => {
+export const makeOAuth = (
+  handler: MockHandler,
+  seed: Record<string, JsonObject> = {},
+  options: { readonly metaMintUrl?: string } = {}
+) => {
   const table = new MemorySessionTable()
   const files = new Map<string, JsonObject>(Object.entries(seed))
   const removed: string[] = []
@@ -35,7 +39,11 @@ export const makeOAuth = (handler: MockHandler, seed: Record<string, JsonObject>
       await Promise.resolve()
     }
   }
-  const service: OAuthService = makeOAuthService({ sessions: new OAuthSessions(table), sink })
+  const service: OAuthService = makeOAuthService({
+    sessions: new OAuthSessions(table),
+    sink,
+    metaMintUrl: options.metaMintUrl
+  })
   const http = mockHttp(handler)
   return {
     service,

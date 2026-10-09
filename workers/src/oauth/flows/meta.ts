@@ -7,7 +7,7 @@
  */
 import { Effect } from "effect"
 import { HttpClientRequest } from "effect/http"
-import { META_DEFAULT_BASE_URL, META_MINT_URL } from "../../credentials/refresh/meta.ts"
+import { META_DEFAULT_BASE_URL, metaMintUrl } from "../../credentials/refresh/meta.ts"
 import type { JsonObject } from "../../json/index.ts"
 import { sha256Hex } from "../encoding.ts"
 import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from "./http.ts"
@@ -40,9 +40,9 @@ const formPost = (url: string, params: Record<string, string>) =>
   )
 
 /** `MintAPIKey`; failures are advisory (the DCA token is stored without a key). */
-const mintApiKey = (dcaToken: string) =>
+const mintApiKey = (dcaToken: string, mintUrl: string | undefined) =>
   Effect.gen(function* () {
-    const request = HttpClientRequest.post(META_MINT_URL).pipe(
+    const request = HttpClientRequest.post(metaMintUrl(mintUrl)).pipe(
       HttpClientRequest.setHeaders({
         authorization: `Bearer ${dcaToken}`,
         "user-agent": USER_AGENT,
@@ -56,7 +56,7 @@ const mintApiKey = (dcaToken: string) =>
     return minted !== undefined && str(minted.api_key) !== "" ? minted : undefined
   })
 
-export const metaFlow = (): DeviceFlow => ({
+export const metaFlow = (mintUrl?: string): DeviceFlow => ({
   kind: "device",
   provider: "meta",
   expiredMessage: "Authentication failed: meta auth: authorization timed out or canceled: context deadline exceeded",
@@ -129,7 +129,7 @@ export const metaFlow = (): DeviceFlow => ({
       const expiresIn = Math.trunc(seconds(token.expires_in))
       const dcaExpiresAt = expiresIn > 0 ? Math.floor(now / 1000) + expiresIn : 0
       const dcaExpired = dcaExpiresAt > 0 ? rfc3339(dcaExpiresAt * 1000) : ""
-      const minted = yield* mintApiKey(dcaToken)
+      const minted = yield* mintApiKey(dcaToken, mintUrl)
       const apiKey = str(minted?.api_key)
       const email = str(minted?.user_email)
       const name = str(minted?.user_full_name)

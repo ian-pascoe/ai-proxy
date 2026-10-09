@@ -6,8 +6,8 @@
  * checkSystemInstructionsWithSigningModeAt, relocateClaudeSystemPromptForCountTokens,
  * insertClaudeMidConversationSystemBlocks, prependClaudeSystemReminderBlocksToFirstUserMessage,
  * injectClaudeCodeCurrentDateInternal, injectClaudeCodeContextManagement, applyCloakingInternal),
- * helps/cloak_obfuscate.go, helps/cloak_utils.go. Not ported: the Fable/Opus-5.5 payload-rule reconcilers and the
- * system placement reconciliation that only matter when payload rules rewrite the model after cloaking.
+ * helps/cloak_obfuscate.go, helps/cloak_utils.go. The Fable/Opus-5.5 and system-placement reconcilers live in
+ * `reconcile.ts`.
  */
 import { createHash, randomBytes } from "node:crypto"
 import type { Config } from "../../config/schema.ts"
@@ -94,7 +94,7 @@ const isCurrentDateReminder = (text: string): boolean =>
 export const currentDateReminder = (date: string): string =>
   `<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is ${date}.\n\n      IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>\n`
 
-const firstUserMessageIndex = (body: JsonObject): number =>
+export const firstUserMessageIndex = (body: JsonObject): number =>
   isArr(body.messages) ? body.messages.findIndex((message) => str(get(message, "role")) === "user") : -1
 
 /** `claudeBillingFingerprintMessageText`. */
@@ -113,12 +113,12 @@ export const billingFingerprintMessageText = (body: JsonObject): string => {
   return ""
 }
 
-interface ForwardedBlock {
+export interface ForwardedBlock {
   readonly text: string
   readonly cacheControl: JsonObject | undefined
 }
 
-const collectForwardedBlocks = (system: Json | undefined): ForwardedBlock[] => {
+export const collectForwardedBlocks = (system: Json | undefined): ForwardedBlock[] => {
   const blocks: ForwardedBlock[] = []
   const push = (text: string, cacheControl?: JsonObject): void => {
     if (text.trim() === "" || isClaudeCodeAttributionSystemText(text) || text === CLAUDE_CODE_IDENTITY) return
@@ -165,7 +165,7 @@ const hasAdvisorHistory = (body: JsonObject): boolean => {
   return false
 }
 
-const messageContentText = (content: Json | undefined): string => {
+export const messageContentText = (content: Json | undefined): string => {
   if (typeof content === "string") return content
   if (!isArr(content)) return ""
   return content
@@ -209,7 +209,11 @@ const callerSystemReminder = (text: string): string =>
   `<system-reminder>\n${text}${text.endsWith("\n") ? "" : "\n"}</system-reminder>`
 
 /** `prependClaudeSystemReminderBlocksToFirstUserMessage`. */
-const prependSystemReminderBlocks = (body: JsonObject, blocks: readonly ForwardedBlock[], explicit: boolean): void => {
+export const prependSystemReminderBlocks = (
+  body: JsonObject,
+  blocks: readonly ForwardedBlock[],
+  explicit: boolean
+): void => {
   const firstUser = firstUserMessageIndex(body)
   if (firstUser < 0 || blocks.length === 0 || !isArr(body.messages)) return
   const message = body.messages[firstUser] as JsonObject
@@ -616,7 +620,7 @@ export const applyCloaking = (request: CloakRequest): CloakResult => {
 }
 
 /** `applyClaudeCloakThinkingDisplay`: progress-display models show `updates` unless the caller chose. */
-const applyThinkingDisplay = (body: JsonObject): void => {
+export const applyThinkingDisplay = (body: JsonObject): void => {
   if (get(body, "thinking.display") !== undefined || !usesProgressDisplay(str(body.model))) return
   const type = str(get(body, "thinking.type")).trim().toLowerCase()
   if (type !== "adaptive" && type !== "enabled") return

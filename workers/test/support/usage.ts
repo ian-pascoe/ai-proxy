@@ -1,20 +1,30 @@
 // Helpers for the usage tests: the D1 schema (the real migration file) and sample records.
 import { env } from "cloudflare:workers"
-import migration from "../../migrations/0001_usage_records.sql?raw"
+import initial from "../../migrations/0001_usage_records.sql?raw"
+import sessions from "../../migrations/0002_usage_sessions.sql?raw"
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts"
 
-/** Applies the checked-in migration to the test D1 database (idempotent) and empties the table. */
-export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Database> => {
-  const statements = migration
+const statementsOf = (sql: string): string[] =>
+  sql
     .split("\n")
     .filter((line) => !line.trim().startsWith("--"))
     .join("\n")
     .split(";")
     .map((statement) => statement.trim())
     .filter((statement) => statement !== "")
-  await db.batch(
-    statements.map((statement) => db.prepare(statement.replace(/^CREATE (TABLE|INDEX)/, "CREATE $1 IF NOT EXISTS")))
-  )
+
+/**
+ * Applies the checked-in migrations to the test D1 database (idempotent) and empties the table. `ALTER TABLE ... ADD
+ * COLUMN` has no IF NOT EXISTS, so a duplicate-column failure of an already migrated database is ignored.
+ */
+export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Database> => {
+  for (const statement of [...statementsOf(initial), ...statementsOf(sessions)]) {
+    try {
+      await db.prepare(statement.replace(/^CREATE (TABLE|INDEX)/, "CREATE $1 IF NOT EXISTS")).run()
+    } catch (error) {
+      if (!/duplicate column name/i.test(String(error))) throw error
+    }
+  }
   await db.prepare("DELETE FROM usage_records").run()
   return db
 }

@@ -6,6 +6,7 @@
  * (`migrations/0001_usage_records.sql`) and the "queue" is the set of records not yet exported.
  */
 import { authIndexOf } from "../management/auth-index.ts"
+import { normalizeToCanonicalUuid } from "../session-routing/identity.ts"
 import { ensureTokenBreakdown, TOKEN_ACCOUNTING_SCHEMA_VERSION, type TokenBreakdown } from "./accounting.ts"
 import type { UsageRecord } from "./record.ts"
 
@@ -37,6 +38,9 @@ export interface UsageRow {
   reasoning_effort: string | null
   service_tier: string
   response_service_tier: string | null
+  session_id: string | null
+  parent_session_id: string | null
+  base_url: string | null
   input_tokens: number
   output_tokens: number
   reasoning_tokens: number
@@ -85,6 +89,9 @@ const INSERT_COLUMNS = [
   "reasoning_effort",
   "service_tier",
   "response_service_tier",
+  "session_id",
+  "parent_session_id",
+  "base_url",
   "input_tokens",
   "output_tokens",
   "reasoning_tokens",
@@ -142,6 +149,9 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     reasoning_effort: trimmedOrNull(record.reasoningEffort),
     service_tier: record.serviceTier,
     response_service_tier: trimmedOrNull(detail.responseServiceTier),
+    session_id: trimmedOrNull(record.sessionId),
+    parent_session_id: trimmedOrNull(record.parentSessionId),
+    base_url: trimmedOrNull(record.baseUrl),
     input_tokens: detail.inputTokens,
     output_tokens: detail.outputTokens,
     reasoning_tokens: detail.reasoningTokens,
@@ -175,6 +185,14 @@ export const insertUsageRecord = async (db: D1Database, record: UsageRecord): Pr
 // ---------------------------------------------------------------------------------------------------------------
 // JSON shape (redisqueue queuedUsageDetail)
 // ---------------------------------------------------------------------------------------------------------------
+
+/** `session_id`/`parent_session_id` of the export: canonical UUIDs, the parent only when it differs (redisqueue). */
+const sessionPayload = (row: UsageRow): Record<string, string> => {
+  const sessionId = normalizeToCanonicalUuid(row.session_id ?? "")
+  if (sessionId === "") return {}
+  const parent = normalizeToCanonicalUuid(row.parent_session_id ?? "")
+  return { session_id: sessionId, ...(parent === "" || parent === sessionId ? {} : { parent_session_id: parent }) }
+}
 
 /** The export JSON of one record. `api_key` carries the Access principal id (the Go client API key). */
 export const rowToPayload = (row: UsageRow): Record<string, unknown> => {
@@ -227,6 +245,8 @@ export const rowToPayload = (row: UsageRow): Record<string, unknown> => {
     api_key: row.principal_id,
     request_id: row.request_id,
     ...(row.trace_id === null ? {} : { trace_id: row.trace_id }),
+    ...sessionPayload(row),
+    ...(row.base_url === null ? {} : { base_url: row.base_url }),
     reasoning_effort: row.reasoning_effort ?? "",
     service_tier: row.service_tier,
     ...(row.response_service_tier === null ? {} : { response_service_tier: row.response_service_tier }),

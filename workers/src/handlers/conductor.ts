@@ -41,6 +41,7 @@ import type { ExecutionContext, ExecutorOptions, ExecutorRequest, ProviderExecut
 import type { Json } from "../json/index.ts"
 import { holdInvocation, WorkerEnv } from "../platform/env.ts"
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts"
+import type { SessionRouting } from "../session-routing/routing.ts"
 import { UsageReporter } from "../usage/reporter.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
@@ -79,6 +80,21 @@ export const jitteredWait = (waitMs: number, maxWaitMs: number, unit: number): n
   return range <= 0 ? waitMs : waitMs + unit * range
 }
 
+/** Usage fields of the session and upstream base URL of an attempt (`syncMetadataSessionToContext`, `BaseURL`). */
+const usageSession = (routing: SessionRouting | undefined, picked: PickResult, credential: CredentialSnapshot) => {
+  const session = picked.session ?? routing?.usageSession
+  const baseUrl = (credential.attributes["base_url"] ?? "").trim() || stringOf(credential.metadata["base_url"])
+  return {
+    ...(session === undefined ? {} : { sessionId: session.id }),
+    ...(session?.parentId === undefined || session.parentId === session.id
+      ? {}
+      : { parentSessionId: session.parentId }),
+    ...(baseUrl === "" ? {} : { baseUrl })
+  }
+}
+
+const stringOf = (value: unknown): string => (typeof value === "string" ? value.trim() : "")
+
 /** What the conductor needs to know about the request (built by `handlers/execute.ts`). */
 export interface Prepared {
   readonly config: Config
@@ -93,6 +109,8 @@ export interface Prepared {
   readonly callerScope: string
   readonly endpoint: string
   readonly session: PickSession | undefined
+  /** LCP fingerprints, derived identity and usage session (see `session-routing/routing.ts`). */
+  readonly routing?: SessionRouting
   readonly pinnedId?: string | undefined
   /** Skip free-plan Codex credentials. */
   readonly disallowFreeAuth?: boolean
@@ -214,7 +232,8 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
             ...(prepared.options.metadata.reasoningEffort !== undefined
               ? { reasoningEffort: prepared.options.metadata.reasoningEffort }
               : {}),
-            requestedAt: now
+            requestedAt: now,
+            ...usageSession(prepared.routing, picked, credential)
           })
         yield* noteSelection(credential.id, credential.provider, parseSuffix(upstreamModel).modelName)
         const { modelInfo, lookup } = yield* capabilities.thinking(parseSuffix(upstreamModel).modelName, credential)
@@ -331,6 +350,10 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               retryRound: round,
               requestRetry: settings.requestRetry,
               ...(prepared.session === undefined ? {} : { session: prepared.session }),
+              ...(prepared.routing?.lcp === undefined ? {} : { lcp: prepared.routing.lcp }),
+              ...(prepared.routing?.fallbackSession === undefined
+                ? {}
+                : { fallbackSession: prepared.routing.fallbackSession }),
               ...(prepared.pinnedId === undefined ? {} : { pinnedId: prepared.pinnedId }),
               ...(prepared.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
               ...(prepared.preferWebsockets === true ? { preferWebsockets: true } : {}),

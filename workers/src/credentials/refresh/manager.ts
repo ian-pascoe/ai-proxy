@@ -64,6 +64,8 @@ export interface RefreshManagerOptions {
   readonly retryDelayMs?: (attempt: number) => number
   /** Upper bound of one refresh including retries (credential acquisition only; see `REQUEST_TIMEOUT`). */
   readonly timeoutMs?: number
+  /** `META_MINT_URL` override of the Meta key-mint endpoint. */
+  readonly metaMintUrl?: string
 }
 
 export type RefreshFailureCode =
@@ -132,6 +134,7 @@ export class RefreshManager {
   readonly #now: () => number
   readonly #workers: () => number
   readonly #retryDelayMs: (attempt: number) => number
+  readonly #metaMintUrl: string | undefined
   readonly #timeoutMs: number
   readonly #inflight = new Map<string, Promise<RefreshResult>>()
   readonly #vertexInflight = new Map<string, Promise<Outcome<VertexToken>>>()
@@ -146,6 +149,7 @@ export class RefreshManager {
     this.#now = options.now ?? Date.now
     this.#workers = options.workers ?? (() => DEFAULT_WORKERS)
     this.#retryDelayMs = options.retryDelayMs ?? defaultRetryDelay
+    this.#metaMintUrl = options.metaMintUrl
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   }
 
@@ -354,7 +358,8 @@ export class RefreshManager {
             metadata: structuredClone(credential.metadata),
             attributes: credential.attributes,
             now,
-            retryDelayMs: this.#retryDelayMs
+            retryDelayMs: this.#retryDelayMs,
+            metaMintUrl: this.#metaMintUrl
           })
     const outcome = await this.#run(effect)
     const finishedAt = this.#now()

@@ -82,9 +82,11 @@ export class ControlPlane extends DurableObject<Env> {
         clear: () => ctx.storage.deleteAlarm()
       },
       http: FetchHttpClient.layer,
+      metaMintUrl: env.META_MINT_URL,
       workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"]
     })
     this.#oauth = makeOAuthService({
+      metaMintUrl: env.META_MINT_URL,
       sessions: new OAuthSessions(new SqliteSessionTable(ctx.storage.sql)),
       sink: {
         get: (name) => this.#pool.refreshTarget(name)?.credential.metadata,
@@ -181,9 +183,16 @@ export class ControlPlane extends DurableObject<Env> {
     return result
   }
 
-  /** Imports a Go auth JSON file verbatim (an existing credential of the same name is replaced). */
-  async importAuthFile(name: string, content: string | JsonObject): Promise<UpsertResult> {
-    const result = this.#pool.upsert(name, content, { mergeExisting: false })
+  /**
+   * Imports a Go auth JSON file verbatim (an existing credential of the same name is replaced; `mergeExisting` keeps
+   * its user settings like a re-login).
+   */
+  async importAuthFile(
+    name: string,
+    content: string | JsonObject,
+    options: { readonly mergeExisting?: boolean } = {}
+  ): Promise<UpsertResult> {
+    const result = this.#pool.upsert(name, content, { mergeExisting: options.mergeExisting === true })
     if (result.ok) await this.#rearm()
     return result
   }

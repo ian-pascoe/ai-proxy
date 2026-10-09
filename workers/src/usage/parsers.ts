@@ -90,7 +90,7 @@ export const parseClaudeStreamUsage = (line: string): UsageDetail | undefined =>
 // ---------------------------------------------------------------------------------------------------------------
 
 /** `parseGeminiFamilyUsageDetail`: `candidatesTokenCount` excludes `thoughtsTokenCount`. */
-const parseGeminiFamilyNode = (node: Json): UsageDetail => {
+export const parseGeminiFamilyNode = (node: Json): UsageDetail => {
   const cached = tokenInt(get(node, "cachedContentTokenCount"))
   const toolUse = tokenInt(firstExisting(node, "toolUsePromptTokenCount", "tool_use_prompt_token_count"))
   const input = safeSum(tokenInt(get(node, "promptTokenCount")), toolUse)
@@ -130,11 +130,14 @@ const finishSeparateReasoning = (detail: UsageDetail, inputValid: boolean): Usag
 
 const geminiNode = (root: Json | undefined): Json | undefined => firstExisting(root, "usageMetadata", "usage_metadata")
 
-/** `ParseGeminiUsage` over a non-stream response body. */
-export const parseGeminiUsage = (body: string): UsageDetail => {
-  const node = geminiNode(tryParseJson(body))
+/** `ParseGeminiUsage` over a parsed non-stream response body. */
+export const parseGeminiUsageBody = (root: Json | undefined): UsageDetail => {
+  const node = geminiNode(root)
   return node === undefined ? emptyUsageDetail : parseGeminiFamilyNode(node)
 }
+
+/** `ParseGeminiUsage` over a non-stream response body. */
+export const parseGeminiUsage = (body: string): UsageDetail => parseGeminiUsageBody(tryParseJson(body))
 
 /** `ParseGeminiStreamUsage`: zero placeholders (`usageMetadata` without counts) are skipped. */
 export const parseGeminiStreamUsage = (line: string): UsageDetail | undefined => {
@@ -170,7 +173,7 @@ export const parseAntigravityStreamUsage = (line: string): UsageDetail | undefin
 const exists = (value: Json | undefined): boolean => value !== undefined
 
 /** `parseInteractionsUsageDetail`. */
-const parseInteractionsNode = (node: Json): UsageDetail => {
+export const parseInteractionsNode = (node: Json): UsageDetail => {
   const cacheRead = firstExisting(node, "cache_read_tokens", "cacheReadTokens")
   const toolUse = tokenInt(
     firstExisting(node, "tool_use_tokens", "total_tool_use_tokens", "toolUseTokens", "totalToolUseTokens")
@@ -217,6 +220,9 @@ const parseInteractionsRoot = (root: Json | undefined): UsageDetail => {
   const geminiShaped = exists(get(node, "promptTokenCount")) || exists(get(node, "candidatesTokenCount"))
   return withTier(geminiShaped ? parseGeminiFamilyNode(node) : parseInteractionsNode(node), root)
 }
+
+/** `ParseInteractionsUsage` over a parsed non-stream response body. */
+export const parseInteractionsUsageBody = (root: Json | undefined): UsageDetail => parseInteractionsRoot(root)
 
 /** `ParseInteractionsUsage` over a non-stream response body. */
 export const parseInteractionsUsage = (body: string): UsageDetail => parseInteractionsRoot(tryParseJson(body))

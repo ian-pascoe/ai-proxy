@@ -13,6 +13,7 @@ import { HttpRouter } from "effect/http"
 import { isJsonObject } from "../json/index.ts"
 import { isValidOAuthState } from "../oauth/names.ts"
 import { bodyJson, controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts"
+import { oauthImportRoutes } from "./oauth-import.ts"
 
 const BASE = "/v8/management/oauth"
 
@@ -112,5 +113,6 @@ export const oauthRoutes = [
   HttpRouter.route("GET", `${BASE}/status`, handled(loginStatus)),
   HttpRouter.route("DELETE", `${BASE}/session`, handled(cancelLogin)),
   HttpRouter.route("POST", `${BASE}/callback`, handled(postCallback)),
-  HttpRouter.route("GET", `${BASE}/callback`, handled(getCallback))
+  HttpRouter.route("GET", `${BASE}/callback`, handled(getCallback)),
+  ...oauthImportRoutes
 ]

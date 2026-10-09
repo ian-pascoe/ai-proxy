@@ -19,7 +19,8 @@
  */
 import { Context, type Effect } from "effect"
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts"
-import type { Lease, ReportResult } from "../credentials/selection/types.ts"
+import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts"
+import type { LcpPrepared } from "../session-routing/canonical.ts"
 import type { WorkerEnv } from "../platform/env.ts"
 import type { ExecutionError } from "./errors.ts"
 
@@ -62,6 +63,10 @@ export interface PickRequest {
   readonly callerScope: string
   /** Session identity for affinity/stickiness, when the request carries one. */
   readonly session?: PickSession
+  /** Conversation fingerprints for the LCP matcher (requests without an explicit `session`). */
+  readonly lcp?: LcpPrepared
+  /** Derived content-hash / message-hash identity, used when the LCP matcher does not apply. */
+  readonly fallbackSession?: PickSession
   /** Credentials already tried in this retry round. */
   readonly excludedIds?: ReadonlyArray<string>
   /** Zero-based retry round (credentials whose own `request-retry` is below it are skipped). */
@@ -103,6 +108,8 @@ export interface PickResult {
   readonly lease: Lease
   /** Lease id for logs. */
   readonly leaseId: string
+  /** The session identity the LCP matcher settled on (usage `session_id`/`parent_session_id`). */
+  readonly session?: ResolvedSession
 }
 
 /** Outcome of one upstream attempt (the wire type of `ControlPlane.report`). */

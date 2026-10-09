@@ -6,8 +6,9 @@
  * the HTTP exchange, error classification and response translation.
  *
  * Not ported (documented in docs/workers-port/ARCHITECTURE.md): the uTLS/header-order fingerprint (impossible with
- * Workers `fetch`, see workers/README.md), Thread continuation alias state, the device-profile stabiliser, the
- * proxies and OAuth refresh (OAuth slice). Responses compaction (`responses/compact` and `compaction_trigger`) runs a
+ * Workers `fetch`, see workers/README.md) and per-credential proxies. Thread continuation alias state
+ * (`thread.ts`), the device-profile stabiliser (`device-profile.ts`) and `rebuild-mid-system-message`
+ * (`mid-system.ts`) run inside the pipeline. Responses compaction (`responses/compact` and `compaction_trigger`) runs a
  * summary request through this executor and seals the answer into a capsule (`compaction.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
@@ -47,6 +48,8 @@ import {
   prepareClaudeCompactionSummaryPayload
 } from "./compaction.ts"
 import { type ContinuityStore, makeSessionStateContinuityStore } from "./continuity.ts"
+import { type DeviceProfileStore, makeSessionStateDeviceProfileStore } from "./device-profile.ts"
+import { type ToolAliasStore, makeSessionStateToolAliasStore } from "./thread.ts"
 import { type ClaudeUpstreamProfile, restoreResponseModel } from "./profile.ts"
 import { restoreToolNamesInResponse, AliasRestoreError, restoreToolNamesInStreamLine } from "./mcp-alias.ts"
 import {
@@ -70,11 +73,15 @@ import { countClaudeInputTokens } from "../../tokenizer/claude-input.ts"
 
 const defaultContinuity = makeSessionStateContinuityStore()
 const defaultReplay = makeSessionStateReplayStore()
+const defaultDeviceProfiles = makeSessionStateDeviceProfileStore()
+const defaultToolAliases = makeSessionStateToolAliasStore()
 
 export interface ClaudeExecutorOptions {
   readonly translators?: TranslatorRegistry
   readonly continuity?: ContinuityStore
   readonly replay?: ThinkingReplayStore
+  readonly deviceProfiles?: DeviceProfileStore
+  readonly toolAliases?: ToolAliasStore
   /** Injected clock for date reminders (tests). */
   readonly now?: () => Date
   /** Delegating provider profile (Kimi embeds this executor with its own model naming). */
@@ -159,6 +166,8 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     registry,
     continuity: executorOptions.continuity ?? defaultContinuity,
     replay: executorOptions.replay ?? defaultReplay,
+    deviceProfiles: executorOptions.deviceProfiles ?? defaultDeviceProfiles,
+    toolAliases: executorOptions.toolAliases ?? defaultToolAliases,
     now: executorOptions.now ?? (() => new Date()),
     profile: executorOptions.profile
   }
@@ -208,14 +217,21 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     ).pipe(Effect.asVoid)
   }
 
+  /** `commitClaudeContinuity` + `rememberClaudeOAuthToolAliases`: what a completed response records. */
   const commitContinuity = (
     prepared: PreparedClaudeRequest,
     messageId: string,
-    requestId: string
+    requestId: string,
+    callerScope: string
   ): Effect.Effect<void> =>
-    prepared.continuity !== undefined && messageId !== ""
-      ? services.continuity.commit(prepared.continuity, messageId, requestId, prepared.promptId)
-      : Effect.void
+    Effect.all([
+      prepared.continuity !== undefined && messageId !== ""
+        ? services.continuity.commit(prepared.continuity, messageId, requestId, prepared.promptId)
+        : Effect.void,
+      prepared.threadAliasKeys === undefined
+        ? Effect.void
+        : services.toolAliases.save(callerScope, prepared.threadAliasKeys(messageId), prepared.reverseMap)
+    ]).pipe(Effect.asVoid)
 
   const executeMessages = Effect.fnUntraced(function* (
     context: ExecutionContext,
@@ -277,12 +293,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       const message = lines
         .map((line) => tryParseJson(line.trim().startsWith("data:") ? line.trim().slice(5).trim() : ""))
         .find((payload) => str(get(payload, "type")) === "message_start")
-      yield* commitContinuity(prepared, str(get(message, "message.id")).trim(), requestId)
+      yield* commitContinuity(prepared, str(get(message, "message.id")).trim(), requestId, options.metadata.callerScope)
       replayContent = reader.accumulator.content()
     } else {
       const parsed = tryParseJson(data)
       context.usage.observeResponseModel(responseModelOf(parsed))
-      yield* commitContinuity(prepared, str(get(parsed, "id")).trim(), requestId)
+      yield* commitContinuity(prepared, str(get(parsed, "id")).trim(), requestId, options.metadata.callerScope)
       if (prepared.reverseMap.size > 0 && isObj(parsed)) {
         yield* Effect.try({
           try: () => restoreToolNamesInResponse(parsed, prepared.reverseMap),
@@ -466,7 +482,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       Stream.onExit((exit) =>
         exit._tag === "Success" && reader.completed
           ? Effect.andThen(
-              commitContinuity(prepared, reader.messageId, requestId),
+              commitContinuity(prepared, reader.messageId, requestId, options.metadata.callerScope),
               finishReplay(prepared, reader.accumulator.content())
             )
           : finishReplay(prepared, undefined)

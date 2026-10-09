@@ -64,27 +64,91 @@ export const pkcs1ToPkcs8 = (pkcs1: Uint8Array): Uint8Array =>
 // oxlint-disable-next-line no-control-regex
 const ANSI_ESCAPE = /\u001b(?:\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\[[0-?]*[ -/]*[@-~]|.)/g
 
-/**
- * `sanitizePrivateKey` + `rebuildPEM`: tolerates CRLF, ANSI escapes and broken line wrapping, then returns the PKCS#8
- * DER (PKCS#1 `RSA PRIVATE KEY` blocks are converted). `undefined` when no usable RSA key block is found.
- */
-export const privateKeyToPkcs8 = (raw: string): Uint8Array | undefined => {
+type PemBody =
+  | { readonly ok: true; readonly kind: "RSA PRIVATE KEY" | "PRIVATE KEY"; readonly der: Uint8Array }
+  | { readonly ok: false; readonly message: string }
+
+/** `sanitizePrivateKey` + `rebuildPEM`: tolerates CRLF, ANSI escapes and broken line wrapping. */
+const decodePemBody = (raw: string): PemBody => {
   const text = raw.replace(ANSI_ESCAPE, "").replace(/\r\n?/g, "\n")
   const kind = text.includes("RSA PRIVATE KEY") ? "RSA PRIVATE KEY" : "PRIVATE KEY"
   const begin = `-----BEGIN ${kind}-----`
   const end = `-----END ${kind}-----`
   const start = text.indexOf(begin)
   const stop = text.indexOf(end)
-  if (start < 0 || stop <= start) return undefined
+  if (start < 0 || stop <= start) return { ok: false, message: "missing pem markers" }
   const payload = text.slice(start + begin.length, stop).replace(/[^A-Za-z0-9+/=]/g, "")
-  if (payload === "") return undefined
-  let der: Uint8Array
+  if (payload === "") return { ok: false, message: "private_key base64 payload empty" }
   try {
-    der = Uint8Array.from(atob(payload), (char) => char.charCodeAt(0))
+    return { ok: true, kind, der: Uint8Array.from(atob(payload), (char) => char.charCodeAt(0)) }
   } catch {
-    return undefined
+    return { ok: false, message: "private_key base64 decode failed" }
   }
-  return kind === "RSA PRIVATE KEY" ? pkcs1ToPkcs8(der) : der
+}
+
+/**
+ * The PKCS#8 DER of a (possibly damaged) PEM private key (PKCS#1 `RSA PRIVATE KEY` blocks are converted).
+ * `undefined` when no usable RSA key block is found.
+ */
+export const privateKeyToPkcs8 = (raw: string): Uint8Array | undefined => {
+  const body = decodePemBody(raw)
+  if (!body.ok) return undefined
+  return body.kind === "RSA PRIVATE KEY" ? pkcs1ToPkcs8(body.der) : body.der
+}
+
+/** Reads one DER element at `offset`: `[tag, contentStart, contentEnd]`. */
+const readDer = (bytes: Uint8Array, offset: number): [number, number, number] | undefined => {
+  const tag = bytes[offset]
+  const first = bytes[offset + 1]
+  if (tag === undefined || first === undefined) return undefined
+  let length = first
+  let start = offset + 2
+  if (first >= 0x80) {
+    const count = first & 0x7f
+    if (count === 0 || count > 4) return undefined
+    length = 0
+    for (let index = 0; index < count; index += 1) length = length * 256 + (bytes[start + index] ?? 0)
+    start += count
+  }
+  return start + length > bytes.length ? undefined : [tag, start, start + length]
+}
+
+/** The PKCS#1 `RSAPrivateKey` inside a PKCS#8 `PrivateKeyInfo` (`SEQUENCE { INTEGER, SEQUENCE, OCTET STRING }`). */
+const pkcs8ToPkcs1 = (pkcs8: Uint8Array): Uint8Array | undefined => {
+  const outer = readDer(pkcs8, 0)
+  if (outer === undefined || outer[0] !== 0x30) return undefined
+  const version = readDer(pkcs8, outer[1])
+  if (version === undefined || version[0] !== 0x02) return undefined
+  const algorithm = readDer(pkcs8, version[2])
+  if (algorithm === undefined || algorithm[0] !== 0x30) return undefined
+  const key = readDer(pkcs8, algorithm[2])
+  return key === undefined || key[0] !== 0x04 ? undefined : pkcs8.subarray(key[1], key[2])
+}
+
+export type NormalizedPrivateKey =
+  { readonly ok: true; readonly pem: string } | { readonly ok: false; readonly message: string }
+
+/**
+ * `sanitizePrivateKey`: validates the key as RSA and re-encodes it as a canonical `RSA PRIVATE KEY` PEM block (what
+ * `NormalizeServiceAccountMap` stores). Messages follow the Go errors.
+ */
+export const normalizePrivateKey = async (raw: string): Promise<NormalizedPrivateKey> => {
+  const body = decodePemBody(raw.trim())
+  if (!body.ok) return { ok: false, message: `private_key is not valid pem: ${body.message}` }
+  const pkcs1 = body.kind === "RSA PRIVATE KEY" ? body.der : pkcs8ToPkcs1(body.der)
+  if (pkcs1 === undefined) return { ok: false, message: "private_key is not an RSA key" }
+  try {
+    await crypto.subtle.importKey("pkcs8", pkcs1ToPkcs8(pkcs1), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, [
+      "sign"
+    ])
+  } catch {
+    return { ok: false, message: `private_key invalid ${body.kind === "RSA PRIVATE KEY" ? "rsa" : "pkcs8"}` }
+  }
+  const base64 =
+    btoa(String.fromCharCode(...pkcs1))
+      .match(/.{1,64}/g)
+      ?.join("\n") ?? ""
+  return { ok: true, pem: `-----BEGIN RSA PRIVATE KEY-----\n${base64}\n-----END RSA PRIVATE KEY-----\n` }
 }
 
 // --- JWT ---------------------------------------------------------------------------------------------------------

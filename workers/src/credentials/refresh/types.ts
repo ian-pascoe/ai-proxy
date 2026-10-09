@@ -21,6 +21,8 @@ export interface RefreshContext {
   readonly now: number
   /** Delay before retry `attempt` (1-based) in ms. Go sleeps `attempt` seconds; tests inject `0`. */
   readonly retryDelayMs: (attempt: number) => number
+  /** `META_MINT_URL` override of the Meta key-mint endpoint (Go reads the process environment). */
+  readonly metaMintUrl?: string | undefined
 }
 
 /** An effect that talks to an upstream through the injected `HttpClient`. */

@@ -79,6 +79,11 @@ export interface UsageRecord {
   readonly responseModel?: string
   readonly reasoningEffort?: string
   readonly serviceTier: string
+  /** Session identity (bounded id, e.g. `claude:<uuid>`, `derived:ctx:v1:<hash>`, `lcp:v1:<hash>`). */
+  readonly sessionId?: string
+  readonly parentSessionId?: string
+  /** Configured upstream base URL of the credential (Go `Record.BaseURL`). */
+  readonly baseUrl?: string
 }
 
 /** gjson `.Int()` for numeric nodes; anything else counts as 0. */

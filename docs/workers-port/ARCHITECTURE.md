@@ -182,8 +182,8 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   is (Go only discovers a cooling pool when it filters the execution models). When the wait exceeds the limit the plan
   carries the recovery time so the Worker can answer with `Retry-After`.
 - Deviations from Go: several providers are selected from one ID-sorted union (no per-provider slot cursor); alias groups
-  of the session cache are independent keys; the LCP conversation matcher is not ported (`PickRequest.session` carries the
-  id extracted by `handlers/session.ts`).
+  of the session cache are independent keys (the LCP matcher is ported, see Sessions below). `PickRequest.session` carries the
+  explicit id extracted by `handlers/session.ts`; `lcp` and `fallbackSession` carry the content-based identities.
 
 ## Request pipeline
 
@@ -262,8 +262,25 @@ Core contracts every provider slice implements (Go references in each module hea
   then `snapshot.lookupModelInfo`) and hands them to the executor as `ExecutorRequest.modelInfo` plus
   `modelLookup = snapshot.lookupModelInfo`, which executors pass to `Thinking.apply`.
 - **Sessions**: `handlers/session.ts` ports `session.ExtractSessionInfo` (headers, Claude `metadata.user_id`, body fields)
-  and feeds `PickRequest.session` together with the Access `callerScope`. Not ported: the derived content-hash identity and
-  the LCP conversation matcher, so requests without an explicit session marker are never bound.
+  and feeds `PickRequest.session` together with the Access `callerScope`. Requests without an explicit marker are bound by
+  content (`src/session-routing/`, `routing.ts` = `prepareSessionRouting`, only when `routing.session-affinity` is on):
+  - **LCP conversation matcher** (`canonical.ts`, `matcher.ts`; Go `session/lcp.go`, `auth/selector.go pickLCP/OnResult`):
+    the request is reduced to canonical turns (five protocols, thinking tags/CRLF/timestamps/UUIDs of system text masked,
+    tool parts sorted, >16 KiB values sampled) and a SHA-256 fingerprint per turn. The `MerklePrefixMatcher` (bounded: 1024
+    turns, 4096 groups, 262144 prefixes, TTL = `session-affinity-ttl`) lives next to the affinity cache in the ControlPlane
+    pool: `pick` matches the longest known prefix (fork = divergence, compaction = shared tail after history reduction), binds
+    new sequences to the picked credential and returns the LCP identity (`PickResult.session`, used for usage records);
+    `report` touches the sequence on success or drops exactly that sequence on a credential-attributed failure (the lease
+    carries the sequence and the access generation, so a late failure cannot evict a refreshed binding). Namespace
+    `lcp:v1::<provider|mixed>::<model>::<callerScope>`; credential changes call `invalidateAuth`.
+  - **Derived identity** (`identity.ts`; Go `session.DeriveID`/`hasExplicitSession`): `derived:ctx:v1:<sha256>` over the
+    leading instructions and the first user input (only when no explicit marker exists); used when the LCP matcher does not
+    apply (no non-system turn) and recorded in usage even with affinity off. Last fallback: the FNV message hash of the first
+    system/user/assistant messages (`msg:<hex>`, short hash as parent).
+  - Deviations: the Go JSON `Raw` text is replaced by the compact re-serialisation of the parsed body (sampling of >16 KiB JSON
+    parts and `original_size` are measured on it), a sparse sample cut inside a multi-byte character decodes to U+FFFD, and
+    execution-session (WebSocket) metadata ids are not consulted. Go parity is tested with `tools/fixturegen/session`
+    (`test/fixtures/session.json`: turns, fingerprints, derive ids, matcher scenarios).
 
 ## Codex provider and Responses API (`src/executor/codex/`, `src/translator/codex/`, `src/handlers/responses/`)
 
@@ -558,9 +575,9 @@ HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in
 
 Deviations from Go: credentials without a refresh token are never scheduled (Go loops every 30 s on an unchanged auth);
 Codex keeps `email`/`plan_type` when the new `id_token` lacks them; a cached xAI `token_endpoint` must be an https x.ai
-URL; Kimi/Claude device/uTLS headers are constants/subsets; `META_MINT_URL` and Devin's metadata refresh (protobuf quota
-probe, never scheduled) are not ported; Claude device-id/profile preparation belongs to its executor slice (use
-`patchCredentialMetadata`); Antigravity project discovery and the credits probe run in the Antigravity executor.
+URL; Kimi/Claude device/uTLS headers are constants/subsets; Devin's metadata refresh (protobuf quota probe, never
+scheduled) is not ported; `META_MINT_URL` is the Worker var of the same name (`RefreshContext.metaMintUrl`, also used by the Meta
+login); Claude device-profile preparation is the executor's `stabilize-device-profile` store (below); Antigravity project discovery and the credits probe run in the Antigravity executor.
 
 ## Claude provider (`src/executor/claude/`, `src/translator/claude/`)
 
@@ -587,6 +604,24 @@ Deviations from Go (all deliberate, documented in code headers):
 - No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is dropped on import.
 - Device-profile stabilisation, Fable/Opus-5.5 context-management reconcilers, `rebuildMidSystem` and Kimi attribution
   are not ported; the continuity and thinking-replay stores live in the `SessionState` DO (see below): `begin` = one read (which
+
+- No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is parsed but not enforced.
+- **Device-profile stabiliser** (`device-profile.ts`, `upstream.claude.header-defaults.stabilize-device-profile`; Go
+  `helps/claude_device_profile.go` local mode): confirmed Claude Code clients contribute their user agent / Stainless
+  versions (only when they equal the configured baseline tuple; the platform is always pinned to the baseline), stored per
+  credential and CLI entrypoint scope in the `SessionState` DO (sliding 7 d TTL, newer CLI version upgrades, compare-and-swap);
+  unconfirmed clients get the baseline. The Home KV mode is not ported. Go parity: `tools/fixturegen/claudeprofile`.
+- **`rebuild-mid-system-message`** (`mid-system.ts`): `role: "system"` messages are folded into `system` right after the
+  thinking step (messages, count_tokens and the local estimator), enabled per `api-keys.claude` entry or the
+  `rebuild_mid_system_message` credential attribute.
+- **Thread continuation** (`thread.ts`): `thread.type = "continue"` requests without `tools` restore the MCP tool aliases saved
+  for `message:<previous_message_id>` / `message:<new id>` (SessionState DO per caller scope, 1024 entries, 7 d TTL; Go: executor
+  memory); an unknown previous message is the request-scoped 404 `not_found_error`.
+- **Post-payload reconcilers** (`reconcile.ts`: Fable 5.1 / Opus 5.5 fallbacks, `thinking.display`, `# Reporting outcomes`
+  block, system-turn placement) are ported and tested against the Go cases but, exactly like in Go, not called by the
+  executors: payload rules are the final mutation, nothing may rewrite the body after them. `experimental-cch-signing` is
+  accepted and ignored (Go keeps it for compatibility; signing is automatic).
+- Kimi attribution stripping is in the pipeline (`stripAttributionSystem`); the continuity and thinking-replay stores live in the `SessionState` DO (see below): `begin` = one read (which
   slides the 1 h TTL) plus one write only when the prompt id or pinned date changed, `commit` = one compare-and-swap write using
   the generation carried in `ContinuityState` (`planContinuity` computes the arguments, the store is awaited before the
   synchronous `applyCloaking`).
@@ -619,7 +654,7 @@ Deviations from Go (all deliberate, documented in code headers):
   `Api-Revision` header) and `vertex` (API key against the project-less host, or a service account against the regional
   `projects/<id>/locations/<loc>` endpoint; Imagen models go through `:predict` with the request/response converters).
   Request shaping (`shaping.ts`: model/suffix handling, `maxOutputTokens` cap, content-turn splitting) and usage parsing
-  (`usage.ts`: `usageMetadata`/Interactions usage, intermediate-usage filtering) follow the Go executors. Payload rules
+  (`usage.ts`: `usageMetadata`/Interactions usage with the v2 token breakdown - re-exported from `usage/parsers.ts` - and intermediate-usage filtering) follow the Go executors. Payload rules
   stay the last mutation of the body in every path (stream, count, Imagen, native Interactions).
 - **Routes**: `POST /v1beta/models/*` (`generateContent`, `streamGenerateContent`, `countTokens`, Gemini SSE or raw
   chunks for other `alt`s) and `POST /v1beta/interactions` (exactly one of `model`/`agent`; agent requests are forced to
@@ -764,7 +799,10 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `is*TokenEvent` into their stream loops to refine it).
 - **Persistence** (`d1.ts`, `d1-sink.ts`, `migrations/0001_usage_records.sql`): table `usage_records` (primary key =
   attempt `request_id`, `trace_id` = inbound request id, raw token columns plus the `acct_*` breakdown columns,
-  `exported_at` for the queue). `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
+  `exported_at` for the queue; `migrations/0002_usage_sessions.sql` adds `session_id`, `parent_session_id` and `base_url`: the
+  explicit, derived (`derived:ctx:v1:...`) or LCP (`lcp:v1:...`) session identity of the attempt - the LCP one comes back
+  from `pick` - and the credential's configured upstream base URL; the queue export projects the session ids to canonical
+  UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). Apply the schema with `wrangler d1 migrations apply cliproxy-usage`
@@ -1106,6 +1144,8 @@ Deviations from Go: the Antigravity login uses the Go fallback client version `2
 _Antigravity provider_) and project discovery runs inside the login (non-fatal; the executor repeats it when `project_id` is missing); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
 exchange errors include the (scrubbed) upstream status/body like Go but cap it at 512 chars; device-flow states carry a random
 suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
-Claude provider). Not ported: `POST /oauth/import?provider=vertex` (belongs to the Vertex/Gemini slice; service-account files can be
-uploaded through `POST /credentials`), plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go
+Claude provider). `POST /v8/management/oauth/import?provider=vertex` (`management/oauth-import.ts`, Go `ImportVertexCredential`)
+takes a multipart service-account `file` (+ `location`, default `us-central1`), re-encodes the key as an RSA PKCS#1 PEM
+(`normalizePrivateKey`, parity with `NormalizeServiceAccountMap` in `test/fixtures/session.json`; error texts of invalid keys
+differ) and stores `vertex-<project>.json` merged over an existing file. Not ported: plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go
 server can still be imported through management.

@@ -94,6 +94,28 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
                   ...(request.session.parentId === undefined ? {} : { parentId: request.session.parentId }),
                   ...(request.session.isFork === true ? { isFork: true } : {})
                 }
+              }),
+          ...(request.lcp === undefined
+            ? {}
+            : {
+                lcp: {
+                  callerScope: request.callerScope,
+                  fingerprints: request.lcp.fingerprints,
+                  minPrefixLength: request.lcp.minPrefixLength,
+                  tailFingerprints: request.lcp.tailFingerprints,
+                  envDigest: request.lcp.envDigest
+                }
+              }),
+          ...(request.fallbackSession === undefined
+            ? {}
+            : {
+                fallbackSession: {
+                  id: request.fallbackSession.id,
+                  callerScope: request.callerScope,
+                  ...(request.fallbackSession.parentId === undefined
+                    ? {}
+                    : { parentId: request.fallbackSession.parentId })
+                }
               })
         }
         const result = yield* Effect.tryPromise({ try: async () => await api(env).pick(wire), catch: unavailable })
@@ -116,7 +138,8 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
             forceMapping: route.forceMapping,
             stateModel: route.stateModel,
             pooled: route.pooled && request.selectionModel === undefined
-          }
+          },
+          ...(result.session === undefined ? {} : { session: result.session })
         } satisfies PickResult
       }),
     report: (lease, result) =>

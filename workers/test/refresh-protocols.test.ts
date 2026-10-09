@@ -387,6 +387,19 @@ describe("kimi", () => {
 describe("meta", () => {
   const MINT = "POST https://api.meta.ai/muse-code/key"
 
+  it("META_MINT_URL overrides the mint endpoint; a blank override keeps the default", async () => {
+    const metadata = { type: "meta", dca_token: "dca:abc", access_token: "dca:abc" }
+    const minted = { body: { api_key: "meta-key" } }
+    const overridden = await run(refreshMeta, metadata, routes({ "POST https://mint.example.test/key": minted }), {
+      metaMintUrl: " https://mint.example.test/key "
+    })
+    expect(success(overridden.outcome)).toMatchObject({ api_key: "meta-key" })
+    expect(overridden.requests.map((request) => request.url)).toEqual(["https://mint.example.test/key"])
+    const blank = await run(refreshMeta, metadata, routes({ [MINT]: minted }), { metaMintUrl: "  " })
+    expect(success(blank.outcome)).toMatchObject({ api_key: "meta-key" })
+    expect(blank.requests.map((request) => request.url)).toEqual(["https://api.meta.ai/muse-code/key"])
+  })
+
   it("mints an API key from the DCA token and persists the identity fields", async () => {
     const { outcome, requests } = await run(
       refreshMeta,

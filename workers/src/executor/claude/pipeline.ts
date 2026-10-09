@@ -55,6 +55,14 @@ import {
   relocateSystemForCountTokens
 } from "./cloaking.ts"
 import { type ContinuityState, type ContinuityStore } from "./continuity.ts"
+import { type DeviceProfileStore, deviceProfileStabilizationEnabled } from "./device-profile.ts"
+import { rebuildMidSystemEnabled, rebuildMidSystemMessagesToTopLevel } from "./mid-system.ts"
+import {
+  threadAliasKeys,
+  threadContinuationNeedsAliasState,
+  threadNotFoundError,
+  type ToolAliasStore
+} from "./thread.ts"
 import {
   claudeCreds,
   DEFAULT_BASE_URL,
@@ -85,6 +93,10 @@ export interface PipelineServices {
   readonly registry: TranslatorRegistry
   readonly continuity: ContinuityStore
   readonly replay: ThinkingReplayStore
+  /** Stabilised Claude Code device profiles (`stabilize-device-profile`). */
+  readonly deviceProfiles: DeviceProfileStore
+  /** MCP tool aliases of Thread turns (`thread.type = "continue"` without tools). */
+  readonly toolAliases: ToolAliasStore
   readonly now: () => Date
   /** Delegating provider profile (Kimi); `undefined` for the Claude provider itself. */
   readonly profile?: ClaudeUpstreamProfile | undefined
@@ -121,6 +133,8 @@ export interface PreparedClaudeRequest {
   readonly continuity: ContinuityState | undefined
   readonly promptId: string
   readonly replay: ReplayScope | undefined
+  /** Thread request (`thread.type` set): the alias keys to save once the upstream message id is known. */
+  readonly threadAliasKeys: ((messageId: string) => string[]) | undefined
 }
 
 const requestScoped = (status: number, message: string): ExecutionError =>
@@ -335,6 +349,21 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   })
   if (!isObj(thinkingBody)) return yield* requestScoped(400, "invalid Claude request body")
   const body: JsonObject = thinkingBody
+  if (rebuildMidSystemEnabled(config, credential)) rebuildMidSystemMessagesToTopLevel(body)
+
+  // Thread continuation without tool definitions reuses the aliases remembered for the previous message; the state
+  // lives in a store, so it is read before the synchronous request shaping.
+  const threadBody = body
+  const savedAliases =
+    fingerprint.mcpAlias && threadContinuationNeedsAliasState(threadBody)
+      ? yield* services.toolAliases.load(options.metadata.callerScope, threadAliasKeys(threadBody, ""))
+      : undefined
+  const needsAliasState = fingerprint.mcpAlias && threadContinuationNeedsAliasState(threadBody)
+  const stabilizeProfile = deviceProfileStabilizationEnabled(config)
+  const stabilizedProfile =
+    stabilizeProfile && confirmed
+      ? yield* services.deviceProfiles.resolve(credential, apiKey, options.headers, config)
+      : undefined
 
   // Session continuity is started (one store round trip) before the synchronous request shaping.
   const wire = yield* attempt(() => resolveWirePolicy(config, credential, apiKey, confirmed))
@@ -407,7 +436,14 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
 
     const translatedRequest = cloneJson(body) as JsonObject
     let reverseMap: ReadonlyMap<string, string> = new Map()
-    if (fingerprint.mcpAlias && cloaked) reverseMap = remapToolNames(body, aliasSecret(options))
+    if (fingerprint.mcpAlias && cloaked) {
+      if (needsAliasState) {
+        if (savedAliases === undefined) throw threadNotFoundError()
+        reverseMap = savedAliases
+      } else {
+        reverseMap = remapToolNames(body, aliasSecret(options))
+      }
+    }
     sanitizeForClaudeUpstream(body, baseModel, isCompat)
     if (fingerprint.applyCLIIdentity)
       applyCLIIdentity(body, credential, apiKey, sessionId, fingerprint.synthesizeIdentity)
@@ -472,7 +508,9 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       fingerprint,
       wire: policy,
       sessionId,
-      cpaSessionId: options.metadata.sessionId
+      cpaSessionId: options.metadata.sessionId,
+      stabilizeDeviceProfile: stabilizeProfile,
+      stabilizedProfile
     })
     const bodyText = serializeAndSign(finalBody, cchSigning)
     return {
@@ -488,7 +526,11 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       reverseMap,
       continuity: rules.touched.has("diagnostics") ? undefined : continuity,
       promptId: cloak.promptId,
-      replay
+      replay,
+      threadAliasKeys:
+        str(get(translatedRequest, "thread.type")) === ""
+          ? undefined
+          : (messageId) => threadAliasKeys(translatedRequest, messageId)
     } satisfies PreparedClaudeRequest
   })
 })
@@ -533,6 +575,12 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
   })
   if (!isObj(thinkingBody)) return yield* requestScoped(400, "invalid Claude request body")
   const body: JsonObject = thinkingBody
+  if (rebuildMidSystemEnabled(config, credential)) rebuildMidSystemMessagesToTopLevel(body)
+  const stabilizeProfile = deviceProfileStabilizationEnabled(config)
+  const stabilizedProfile =
+    stabilizeProfile && confirmed
+      ? yield* services.deviceProfiles.resolve(credential, apiKey, options.headers, config)
+      : undefined
 
   return yield* attempt(() => {
     const { policy, settings } = resolveWirePolicy(config, credential, apiKey, confirmed)
@@ -596,7 +644,9 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
       fingerprint,
       wire: policy,
       sessionId,
-      cpaSessionId: options.metadata.sessionId
+      cpaSessionId: options.metadata.sessionId,
+      stabilizeDeviceProfile: stabilizeProfile,
+      stabilizedProfile
     })
     return { url: parsedUrl.toString(), headers, bodyText: JSON.stringify(finalBody), body: finalBody }
   })
@@ -659,6 +709,7 @@ export const prepareLocalCountBody = Effect.fnUntraced(function* (input: Prepare
   })
   return yield* attempt(() => {
     if (!isObj(thinkingBody)) throw requestScoped(400, "invalid Claude token count request JSON")
+    if (rebuildMidSystemEnabled(config, credential)) rebuildMidSystemMessagesToTopLevel(thinkingBody)
     sanitizeForClaudeUpstream(thinkingBody, baseModel, isCompat)
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
     const finalBody = applyPayloadRules(

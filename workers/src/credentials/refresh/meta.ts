@@ -3,7 +3,7 @@
  *
  * Go source: internal/auth/meta/meta.go (`MintAPIKey`), internal/runtime/executor/meta_executor.go (`Refresh`,
  * `extractDCAToken`, `metaCreds`, `ShouldPrepareRequestAuth`). Docs: credentials.md §9.4.
- * The `META_MINT_URL` override of Go (unit tests) is not ported; tests mock the transport instead.
+ * `META_MINT_URL` (Worker var) overrides the mint endpoint like the Go environment variable of the same name.
  */
 import { Effect } from "effect"
 import { HttpClientRequest } from "effect/http"
@@ -13,6 +13,10 @@ import { clipBody, parseJsonObject, rfc3339, send, str } from "./http.ts"
 import type { RefreshContext, RefreshProtocolEffect } from "./types.ts"
 
 export const META_MINT_URL = "https://api.meta.ai/muse-code/key"
+/** `MintAPIKey`: a non-blank `META_MINT_URL` wins over the default endpoint. */
+export const metaMintUrl = (override: string | undefined): string =>
+  override !== undefined && override.trim() !== "" ? override.trim() : META_MINT_URL
+
 export const META_DEFAULT_BASE_URL = "https://api.meta.ai/v1"
 const META_USER_AGENT = "muse-code/1.0.2"
 
@@ -51,7 +55,7 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
       return yield* Effect.fail(refreshError({ message: "meta executor: missing API key or DCA token", status: 401 }))
     }
 
-    const request = HttpClientRequest.post(META_MINT_URL).pipe(
+    const request = HttpClientRequest.post(metaMintUrl(context.metaMintUrl)).pipe(
       HttpClientRequest.setHeaders({
         authorization: `Bearer ${dcaToken}`,
         "user-agent": META_USER_AGENT,

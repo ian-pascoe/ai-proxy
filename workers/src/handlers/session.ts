@@ -4,8 +4,8 @@
  * Go source: sdk/cliproxy/session/info.go (ExtractSessionInfo, isBodyForkCandidate, BoundSessionIdentity,
  * finalizeSessionInfo), sdk/cliproxy/session/identity.go (NormalizeExplicitID, ClaudeMetadataIdentities, CallerScope).
  * Docs: credentials.md §6.9. Only *explicit* identities are extracted (headers, body fields, Claude `metadata.user_id`);
- * the derived content hash and the LCP conversation matcher are not ported, so requests without any session marker
- * are not bound to a credential.
+ * requests without any session marker get the derived content-hash identity and the LCP conversation matcher from
+ * `src/session-routing`.
  */
 import { type Json, get } from "../json/index.ts"
 
@@ -37,9 +37,9 @@ interface ClaudeIdentities {
   readonly agentId: string
 }
 
-const stringOf = (value: Json | undefined): string => (typeof value === "string" ? value : "")
+export const stringOf = (value: Json | undefined): string => (typeof value === "string" ? value : "")
 
-const requestRoot = (body: Json | undefined): { root: Json | undefined; nested: Json | undefined } => {
+export const requestRoot = (body: Json | undefined): { root: Json | undefined; nested: Json | undefined } => {
   if (body === undefined) return { root: undefined, nested: undefined }
   const request = get(body, "request")
   const hasNested = request !== undefined && get(body, "contents") === undefined
@@ -47,7 +47,7 @@ const requestRoot = (body: Json | undefined): { root: Json | undefined; nested: 
 }
 
 /** `ClaudeMetadataIdentities`: session/parent/agent from `metadata.user_id` (JSON object or legacy suffix). */
-const claudeMetadataIdentities = (body: Json | undefined): ClaudeIdentities => {
+export const claudeMetadataIdentities = (body: Json | undefined): ClaudeIdentities => {
   const none = { sessionId: "", parentSessionId: "", agentId: "" }
   const { root, nested } = requestRoot(body)
   if (root === undefined) return none

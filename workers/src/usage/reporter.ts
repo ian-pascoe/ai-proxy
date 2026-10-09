@@ -29,6 +29,11 @@ export interface UsageReporterInit {
   readonly serviceTier: string
   readonly reasoningEffort?: string
   readonly requestedAt: number
+  /** Canonical session identity of the request (explicit, derived or LCP); see `session-routing/routing.ts`. */
+  readonly sessionId?: string
+  readonly parentSessionId?: string
+  /** The credential's configured upstream base URL, when it has one. */
+  readonly baseUrl?: string
 }
 
 export class UsageReporter {
@@ -182,7 +187,10 @@ export class UsageReporter {
       detail,
       ...(this.#responseModel !== undefined ? { responseModel: this.#responseModel } : {}),
       ...(this.#reasoningEffort !== undefined ? { reasoningEffort: this.#reasoningEffort } : {}),
-      serviceTier: init.serviceTier
+      serviceTier: init.serviceTier,
+      ...(init.sessionId === undefined ? {} : { sessionId: init.sessionId }),
+      ...(init.parentSessionId === undefined ? {} : { parentSessionId: init.parentSessionId }),
+      ...(init.baseUrl === undefined ? {} : { baseUrl: init.baseUrl })
     }
   }
 }

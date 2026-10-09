@@ -24,6 +24,7 @@ import type { WorkerEnv } from "../platform/env.ts"
 import { type Attempt, attemptOptions, conduct, lifecycleError, type Prepared } from "./conductor.ts"
 import { rewriteResponseModel, rewriteStreamChunk } from "./model-rewrite.ts"
 import { resolveModel } from "./resolve.ts"
+import { prepareSessionRouting } from "../session-routing/routing.ts"
 import { extractSessionInfo } from "./session.ts"
 
 export interface ExecutionInput {
@@ -137,6 +138,14 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
   const headers = new Headers(input.request.headers as Record<string, string>)
   const originalRequest = input.originalRequest ?? input.body
   const sessionInfo = extractSessionInfo(headers, originalRequest)
+  const routing = prepareSessionRouting({
+    headers,
+    body: originalRequest,
+    format: input.entryProtocol,
+    callerScope: identity.callerScope,
+    explicit: sessionInfo,
+    affinity: config.routing["session-affinity"]
+  })
   const options: ExecutorOptions = {
     stream,
     alt: input.alt,
@@ -166,6 +175,7 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
             ...(sessionInfo.parentSessionId === undefined ? {} : { parentId: sessionInfo.parentSessionId }),
             ...(sessionInfo.isFork ? { isFork: true } : {})
           },
+    routing,
     ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
     ...(input.authSelectionModel === undefined ? {} : { selectionModel: input.authSelectionModel }),
     ...(input.pinnedId !== undefined ? { pinnedId: input.pinnedId } : {}),

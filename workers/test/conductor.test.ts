@@ -490,9 +490,23 @@ describe("session affinity and thinking", () => {
       const sessionInput = chatInput("m", {}, { "x-session-id": "session-42" })
       for (let index = 0; index < 5; index += 1) yield* run.exec(executeNonStream(sessionInput))
       assert.strictEqual(new Set(run.calls.map(keyOf)).size, 1)
-      // Without a session marker the requests rotate.
-      for (let index = 0; index < 6; index += 1) yield* run.exec(executeNonStream(chatInput()))
+      // Without a session marker unrelated conversations rotate ...
+      const conversation = (text: string) => ({
+        ...chatInput(),
+        body: { model: "m", messages: [{ role: "user", content: text }] }
+      })
+      for (let index = 0; index < 6; index += 1) yield* run.exec(executeNonStream(conversation(`topic ${index}`)))
       assert.isAbove(new Set(run.calls.slice(5).map(keyOf)).size, 1)
+      // ... while the same conversation stays on one credential (LCP matcher / derived identity).
+      const before = run.calls.length
+      for (let index = 0; index < 4; index += 1) yield* run.exec(executeNonStream(conversation("topic 0")))
+      assert.strictEqual(new Set(run.calls.slice(before).map(keyOf)).size, 1)
+      assert.strictEqual(run.calls.slice(before).map(keyOf)[0], keyOf(run.calls[5] as UpstreamCall))
+      // Usage records carry the session identity (explicit, then LCP) and the credential's base URL.
+      assert.strictEqual(run.records[0]?.sessionId, "header:session-42")
+      assert.match(run.records[5]?.sessionId ?? "", /^lcp:v1:[0-9a-f]{64}$/)
+      assert.strictEqual(run.records[before]?.sessionId, run.records[5]?.sessionId)
+      assert.match(run.records[0]?.baseUrl ?? "", /^https:\/\/[a-z]\.example/)
     })
   )
 

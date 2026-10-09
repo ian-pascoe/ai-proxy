@@ -61,6 +61,6 @@ export type StateResult =
 
 export const DEFAULT_MAX_ENTRIES = 256
 export const MIN_TTL_MS = 1_000
-export const MAX_TTL_MS = 24 * 3_600_000
+export const MAX_TTL_MS = 7 * 24 * 3_600_000
 /** Longest accepted value (UTF-16 units); the Go caches cap entries at 16 MiB. */
 export const MAX_VALUE_CHARS = 20 * 1024 * 1024

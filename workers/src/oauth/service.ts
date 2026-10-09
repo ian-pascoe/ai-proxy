@@ -67,6 +67,8 @@ export type CallbackResult =
 export interface OAuthServiceOptions {
   readonly sessions: OAuthSessions
   readonly sink: CredentialSink
+  /** `META_MINT_URL` override of the Meta key-mint endpoint. */
+  readonly metaMintUrl?: string | undefined
 }
 
 const newDeviceState = (prefix: string, now: number): string => `${prefix}-${now}-${randomHex(4)}`
@@ -78,7 +80,7 @@ const callbackFlows: Readonly<Partial<Record<OAuthProvider, () => CallbackFlow>>
   devin: devinFlow
 }
 
-const deviceFlows: Readonly<Partial<Record<OAuthProvider, () => DeviceFlow>>> = {
+const deviceFlows: Readonly<Partial<Record<OAuthProvider, (metaMintUrl?: string) => DeviceFlow>>> = {
   codex: codexDeviceFlow,
   xai: xaiFlow,
   meta: metaFlow,
@@ -97,7 +99,7 @@ export interface OAuthService {
   readonly cancel: (state: string) => Effect.Effect<{ readonly cancelled: boolean }>
 }
 
-export const makeOAuthService = ({ sessions, sink }: OAuthServiceOptions): OAuthService => {
+export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOptions): OAuthService => {
   const startCallback = (flow: CallbackFlow, now: number): Effect.Effect<StartResult> =>
     Effect.gen(function* () {
       const state = generateState()
@@ -172,7 +174,7 @@ export const makeOAuthService = ({ sessions, sink }: OAuthServiceOptions): OAuth
 
   const pollDevice = (session: OAuthSession, now: number): Effect.Effect<StatusResult, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
-      const flow = deviceFlows[session.provider]?.()
+      const flow = deviceFlows[session.provider]?.(metaMintUrl)
       if (flow === undefined) return { status: "error", error: "unsupported provider" } as const
       if (now > session.deadlineAt) {
         sessions.setError(session.state, flow.expiredMessage, now)
@@ -222,7 +224,7 @@ export const makeOAuthService = ({ sessions, sink }: OAuthServiceOptions): OAuth
           case "xai":
             return yield* startDevice(xaiFlow(), newDeviceState("xai", now), now)
           case "meta":
-            return yield* startDevice(metaFlow(), newDeviceState("meta", now), now)
+            return yield* startDevice(metaFlow(metaMintUrl), newDeviceState("meta", now), now)
           case "kimi":
           case "kimi-ai": {
             const target = kimiDomain(provider === "kimi-ai" ? "kimi.ai" : (input.domain ?? "kimi.com"))
