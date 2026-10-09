@@ -32,6 +32,14 @@ export interface ExecutorRequest {
   readonly modelLookup?: ModelInfoLookup | undefined
 }
 
+/** Go `WithDownstreamWebsocket` / `ExecutionSessionMetadataKey` / `WithRequiredUpstreamWebsocket`. */
+export interface WebsocketExecution {
+  /** Id of the downstream socket: the execution session that owns the upstream sockets. */
+  readonly sessionId: string
+  /** The request continues a response and needs the live upstream socket (else: replay with full input). */
+  readonly requireUpstream: boolean
+}
+
 /** Typed subset of Go `Options.Metadata` (sdk/api/handlers/handlers.go requestExecutionMetadata). */
 export interface ExecutionMetadata {
   /** Inbound route path, e.g. `/v1/chat/completions` (payload rules, image endpoints). */
@@ -49,6 +57,8 @@ export interface ExecutionMetadata {
   readonly callerScope: string
   /** Session identity for affinity/prompt caching, when known. */
   readonly sessionId?: string
+  /** Set for requests that arrive over the Responses WebSocket (`handlers/responses/websocket`). */
+  readonly websocket?: WebsocketExecution
 }
 
 /** Go `executor.Options`. */

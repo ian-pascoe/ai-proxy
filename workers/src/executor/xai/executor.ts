@@ -7,8 +7,11 @@
  * Pipeline per attempt: translate -> Thinking.apply -> model/stream fields -> tool normalisation -> reasoning replay ->
  * input normalisation -> prompt cache key -> finalizePayload (user payload rules, always last) -> headers -> fetch.
  *
- * Not ported (documented follow-ups): the WebSocket transport (#18), the apply_patch response bridge and
- * multi-agent-v2 input rewriting. `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
+ * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
+ *
+ * Not ported (documented follow-ups): the apply_patch response bridge and multi-agent-v2 input rewriting.
+ * `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the
+ * conductor (`withCredentialRefresh`), not by the executor.
  */
 import { Clock, Effect, Stream } from "effect"
 import { splitLines } from "../../http/sse.ts"
@@ -20,6 +23,7 @@ import { getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
 import { ExecutionError } from "../errors.ts"
 import { ensureResponsesUsageDetails, OutputItemCollector, parseCodexUsage } from "../codex/output.ts"
+import { codexWebsocketsEnabled } from "../codex/websocket.ts"
 import { claudeCodeExecutionScope } from "../codex/replay.ts"
 import { normalizeCodexInstructions, setIfDifferent } from "../codex/request.ts"
 import { finalizePayload } from "../helps/payload.ts"
@@ -28,6 +32,7 @@ import { providerSessionUuid, uuidV5Oid } from "../helps/uuid.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
 import { Thinking } from "../thinking.ts"
+import { replayRequiredError } from "../websocket/session.ts"
 import {
   type ExecutionContext,
   type ExecutorOptions,
@@ -64,6 +69,7 @@ import {
   cacheReplayFromCompleted,
   clearReplayAfterCompaction,
   defaultXaiReplayStore,
+  NO_REPLAY_SCOPE,
   replayScopeFromRequest,
   type XaiReplayScope,
   type XaiReplayStore
@@ -97,6 +103,7 @@ import {
 } from "./tools.ts"
 import { sendUpstream, transportError } from "./transport.ts"
 import { currentXaiClientVersion } from "./version.ts"
+import { makeXaiWebsocketStream } from "./websocket.ts"
 
 export interface XaiExecutorOptions {
   readonly translators?: TranslatorRegistry
@@ -106,7 +113,7 @@ export interface XaiExecutorOptions {
 
 const COMPOSER_MODEL_PREFIX = "grok-composer-"
 
-interface PreparedRequest {
+export interface PreparedRequest {
   /** Final business payload (after payload rules once `finalize` ran). */
   body: Json
   readonly baseModel: string
@@ -121,7 +128,7 @@ interface PreparedRequest {
 }
 
 /** `helps.NewPayloadFinalizer`: user payload rules are the last mutation of the business payload. */
-const makeFinalize =
+export const makeFinalize =
   (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions) =>
   (model: string, protocol: string, original: Json | undefined, body: Json): Json =>
     finalizePayload(
@@ -202,7 +209,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     context: ExecutionContext,
     request: ExecutorRequest,
     options: ExecutorOptions,
-    mode: { readonly stream: boolean; readonly to: string }
+    mode: { readonly stream: boolean; readonly to: string; readonly websocket?: boolean }
   ) {
     const thinking = yield* Thinking
     const baseModel = parseSuffix(request.model).modelName
@@ -276,14 +283,20 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     if (willInjectXSearch && !toolChoiceRequiresHostedToolOnly(body)) body = ensureNativeXSearchTool(body)
     body = clampToolsLimit(body, XAI_MAX_TOOLS, namespaceTools)
 
-    const replayScope = replayScopeFromRequest({
-      from,
-      model: request.model,
-      requestPayload: request.payload,
-      body,
-      headers: options.headers,
-      callerScope: options.metadata.callerScope
-    })
+    // End-to-end WebSocket requests use the upstream `previous_response_id` state: replaying encrypted reasoning as
+    // input as well would duplicate the turn.
+    const upstreamState =
+      mode.websocket === true && asString(get(request.payload, "previous_response_id")).trim() !== ""
+    const replayScope = upstreamState
+      ? NO_REPLAY_SCOPE
+      : replayScopeFromRequest({
+          from,
+          model: request.model,
+          requestPayload: request.payload,
+          body,
+          headers: options.headers,
+          callerScope: options.metadata.callerScope
+        })
     yield* applyReplayCache(replayStore, replayScope, body)
 
     body = normalizeInputCustomToolCalls(body)
@@ -522,6 +535,19 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     return { headers: out, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
   })
 
+  const websocketStream = makeXaiWebsocketStream({
+    prepare,
+    finalize: (context, request, options, prepared, body) =>
+      makeFinalize(context, request, options)(
+        prepared.baseModel,
+        prepared.providerFormat,
+        prepared.originalTranslated,
+        body
+      ),
+    replayStore,
+    codexTarget: Formats.Codex
+  })
+
   // -------------------------------------------------------------------------------------------------------------
   // Entry points
   // -------------------------------------------------------------------------------------------------------------
@@ -542,8 +568,15 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     if (isSpeechRequest(options)) return Effect.fail(streamingUnsupported("/audio/speech"))
     if (isImageRequest(options)) return Effect.fail(streamingUnsupported("/images"))
     if (isVideoRequest(options)) return Effect.fail(streamingUnsupported("/videos"))
+    const websocket = options.metadata.websocket
     if (inputHasItemType(request.payload, "compaction_trigger")) {
+      if (websocket?.requireUpstream === true) return Effect.fail(replayRequiredError())
       return executeCompactionTriggerStream(context, request, options)
+    }
+    if (websocket !== undefined) {
+      // XAIAutoExecutor: WebSocket only for a downstream WebSocket and a credential that enables it.
+      if (codexWebsocketsEnabled(context.credential)) return websocketStream(context, request, options)
+      if (websocket.requireUpstream) return Effect.fail(replayRequiredError())
     }
     return executeResponsesStream(context, request, options)
   }

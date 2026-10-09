@@ -96,6 +96,10 @@ export interface Prepared {
   readonly disallowFreeAuth?: boolean
   /** Select credentials as if for this model while executing `routeModel` (Go `auth_selection_model`). */
   readonly selectionModel?: string
+  /** Downstream WebSocket request: prefer Codex credentials with `websockets` enabled. */
+  readonly preferWebsockets?: boolean
+  /** Observes the credential of each attempt (the Responses WebSocket handler pins/tracks it). */
+  readonly onSelected?: (credential: CredentialSnapshot) => void
   /** Token counting (Go `ExecuteCount`): no passive quota snapshot, generic endpoint 404s are availability-neutral. */
   readonly countTokens?: boolean
 }
@@ -296,6 +300,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               ...(prepared.session === undefined ? {} : { session: prepared.session }),
               ...(prepared.pinnedId === undefined ? {} : { pinnedId: prepared.pinnedId }),
               ...(prepared.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
+              ...(prepared.preferWebsockets === true ? { preferWebsockets: true } : {}),
               ...(prepared.selectionModel === undefined ? {} : { selectionModel: prepared.selectionModel })
             })
           )

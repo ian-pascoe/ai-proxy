@@ -170,3 +170,128 @@ const applyRoutingHint = (headers: Record<string, string>, input: CodexHeaderInp
   if (typeof tier === "string" && tier.trim() !== "") hint += `;tier=${tier.trim()}`
   headers[ROUTING_HINT_HEADER] = hint
 }
+
+export const CODEX_WEBSOCKET_BETA = "responses_websockets=2026-02-06"
+
+export interface CodexWebsocketHeaderInput {
+  readonly credential: CredentialSnapshot
+  readonly config: Config
+  readonly clientHeaders: Headers
+  /** Prompt cache id: sent as `session_id` and `Conversation_id`. */
+  readonly cacheId: string
+  /** Native Codex client (lite requests). */
+  readonly nativeRequest: boolean
+  /** Final upstream body: the routing hint reads `service_tier` from it. */
+  readonly body?: Json
+  readonly baseModel: string
+  readonly sessionId?: string
+  readonly modelHeaderOverrides?: Readonly<Record<string, string>>
+}
+
+const SESSION_HEADERS = ["session-id", "session_id"]
+
+/**
+ * `applyCodexWebsocketHeaders` + routing hint + model overrides (Go `codex_websockets_request.go`). Names are lower
+ * case. The handshake carries no `Content-Type`/`Accept`; the beta header selects the Responses WebSocket protocol.
+ */
+export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Record<string, string> => {
+  const { credential, config, clientHeaders } = input
+  const { apiKey } = codexCreds(credential)
+  const isApiKey = codexUsesApiKey(credential)
+  const headers: Record<string, string> = {}
+  if (input.cacheId !== "") {
+    headers["session_id"] = input.cacheId
+    headers["conversation_id"] = input.cacheId
+  }
+  if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`
+
+  // ensureHeaderWithPriority: what is set wins, then the client's value, then the configured default.
+  const defaults = config.oauth.providers.codex["header-defaults"]
+  const betaFeatures = clientHeader(clientHeaders, "x-codex-beta-features")
+  const configBeta = isApiKey ? "" : defaults["beta-features"].trim()
+  if (betaFeatures !== "") headers["x-codex-beta-features"] = betaFeatures
+  else if (configBeta !== "") headers["x-codex-beta-features"] = configBeta
+  const passthrough = [
+    "x-codex-turn-state",
+    "x-codex-turn-metadata",
+    "x-client-request-id",
+    "x-responsesapi-include-timing-metrics",
+    "version"
+  ]
+  if (input.nativeRequest) passthrough.push("x-openai-internal-codex-responses-lite")
+  for (const name of passthrough) {
+    const value = clientHeader(clientHeaders, name)
+    if (value !== "") headers[name] = value
+  }
+
+  // API keys only forward the client's User-Agent; OAuth credentials: configured default, client, fixed Codex value.
+  const clientUserAgent = clientHeader(clientHeaders, "user-agent")
+  const configUserAgent = isApiKey ? "" : defaults["user-agent"].trim()
+  if (isApiKey) {
+    if (clientUserAgent !== "") headers["user-agent"] = clientUserAgent
+  } else {
+    headers["user-agent"] =
+      configUserAgent !== "" ? configUserAgent : clientUserAgent !== "" ? clientUserAgent : CODEX_USER_AGENT
+  }
+
+  const clientBeta = clientHeader(clientHeaders, "openai-beta")
+  headers["openai-beta"] = clientBeta.includes("responses_websockets=") ? clientBeta : CODEX_WEBSOCKET_BETA
+
+  // ensureCodexWebsocketSessionHeader: cache id, then the client's session header, then (Mac OS UA) a random id.
+  let session = headers["session_id"] ?? ""
+  for (const name of SESSION_HEADERS) {
+    if (session === "") session = clientHeader(clientHeaders, name)
+  }
+  if (session === "" && (headers["user-agent"] ?? "").includes("Mac OS")) session = crypto.randomUUID()
+  if (session !== "") headers["session_id"] = session
+  delete headers["session-id"]
+
+  if (input.nativeRequest && isCodexCloakingDisabled(config, credential)) {
+    delete headers["session_id"]
+    delete headers["conversation_id"]
+    for (const name of [
+      "session-id",
+      "session_id",
+      "conversation_id",
+      "thread-id",
+      "x-codex-routing-hint",
+      "x-codex-window-id"
+    ]) {
+      const value = clientHeader(clientHeaders, name)
+      if (value !== "") headers[name] = value
+    }
+  }
+
+  const originator = clientHeader(clientHeaders, "originator")
+  if (originator !== "") headers["originator"] = originator
+  else if (!isApiKey) headers["originator"] = CODEX_ORIGINATOR
+  if (!isApiKey) {
+    const accountId = credential.metadata["account_id"]
+    if (typeof accountId === "string" && accountId.trim() !== "") headers["chatgpt-account-id"] = accountId.trim()
+  }
+  applyCustomHeaders(headers, credential, clientHeaders, input.sessionId)
+  if (!isCodexCloakingDisabled(config, credential)) {
+    headers["user-agent"] = CODEX_USER_AGENT
+    headers["originator"] = CODEX_ORIGINATOR
+  }
+
+  if (!isApiKey) {
+    applyRoutingHint(
+      headers,
+      {
+        credential,
+        config,
+        clientHeaders,
+        stream: true,
+        baseModel: input.baseModel,
+        ...(input.body !== undefined ? { body: input.body } : {}),
+        ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {})
+      },
+      clientHeaders
+    )
+  }
+  for (const [name, value] of Object.entries(input.modelHeaderOverrides ?? {})) headers[name.toLowerCase()] = value
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) out[name.toLowerCase()] = value
+  return out
+}

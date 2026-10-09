@@ -3,8 +3,8 @@
  * `/backend-api/codex/*` (entry protocol `openai-response`).
  *
  * Go source: sdk/api/handlers/openai/openai_responses_handlers.go (Responses, Compact, handleNonStreamingResponse,
- * handleStreamingResponse), internal/api/server_routes.go (route table). The websocket variants (`GET /v1/responses`)
- * are a separate slice. Multi-agent-v2 request rewriting is not ported.
+ * handleStreamingResponse), internal/api/server_routes.go (route table). The websocket variants (`GET /v1/responses`,
+ * `GET /backend-api/codex/responses`) are in websocket/. Multi-agent-v2 request rewriting is not ported.
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -16,6 +16,7 @@ import { executeNonStream, executeStream, type ExecutionInput } from "../execute
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
 import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
 import { isCodexResponsesClient, responsesFramer } from "./framer.ts"
+import { handleResponsesSocket } from "./websocket/routes.ts"
 
 const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(invalidRequestBody(message), { status, contentType: "application/json" })
@@ -75,10 +76,14 @@ const ROUTES = [
   ["/backend-api/codex/responses/compact", true]
 ] as const
 
+const SOCKET_ROUTES = ["/v1/responses", "/backend-api/codex/responses"] as const
+
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal` (see `handlers/layer.ts`). */
 export const ResponsesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<ProxyServices>()
     for (const [path, compact] of ROUTES) yield* router.add("POST", path, Effect.provide(handle(compact), services))
+    // The Responses WebSocket (`Upgrade: websocket`), see websocket/routes.ts.
+    for (const path of SOCKET_ROUTES) yield* router.add("GET", path, Effect.provide(handleResponsesSocket, services))
   })
 )

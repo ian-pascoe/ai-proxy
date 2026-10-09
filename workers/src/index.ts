@@ -9,7 +9,10 @@ const { handler } = makeWebHandler()
 
 export { ControlPlane }
 
-/** Stub: per-session reasoning replay caches and Responses WebSocket state. Filled in by later slices. */
+/**
+ * Stub: per-session reasoning replay caches (later slice). The Responses WebSocket keeps its state in the Worker
+ * invocation that accepted the socket, not here (see docs/workers-port/ARCHITECTURE.md).
+ */
 export class SessionState extends DurableObject<Env> {}
 
 export default {

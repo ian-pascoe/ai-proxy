@@ -15,6 +15,7 @@ import { CredentialRefresher } from "../executor/helps/credential-refresh.ts"
 import { ModelRegistryLive } from "../registry/live.ts"
 import { ExecutorRegistry } from "../executor/registry.ts"
 import { Thinking } from "../executor/thinking.ts"
+import { UpstreamWebSocketConnector } from "../executor/websocket/connector.ts"
 import { D1UsageSink } from "../usage/d1-sink.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
@@ -40,6 +41,8 @@ export interface ProxyLayerOptions {
   readonly credentialRefresher?: Layer.Layer<CredentialRefresher>
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>
   readonly usageSink?: Layer.Layer<UsageSink>
+  /** Upstream WebSocket dialer for the Codex/xAI transports (defaults to `fetch` with `Upgrade: websocket`). */
+  readonly websocketConnector?: Layer.Layer<UpstreamWebSocketConnector>
   readonly thinking?: Layer.Layer<Thinking>
 }
 
@@ -69,6 +72,7 @@ export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
     ExecutorRegistry.layer,
     options.usageSink ?? D1UsageSink,
     options.httpClient ?? FetchHttpClient.layer,
+    options.websocketConnector ?? UpstreamWebSocketConnector.layerFetch,
     options.thinking ?? Thinking.live
   ).pipe(Layer.provideMerge(config))
   return ProxyRoutes.pipe(Layer.provide(services))

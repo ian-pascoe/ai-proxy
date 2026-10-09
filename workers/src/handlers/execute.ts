@@ -15,7 +15,8 @@ import { AccessPrincipal } from "../access/principal.ts"
 import { ConfigReader } from "../config/reader.ts"
 import type { Config } from "../config/schema.ts"
 import { ExecutionError } from "../executor/errors.ts"
-import type { ExecutionMetadata, ExecutorOptions } from "../executor/types.ts"
+import type { CredentialSnapshot } from "../executor/picker.ts"
+import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../executor/types.ts"
 import { filterUpstreamHeaders } from "../http/headers.ts"
 import { get, type Json } from "../json/index.ts"
 import type { Format } from "../translator/formats.ts"
@@ -48,6 +49,10 @@ export interface ExecutionInput {
   readonly authSelectionModel?: string
   /** Require this credential (xAI video retrieval is bound to the credential that created the video). */
   readonly pinnedId?: string
+  /** The request arrives over the Responses WebSocket: prefer `websockets` credentials and tell the executor. */
+  readonly websocket?: WebsocketExecution
+  /** Called with each credential an attempt runs on (Go `WithSelectedAuthIDCallback`). */
+  readonly onSelected?: (credential: CredentialSnapshot) => void
 }
 
 export interface ExecutionOutput {
@@ -88,7 +93,8 @@ export const executionMetadata = (
     callerScope,
     ...(idempotencyKey !== undefined && idempotencyKey !== "" ? { idempotencyKey } : {}),
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
-    ...(sessionId !== undefined ? { sessionId } : {})
+    ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(input.websocket !== undefined ? { websocket: input.websocket } : {})
   }
 }
 
@@ -162,7 +168,9 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
           },
     ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
     ...(input.authSelectionModel === undefined ? {} : { selectionModel: input.authSelectionModel }),
-    ...(input.pinnedId !== undefined ? { pinnedId: input.pinnedId } : {})
+    ...(input.pinnedId !== undefined ? { pinnedId: input.pinnedId } : {}),
+    ...(input.websocket !== undefined ? { preferWebsockets: true } : {}),
+    ...(input.onSelected !== undefined ? { onSelected: input.onSelected } : {})
   } satisfies Prepared
 })
 
@@ -218,6 +226,7 @@ const readBootstrap = (pull: Pull.Pull<ReadonlyArray<string>, ExecutionError>) =
  */
 const runStreamAttempt = (prepared: Prepared, attempt: Attempt) =>
   Effect.gen(function* () {
+    prepared.onSelected?.(attempt.context.credential)
     const result = yield* attempt.executor.executeStream(attempt.context, attempt.request, prepared.options)
     // The pull lives in a child of the request scope: failed attempts close it, the winner stays open until the
     // response body is consumed.

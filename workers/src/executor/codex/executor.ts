@@ -6,8 +6,10 @@
  * Pipeline per attempt (ARCHITECTURE.md): translate -> model rewrite -> thinking -> provider shaping -> input id
  * sanitising -> user payload rules (final barrier) -> upstream fetch -> response translation.
  *
- * Not ported (documented follow-ups): websocket transport (#18), bootstrap buffering and retries (retry slice),
- * multi-agent-v2 rewriting and `is-compat` model handling. `CountTokens` counts locally (`helps/token-count.ts`).
+ * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
+ *
+ * Not ported (documented follow-ups): bootstrap buffering and retries (retry slice), multi-agent-v2 rewriting and
+ * `is-compat` model handling. `CountTokens` counts locally (`helps/token-count.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -27,6 +29,7 @@ import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-c
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
 import { Thinking } from "../thinking.ts"
+import { replayRequiredError } from "../websocket/session.ts"
 import {
   type ExecutionContext,
   type ExecutorOptions,
@@ -83,6 +86,7 @@ import {
   replayScopeFromRequest
 } from "./replay.ts"
 import { CodexStreamReader } from "./stream.ts"
+import { codexWebsocketsEnabled, makeCodexWebsocketStream } from "./websocket.ts"
 
 export const CODEX_PROVIDER = "codex"
 
@@ -103,7 +107,7 @@ const transportError = (error: HttpClientError.HttpClientError) =>
     cause: error
   })
 
-interface PreparedRequest {
+export interface PreparedRequest {
   readonly url: string
   readonly headers: Record<string, string>
   /** Final business payload (after payload rules). */
@@ -115,6 +119,10 @@ interface PreparedRequest {
   readonly replayScope: CodexReplayScope
   readonly responseFormat: string
   readonly providerFormat: string
+  /** Prompt cache id (`session_id` header), `""` when none could be derived. */
+  readonly cacheId: string
+  /** Native Codex client: the upstream output is forwarded untouched. */
+  readonly nativeOutput: boolean
 }
 
 export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): ProviderExecutor => {
@@ -186,7 +194,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     context: ExecutionContext,
     request: ExecutorRequest,
     options: ExecutorOptions,
-    mode: { readonly stream: boolean; readonly compact: boolean }
+    mode: { readonly stream: boolean; readonly compact: boolean; readonly websocket?: boolean }
   ) {
     const thinking = yield* Thinking
     const baseModel = parseSuffix(request.model).modelName
@@ -216,18 +224,23 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       body = del(body, "stream")
     } else {
       body = setIfDifferent(body, "stream", true)
-      const summaryDelivery = get(body, "stream_options.reasoning_summary_delivery")
-      for (const field of [
-        "previous_response_id",
-        "generate",
-        "prompt_cache_retention",
-        "safety_identifier",
-        "stream_options"
-      ]) {
-        body = del(body, field)
+      if (mode.websocket === true) {
+        // The WebSocket protocol continues a response with `previous_response_id` and honours `generate: false`.
+        for (const field of ["prompt_cache_retention", "safety_identifier"]) body = del(body, field)
+      } else {
+        const summaryDelivery = get(body, "stream_options.reasoning_summary_delivery")
+        for (const field of [
+          "previous_response_id",
+          "generate",
+          "prompt_cache_retention",
+          "safety_identifier",
+          "stream_options"
+        ]) {
+          body = del(body, field)
+        }
+        if (mode.stream && summaryDelivery !== undefined)
+          body = set(body, "stream_options.reasoning_summary_delivery", summaryDelivery)
       }
-      if (mode.stream && summaryDelivery !== undefined)
-        body = set(body, "stream_options.reasoning_summary_delivery", summaryDelivery)
     }
     body = normalizeCodexInstructions(body, nativeOutput)
     if (!mode.compact && context.config.multimedia["disable-image-generation"] === false) {
@@ -266,20 +279,24 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
 
     const effort = asString(get(body, "reasoning.effort"))
     context.usage.setReasoningEffort(effort !== "" ? effort : undefined)
-    const headers = buildCodexHeaders({
-      credential: context.credential,
-      config: context.config,
-      clientHeaders: options.headers,
-      stream: !mode.compact,
-      ...(cacheId !== "" ? { sessionHeader: cacheId } : {}),
-      body,
-      baseModel,
-      ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
-      routingHint: true,
-      ...(executorOptions.modelHeaderOverrides?.(baseModel) !== undefined
-        ? { modelHeaderOverrides: executorOptions.modelHeaderOverrides(baseModel) as Record<string, string> }
-        : {})
-    })
+    // The WebSocket transport builds its own handshake headers (`websocket.ts`).
+    const headers =
+      mode.websocket === true
+        ? {}
+        : buildCodexHeaders({
+            credential: context.credential,
+            config: context.config,
+            clientHeaders: options.headers,
+            stream: !mode.compact,
+            ...(cacheId !== "" ? { sessionHeader: cacheId } : {}),
+            body,
+            baseModel,
+            ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
+            routingHint: true,
+            ...(executorOptions.modelHeaderOverrides?.(baseModel) !== undefined
+              ? { modelHeaderOverrides: executorOptions.modelHeaderOverrides(baseModel) as Record<string, string> }
+              : {})
+          })
     const url = `${codexBaseUrl(context.credential)}${mode.compact ? "/responses/compact" : "/responses"}`
     return {
       url,
@@ -290,8 +307,16 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       original: options.originalRequest ?? request.payload,
       replayScope,
       responseFormat,
-      providerFormat: to
+      providerFormat: to,
+      cacheId,
+      nativeOutput
     } satisfies PreparedRequest
+  })
+
+  const websocketStream = makeCodexWebsocketStream({
+    prepare,
+    replayStore,
+    modelHeaderOverrides: executorOptions.modelHeaderOverrides
   })
 
   /** POSTs `body`; non-2xx answers become classified `ExecutionError`s (the replay cache is cleared when needed). */
@@ -703,6 +728,12 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     }
     if (isCodexImageRequest(options.sourceFormat, options.metadata.requestPath)) {
       return executeImageStream(context, request, options)
+    }
+    const websocket = options.metadata.websocket
+    if (websocket !== undefined) {
+      // CodexAutoExecutor: WebSocket only for a downstream WebSocket and a credential that enables it.
+      if (codexWebsocketsEnabled(context.credential)) return websocketStream(context, request, options)
+      if (websocket.requireUpstream) return Effect.fail(replayRequiredError())
     }
     return executeResponsesStream(context, request, options)
   }

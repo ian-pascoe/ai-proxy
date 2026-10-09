@@ -10,6 +10,7 @@ import type { Config } from "../../src/config/schema.ts"
 import type { CredentialPicker } from "../../src/executor/picker.ts"
 import { StaticCredentialPickerLayer } from "../../src/executor/static-picker.ts"
 import type { Thinking } from "../../src/executor/thinking.ts"
+import type { UpstreamWebSocketConnector } from "../../src/executor/websocket/connector.ts"
 import { makeProxyRoutes } from "../../src/handlers/layer.ts"
 import { ModelCapabilities } from "../../src/handlers/model-capabilities.ts"
 import { ModelProviders } from "../../src/handlers/model-providers.ts"
@@ -107,6 +108,8 @@ export interface PipelineOptions {
   readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>
   /** Defaults to the config-backed model lookup. */
   readonly modelProviders?: Layer.Layer<ModelProviders, never, ConfigReader>
+  /** Upstream WebSocket dialer for the Codex/xAI transports (defaults to the real `fetch` dialer). */
+  readonly websocketConnector?: Layer.Layer<UpstreamWebSocketConnector>
   /** Extra global layers (middleware, loggers) merged next to the routes. */
   readonly extraLayers?: Layer.Layer<never, never, HttpRouter.HttpRouter>
 }
@@ -131,6 +134,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
     modelProviders: options.modelProviders ?? ModelProviders.configLayer,
     modelCapabilities: ModelCapabilities.configLayer,
     credentialRefresher: CredentialRefresher.none,
+    ...(options.websocketConnector !== undefined ? { websocketConnector: options.websocketConnector } : {}),
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})
   })
   const { handler, dispose } = HttpRouter.toWebHandler(

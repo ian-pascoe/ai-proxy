@@ -50,7 +50,8 @@ workers/                      pnpm package, deployed with wrangler
   It is the single writer for credential state, which replaces the Go `singleflight`/mutex/goroutine machinery. The
   Worker talks to it through JS RPC methods (e.g. `pick`, `report`, `getConfig`).
 - **`SessionState` Durable Object** (one per `caller_scope + session key`): reasoning/thinking replay caches that need
-  compare-and-swap semantics, and per-socket state for the Responses WebSocket API.
+  compare-and-swap semantics (still a stub: the replay stores are per isolate). The Responses WebSocket does **not** use
+  it: that state lives in the Worker invocation that accepted the socket (see "Responses WebSocket transports").
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
 - **Static assets**: management control panel.
@@ -279,12 +280,19 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
   `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
 - **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
   `is-compat` models, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
+
+- **WebSocket**: `executor/codex/websocket.ts` is the upstream transport (Go `CodexWebsocketsExecutor`), dispatched from
+  `executeStream` like Go's `CodexAutoExecutor`; see "Responses WebSocket transports".
+- **Not ported (follow-ups)**: bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
+  `is-compat` models, local token counting (`countTokens` answers 501; needs a BPE tokenizer) and the Claude stream
+  input-token estimate, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
   the Grok signature check, OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
   non-`gpt-image` models (ported but not routed).
 
 ## xAI provider and media endpoints (`src/executor/xai/`, `src/handlers/openai/{videos,speech,xai-*}.ts`)
 
-Port of `xai_executor*.go` (HTTP/SSE only; the Responses WebSocket executor belongs to #18). Reuses the Codex translators
+Port of `xai_executor*.go` (HTTP/SSE; the Responses WebSocket executor is `executor/xai/websocket.ts`, see "Responses
+WebSocket transports"). Reuses the Codex translators
 (`* -> codex`, compaction `* -> openai-response`) and the Codex output helpers.
 
 - **Base URLs and identity** (`credentials.ts`, `headers.ts`): `using_api` (attribute, metadata, `auth_kind`; OAuth defaults to
@@ -317,7 +325,71 @@ Port of `xai_executor*.go` (HTTP/SSE only; the Responses WebSocket executor belo
   (`ExecutionOutput.credentialId` reports the serving credential). `/v1/audio/speech` and `/v1/tts` convert to `POST /tts`.
 - **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge and multi-agent-v2 input
   rewriting (shared with Codex), `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+
+- **Not ported (follow-ups)**: the `apply_patch` Responses bridge and multi-agent-v2 input
+  rewriting (shared with Codex), local `o200k_base` token counting (`countTokens` answers 501), the Claude stream input-token
+  estimate, `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
+
+## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
+
+Port of `openai_responses_websocket*.go` (inbound `GET /v1/responses` and `GET /backend-api/codex/responses` with
+`Upgrade: websocket`), `codex_websockets_*.go` and `xai_websockets_executor.go`. The Access gate authenticates the
+upgrade request like any other (default-deny prefixes); the principal is captured for the socket's lifetime.
+
+- **Where the socket lives (decision)**: in the Worker invocation that accepts it (`WebSocketPair` + `server.accept()`,
+  `routes.ts`), **not** in a `SessionState` Durable Object. Per-socket state (previous request/response chaining, pending tool
+  calls, pinned credential, upstream mode, tool-call repair caches) is plain memory of the socket's fiber and dies with the socket,
+  like the goroutine-per-connection state in Go. A DO with the hibernation API would add nothing: the outbound upstream
+  WebSocket and the running turn keep the object awake anyway and outbound sockets cannot hibernate; it would only add an RPC hop
+  per frame. The cost is that an isolate restart (deploy) drops live sockets; clients reconnect and replay full input, which is
+  also what happens when Go restarts. The `SessionState` class stays a stub.
+- **Loop** (`socket.ts`): one fiber per socket, started with `Effect.runForkWith(context)` from the upgrade handler (the services of the
+  request are captured once; every turn runs in its own `Effect.scoped`). A second fiber is the only reader of the client socket so
+  `response.interrupt` reaches the running upstream socket (or cancels a local HTTP turn) without waiting behind the response.
+  Closing the client socket interrupts the fiber: the attempt is reported as a connection-lifecycle failure (no cooldown) and the
+  upstream execution sessions are closed. Turns call `executeStream` (the normal conductor: pick, failover, usage, refresh) with
+  `ExecutionInput.websocket = { sessionId, requireUpstream }`, `onSelected` (the credential of each attempt) and `pinnedId`;
+  `preferWebsockets` makes `pick` prefer Codex credentials with `websockets`.
+- **Per-frame planning** (`plan.ts`, `normalize.ts`; pure): `response.create` / `response.append` become executable bodies. Without
+  an upstream socket the transcript is rebuilt locally (previous input + previous output + new input, compaction/replacement
+  detection, call-id and item-id dedupe; `generate:false` warm-ups answered with synthetic `response.created`/`response.completed`
+  `resp_prewarm_<uuid>`). After a turn that ran on a credential with `websockets` (Codex/xAI) the socket pins that credential and later
+  frames pass through (`previous_response_id` kept, state upstream); a model change drops the pin. A continuation that needs the live
+  upstream socket but cannot have it closes the client with 1012 "upstream requires HTTP replay" (the client replays full input).
+  Terminal failures expose request-shape errors (and terminal auth) as a Responses `error` frame and close; credential/quota/transport
+  failures close silently (1011) like Go; 1009 (message too big) and replay-required map to their own close codes.
+- **Tool-call repair** (`tool-cache.ts`): orphaned `function_call(_output)` items of replayed input are re-attached from per-session
+  caches (256 entries, per isolate, keyed by caller scope + the client's session key, released with the last socket).
+- **Upstream transport** (`executor/websocket/`): `UpstreamWebSocketConnector` dials with `fetch` + `Upgrade: websocket` (30 s handshake
+  timeout, `wss:` URLs are fetched as `https:`); tests substitute in-memory sockets through `makeProxyRoutes({ websocketConnector })`.
+  `UpstreamSessionStore` keeps one retained socket per execution session (= downstream socket id), serialises requests with a
+  semaphore, reuses the socket while the target `(credential id, URL)` is unchanged, redials once when a send fails, applies the 5 minute
+  idle read deadline (`Effect.timeout`, testable with `TestClock`), maps binary frames, close codes and drops to errors, and
+  invalidates a socket whose turn ended before its terminal event. An idle socket that the upstream drops closes the downstream socket
+  (Go `UpstreamDisconnectChan`). Requests without a session use an ephemeral socket closed after the turn. The Worker holds at most
+  one upstream socket per client socket; it counts towards the 6 simultaneous outbound connections of the invocation.
+- **Codex** (`codex/websocket.ts`): the HTTP `prepare` in websocket mode (`previous_response_id`, `generate`, `stream_options` kept;
+  payload rules last) then framing only (`type: "response.create"`). Handshake headers follow `applyCodexWebsocketHeaders`
+  (`OpenAI-Beta: responses_websockets=2026-02-06`, `session_id`/`Conversation_id`, turn-state/metadata passthrough, routing hint).
+  Events are forwarded as bare JSON (Go skips response translation for downstream sockets): `response.done` -> `response.completed`,
+  rebuilt `response.output`, usage detail objects, replay cache update, `error` frames and terminal failures classified like the SSE path
+  (`websocket_connection_limit_reached` retries immediately on another credential).
+- **xAI** (`xai/websocket.ts`, `websocket-ids.ts`): official API base URL only (the CLI chat proxy answers 405 to upgrades), frame =
+  prepared body with `type: response.create`, no `stream`/`stream_options`/`background`, `store: true`, no `instructions` on
+  continuations, payload rules on that body and `type` re-forced afterwards. Downstream response ids are mapped to upstream ids
+  (`-xai-<seq>` suffix for repeats; `previous_response_id` dropped and the recorded transcript prepended when the upstream target
+  changed). `generate:false` warm-ups end after `response.created` with a synthesised `response.completed`.
+- **Fallback to HTTP**: credentials without `websockets` (or other providers) run each turn over the ordinary HTTP executors, with the
+  transcript rebuilt locally; a downstream WebSocket never needs an upstream one.
+
+Deviations from Go / not ported: no WebSocket ping keep-alives (`streaming.keepalive-seconds` is ignored: the Workers WebSocket API
+cannot send ping frames); terminal failures close with 1011/1012/1009 instead of dropping the TCP connection; credential pinning only
+covers WebSocket-capable credentials and the decision to pass through is based on the previously pinned credential instead of the global
+credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`), multi-agent-v2 request rewriting,
+stream bootstrap buffering, non-stream execution over WebSocket, `compaction_trigger` over the xAI socket (runs through HTTP compaction
+with the input the client sent) and the xAI apply_patch bridge. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
+long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 ## Model registry and `/models` endpoints (`src/registry/`)
 

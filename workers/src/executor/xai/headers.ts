@@ -60,3 +60,15 @@ export const buildXaiChatHeaders = (
   }
   return withCustom(headers, input)
 }
+
+/**
+ * `applyXAIWebsocketHeaders`: JSON content type, bearer token, `x-grok-conv-id` and the custom headers. No CLI identity
+ * headers (the chat proxy does not serve WebSocket upgrades).
+ */
+export const buildXaiWebsocketHeaders = (input: XaiHeaderInput): Record<string, string> => {
+  const { token } = xaiCreds(input.credential)
+  const headers: Record<string, string> = { "content-type": "application/json" }
+  if (token.trim() !== "") headers["authorization"] = `Bearer ${token}`
+  if (input.convId !== undefined && input.convId !== "") headers["x-grok-conv-id"] = input.convId
+  return withCustom(headers, input)
+}
