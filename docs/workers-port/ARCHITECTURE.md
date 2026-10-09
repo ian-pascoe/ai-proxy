@@ -130,6 +130,31 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   static model catalog used by the lookup). Known Go quirk not mirrored: gjson reads *unparsable* source JSON
   leniently in `extractCodexConfig`; the Workers port only handles parsed bodies.
 
+## Credentials and selection (ControlPlane)
+
+- **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim in
+  the DO's SQLite `credentials` table, the file *is* the metadata) and API keys synthesised from `api-keys` config with
+  the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
+  `derive.ts` turns a stored file into the immutable `Credential` (priority, weight, prefix, headers, exclusions,
+  aliases, plan/domain attributes); global exclusions and aliases are applied at selection time, so config edits take
+  effect immediately. Config credentials are never stored; their runtime state is pruned when their id disappears.
+- **Selection** (`selection/`, pure and deterministic, clock injected): candidate set -> availability (`availability.ts`,
+  incl. "never an expired OAuth token") -> highest priority tier -> strategy (`strategies.ts`: round-robin, smooth
+  weighted round-robin, fill-first) -> optional session affinity (`affinity.ts`, TTL cache keyed
+  `callerScope::providers::session::model`). Model prefixes, `force-model-prefix`, exclusions, OAuth/API-key aliases,
+  `force-mapping` and alias pools are resolved per credential in `routing.ts`. The caller still resolves the provider set
+  (`PickRequest.providers`) from the model registry; the DO enforces the per-credential rules.
+- **RPC**: `pick(request)` returns `{ ok: true, credential, route, lease }` (credential snapshot including token
+  metadata, resolved base URL/headers, and the requested -> upstream model mapping) or `{ ok: false, failure }`
+  (`model_cooldown` 429 + body, `auth_unavailable` 503, `auth_not_found`, `provider_not_found`). `report(lease, result)`
+  records counters/last error and affinity effects; the cooldown state machine is added on top of it by the
+  retry/cooldown slice (`CredentialState` already has the Go fields and `availability.ts` already reads them).
+  Management methods: `listCredentials` (redacted), `upsertCredential` (re-login merge, credentials.md §11),
+  `importAuthFile`, `removeCredential`, `setCredentialDisabled`.
+- Deviations from Go: several providers are selected from one ID-sorted union (no per-provider slot cursor); alias groups
+  of the session cache are independent keys; the LCP conversation matcher and session-id extraction are left to the
+  pipeline slice (`PickRequest.session` carries the extracted id).
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot
