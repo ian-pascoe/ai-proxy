@@ -38,7 +38,18 @@ export const mockHttpClient = (
     HttpClient.HttpClient,
     HttpClient.make((request, url) =>
       Effect.promise(async () => {
-        const body = request.body._tag === "Uint8Array" ? new TextDecoder().decode(request.body.body) : ""
+        const body =
+          request.body._tag === "Uint8Array"
+            ? new TextDecoder().decode(request.body.body)
+            : request.body._tag === "FormData"
+              ? // Multipart bodies are recorded as `[name, value | {filename,type,size}]` pairs.
+                JSON.stringify(
+                  Array.from(request.body.formData.entries(), ([name, value]) => [
+                    name,
+                    typeof value === "string" ? value : { filename: value.name, type: value.type, size: value.size }
+                  ])
+                )
+              : ""
         const call: UpstreamCall = {
           url: url.toString(),
           method: request.method,

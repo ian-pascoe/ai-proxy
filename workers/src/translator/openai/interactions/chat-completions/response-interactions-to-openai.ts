@@ -62,7 +62,8 @@ const ensureStarted = (out: JsonObject[], st: InteractionsToOpenAIChatState): vo
   out.push(chunk)
 }
 
-const toolCallIndexOf = (st: InteractionsToOpenAIChatState, index: number): number => st.toolCallIndexByStep.get(index) ?? index
+const toolCallIndexOf = (st: InteractionsToOpenAIChatState, index: number): number =>
+  st.toolCallIndexByStep.get(index) ?? index
 
 const toolCallStartChunk = (st: InteractionsToOpenAIChatState, index: number): JsonObject => {
   const chunk = baseChunk(st)
@@ -80,7 +81,9 @@ const toolCallStartChunk = (st: InteractionsToOpenAIChatState, index: number): J
 
 const toolCallArgumentsChunk = (st: InteractionsToOpenAIChatState, index: number, args: string): JsonObject => {
   const chunk = baseChunk(st)
-  ;(choiceOf(chunk).delta as JsonObject).tool_calls = [{ index: toolCallIndexOf(st, index), function: { arguments: args } }]
+  ;(choiceOf(chunk).delta as JsonObject).tool_calls = [
+    { index: toolCallIndexOf(st, index), function: { arguments: args } }
+  ]
   return chunk
 }
 
@@ -152,7 +155,11 @@ const appendCompleted = (out: JsonObject[], root: Json, st: InteractionsToOpenAI
   const status = firstNonEmpty(getStr(interaction, "status"), getStr(root, "status"))
   const interactionFinishReason = firstNonEmpty(getStr(interaction, "finish_reason"), getStr(root, "finish_reason"))
   if (interactionFinishReason === "content_filter") finishReason = "content_filter"
-  else if (status === "incomplete" || interactionFinishReason === "length" || interactionFinishReason === "max_tokens") {
+  else if (
+    status === "incomplete" ||
+    interactionFinishReason === "length" ||
+    interactionFinishReason === "max_tokens"
+  ) {
     finishReason = "length"
   }
   choiceOf(chunk).finish_reason = finishReason
@@ -342,7 +349,11 @@ export const convertInteractionsResponseToOpenAINonStream = (context: ResponseCo
   const status = firstNonEmpty(getStr(interaction, "status"), getStr(root, "status"))
   const interactionFinishReason = firstNonEmpty(getStr(interaction, "finish_reason"), getStr(root, "finish_reason"))
   if (interactionFinishReason === "content_filter") choice.finish_reason = "content_filter"
-  else if (status === "incomplete" || interactionFinishReason === "length" || interactionFinishReason === "max_tokens") {
+  else if (
+    status === "incomplete" ||
+    interactionFinishReason === "length" ||
+    interactionFinishReason === "max_tokens"
+  ) {
     choice.finish_reason = "length"
   }
   const envId = firstNonEmpty(
@@ -361,4 +372,3 @@ export const interactionsToOpenAIResponse: ResponseTransform = {
   stream: convertInteractionsResponseToOpenAI,
   nonStream: convertInteractionsResponseToOpenAINonStream
 }
-

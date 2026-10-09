@@ -5,10 +5,7 @@
  * interactions_openai_responses_response.go} (helper functions).
  */
 import { cloneJson, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
-import {
-  antigravityToolNameToUpstream,
-  antigravityUpstreamToolNameToClient
-} from "../../common/antigravity-tools.ts"
+import { antigravityToolNameToUpstream, antigravityUpstreamToolNameToClient } from "../../common/antigravity-tools.ts"
 import { normalizeOpenAIFileData } from "../../common/file-data.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
 import {

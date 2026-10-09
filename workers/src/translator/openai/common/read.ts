@@ -1,7 +1,15 @@
 /**
  * Small gjson-style readers shared by the OpenAI-compatible translators (gjson `Result` helpers over parsed JSON).
  */
-import { asString, get, isJsonArray, isJsonObject, type Json, type JsonArray, type JsonObject } from "../../../json/index.ts"
+import {
+  asString,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonArray,
+  type JsonObject
+} from "../../../json/index.ts"
 
 /** `Result.String()` of a path (or of a value). */
 export const str = (value: Json | undefined): string => asString(value)

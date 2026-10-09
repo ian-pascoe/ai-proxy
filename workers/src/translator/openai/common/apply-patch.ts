@@ -7,7 +7,7 @@
  * Differences from Go: the streaming decoder scans UTF-16 strings instead of UTF-8 bytes (invalid UTF-8 cannot occur
  * in decoded text); everything else, including the error messages, follows the Go state machine.
  */
-import { get, type Json } from "../../../json/index.ts"
+import type { Json } from "../../../json/index.ts"
 import { goMarshal } from "../../../http/json-text.ts"
 import { getStr } from "./read.ts"
 
@@ -83,14 +83,7 @@ export const unwrapApplyPatchInput = (
 export const escapeApplyPatchInputFragment = (fragment: string): string => goMarshal(fragment).slice(1, -1)
 
 type Phase =
-  | "beforeObject"
-  | "beforeKey"
-  | "inKey"
-  | "beforeColon"
-  | "beforeValue"
-  | "inValue"
-  | "afterValue"
-  | "complete"
+  "beforeObject" | "beforeKey" | "inKey" | "beforeColon" | "beforeValue" | "inValue" | "afterValue" | "complete"
 
 const isJsonSpace = (c: string): boolean => c === " " || c === "\t" || c === "\r" || c === "\n"
 
@@ -149,7 +142,9 @@ export class ApplyPatchInputDecoder {
             try {
               key = JSON.parse(this.#keyRaw) as string
             } catch (error) {
-              return this.#fail(`decode apply_patch input key: ${error instanceof Error ? error.message : String(error)}`)
+              return this.#fail(
+                `decode apply_patch input key: ${error instanceof Error ? error.message : String(error)}`
+              )
             }
             if (key !== "input") return this.#fail("apply_patch arguments must contain the input field")
             this.#keyRaw = ""
@@ -265,7 +260,8 @@ export class ApplyPatchInputDecoder {
       if (unwrapped.input !== this.#input) return this.#fail("conflicting apply_patch arguments completion")
       return { tail: "" }
     }
-    if (!unwrapped.input.startsWith(this.#input)) return this.#fail("final apply_patch input conflicts with streamed input")
+    if (!unwrapped.input.startsWith(this.#input))
+      return this.#fail("final apply_patch input conflicts with streamed input")
     const tail = unwrapped.input.slice(this.#input.length)
     this.#input += tail
     this.#finished = true
@@ -303,7 +299,9 @@ export class ApplyPatchCallState {
   }
 
   /** The unsent suffix and the complete decoded input. */
-  finishArguments(argumentsText: string): { readonly tail: string; readonly input: string } | { readonly error: string } {
+  finishArguments(
+    argumentsText: string
+  ): { readonly tail: string; readonly input: string } | { readonly error: string } {
     const finished = this.decoder.finish(argumentsText)
     if ("error" in finished) return finished
     return { tail: finished.tail, input: this.decoder.input() }
@@ -346,4 +344,3 @@ export const applyPatchFailure = (responseId: string, sequence: number): Json =>
     }
   }
 })
-

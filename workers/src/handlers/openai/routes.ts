@@ -73,8 +73,7 @@ const chatCompletions = handle({
   prepare: (raw) => {
     let body = raw
     let stream = get(body, "stream") === true
-    // Some clients send Responses-format payloads to /v1/chat/completions; convert them when the
-    // (openai-response -> openai) translator is available.
+    // Some clients send Responses-format payloads to /v1/chat/completions; convert them to Chat Completions.
     if (isResponsesShaped(body) && builtinTranslators.hasRequestTransformer(Formats.OpenAIResponse, Formats.OpenAI)) {
       const converted = builtinTranslators.translateRequest(Formats.OpenAIResponse, Formats.OpenAI, {
         format: Formats.OpenAIResponse,
@@ -82,10 +81,9 @@ const chatCompletions = handle({
         stream,
         body
       })
-      if (converted.error === undefined) {
-        body = converted.body
-        stream = asBool(get(body, "stream"))
-      }
+      // Go ignores the conversion error and continues with the returned body.
+      body = converted.body
+      stream = asBool(get(body, "stream"))
     }
     return { body, stream }
   },

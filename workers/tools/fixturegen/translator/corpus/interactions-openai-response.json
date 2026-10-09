@@ -19,9 +19,7 @@
         "thinking_level": " HIGH ",
         "thinking_summaries": "auto"
       },
-      "response_modalities": [
-        "text"
-      ],
+      "response_modalities": ["text"],
       "service_tier": "flex",
       "response_format": {
         "type": "json_object"

@@ -3,12 +3,22 @@
  *
  * Go source: internal/translator/openai/claude/openai_claude_request.go.
  */
-import { asFloat, asInt, cloneJson, get, isJsonArray, isJsonObject, type Json, type JsonArray, type JsonObject } from "../../../json/index.ts"
+import {
+  asFloat,
+  asInt,
+  cloneJson,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonArray,
+  type JsonObject
+} from "../../../json/index.ts"
 import { convertBudgetToLevel } from "../../../thinking/convert.ts"
 import { getThinkingText } from "../../../thinking/text.ts"
 import { alignOpenAIToolCallMessages } from "../common/openai-tools.ts"
 import { sortKeysDeep } from "../common/go-json.ts"
-import { getStr, isArr, isObj, present, raw, str, trimmed } from "../common/read.ts"
+import { getStr, isArr, isObj, present, raw, str } from "../common/read.ts"
 import {
   alignClaudeToolResults,
   claudeMessageSystemReminderText,
@@ -51,7 +61,8 @@ export const normalizeObjectSchemaProperties = (schema: Json): Json => {
     if (mapKey === "patternProperties") continue
     const subMap = value[mapKey]
     if (isJsonObject(subMap)) {
-      for (const [subKey, subSchema] of Object.entries(subMap)) subMap[subKey] = normalizeObjectSchemaProperties(subSchema)
+      for (const [subKey, subSchema] of Object.entries(subMap))
+        subMap[subKey] = normalizeObjectSchemaProperties(subSchema)
     }
   }
   for (const valKey of SCHEMA_VALUE_KEYWORDS) {
@@ -184,7 +195,12 @@ const convertClaudeToolResultContent = (content: Json | undefined): { text: stri
   return { text: raw(content), images: [] }
 }
 
-const convertClaudeRequestToOpenAIImpl = (modelName: string, root: Json, stream: boolean, preserveThinkingBlocks: boolean): Json => {
+const convertClaudeRequestToOpenAIImpl = (
+  modelName: string,
+  root: Json,
+  stream: boolean,
+  preserveThinkingBlocks: boolean
+): Json => {
   const drops = new UserTurnDrops()
   const out: JsonObject = { model: modelName, messages: [] }
 
@@ -457,5 +473,3 @@ export const convertClaudeRequestToOpenAI = (modelName: string, body: Json, stre
 /** `ConvertClaudeRequestToOpenAIWithCompat`: preserves assistant thinking text for compatibility endpoints. */
 export const convertClaudeRequestToOpenAIWithCompat = (modelName: string, body: Json, stream: boolean): Json =>
   convertClaudeRequestToOpenAIImpl(modelName, body, stream, true)
-
-

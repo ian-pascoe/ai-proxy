@@ -5,11 +5,7 @@
  * responses_tool_index.go,shell_tool.go}.
  */
 import { cloneJson, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
-import {
-  applyPatchDescription,
-  applyPatchParameters,
-  isApplyPatchCustomTool
-} from "../../common/apply-patch.ts"
+import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../common/apply-patch.ts"
 import { getStr, isArr, str } from "../../common/read.ts"
 import { setResponsesToolCallIdentity } from "../../common/responses.ts"
 
@@ -372,7 +368,8 @@ export class ResponsesToolIndex {
       const reserved = new Set<string>([...this.byChat.keys(), ...this.byRaw.keys(), ...this.byLocal.keys()])
       for (const item of items) {
         const kind = getStr(item, "type")
-        if (kind === "function_call" || kind === "custom_tool_call") reserved.add(this.canonicalName(getStr(item, "name")))
+        if (kind === "function_call" || kind === "custom_tool_call")
+          reserved.add(this.canonicalName(getStr(item, "name")))
       }
       name = LOCAL_SHELL
       for (let suffix = 1; reserved.has(name); suffix++) name = `${LOCAL_SHELL}_${suffix}`
@@ -436,4 +433,3 @@ export const responsesToolOutputText = (output: Json | undefined): string => {
 /** `pickRequestJSON`: the original request when available, else the translated one. */
 export const pickRequestJson = (original: Json | undefined, translated: Json | undefined): Json | undefined =>
   original !== undefined ? original : translated
-

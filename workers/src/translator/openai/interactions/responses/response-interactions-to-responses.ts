@@ -152,7 +152,10 @@ const hasPatchBridge = (st: State): boolean => {
 }
 
 /** `interactionsToolIdentityMap`: Interactions uses qualified names directly. */
-const toolIdentityMapOf = (requestBody: Json | undefined, forAntigravity: boolean): Map<string, ResponsesToolIdentity> => {
+const toolIdentityMapOf = (
+  requestBody: Json | undefined,
+  forAntigravity: boolean
+): Map<string, ResponsesToolIdentity> => {
   let root = requestBody
   const request = get(root, "request")
   if (request !== undefined) root = request
@@ -290,7 +293,8 @@ const resolveStepIndex = (
   if (explicitIndex !== undefined) related.add(asInt(explicitIndex))
   if (stepIndex !== undefined) related.add(asInt(stepIndex))
   let conflict =
-    matched.size > 1 || (explicitIndex !== undefined && stepIndex !== undefined && asInt(explicitIndex) !== asInt(stepIndex))
+    matched.size > 1 ||
+    (explicitIndex !== undefined && stepIndex !== undefined && asInt(explicitIndex) !== asInt(stepIndex))
   for (const callIndex of matched) {
     related.add(callIndex)
     if (
@@ -305,7 +309,10 @@ const resolveStepIndex = (
     const call = st.functionCalls.get(callIndex)
     if (call === undefined) continue
     patchRelated = patchRelated || call.patchCall !== undefined || isPatch(st, call.rawName)
-    if ((itemId !== "" && call.itemIdSeen && itemId !== call.id) || (callId !== "" && call.callIdSeen && callId !== call.callId)) {
+    if (
+      (itemId !== "" && call.itemIdSeen && itemId !== call.id) ||
+      (callId !== "" && call.callIdSeen && callId !== call.callId)
+    ) {
       conflict = true
     }
   }
@@ -336,13 +343,27 @@ const resolveStepIndex = (
 // ---------------------------------------------------------------------------------------------------------------------
 
 const argumentsDeltaEvent = (index: number, itemId: string, args: string, st: State): string =>
-  emit("response.function_call_arguments.delta", withSeq(st, { type: "response.function_call_arguments.delta", output_index: index, item_id: itemId, delta: args }))
+  emit(
+    "response.function_call_arguments.delta",
+    withSeq(st, { type: "response.function_call_arguments.delta", output_index: index, item_id: itemId, delta: args })
+  )
 
 const argumentsDoneEvent = (index: number, itemId: string, args: string, st: State): string =>
-  emit("response.function_call_arguments.done", withSeq(st, { type: "response.function_call_arguments.done", output_index: index, item_id: itemId, arguments: args }))
+  emit(
+    "response.function_call_arguments.done",
+    withSeq(st, {
+      type: "response.function_call_arguments.done",
+      output_index: index,
+      item_id: itemId,
+      arguments: args
+    })
+  )
 
 const customInputDoneEvent = (index: number, itemId: string, input: string, st: State): string =>
-  emit("response.custom_tool_call_input.done", withSeq(st, { type: "response.custom_tool_call_input.done", output_index: index, item_id: itemId, input }))
+  emit(
+    "response.custom_tool_call_input.done",
+    withSeq(st, { type: "response.custom_tool_call_input.done", output_index: index, item_id: itemId, input })
+  )
 
 /** Keeps evidence even before the upstream name identifies the winning declaration (`interactionsUpdateFunctionCall`). */
 const updateFunctionCall = (index: number, step: Json | undefined, st: State, initial: boolean): string[] => {
@@ -356,7 +377,8 @@ const updateFunctionCall = (index: number, step: Json | undefined, st: State, in
     if (target.pendingError === undefined) target.pendingError = error
   }
   const stepType = get(step, "type")
-  if (stepType !== undefined && getStr(step, "type") !== "function_call") recordError("conflicting apply_patch item type")
+  if (stepType !== undefined && getStr(step, "type") !== "function_call")
+    recordError("conflicting apply_patch item type")
   const mergeId = (field: "id" | "callId", seenField: "itemIdSeen" | "callIdSeen", value: string): void => {
     if (value === "") return
     if ((target[seenField] || (target.added && !isPatch(st, target.rawName))) && target[field] !== value) {
@@ -377,7 +399,13 @@ const updateFunctionCall = (index: number, step: Json | undefined, st: State, in
   const args = get(step, "arguments")
   if (
     args !== undefined &&
-    !(initial && !call.hasSnapshot && call.arguments === "" && !call.itemDoneEmitted && jsonStringValue(args, "").trim() === "{}")
+    !(
+      initial &&
+      !call.hasSnapshot &&
+      call.arguments === "" &&
+      !call.itemDoneEmitted &&
+      jsonStringValue(args, "").trim() === "{}"
+    )
   ) {
     const argumentsText = jsonStringValue(args, "{}")
     // A later complete snapshot is not a new prefix for already buffered fragments.
@@ -386,7 +414,8 @@ const updateFunctionCall = (index: number, step: Json | undefined, st: State, in
     if ("error" in snapshot) {
       recordError(snapshot.error)
     } else {
-      if (call.hasSnapshot && snapshot.input !== call.snapshotInput) recordError("conflicting apply_patch full snapshots")
+      if (call.hasSnapshot && snapshot.input !== call.snapshotInput)
+        recordError("conflicting apply_patch full snapshots")
       if (call.patchCall !== undefined && call.itemDoneEmitted && snapshot.input !== call.patchCall.decoder.input()) {
         recordError("apply_patch snapshot conflicts with completed input")
       }
@@ -426,7 +455,13 @@ const updateFunctionCall = (index: number, step: Json | undefined, st: State, in
     if (!patch && call.initialArguments !== "") call.arguments = call.initialArguments + call.arguments
     const itemType = call.isCustom ? "custom_tool_call" : "function_call"
     const inputKey = call.isCustom ? "input" : "arguments"
-    const item: JsonObject = { status: "in_progress", type: itemType, [inputKey]: "", id: call.id, call_id: call.callId }
+    const item: JsonObject = {
+      status: "in_progress",
+      type: itemType,
+      [inputKey]: "",
+      id: call.id,
+      call_id: call.callId
+    }
     const added: JsonObject = { type: "response.output_item.added", item }
     added.sequence_number = nextSeq(st)
     added.output_index = index
@@ -502,7 +537,13 @@ const reasoningItem = (index: number, st: State): JsonObject => {
 const completedOutputItem = (index: number, itemType: string, st: State): JsonObject | undefined => {
   switch (itemType) {
     case "model_output": {
-      const item: JsonObject = { id: st.itemIds.get(index) ?? "", type: "message", status: "completed", role: "assistant", content: [] }
+      const item: JsonObject = {
+        id: st.itemIds.get(index) ?? "",
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: []
+      }
       const text = st.textOutputs.get(index)
       if (text !== undefined && text !== "") item.content = [{ type: "output_text", text }]
       return item
@@ -513,7 +554,14 @@ const completedOutputItem = (index: number, itemType: string, st: State): JsonOb
       const call = st.functionCalls.get(index)
       const itemId = st.itemIds.get(index) ?? ""
       if (call !== undefined && call.isCustom) {
-        const item: JsonObject = { id: itemId, type: "custom_tool_call", call_id: call.callId, name: "", input: "", status: "completed" }
+        const item: JsonObject = {
+          id: itemId,
+          type: "custom_tool_call",
+          call_id: call.callId,
+          name: "",
+          input: "",
+          status: "completed"
+        }
         if (call.namespace !== "") item.namespace = call.namespace
         item.name = call.name
         let input = unwrapResponsesCustomToolInput(callArguments(call))
@@ -521,7 +569,14 @@ const completedOutputItem = (index: number, itemType: string, st: State): JsonOb
         item.input = input
         return item
       }
-      const item: JsonObject = { id: itemId, type: "function_call", call_id: itemId, name: "", arguments: "{}", status: "completed" }
+      const item: JsonObject = {
+        id: itemId,
+        type: "function_call",
+        call_id: itemId,
+        name: "",
+        arguments: "{}",
+        status: "completed"
+      }
       if (call !== undefined) {
         item.call_id = call.callId
         if (call.namespace !== "") item.namespace = call.namespace
@@ -551,7 +606,13 @@ const setCompletedOutput = (payload: JsonObject, st: State): void => {
 // Terminal events
 // ---------------------------------------------------------------------------------------------------------------------
 
-const createdEvent = (modelName: string, original: Json | undefined, translated: Json | undefined, root: Json, st: State): string => {
+const createdEvent = (
+  modelName: string,
+  original: Json | undefined,
+  translated: Json | undefined,
+  root: Json,
+  st: State
+): string => {
   const payload: JsonObject = {
     type: "response.created",
     response: { id: "", object: "response", status: "in_progress", model: "", output: [] }
@@ -655,7 +716,9 @@ const stepStart = (root: Json, st: State): string[] => {
   const existing = st.functionCalls.get(index)
   if (
     existing !== undefined &&
-    (existing.patchCall !== undefined || isPatch(st, existing.rawName) || (existing.rawName === "" && hasPatchBridge(st)))
+    (existing.patchCall !== undefined ||
+      isPatch(st, existing.rawName) ||
+      (existing.rawName === "" && hasPatchBridge(st)))
   ) {
     return updateFunctionCall(index, step, st, true)
   }
@@ -710,9 +773,18 @@ const stepDelta = (root: Json, st: State): string[] => {
   const deltaType = getStr(root, "delta.type")
   // Check the source barrier before a same-event snapshot or identity update can replay fragments.
   const sourceCall = st.functionCalls.get(index)
-  if (sourceCall !== undefined && sourceCall.sourceStopped && deltaType === "arguments_delta" && getStr(root, "delta.arguments") !== "") {
+  if (
+    sourceCall !== undefined &&
+    sourceCall.sourceStopped &&
+    deltaType === "arguments_delta" &&
+    getStr(root, "delta.arguments") !== ""
+  ) {
     const errSourceStop = "apply_patch delta after source stop"
-    if (sourceCall.patchCall !== undefined || isPatch(st, sourceCall.rawName) || isPatch(st, getStr(root, "step.name"))) {
+    if (
+      sourceCall.patchCall !== undefined ||
+      isPatch(st, sourceCall.rawName) ||
+      isPatch(st, getStr(root, "step.name"))
+    ) {
       return patchFailure(st, errSourceStop)
     }
     if (sourceCall.rawName === "" && hasPatchBridge(st) && sourceCall.pendingError === undefined) {
@@ -834,9 +906,19 @@ const stepStop = (root: Json, st: State): string[] => {
       const done = withSeq(st, {
         type: "response.output_item.done",
         output_index: index,
-        item: { id: itemId, type: "message", status: "completed", role: "assistant", content: [{ type: "output_text", text }] }
+        item: {
+          id: itemId,
+          type: "message",
+          status: "completed",
+          role: "assistant",
+          content: [{ type: "output_text", text }]
+        }
       })
-      return [emit("response.output_text.done", textDone), emit("response.content_part.done", part), emit("response.output_item.done", done)]
+      return [
+        emit("response.output_text.done", textDone),
+        emit("response.content_part.done", part),
+        emit("response.output_item.done", done)
+      ]
     }
     case "function_call":
       return functionCallStop(index, itemId, updates, st)
@@ -856,7 +938,11 @@ const stepStop = (root: Json, st: State): string[] => {
         summary_index: 0,
         part: { type: "summary_text", text }
       })
-      const done: JsonObject = { type: "response.output_item.done", output_index: index, item: reasoningItem(index, st) }
+      const done: JsonObject = {
+        type: "response.output_item.done",
+        output_index: index,
+        item: reasoningItem(index, st)
+      }
       done.sequence_number = nextSeq(st)
       return [
         emit("response.reasoning_summary_text.done", textDone),
@@ -865,7 +951,11 @@ const stepStop = (root: Json, st: State): string[] => {
       ]
     }
     default: {
-      const done: JsonObject = { type: "response.output_item.done", output_index: index, item: reasoningItem(index, st) }
+      const done: JsonObject = {
+        type: "response.output_item.done",
+        output_index: index,
+        item: reasoningItem(index, st)
+      }
       done.sequence_number = nextSeq(st)
       return [emit("response.output_item.done", done)]
     }
@@ -893,12 +983,15 @@ const functionCallStop = (index: number, itemId: string, updates: string[], st: 
     if (call.hasSnapshot && isValidJsonText(call.arguments)) {
       const source = finishWhole(call.arguments)
       if ("error" in source) return patchFailure(st, source.error)
-      if (source.input !== call.snapshotInput) return patchFailure(st, "apply_patch complete source conflicts with snapshot")
+      if (source.input !== call.snapshotInput)
+        return patchFailure(st, "apply_patch complete source conflicts with snapshot")
     }
     const finished = call.patchCall.finishArguments(args)
     if ("error" in finished) return patchFailure(st, finished.error)
     events.push(...patchDelta(st, call, finished.tail))
-    events.push(emit("response.custom_tool_call_input.done", applyPatchInputDone(call.patchCall, finished.input, nextSeq(st))))
+    events.push(
+      emit("response.custom_tool_call_input.done", applyPatchInputDone(call.patchCall, finished.input, nextSeq(st)))
+    )
     const item = completedOutputItem(index, "function_call", st)
     const done: JsonObject = { type: "response.output_item.done" }
     done.sequence_number = nextSeq(st)
@@ -915,7 +1008,14 @@ const functionCallStop = (index: number, itemId: string, updates: string[], st: 
       events.push(customInputDoneEvent(index, itemId, input, st))
       call.argumentsDoneEmitted = true
     }
-    const item: JsonObject = { id: itemId, type: "custom_tool_call", call_id: call.callId, name: "", input: "", status: "completed" }
+    const item: JsonObject = {
+      id: itemId,
+      type: "custom_tool_call",
+      call_id: call.callId,
+      name: "",
+      input: "",
+      status: "completed"
+    }
     const done: JsonObject = { type: "response.output_item.done", output_index: index, item }
     done.sequence_number = nextSeq(st)
     if (call.namespace !== "") item.namespace = call.namespace
@@ -930,7 +1030,14 @@ const functionCallStop = (index: number, itemId: string, updates: string[], st: 
     events.push(argumentsDoneEvent(index, itemId, args, st))
     call.argumentsDoneEmitted = true
   }
-  const item: JsonObject = { id: itemId, type: "function_call", call_id: call.callId, name: "", arguments: "", status: "completed" }
+  const item: JsonObject = {
+    id: itemId,
+    type: "function_call",
+    call_id: call.callId,
+    name: "",
+    arguments: "",
+    status: "completed"
+  }
   const done: JsonObject = { type: "response.output_item.done", output_index: index, item }
   done.sequence_number = nextSeq(st)
   if (call.namespace !== "") item.namespace = call.namespace
@@ -1048,9 +1155,13 @@ const convertEvent = (
         const index = resolved.index
         const call = st.functionCalls.get(index)
         // Patch-enabled unnamed functions retain evidence before final snapshot filtering.
-        if (call === undefined || (call.patchCall === undefined && !isPatch(st, call.rawName) && (!patchEnabled || call.rawName !== ""))) {
+        if (
+          call === undefined ||
+          (call.patchCall === undefined && !isPatch(st, call.rawName) && (!patchEnabled || call.rawName !== ""))
+        ) {
           if (getStr(step, "type") !== "function_call") continue
-          const unresolved = patchEnabled && (getStr(step, "name") === "" || (call !== undefined && call.rawName === ""))
+          const unresolved =
+            patchEnabled && (getStr(step, "name") === "" || (call !== undefined && call.rawName === ""))
           if (!isPatch(st, getStr(step, "name")) && !unresolved) continue
         }
         events.push(...updateFunctionCall(index, step, st, false))
@@ -1126,7 +1237,10 @@ const convertNonStream = (context: ResponseContext, body: string): string | unde
   const steps = get(root, "steps") ?? get(root, "interaction.steps")
   const forAntigravity = isAntigravityModel(responseModel(modelName, root))
   const requestBody = context.originalRequest ?? context.translatedRequest
-  const identities = requestBody !== undefined ? toolIdentityMapOf(requestBody, forAntigravity) : new Map<string, ResponsesToolIdentity>()
+  const identities =
+    requestBody !== undefined
+      ? toolIdentityMapOf(requestBody, forAntigravity)
+      : new Map<string, ResponsesToolIdentity>()
   let patchEnabled = false
   for (const identity of identities.values()) if (identity.applyPatch) patchEnabled = true
   let toolInputError: string | undefined

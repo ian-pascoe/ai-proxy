@@ -438,7 +438,14 @@ const processChunk = (
         type: "response.output_item.added",
         sequence_number: nextSeq(),
         output_index: outputIndex,
-        item: { id: `ctc_${callId}`, type: "custom_tool_call", status: "in_progress", input: "", call_id: callId, name: "" }
+        item: {
+          id: `ctc_${callId}`,
+          type: "custom_tool_call",
+          status: "in_progress",
+          input: "",
+          call_id: callId,
+          name: ""
+        }
       }
       st.toolIndex.applyIdentity(o, name, "item")
       out.push(emit("response.output_item.added", o))
@@ -447,7 +454,14 @@ const processChunk = (
         type: "response.output_item.added",
         sequence_number: nextSeq(),
         output_index: outputIndex,
-        item: { id: `fc_${callId}`, type: "function_call", status: "in_progress", arguments: "", call_id: callId, name: "" }
+        item: {
+          id: `fc_${callId}`,
+          type: "function_call",
+          status: "in_progress",
+          arguments: "",
+          call_id: callId,
+          name: ""
+        }
       }
       st.toolIndex.applyIdentity(o, name, "item")
       out.push(emit("response.output_item.added", o))
@@ -473,7 +487,9 @@ const processChunk = (
         const pushed = patchCall.pushArguments(delta)
         if ("error" in pushed) failToolInput(pushed.error)
         else if (pushed.text !== "") {
-          out.push(emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, pushed.text, nextSeq())))
+          out.push(
+            emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, pushed.text, nextSeq()))
+          )
         }
         st.funcArgsSent.set(key, args.length)
       }
@@ -640,7 +656,9 @@ const processChunk = (
   const finalizeOpenItems = (): void => {
     if (st.toolInputError !== undefined) return
     if (st.msgItemAdded.size > 0) {
-      const idxs = [...st.msgItemAdded.keys()].sort((a, b) => (st.msgOutputIx.get(a) ?? 0) - (st.msgOutputIx.get(b) ?? 0))
+      const idxs = [...st.msgItemAdded.keys()].sort(
+        (a, b) => (st.msgOutputIx.get(a) ?? 0) - (st.msgOutputIx.get(b) ?? 0)
+      )
       for (const idx of idxs) emitMessageItemDone(idx)
     }
     if (st.reasoningId !== "") {
@@ -715,7 +733,9 @@ const processChunk = (
           }
           input = finished.input
           if (finished.tail !== "") {
-            out.push(emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, finished.tail, nextSeq())))
+            out.push(
+              emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, finished.tail, nextSeq()))
+            )
           }
           out.push(emit("response.custom_tool_call_input.done", applyPatchInputDone(patchCall, input, nextSeq())))
         } else {
@@ -756,7 +776,14 @@ const processChunk = (
         type: "response.output_item.done",
         sequence_number: nextSeq(),
         output_index: outputIndex,
-        item: { id: `fc_${callId}`, type: "function_call", status: toolStatus, arguments: args, call_id: callId, name: "" }
+        item: {
+          id: `fc_${callId}`,
+          type: "function_call",
+          status: toolStatus,
+          arguments: args,
+          call_id: callId,
+          name: ""
+        }
       }
       st.toolIndex.applyIdentity(itemDone, st.funcNames.get(key) ?? "", "item")
       out.push(emit("response.output_item.done", itemDone))
@@ -892,7 +919,10 @@ const processChunk = (
             // Retain conflicting non-empty ids until the winning tool is known.
             if (newId !== "" && oldId !== "" && newId !== oldId) st.funcIdentityConflicts.set(key, true)
             if (st.toolIndex.isApplyPatch(oldName) || st.toolIndex.isApplyPatch(newName)) {
-              if (st.funcIdentityConflicts.get(key) === true || (newName !== "" && oldName !== "" && newName !== oldName)) {
+              if (
+                st.funcIdentityConflicts.get(key) === true ||
+                (newName !== "" && oldName !== "" && newName !== oldName)
+              ) {
                 failToolInput("conflicting apply_patch call identity")
                 break
               }
@@ -902,7 +932,8 @@ const processChunk = (
             if (nameChunk !== "" && st.funcItemAdded.get(key) !== true) st.funcNames.set(key, nameChunk)
 
             const args = get(tc, "function.arguments")
-            if (args !== undefined && str(args) !== "") st.funcArgsBuf.set(key, (st.funcArgsBuf.get(key) ?? "") + str(args))
+            if (args !== undefined && str(args) !== "")
+              st.funcArgsBuf.set(key, (st.funcArgsBuf.get(key) ?? "") + str(args))
             emitToolItem(key, false)
             emitPendingFunctionArgs(key)
             if (st.toolInputError !== undefined) break
@@ -1095,4 +1126,3 @@ export const openAIToOpenAIResponsesResponse: ResponseTransform = {
   stream: convertOpenAIChatCompletionsResponseToOpenAIResponses,
   nonStream: convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream
 }
-

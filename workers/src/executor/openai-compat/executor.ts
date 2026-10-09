@@ -6,20 +6,24 @@
  * Chat Completions -> thinking -> max-token field normalisation -> prompt cache key -> `stream_options.include_usage`
  * (stream) -> user payload rules (final semantic mutation) -> POST `{base-url}/chat/completions`.
  *
- * Not ported yet (later slices): `/responses/compact` (Responses slice), images (`openai-image`), local token counting
+ * Images (`openai-image` source format) take the `executeImages` path below: the body is forwarded to
+ * `{base-url}/images/generations|edits` (see `images.ts`).
+ *
+ * Not ported yet (later slices): `/responses/compact` (Responses slice), local token counting
  * (needs a BPE tokenizer), the text-only tool-result normalisation for models whose `input-modalities` exclude
  * images, and derived prompt cache keys (session identity lives in the conductor slice; a client-supplied
  * `prompt_cache_key` is honoured).
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { get, type Json, set, tryParseJson } from "../../json/index.ts"
+import { get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
 import { splitLines } from "../../http/sse.ts"
 import { builtinTranslators } from "../../translator/builtin.ts"
-import { Formats } from "../../translator/formats.ts"
+import { EntryOnlyFormats, Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
 import { parseOpenAIStreamUsage, parseOpenAIUsage, responseModelOf, ssePayloadObject } from "../../usage/record.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
+import { ensureResponsesUsageDetails } from "../codex/output.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { finalizePayload } from "../helps/payload.ts"
 import {
@@ -40,6 +44,7 @@ import {
   responseFormatOf,
   type StreamResult
 } from "../types.ts"
+import { compatImageEndpointPath, editBodyToFormData, prepareCompatImagesBody, wantsMultipartEdit } from "./images.ts"
 import { OpenAICompatStreamReader, TOOL_INPUT_ERROR_MESSAGE } from "./stream.ts"
 
 const USER_AGENT = "cli-proxy-openai-compat"
@@ -51,6 +56,8 @@ interface PreparedRequest {
   /** Final business payload (after payload rules). */
   readonly body: Json
   readonly baseModel: string
+  /** Multipart form sent instead of `body` (image edits uploaded as multipart by the client). */
+  readonly form?: FormData
 }
 
 /** `fetch` failures carry no HTTP answer: the conductor treats them as transient transport errors (no cooldown). */
@@ -207,11 +214,59 @@ export const makeOpenAICompatExecutor = (
     return { url, headers, body, baseModel } satisfies PreparedRequest
   })
 
+  /** Images API request (`executeImages` / `executeImagesStream` preparation). */
+  const prepareImages = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+    stream: boolean
+  ) {
+    const baseModel = parseSuffix(request.model).modelName
+    const { baseURL, apiKey } = credentialEndpoint(context)
+    if (baseURL === "") return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" })
+    const endpoint = compatImageEndpointPath(options.metadata.requestPath)
+    const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+    const from = options.sourceFormat
+    const original = prepareCompatImagesBody(options.originalRequest ?? request.payload, baseModel, stream)
+    let body: Json = prepareCompatImagesBody(request.payload, baseModel, stream)
+    const effort = get(body, "reasoning_effort")
+    context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
+    // User payload rules stay the final mutation of the business payload; a multipart upload is rebuilt afterwards.
+    body = finalizePayload(
+      context.config,
+      provider,
+      {
+        model: baseModel,
+        requestedModel,
+        protocol: to,
+        fromProtocol: from,
+        requestPath: options.metadata.requestPath,
+        headers: options.headers,
+        original
+      },
+      body
+    )
+    const multipart = wantsMultipartEdit(endpoint, options.headers.get("content-type") ?? "")
+    const headers: Record<string, string> = multipart ? {} : { "content-type": "application/json" }
+    if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`
+    headers["user-agent"] = USER_AGENT
+    applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId)
+    if (stream) {
+      headers["accept"] = "text/event-stream"
+      headers["cache-control"] = "no-cache"
+    }
+    const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + endpoint
+    const form = multipart ? editBodyToFormData(body as JsonObject, baseModel, stream) : undefined
+    return { url, headers, body, baseModel, ...(form === undefined ? {} : { form }) } satisfies PreparedRequest
+  })
+
   /** Sends the request; non-2xx answers become `ExecutionError`s carrying the upstream body. */
   const send = Effect.fnUntraced(function* (context: ExecutionContext, prepared: PreparedRequest) {
     const client = yield* HttpClient.HttpClient
     const request = HttpClientRequest.post(prepared.url).pipe(
-      HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json"),
+      prepared.form === undefined
+        ? HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json")
+        : HttpClientRequest.bodyFormData(prepared.form),
       HttpClientRequest.setHeaders(prepared.headers)
     )
     const response: HttpClientResponse.HttpClientResponse = yield* client
@@ -233,11 +288,42 @@ export const makeOpenAICompatExecutor = (
     return response
   })
 
+  /** `executeImages`: the upstream Images API answer is returned unchanged. */
+  const executeImages = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const prepared = yield* prepareImages(context, request, options, false)
+    const response = yield* send(context, prepared)
+    const text = yield* response.text.pipe(Effect.mapError(transportError))
+    context.usage.observeResponseModel(responseModelOf(tryParseJson(text)))
+    context.usage.publish(parseOpenAIUsage(text))
+    return { payload: text, headers: new Headers(response.headers) } satisfies ExecutorResponse
+  })
+
+  /** `executeImagesStream`: upstream SSE bytes are forwarded as they arrive. */
+  const executeImagesStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const prepared = yield* prepareImages(context, request, options, true)
+    const response = yield* send(context, prepared)
+    const chunks = response.stream.pipe(
+      Stream.decodeText,
+      Stream.mapError(transportError),
+      Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
+    )
+    return { headers: new Headers(response.headers), chunks } satisfies StreamResult
+  })
+
   const execute = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
+    if (options.sourceFormat === EntryOnlyFormats.OpenAIImage) return yield* executeImages(context, request, options)
     const prepared = yield* prepare(context, request, options, options.stream)
     const response = yield* send(context, prepared)
     const text = yield* response.text.pipe(Effect.mapError(transportError))
@@ -252,7 +338,8 @@ export const makeOpenAICompatExecutor = (
       return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
     }
     context.usage.publish(parseOpenAIUsage(text))
-    return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
+    const payload = responseFormatOf(options) === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out
+    return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
   const executeStream = Effect.fnUntraced(function* (
@@ -260,6 +347,8 @@ export const makeOpenAICompatExecutor = (
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
+    if (options.sourceFormat === EntryOnlyFormats.OpenAIImage)
+      return yield* executeImagesStream(context, request, options)
     const prepared = yield* prepare(context, request, options, true)
     const response = yield* send(context, prepared)
     const reader = new OpenAICompatStreamReader({

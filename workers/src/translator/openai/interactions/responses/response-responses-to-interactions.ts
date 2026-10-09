@@ -56,7 +56,11 @@ const responseModel = (modelName: string, root: Json | undefined): string =>
   firstNonEmpty(modelName, getStr(root, "model"), getStr(root, "response.model"), getStr(root, "interaction.model"))
 
 /** `setInteractionsUsageFromResponses`. */
-export const setInteractionsUsageFromResponses = (out: JsonObject, path: string, usage: Json | undefined): JsonObject => {
+export const setInteractionsUsageFromResponses = (
+  out: JsonObject,
+  path: string,
+  usage: Json | undefined
+): JsonObject => {
   if (usage === undefined) return out
   const setInt = (name: string, value: Json | undefined, ...more: string[]): void => {
     if (value === undefined) return
@@ -89,7 +93,12 @@ const appendCreated = (out: string[], st: State, modelName: string, response: Js
   st.id = firstNonEmpty(getStr(response, "id"), st.id, `interaction_${Date.now()}000000`)
   out.push(
     ev("interaction.created", {
-      interaction: { id: st.id, status: "in_progress", object: "interaction", model: responseModel(modelName, response) },
+      interaction: {
+        id: st.id,
+        status: "in_progress",
+        object: "interaction",
+        model: responseModel(modelName, response)
+      },
       event_type: "interaction.created"
     })
   )

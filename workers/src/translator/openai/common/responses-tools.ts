@@ -151,4 +151,5 @@ export const unwrapResponsesCustomToolInput = (argumentsText: string): string =>
   return trimmed
 }
 
-export const isApplyPatchDescriptor = (descriptor: ResponsesToolDescriptor): boolean => isApplyPatchCustomTool(descriptor.tool)
+export const isApplyPatchDescriptor = (descriptor: ResponsesToolDescriptor): boolean =>
+  isApplyPatchCustomTool(descriptor.tool)

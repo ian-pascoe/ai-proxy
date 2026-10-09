@@ -134,4 +134,3 @@ export const normalizeResponsesToolCallOutputs = (items: readonly Json[]): Json[
   }
   return normalized
 }
-

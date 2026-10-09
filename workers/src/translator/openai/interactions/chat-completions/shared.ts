@@ -97,7 +97,11 @@ export const openAIToolCallToInteractionsStep = (toolCall: Json, forAntigravity:
 }
 
 /** `setInteractionsUsageFromOpenAIChat` (mutates `out`; `path` is a top-level key or `interaction.usage`). */
-export const setInteractionsUsageFromOpenAIChat = (out: JsonObject, path: string, usage: Json | undefined): JsonObject => {
+export const setInteractionsUsageFromOpenAIChat = (
+  out: JsonObject,
+  path: string,
+  usage: Json | undefined
+): JsonObject => {
   if (usage === undefined) return out
   const target = (): JsonObject => {
     let node = out

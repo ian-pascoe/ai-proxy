@@ -11,7 +11,13 @@ import { getStr, isArr, isObj, raw, str } from "../common/read.ts"
 /** `IsGeminiThoughtPart` (common/gemini.go). */
 export const isGeminiThoughtPart = (part: Json | undefined): boolean => asBool(get(part, "thought"))
 
-const deterministicToolCallId = (kind: string, msgIdx: number, partIdx: number, name: string, payload: string): string =>
+const deterministicToolCallId = (
+  kind: string,
+  msgIdx: number,
+  partIdx: number,
+  name: string,
+  payload: string
+): string =>
   `call_${createHash("sha256").update(`${kind}|${msgIdx}|${partIdx}|${name}|${payload}`).digest("hex").slice(0, 24)}`
 
 const explicitGeminiToolId = (node: Json | undefined): string => {
@@ -227,7 +233,8 @@ export const convertGeminiRequestToOpenAI = (modelName: string, root: Json, stre
             const args = get(functionCall, "args")
             const argsRaw = args !== undefined ? raw(args) : ""
             let toolCallId = explicitGeminiToolId(functionCall)
-            if (toolCallId === "") toolCallId = deterministicToolCallId("call", msgIdx, currentPartIdx, funcName, argsRaw)
+            if (toolCallId === "")
+              toolCallId = deterministicToolCallId("call", msgIdx, currentPartIdx, funcName, argsRaw)
             const queue = toolCallIdsByName.get(funcName) ?? []
             queue.push(toolCallId)
             toolCallIdsByName.set(funcName, queue)

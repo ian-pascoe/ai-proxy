@@ -55,7 +55,12 @@ const appendStatusUpdate = (out: string[], st: OpenAIToInteractionsState): void 
   st.statusUpdated = true
 }
 
-const appendCreated = (out: string[], st: OpenAIToInteractionsState, modelName: string, root: Json | undefined): void => {
+const appendCreated = (
+  out: string[],
+  st: OpenAIToInteractionsState,
+  modelName: string,
+  root: Json | undefined
+): void => {
   if (st.created) return
   st.id = firstNonEmpty(getStr(root, "id"), st.id, nanosId("interaction"))
   out.push(
@@ -100,7 +105,13 @@ const appendStepStop = (out: string[], st: OpenAIToInteractionsState): void => {
   st.currentStepId = ""
 }
 
-const ensureStep = (out: string[], st: OpenAIToInteractionsState, modelName: string, stepType: string, step: Json): void => {
+const ensureStep = (
+  out: string[],
+  st: OpenAIToInteractionsState,
+  modelName: string,
+  stepType: string,
+  step: Json
+): void => {
   appendCreated(out, st, modelName, step)
   if (st.activeStepOpen && st.currentStepType === stepType) return
   appendStepStop(out, st)
@@ -118,9 +129,7 @@ const appendTextDelta = (out: string[], st: OpenAIToInteractionsState, text: str
     )
     return
   }
-  out.push(
-    ev("step.delta", { index: st.activeStepIndex, delta: { text, type: "text" }, event_type: "step.delta" })
-  )
+  out.push(ev("step.delta", { index: st.activeStepIndex, delta: { text, type: "text" }, event_type: "step.delta" }))
 }
 
 const appendArgumentsDelta = (out: string[], st: OpenAIToInteractionsState, args: string): void => {
@@ -133,7 +142,12 @@ const appendArgumentsDelta = (out: string[], st: OpenAIToInteractionsState, args
   )
 }
 
-const appendCompleted = (out: string[], st: OpenAIToInteractionsState, modelName: string, root: Json | undefined): void => {
+const appendCompleted = (
+  out: string[],
+  st: OpenAIToInteractionsState,
+  modelName: string,
+  root: Json | undefined
+): void => {
   if (st.completed) return
   if (!st.created) appendCreated(out, st, modelName, root)
   const now = nowRfc3339()
@@ -191,7 +205,11 @@ const appendToolCallDelta = (
   if (args !== undefined && str(args) !== "") appendArgumentsDelta(out, st, str(args))
 }
 
-const convertOpenAIChatStreamToInteractions = (modelName: string, rawLine: string, st: OpenAIToInteractionsState): string[] => {
+const convertOpenAIChatStreamToInteractions = (
+  modelName: string,
+  rawLine: string,
+  st: OpenAIToInteractionsState
+): string[] => {
   const payload = ssePayloadOf(rawLine)
   if (payload === "") return []
   if (payload.trim() === "[DONE]") {

@@ -329,7 +329,8 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
     }
 
     let hasReasoningInSession = false
-    const isActiveEffort = (effort: string): boolean => effort !== "" && effort !== "none" && effort !== "0" && effort !== "false"
+    const isActiveEffort = (effort: string): boolean =>
+      effort !== "" && effort !== "none" && effort !== "0" && effort !== "false"
     const reasoningEffort = get(root, "reasoning.effort")
     const reasoningEffortFlat = get(root, "reasoning_effort")
     const reasoningObj = get(root, "reasoning")
@@ -339,7 +340,8 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       hasReasoningInSession = isActiveEffort(str(reasoningEffortFlat).trim().toLowerCase())
     } else if (reasoningObj !== undefined) {
       const reasoningRaw = str(reasoningObj).trim().toLowerCase()
-      hasReasoningInSession = reasoningRaw !== "" && reasoningRaw !== "none" && reasoningRaw !== "false" && reasoningRaw !== "{}"
+      hasReasoningInSession =
+        reasoningRaw !== "" && reasoningRaw !== "none" && reasoningRaw !== "false" && reasoningRaw !== "{}"
     }
     if (!hasReasoningInSession) {
       for (const item of rawInputArray) {
@@ -375,7 +377,10 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
         const assistantMessage = messages[mergeableAssistantIndex] as JsonObject
         if (getStr(assistantMessage, "role") === "assistant" && assistantMessage.tool_calls === undefined) {
           assistantMessage.tool_calls = pendingToolCalls
-          const combined = combineOpenAIResponsesReasoning(getStr(assistantMessage, "reasoning_content"), reasoningContent)
+          const combined = combineOpenAIResponsesReasoning(
+            getStr(assistantMessage, "reasoning_content"),
+            reasoningContent
+          )
           if (combined !== "") {
             assistantMessage.reasoning_content = combined
             if (isUsableResponsesReasoning(combined)) latestReasoningContent = combined
@@ -431,10 +436,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       })
       if (callId !== "") pendingToolCallIds.push(callId)
     }
-    const emitToolOutput = (
-      item: Json,
-      setContent: (message: JsonObject, output: Json) => JsonObject
-    ): void => {
+    const emitToolOutput = (item: Json, setContent: (message: JsonObject, output: Json) => JsonObject): void => {
       mergeableAssistantIndex = -1
       const callId = extractResponsesCallId(item)
       recordOutputCount(callId)
@@ -566,7 +568,9 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
             functionName = getStr(item, "name")
             const namespace = getStr(item, "namespace").trim()
             functionName =
-              namespace !== "" ? toolIndex.namespaceName(namespace, functionName) : toolIndex.canonicalName(functionName)
+              namespace !== ""
+                ? toolIndex.namespaceName(namespace, functionName)
+                : toolIndex.canonicalName(functionName)
           }
           const args = get(item, "arguments")
           pushToolCall(item, functionName, args !== undefined ? str(args) : undefined)

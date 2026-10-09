@@ -15,15 +15,11 @@
         "top_p": 0.9,
         "top_k": 20,
         "candidate_count": 2,
-        "stop_sequences": [
-          "END"
-        ],
+        "stop_sequences": ["END"],
         "thinking_level": "HIGH",
         "tool_choice": "auto"
       },
-      "response_modalities": [
-        "text"
-      ],
+      "response_modalities": ["text"],
       "response_format": {
         "type": "json_object"
       },
@@ -198,9 +194,7 @@
         "topP": 0.5,
         "topK": 3,
         "candidateCount": 1,
-        "stopSequences": [
-          "x"
-        ],
+        "stopSequences": ["x"],
         "thinkingConfig": {
           "thinkingLevel": "low"
         }

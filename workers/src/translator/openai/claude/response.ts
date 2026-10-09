@@ -267,7 +267,11 @@ const emitBufferedInterleavedContent = (param: ClaudeStreamParams, results: stri
     param.nextContentBlockIndex++
     if (chunk.type === "thinking") {
       results.push(
-        ev("content_block_start", { type: "content_block_start", index: idx, content_block: { type: "thinking", thinking: "" } }),
+        ev("content_block_start", {
+          type: "content_block_start",
+          index: idx,
+          content_block: { type: "thinking", thinking: "" }
+        }),
         ev("content_block_delta", {
           type: "content_block_delta",
           index: idx,
@@ -277,8 +281,16 @@ const emitBufferedInterleavedContent = (param: ClaudeStreamParams, results: stri
       )
     } else {
       results.push(
-        ev("content_block_start", { type: "content_block_start", index: idx, content_block: { type: "text", text: "" } }),
-        ev("content_block_delta", { type: "content_block_delta", index: idx, delta: { type: "text_delta", text: chunk.text } }),
+        ev("content_block_start", {
+          type: "content_block_start",
+          index: idx,
+          content_block: { type: "text", text: "" }
+        }),
+        ev("content_block_delta", {
+          type: "content_block_delta",
+          index: idx,
+          delta: { type: "text_delta", text: chunk.text }
+        }),
         ev("content_block_stop", { type: "content_block_stop", index: idx })
       )
     }
@@ -451,7 +463,12 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
         }
 
         // Re-check on every chunk: some upstreams split function.name and id across separate deltas.
-        if (!accumulator.startEmitted && accumulator.name !== "" && accumulator.id !== "" && !param.contentBlocksStopped) {
+        if (
+          !accumulator.startEmitted &&
+          accumulator.name !== "" &&
+          accumulator.id !== "" &&
+          !param.contentBlocksStopped
+        ) {
           if (param.openToolCallIndex === -1) emitToolUseStart(param, index, accumulator, results)
         }
       })
@@ -718,4 +735,3 @@ export const openAIToClaudeResponse: ResponseTransform = {
   nonStream: convertOpenAIResponseToClaudeNonStream,
   tokenCount: claudeTokenCount
 }
-

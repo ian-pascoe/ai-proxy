@@ -87,7 +87,12 @@ const appendInteractionsMessageToOpenAI = (items: Json[], step: Json, role: stri
   items.push(msg)
 }
 
-const appendInteractionsStepToOpenAI = (items: Json[], step: Json, defaultRole: string, forAntigravity: boolean): void => {
+const appendInteractionsStepToOpenAI = (
+  items: Json[],
+  step: Json,
+  defaultRole: string,
+  forAntigravity: boolean
+): void => {
   switch (getStr(step, "type")) {
     case "user_input":
       appendInteractionsMessageToOpenAI(items, step, "user")
@@ -134,7 +139,11 @@ const openAIToolFromInteractionsTool = (tool: Json, forAntigravity: boolean): Js
   const fn: JsonObject = { name }
   const desc = firstExisting(get(tool, "description"), get(tool, "function.description"))
   if (desc !== undefined) fn.description = str(desc)
-  const params = firstExisting(get(tool, "parameters"), get(tool, "function.parameters"), get(tool, "parametersJsonSchema"))
+  const params = firstExisting(
+    get(tool, "parameters"),
+    get(tool, "function.parameters"),
+    get(tool, "parametersJsonSchema")
+  )
   if (params !== undefined) fn.parameters = cloneJson(params)
   return { type: "function", function: fn }
 }
@@ -201,7 +210,12 @@ export const convertInteractionsRequestToOpenAI = (modelName: string, root: Json
   copyNumber("temperature", firstExisting(get(gen, "temperature"), get(root, "temperature")))
   copyNumber(
     "max_tokens",
-    firstExisting(get(gen, "max_output_tokens"), get(gen, "maxOutputTokens"), get(root, "max_tokens"), get(root, "max_completion_tokens"))
+    firstExisting(
+      get(gen, "max_output_tokens"),
+      get(gen, "maxOutputTokens"),
+      get(root, "max_tokens"),
+      get(root, "max_completion_tokens")
+    )
   )
   copyNumber("top_p", firstExisting(get(gen, "top_p"), get(gen, "topP"), get(root, "top_p")))
   copyNumber("top_k", firstExisting(get(gen, "top_k"), get(gen, "topK")))

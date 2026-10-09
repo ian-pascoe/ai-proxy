@@ -119,7 +119,11 @@ const openAIChatContentPartToInteractions = (part: Json): JsonObject | undefined
  * `openAIChatContentStep`: one message content as an Interactions step. A non-undefined `drops` closes the user turn:
  * an attachment that cannot be sent is recorded and other sendable parts keep the turn alive.
  */
-const openAIChatContentStep = (stepType: string, content: Json | undefined, drops: UserTurnDrops | undefined): JsonObject | undefined => {
+const openAIChatContentStep = (
+  stepType: string,
+  content: Json | undefined,
+  drops: UserTurnDrops | undefined
+): JsonObject | undefined => {
   const contentItems: Json[] = []
   let sendable = 0
   try {
@@ -192,7 +196,8 @@ const appendOpenAIMessageToInteractions = (
   switch (role) {
     case "assistant": {
       const reasoning = get(message, "reasoning_content")
-      if (reasoning !== undefined) for (const text of openAIReasoningTexts(reasoning)) items.push(interactionsTextStep("thought", text))
+      if (reasoning !== undefined)
+        for (const text of openAIReasoningTexts(reasoning)) items.push(interactionsTextStep("thought", text))
       const step = openAIChatContentStep("model_output", get(message, "content"), undefined)
       if (step !== undefined) items.push(step)
       const toolCalls = get(message, "tool_calls")
@@ -274,12 +279,19 @@ export const convertOpenAIRequestToInteractions = (modelName: string, root: Json
     if (value !== undefined) set(out, path, cloneJson(value))
   }
   if (isAntigravityModel(model)) {
-    const maxOutputTokens = firstExisting(get(root, "max_completion_tokens"), get(root, "max_tokens"), get(root, "max_output_tokens"))
+    const maxOutputTokens = firstExisting(
+      get(root, "max_completion_tokens"),
+      get(root, "max_tokens"),
+      get(root, "max_output_tokens")
+    )
     if (maxOutputTokens !== undefined && get(root, "agent_config.max_total_tokens") === undefined) {
       set(out, "agent_config.max_total_tokens", asInt(maxOutputTokens))
     }
   } else {
-    copyNumber("generation_config.max_output_tokens", firstExisting(get(root, "max_completion_tokens"), get(root, "max_tokens")))
+    copyNumber(
+      "generation_config.max_output_tokens",
+      firstExisting(get(root, "max_completion_tokens"), get(root, "max_tokens"))
+    )
     copyNumber("generation_config.temperature", get(root, "temperature"))
     copyNumber("generation_config.top_p", get(root, "top_p"))
     copyNumber("generation_config.presence_penalty", get(root, "presence_penalty"))

@@ -17,7 +17,8 @@ import {
   jsonStringValue
 } from "./shared.ts"
 
-const requestModel = (modelName: string, root: Json): string => (modelName.trim() !== "" ? modelName : getStr(root, "model"))
+const requestModel = (modelName: string, root: Json): string =>
+  modelName.trim() !== "" ? modelName : getStr(root, "model")
 
 /** `interactionsSystemInstructionText`. */
 const systemInstructionText = (root: Json): string => {
@@ -126,7 +127,11 @@ const toolFromInteractionsTool = (tool: Json, forAntigravity: boolean): JsonObje
   const out: JsonObject = { type: "function", name }
   const description = firstExisting(get(tool, "description"), get(tool, "function.description"))
   if (description !== undefined) out.description = str(description)
-  const parameters = firstExisting(get(tool, "parameters"), get(tool, "function.parameters"), get(tool, "parametersJsonSchema"))
+  const parameters = firstExisting(
+    get(tool, "parameters"),
+    get(tool, "function.parameters"),
+    get(tool, "parametersJsonSchema")
+  )
   if (parameters !== undefined) out.parameters = cloneJson(parameters)
   return out
 }

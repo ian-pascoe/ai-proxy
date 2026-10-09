@@ -3,17 +3,19 @@
  * (entry protocol `openai-image`; the Codex executor answers with an Images API body or SSE frames).
  *
  * Go source: sdk/api/handlers/openai/openai_images_handlers.go (ImagesGenerations, ImagesEdits, imagesEditsFromJSON,
- * imagesEditsFromMultipart, buildOpenAICompatImagesJSONRequest, collectRoutedImages, streamRoutedImages). Only the
- * Codex tool models (`gpt-image-*`) are served here; xAI and OpenAI-compatible image models belong to their provider
- * slices. Multipart edits are converted to the JSON form (`images[].image_url`, `mask.image_url`) before execution
+ * imagesEditsFromMultipart, buildOpenAICompatImagesJSONRequest, collectRoutedImages, streamRoutedImages,
+ * collectImagesWithModel, streamOpenAICompatImages). The Codex tool models (`gpt-image-*`) and models the registry
+ * types as `openai-image` (OpenAI-compatible providers, `image: true` in config) are served here; xAI image models
+ * belong to their provider slice. Multipart edits are converted to the JSON form (`images[].image_url`, `mask.image_url`) before execution
  * (Go does the same in the executor, `codexRewriteOpenAIImageEditMultipartToJSON`).
  */
-import { Effect } from "effect"
+import { Clock, Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
-import type { ExecutionError } from "../../executor/errors.ts"
+import { ExecutionError } from "../../executor/errors.ts"
 import { invalidRequestBody, openAIErrorBody } from "../../http/errors.ts"
 import { SSE_KEEP_ALIVE, sseEvent } from "../../http/sse.ts"
-import { asString, get, type Json, type JsonObject } from "../../json/index.ts"
+import { asInt, asString, get, isJsonArray, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
+import { ModelProviders } from "../model-providers.ts"
 import { CODEX_DEFAULT_IMAGE_TOOL_MODEL } from "../../executor/codex/images.ts"
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
 import type { StreamFramer } from "../framing.ts"
@@ -36,6 +38,55 @@ const imagesModelBase = (model: string): string => {
 }
 
 const isCodexImagesToolModel = (model: string): boolean => CODEX_IMAGE_MODELS.includes(imagesModelBase(model))
+
+/** `mimeTypeFromOutputFormat`. */
+const mimeTypeFromOutputFormat = (outputFormat: string): string => {
+  if (outputFormat === "") return "image/png"
+  if (outputFormat.includes("/")) return outputFormat
+  switch (outputFormat.trim().toLowerCase()) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg"
+    case "webp":
+      return "image/webp"
+    default:
+      return "image/png"
+  }
+}
+
+/** `buildImagesAPIResponseFromXAI`: an OpenAI-compatible Images answer normalised to `response_format`. */
+export const buildImagesApiResponse = (
+  payload: string,
+  responseFormat: string,
+  nowSeconds: number
+): { readonly out: string } | { readonly error: string } => {
+  const parsed = tryParseJson(payload)
+  if (parsed === undefined) return { error: "upstream returned invalid image response JSON" }
+  const createdValue = asInt(get(parsed, "created"))
+  const created = createdValue > 0 ? createdValue : nowSeconds
+  const data = get(parsed, "data")
+  const format = responseFormat.trim().toLowerCase() === "url" ? "url" : "b64_json"
+  const items: JsonObject[] = []
+  for (const entry of isJsonArray(data) ? data : []) {
+    const b64 = asString(get(entry, "b64_json")).trim()
+    const url = asString(get(entry, "url")).trim()
+    if (b64 === "" && url === "") continue
+    const revised = asString(get(entry, "revised_prompt")).trim()
+    const mime =
+      asString(get(entry, "mime_type")).trim() || mimeTypeFromOutputFormat(asString(get(entry, "output_format")).trim())
+    const item: JsonObject = {}
+    if (format === "url") item["url"] = url !== "" ? url : `data:${mimeTypeFromOutputFormat(mime)};base64,${b64}`
+    else if (b64 !== "") item["b64_json"] = b64
+    else item["url"] = url
+    if (revised !== "") item["revised_prompt"] = revised
+    items.push(item)
+  }
+  if (items.length === 0) return { error: "upstream did not return image output" }
+  const out: JsonObject = { created, data: items }
+  const usage = get(parsed, "usage")
+  if (usage !== undefined && typeof usage === "object" && usage !== null && !Array.isArray(usage)) out["usage"] = usage
+  return { out: JSON.stringify(out) }
+}
 
 const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(invalidRequestBody(message), { status: 400, contentType: "application/json" })
@@ -163,7 +214,16 @@ const handle = (edits: boolean) =>
 
     let model = (formModel !== "" ? formModel : asString(get(body, "model"))).trim()
     if (model === "") model = CODEX_DEFAULT_IMAGE_TOOL_MODEL
-    if (!isCodexImagesToolModel(model)) return unsupportedModel(model)
+    let compat = false
+    if (!isCodexImagesToolModel(model)) {
+      const providers = yield* ModelProviders
+      const type =
+        providers.modelType === undefined
+          ? undefined
+          : yield* providers.modelType(model).pipe(Effect.orElseSucceed(() => undefined))
+      compat = type === "openai-image"
+      if (!compat) return unsupportedModel(model)
+    }
     if (asString(get(body, "prompt")).trim() === "") return badRequest("prompt is required")
     const stream = formStream || get(body, "stream") === true
 
@@ -180,7 +240,7 @@ const handle = (edits: boolean) =>
       request,
       allowImageModel: true,
       // Free-plan Codex credentials cannot use the image tools (`WithDisallowFreeAuth`).
-      disallowFreeAuth: true
+      ...(compat ? {} : { disallowFreeAuth: true })
     }
     if (stream) {
       return yield* streamResponse(executeStream(input), {
@@ -191,9 +251,15 @@ const handle = (edits: boolean) =>
     }
     const result = yield* Effect.result(executeNonStream(input))
     if (result._tag === "Failure") return onError(result.failure)
-    return HttpServerResponse.text(result.success.payload, {
-      contentType: "application/json"
-    })
+    if (!compat) return HttpServerResponse.text(result.success.payload, { contentType: "application/json" })
+    const responseFormat = asString(get(body, "response_format")).trim() || "b64_json"
+    const converted = buildImagesApiResponse(
+      result.success.payload,
+      responseFormat,
+      Math.floor((yield* Clock.currentTimeMillis) / 1000)
+    )
+    if ("error" in converted) return onError(new ExecutionError({ status: 502, message: converted.error }))
+    return HttpServerResponse.text(converted.out, { contentType: "application/json" })
   })
 
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */

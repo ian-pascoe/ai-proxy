@@ -22,16 +22,9 @@
         "maxOutputTokens": 512,
         "topP": 0.8,
         "topK": 40,
-        "stopSequences": [
-          "STOP",
-          "<end>"
-        ],
+        "stopSequences": ["STOP", "<end>"],
         "candidateCount": 2,
-        "responseModalities": [
-          "TEXT",
-          "image",
-          "Video"
-        ],
+        "responseModalities": ["TEXT", "image", "Video"],
         "thinkingConfig": {
           "thinkingBudget": 4096,
           "includeThoughts": true
@@ -166,9 +159,7 @@
                     "type": "STRING"
                   }
                 },
-                "required": [
-                  "city"
-                ]
+                "required": ["city"]
               }
             },
             {
@@ -188,9 +179,7 @@
       "toolConfig": {
         "functionCallingConfig": {
           "mode": "ANY",
-          "allowedFunctionNames": [
-            "get_weather"
-          ]
+          "allowedFunctionNames": ["get_weather"]
         }
       }
     }
@@ -318,10 +307,7 @@
       "toolConfig": {
         "functionCallingConfig": {
           "mode": "ANY",
-          "allowedFunctionNames": [
-            "a",
-            "b"
-          ]
+          "allowedFunctionNames": ["a", "b"]
         }
       }
     }

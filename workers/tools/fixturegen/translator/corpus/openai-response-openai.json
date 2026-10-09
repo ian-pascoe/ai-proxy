@@ -47,9 +47,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -213,9 +211,7 @@
           "type": "shell_call",
           "call_id": "call_4",
           "action": {
-            "commands": [
-              "ls -la"
-            ]
+            "commands": ["ls -la"]
           }
         },
         {
@@ -730,9 +726,7 @@
           "type": "shell_call",
           "call_id": "s1",
           "action": {
-            "commands": [
-              "pwd"
-            ]
+            "commands": ["pwd"]
           }
         },
         {
@@ -770,9 +764,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -866,9 +858,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -959,9 +949,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1050,9 +1038,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1143,9 +1129,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1234,9 +1218,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1325,9 +1307,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1416,9 +1396,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1507,9 +1485,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1599,9 +1575,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1690,9 +1664,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1785,9 +1757,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1848,9 +1818,7 @@
       "store": false,
       "temperature": 0.5
     },
-    "responseLines": [
-      "data: [DONE]"
-    ]
+    "responseLines": ["data: [DONE]"]
   },
   {
     "name": "stream: reasoning field and reasoning-only completion",
@@ -1874,9 +1842,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -1965,9 +1931,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -2054,9 +2018,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {
@@ -2278,9 +2240,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "city"
-            ]
+            "required": ["city"]
           }
         },
         {

@@ -401,6 +401,7 @@ Deviations from Go (all deliberate, documented in code headers):
   ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
 - `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
 
+<<<<<<< HEAD
 ## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
 
 - **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
@@ -440,6 +441,32 @@ Deviations from Go (all deliberate, documented in code headers):
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
   `PrepareAntigravityInteractions` is not ported (no Antigravity provider yet); a Vertex Imagen request without a prompt
   answers 400; logging of signature decisions is dropped. Not ported: claude->interactions (not in the slice).
+=======
+## OpenAI-compatible upstream for every client protocol (`src/translator/openai/`, `src/executor/openai-compat/`)
+
+Port of `internal/translator/openai/{claude,gemini,openai,interactions}` plus the image paths of
+`openai_compat_executor.go` and `openai_images_handlers.go`. `translator/openai/register.ts` registers (client -> provider):
+claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completions) and interactions <-> openai-response;
+`handlers/openai/routes.ts` already converts Responses-shaped bodies sent to `/v1/chat/completions`.
+
+- **Layout**: one directory per Go package; `openai/common/` holds the shared helpers (apply_patch bridge, Responses tool
+  descriptors, tool-name fixing, signature checks, user-turn-drop policy, file data). Modules cite their Go source. The
+  apply_patch identity state machine of `interactions/responses` is ported statement by statement (including the
+  `ApplyPatchInputDecoder`), and every translator is covered by golden fixtures (`corpus/*-openai*.json`, `*-interactions.json`).
+- **Images**: the executor serves `openai-image` entry requests (`executor/openai-compat/images.ts`): the JSON body is
+  forwarded to `{base-url}/images/generations|edits` with model/stream normalised and payload rules applied last. The handler
+  routes `gpt-image-*` to Codex and every model the registry types `openai-image` (config `models[].image: true`; test
+  doubles of `ModelProviders` may implement the optional `modelType`) to the OpenAI-compatible executor, converting the
+  non-stream answer to `response_format` (`buildImagesApiResponse`). The handler turns multipart edits into the JSON edit
+  form, so the executor rebuilds `multipart/form-data` for the upstream (file names are not kept).
+- **Deviations**: `isRecognizedReasoningSignature` only knows GPT/SWE/Gemini-bypass signatures (Claude/Gemini/Kimi/Grok
+  envelope validation belongs to those provider slices); a patch-enabled Interactions stream that ends without its source
+  terminator is reported as a gateway error instead of a synthesised `response.failed` (`FinalizeToolInput`); malformed
+  Interactions event JSON is only approximated (longest valid object prefix) because gjson reads lazily; raw JSON texts that
+  Go copies byte for byte (`gjson.Raw`) are re-serialised compactly.
+- **No equivalent needed**: the Go OpenAI-compatible executor has no refresh and no reasoning replay cache (§7 of the pipeline
+  research lists none for it); 401s are ordinary upstream errors for the conductor's classification.
+>>>>>>> b5077795 (feat(workers): OpenAI-compatible images, executor tests and docs for all client protocols (closes #14))
 
 ## Management API and control panel (`src/management/`)
 

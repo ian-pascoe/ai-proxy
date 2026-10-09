@@ -31,8 +31,18 @@ export const isValidGptReasoningSignature = (rawSignature: string): boolean => {
 
 const GPT_PREFIXES = new Set(["openai", "gpt", "codex"])
 const OTHER_PREFIXES = new Set([
-  "claude", "anthropic", "cais", "claude-cais", "claude_cais", "ccmax", "claude-code-max", "claude_code_max",
-  "gemini", "google", "swe", "sealed"
+  "claude",
+  "anthropic",
+  "cais",
+  "claude-cais",
+  "claude_cais",
+  "ccmax",
+  "claude-code-max",
+  "claude_code_max",
+  "gemini",
+  "google",
+  "swe",
+  "sealed"
 ])
 
 /**

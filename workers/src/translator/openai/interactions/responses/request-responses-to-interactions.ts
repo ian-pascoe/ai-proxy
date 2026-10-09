@@ -4,7 +4,18 @@
  * Go source: internal/translator/openai/interactions/responses/interactions_openai_responses_request.go
  * (ConvertOpenAIResponsesRequestToInteractions and helpers).
  */
-import { asBool, asFloat, asInt, cloneJson, del, get, isJsonObject, type Json, type JsonObject, set } from "../../../../json/index.ts"
+import {
+  asBool,
+  asFloat,
+  asInt,
+  cloneJson,
+  del,
+  get,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  set
+} from "../../../../json/index.ts"
 import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../common/apply-patch.ts"
 import { antigravityToolNameToUpstream } from "../../common/antigravity-tools.ts"
 import { isDevinCodexAppAutomationUpdate, sanitizeDevinToolDescription } from "../../common/devin-tools.ts"
@@ -29,7 +40,8 @@ import {
   textStep
 } from "./shared.ts"
 
-const requestModel = (modelName: string, root: Json): string => (modelName.trim() !== "" ? modelName : getStr(root, "model"))
+const requestModel = (modelName: string, root: Json): string =>
+  modelName.trim() !== "" ? modelName : getStr(root, "model")
 
 /** `responsesInstructionsText`. */
 const responsesInstructionsText = (instructions: Json): string => {
@@ -260,7 +272,11 @@ export const convertOpenAIResponsesRequestToInteractions = (modelName: string, b
   if (toolChoice !== undefined) {
     if (isJsonObject(toolChoice)) {
       let tc: Json | undefined = cloneJson(toolChoice)
-      let fnName = firstNonEmpty(getStr(toolChoice, "function.name"), getStr(toolChoice, "name"), getStr(toolChoice, "custom.name"))
+      let fnName = firstNonEmpty(
+        getStr(toolChoice, "function.name"),
+        getStr(toolChoice, "name"),
+        getStr(toolChoice, "custom.name")
+      )
       const ns = firstNonEmpty(
         getStr(toolChoice, "namespace"),
         getStr(toolChoice, "function.namespace"),
@@ -288,7 +304,11 @@ export const convertOpenAIResponsesRequestToInteractions = (modelName: string, b
   const format = get(root, "response_format") ?? get(root, "text.format")
   if (format !== undefined) out.response_format = cloneJson(format)
 
-  const maxOutputTokens = firstExisting(get(root, "max_output_tokens"), get(root, "max_tokens"), get(root, "max_completion_tokens"))
+  const maxOutputTokens = firstExisting(
+    get(root, "max_output_tokens"),
+    get(root, "max_tokens"),
+    get(root, "max_completion_tokens")
+  )
   if (isAntigravityModel(model)) {
     if (maxOutputTokens !== undefined && get(root, "agent_config.max_total_tokens") === undefined) {
       set(out, "agent_config.max_total_tokens", asInt(maxOutputTokens))

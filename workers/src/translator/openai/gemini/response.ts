@@ -244,7 +244,8 @@ const setGeminiUsageMetadata = (out: JsonObject, usage: Json | undefined): JsonO
   if (prompt !== undefined) metadata.promptTokenCount = prompt
   if (completion !== undefined) metadata.candidatesTokenCount = completion
   if (total !== undefined) metadata.totalTokenCount = total
-  else if (prompt !== undefined || completion !== undefined) metadata.totalTokenCount = (prompt ?? 0) + (completion ?? 0)
+  else if (prompt !== undefined || completion !== undefined)
+    metadata.totalTokenCount = (prompt ?? 0) + (completion ?? 0)
   const reasoning = reasoningTokensFromUsage(usage)
   if (reasoning > 0) metadata.thoughtsTokenCount = reasoning
   const cached = cachedTokensFromUsage(usage)
@@ -261,7 +262,11 @@ const newTemplate = (): { out: JsonObject; candidate: JsonObject } => {
 export const convertOpenAIResponseToGemini = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   const state = context.state
   if (state.value === undefined) {
-    state.value = { toolCallsAccumulator: undefined, contentAccumulatorLength: 0, isFirstChunk: false } satisfies GeminiStreamParams
+    state.value = {
+      toolCallsAccumulator: undefined,
+      contentAccumulatorLength: 0,
+      isFirstChunk: false
+    } satisfies GeminiStreamParams
   }
   const param = state.value as GeminiStreamParams
 
@@ -301,7 +306,8 @@ export const convertOpenAIResponseToGemini = (context: ResponseContext, line: st
 
     const role = get(delta, "role")
     if (role !== undefined && param.isFirstChunk) {
-      if (str(role) === "assistant") (((template.candidates as Json[])[0] as JsonObject).content as JsonObject).role = "model"
+      if (str(role) === "assistant")
+        (((template.candidates as Json[])[0] as JsonObject).content as JsonObject).role = "model"
       param.isFirstChunk = false
       results.push(JSON.stringify(template))
       continue
@@ -313,7 +319,9 @@ export const convertOpenAIResponseToGemini = (context: ResponseContext, line: st
       for (const reasoningText of extractReasoningTexts(reasoning)) {
         if (reasoningText === "") continue
         const t = JSON.parse(baseJson) as JsonObject
-        ;(((t.candidates as Json[])[0] as JsonObject).content as JsonObject).parts = [{ thought: true, text: reasoningText }]
+        ;(((t.candidates as Json[])[0] as JsonObject).content as JsonObject).parts = [
+          { thought: true, text: reasoningText }
+        ]
         chunkOutputs.push(JSON.stringify(t))
       }
     }
