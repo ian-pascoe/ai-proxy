@@ -171,6 +171,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     if (modelMax > 0 && (maxTokens > modelMax || maxTokens <= 0)) maxTokens = modelMax
     const chatModelUid = resolveDevinChatModelUid(request.model, parsed.thinkingLevel, parsed.budgetTokens, levelsOf)
 
+    const turnIndex = yield* nextSessionTurnIndex(ids.sessionId, options.metadata.callerScope)
     const matcher = buildSensitiveWordMatcher(context.config.oauth.providers.devin["sensitive-words"])
     const wire = buildGetChatMessageRequest({
       sessionToken: apiKey,
@@ -183,7 +184,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       maxTokens,
       sessionId: ids.sessionId,
       cascadeId: ids.cascadeId,
-      turnIndex: nextSessionTurnIndex(ids.sessionId),
+      turnIndex,
       matcher
     })
     // User payload rules over the protobuf business fields: the last mutation before framing.

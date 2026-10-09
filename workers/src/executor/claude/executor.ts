@@ -29,7 +29,7 @@ import {
 } from "../types.ts"
 import { isObj, str } from "../../translator/common/gjson.ts"
 import { claudeCreds, isAnthropicUpstreamBase } from "./credentials.ts"
-import { type ContinuityStore, makeMemoryContinuityStore } from "./continuity.ts"
+import { type ContinuityStore, makeSessionStateContinuityStore } from "./continuity.ts"
 import { type ClaudeUpstreamProfile, restoreResponseModel } from "./profile.ts"
 import { restoreToolNamesInResponse, AliasRestoreError, restoreToolNamesInStreamLine } from "./mcp-alias.ts"
 import {
@@ -42,7 +42,7 @@ import {
 import { classifyUpstreamError, headersIndicateUnifiedRejection, parseRateLimitResetMs } from "./ratelimit.ts"
 import { ClaudeStreamReader, TOOL_INPUT_ERROR_MESSAGE, validateClaudeStreamingResponse } from "./stream.ts"
 import {
-  makeMemoryReplayStore,
+  makeSessionStateReplayStore,
   replayContentIsReplayable,
   replayScopeValid,
   type ThinkingReplayStore
@@ -51,8 +51,8 @@ import { mergeUsage, parseClaudeStreamUsage, parseClaudeUsage } from "./usage.ts
 import type { UsageDetail } from "../../usage/record.ts"
 import { countClaudeInputTokens } from "../../tokenizer/claude-input.ts"
 
-const defaultContinuity = makeMemoryContinuityStore()
-const defaultReplay = makeMemoryReplayStore()
+const defaultContinuity = makeSessionStateContinuityStore()
+const defaultReplay = makeSessionStateReplayStore()
 
 export interface ClaudeExecutorOptions {
   readonly translators?: TranslatorRegistry
@@ -192,21 +192,24 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     return response
   })
 
-  const finishReplay = (prepared: PreparedClaudeRequest, content: Json | undefined): void => {
+  const finishReplay = (prepared: PreparedClaudeRequest, content: Json | undefined): Effect.Effect<void> => {
     const scope = prepared.replay
-    if (!replayScopeValid(scope) || !scope.cacheReady) return
-    if (content !== undefined && replayContentIsReplayable(content)) {
-      services.replay.replaceIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot, content)
-    } else {
-      services.replay.deleteIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot)
-    }
+    if (!replayScopeValid(scope) || !scope.cacheReady) return Effect.void
+    return (
+      content !== undefined && replayContentIsReplayable(content)
+        ? services.replay.replaceIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot, content)
+        : services.replay.deleteIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot)
+    ).pipe(Effect.asVoid)
   }
 
-  const commitContinuity = (prepared: PreparedClaudeRequest, messageId: string, requestId: string): void => {
-    if (prepared.continuityKey !== "" && messageId !== "") {
-      services.continuity.commit(prepared.continuityKey, messageId, requestId, prepared.promptId)
-    }
-  }
+  const commitContinuity = (
+    prepared: PreparedClaudeRequest,
+    messageId: string,
+    requestId: string
+  ): Effect.Effect<void> =>
+    prepared.continuity !== undefined && messageId !== ""
+      ? services.continuity.commit(prepared.continuity, messageId, requestId, prepared.promptId)
+      : Effect.void
 
   const execute = Effect.fnUntraced(function* (
     context: ExecutionContext,
@@ -267,12 +270,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       const message = lines
         .map((line) => tryParseJson(line.trim().startsWith("data:") ? line.trim().slice(5).trim() : ""))
         .find((payload) => str(get(payload, "type")) === "message_start")
-      commitContinuity(prepared, str(get(message, "message.id")).trim(), requestId)
+      yield* commitContinuity(prepared, str(get(message, "message.id")).trim(), requestId)
       replayContent = reader.accumulator.content()
     } else {
       const parsed = tryParseJson(data)
       context.usage.observeResponseModel(responseModelOf(parsed))
-      commitContinuity(prepared, str(get(parsed, "id")).trim(), requestId)
+      yield* commitContinuity(prepared, str(get(parsed, "id")).trim(), requestId)
       if (prepared.reverseMap.size > 0 && isObj(parsed)) {
         yield* Effect.try({
           try: () => restoreToolNamesInResponse(parsed, prepared.reverseMap),
@@ -289,7 +292,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       usage = parseClaudeUsage(data)
       replayContent = get(parsed, "content")
     }
-    finishReplay(prepared, replayContent)
+    yield* finishReplay(prepared, replayContent)
     const out = registry.translateNonStream(
       responseFormat,
       Formats.Claude,
@@ -348,14 +351,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       }),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message))),
       Stream.onExit((exit) =>
-        Effect.sync(() => {
-          if (exit._tag === "Success" && reader.completed) {
-            commitContinuity(prepared, reader.messageId, requestId)
-            finishReplay(prepared, reader.accumulator.content())
-          } else {
-            finishReplay(prepared, undefined)
-          }
-        })
+        exit._tag === "Success" && reader.completed
+          ? Effect.andThen(
+              commitContinuity(prepared, reader.messageId, requestId),
+              finishReplay(prepared, reader.accumulator.content())
+            )
+          : finishReplay(prepared, undefined)
       )
     )
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult

@@ -21,6 +21,19 @@ const sha256Hex = (text: string): string => createHash("sha256").update(text, "u
 
 const cacheKeyOf = (messageId: string): string => `gemini-responses-text:${messageId}`
 
+/**
+ * Cache keys `restoreTextSignatures` will look up for `items` (assistant messages with an id), so an executor can
+ * load them from the `SessionState` Durable Object in one batch before translating.
+ */
+export const textSignatureKeys = (items: readonly Json[]): string[] => {
+  const keys: string[] = []
+  for (const item of items) {
+    const messageId = asString(get(item, "id")).trim()
+    if (messageId !== "" && assistantVisibleText(item) !== undefined) keys.push(cacheKeyOf(messageId))
+  }
+  return keys
+}
+
 /** `cacheGeminiResponsesTextSignatures`. */
 export const cacheTextSignatures = (
   modelName: string,

@@ -44,6 +44,7 @@ import {
 } from "./classify.ts"
 import {
   applyCloaking,
+  planContinuity,
   billingFingerprintMessageText,
   CloakError,
   generateBillingHeader,
@@ -52,7 +53,7 @@ import {
   reconcileContextManagement,
   relocateSystemForCountTokens
 } from "./cloaking.ts"
-import { type ContinuityStore } from "./continuity.ts"
+import { type ContinuityState, type ContinuityStore } from "./continuity.ts"
 import {
   claudeCreds,
   DEFAULT_BASE_URL,
@@ -112,7 +113,8 @@ export interface PreparedClaudeRequest {
   readonly firstParty: boolean
   /** alias -> client tool name for this request (empty without aliasing). */
   readonly reverseMap: ReadonlyMap<string, string>
-  readonly continuityKey: string
+  /** Session continuity started for this request (undefined when none, or diagnostics were rewritten by rules). */
+  readonly continuity: ContinuityState | undefined
   readonly promptId: string
   readonly replay: ReplayScope | undefined
 }
@@ -286,7 +288,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       (options.metadata.sessionId ?? "").trim() === ""
         ? ""
         : `${options.metadata.callerScope}:${options.metadata.sessionId}`
-    const stored = family !== "" && sessionKey !== "" ? services.replay.get(family, sessionKey) : undefined
+    const stored = family !== "" && sessionKey !== "" ? yield* services.replay.get(family, sessionKey) : undefined
     let applied = false
     if (stored !== undefined) {
       const restored = cloneJson(payload)
@@ -326,8 +328,23 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   if (!isObj(thinkingBody)) return yield* requestScoped(400, "invalid Claude request body")
   const body: JsonObject = thinkingBody
 
+  // Session continuity is started (one store round trip) before the synchronous request shaping.
+  const wire = yield* attempt(() => resolveWirePolicy(config, credential, apiKey, confirmed))
+  const now = services.now()
+  const plan = yield* attempt(() => planContinuity({ config, credential, body, policy: wire.policy, sessionId, now }))
+  const continuity =
+    plan === undefined
+      ? undefined
+      : yield* services.continuity.begin(
+          plan.identity,
+          plan.sessionId,
+          plan.isNewPromptTurn,
+          plan.explicitPromptId,
+          plan.date
+        )
+
   return yield* attempt(() => {
-    const { policy, settings } = resolveWirePolicy(config, credential, apiKey, confirmed)
+    const { policy, settings } = wire
     const explicitCacheMode = isExplicitPromptCacheMode(originalPayload, request.payload, body)
     let probeOrHelper = isProbeOrHelperRequest(body)
     const cloak = applyCloaking({
@@ -341,8 +358,8 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       explicitCacheMode,
       incoming: options.headers,
       sessionId,
-      continuity: services.continuity,
-      now: services.now()
+      continuity,
+      now
     })
     const cloaked = cloak.cloaked
     if (!probeOrHelper) probeOrHelper = isProbeOrHelperRequest(body)
@@ -460,7 +477,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       oauthCredential: fingerprint.authIsOAuthToken,
       firstParty,
       reverseMap,
-      continuityKey: rules.touched.has("diagnostics") ? "" : cloak.continuityKey,
+      continuity: rules.touched.has("diagnostics") ? undefined : continuity,
       promptId: cloak.promptId,
       replay
     } satisfies PreparedClaudeRequest

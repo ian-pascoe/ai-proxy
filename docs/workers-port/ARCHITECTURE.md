@@ -49,9 +49,11 @@ workers/                      pnpm package, deployed with wrangler
   selection cursors, cooldown/quota state, session affinity, OAuth login sessions, refresh scheduling via alarms.
   It is the single writer for credential state, which replaces the Go `singleflight`/mutex/goroutine machinery. The
   Worker talks to it through JS RPC methods (e.g. `pick`, `report`, `getConfig`).
-- **`SessionState` Durable Object** (one per `caller_scope + session key`): reasoning/thinking replay caches that need
-  compare-and-swap semantics (still a stub: the replay stores are per isolate). The Responses WebSocket does **not** use
-  it: that state lives in the Worker invocation that accepted the socket (see "Responses WebSocket transports").
+- **`SessionState` Durable Object** (one instance per store + caller scope + session key, `getByName`, SQLite storage):
+  the replay and continuity caches (Codex/xAI/Claude/Kimi/Gemini/Antigravity reasoning replay, Claude continuity, Devin turn
+  counter, Antigravity Interactions continuation) with TTL and compare-and-swap semantics, see "SessionState Durable Object".
+  The Responses WebSocket does **not** use it: that state lives in the Worker invocation that accepted the socket (see
+  "Responses WebSocket transports").
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
 - **Static assets**: management control panel.
@@ -268,8 +270,9 @@ hint reads the final body) -> fetch`. Streams are processed line by line (`strea
   in-stream `error`/`response.failed` mapping, empty `response.incomplete` -> request-scoped 502, missing terminal ->
   request-scoped 408. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
 - **Reasoning replay** (`replay.ts`): Claude-format callers get cached encrypted reasoning/tool calls re-inserted by
-  anchor matching. The store is an interface; the default is a per-isolate in-memory store (TTL 1 h, bounds as in Go).
-  TODO(SessionState): back it with the `SessionState` Durable Object for cross-isolate continuity.
+  anchor matching. The store is an interface; the default keeps one entry per model in the `SessionState` DO of the session
+  (TTL 1 h, appends are compare-and-swap read-modify-writes, session keys are isolated per caller scope), with a per-isolate
+  memory fallback when the binding is absent and `makeInMemoryReplayStore` for tests.
 - **Handlers**: `POST /v1/responses`, `/v1/responses/compact` and `/backend-api/codex/{responses,responses/compact}` share
   `responses/routes.ts`; the Responses frame assembler (`responses/framer.ts`) buffers partial frames, filters private
   `responsesapi.*`/`codex.*` events (Codex clients keep `codex.response.metadata`), rebuilds an empty
@@ -312,8 +315,8 @@ WebSocket transports"). Reuses the Codex translators
 - **Compaction**: `responses/compact` posts to the official API; a streaming request with a `compaction_trigger` input item is
   executed through compact and re-emitted as a synthetic Responses SSE stream (`compact.ts`).
 - **Reasoning replay** (`replay.ts`): Claude/Responses callers get cached encrypted reasoning, assistant text and tool calls of the
-  previous turn re-inserted (TTL 1 h, 10240 entries). Same pattern as Codex: a store interface with a per-isolate in-memory default
-  (TODO(SessionState) for the Durable Object); session keys are isolated per Access `callerScope` (no scope, no replay).
+  previous turn re-inserted (sliding TTL 1 h). Same pattern as Codex: a store interface over the `SessionState` DO (per-isolate
+  memory fallback, `makeInMemoryXaiReplayStore` for tests); session keys are isolated per Access `callerScope` (no scope, no replay).
 - **Errors** (`errors.ts`): 403 "bad credentials" -> 401 (conductor refresh + retry), 429 `free-usage-exhausted` -> 24 h cooldown
   hint (`retryAfterMs`), speech 404s that do not say the model is unavailable are request-scoped.
 - **Media** (`media.ts` + handlers): executor entry protocols `openai-image`/`openai-video`/`openai-speech` (whole bodies returned
@@ -502,7 +505,10 @@ Deviations from Go (all deliberate, documented in code headers):
 
 - No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is parsed but not enforced.
 - Device-profile stabilisation, Fable/Opus-5.5 context-management reconcilers, `rebuildMidSystem` and Kimi attribution
-  are not ported; continuity and thinking-replay stores are in-memory per isolate (TODO: session Durable Object).
+  are not ported; the continuity and thinking-replay stores live in the `SessionState` DO (see below): `begin` = one read (which
+  slides the 1 h TTL) plus one write only when the prompt id or pinned date changed, `commit` = one compare-and-swap write using
+  the generation carried in `ContinuityState` (`planContinuity` computes the arguments, the store is awaited before the
+  synchronous `applyCloaking`).
 - `internal/signature` is replaced by structural checks (`executor/claude/sanitize.ts`: decodable `E…`/`R…`
   envelope); Gemini clients always receive Gemini's bypass `thoughtSignature` sentinel for Claude thinking blocks.
 - OpenAI Responses -> Claude: the Codex `apply_patch` custom-tool bridge (`internal/client/codex/apply-patch`) is not
@@ -537,17 +543,19 @@ Deviations from Go (all deliberate, documented in code headers):
   apply_patch bridge is reduced to strict `{"input": ...}` validation (`finishApplyPatchArguments`) plus the event
   helpers it needs; a retained failure sets `state.toolInputError` (stream: `response.failed`, non-stream: translation
   failure -> 502). Hidden text signatures (a signature that trails the visible text) go to a `ReplayCache`
-  (`replay-cache.ts`): per-isolate, 1 h TTL, 10240 entries, injected clock for tests. TODO(SessionState Durable
-  Object): back it with the session state DO so carriers survive isolate recycling and span isolates; until then a
-  continuation that lands elsewhere degrades to the bypass signature, never to an error.
+  (`replay-cache.ts`): the translators see a synchronous cache; the Gemini executor installs a request-scoped one
+  around each synchronous translator call (`withReplayCache`, `executor/gemini/replay.ts`): it prefetches the cache keys of the
+  assistant messages in the request in one DO round trip before translating (`textSignatureKeys`) and flushes the entries the
+  response translation stored in one write before the chunk is emitted. One DO instance per caller scope holds the entries (1 h
+  TTL, 10240 per caller); a backend failure degrades to the bypass signature, never to an error.
 - **Fixtures**: cases with generated ids/timestamps are tagged `needs: ["id-normalization"]` and run by
   `test/translator-fixtures-ids.test.ts` (ids and `created_at` masked on both sides; thinking-summary cases apply the
   real summary hooks); everything else must match the Go bytes exactly (`test/translator-fixtures.test.ts`).
 - **Deviations from Go**: `TranslationError.body` returns the partially translated body for fixture parity only;
   `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
-  `PrepareAntigravityInteractions` (continuation sessions) is not ported (see _Antigravity provider_); a Vertex Imagen request without a prompt
-  answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
+  `PrepareAntigravityInteractions` lives in `executor/gemini/antigravity-interactions.ts` (see _SessionState Durable Object_); a Vertex Imagen
+  request without a prompt answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
 
 ## Claude clients on Interactions providers (`src/translator/interactions/`)
 
@@ -688,7 +696,7 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
   inlining via `helps/inline-refs.ts`, temperature rule, `stream_options.include_usage`). Device headers: the login-time
   `metadata.device_id` (persisted in the ControlPlane with the credential) else a UUIDv5 of the credential id; device
   name/model are constants. Thinking replay for Claude callers (`kimi/replay.ts`) reuses the matcher/accumulator of
-  `claude/thinking-replay.ts` over a per-isolate store (TTL 1 h, isolated per caller scope; TODO(SessionState)).
+  `claude/thinking-replay.ts` over the `SessionState` DO (own store name, TTL 1 h, isolated per caller scope).
 - **Meta** is the Codex Responses pipeline without replay/images: `meta/request.ts` (translate to `codex`, thinking, model/stream,
   field deletions, instructions, keep-foreign reasoning sanitising via `codex/request.ts`, `search_content_types` removal,
   payload rules with protocol `meta`), `meta/errors.ts` (`resets_at` retry, 5 min 404 cooldown, credential-scoped
@@ -711,11 +719,67 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
   (Codex, Claude, Meta, Kimi, xAI, OpenAI-compatible; not Devin). Settings imported from aliased `upstream.*` spellings lose their
   OAuth-only origin and stay global (the Go `OAuthOnlyFields` provenance is not kept).
 
-Deviations from Go: Devin's per-session turn counter and Kimi's replay store are per isolate; `fetch` always sends a
+Deviations from Go: Devin's per-session turn counter is an atomic `incr` in the `SessionState` DO (TTL 24 h, per caller scope, not an
+LRU of 5000); `fetch` always sends a
 User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
 error; `internal/signature` provenance detection used for Devin thought signatures is approximated by structural checks.
 Not ported: the apply_patch bridge (Kimi/Meta/Devin), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs.
+
+## SessionState Durable Object (`src/session-state/`)
+
+Replaces the per-process maps of `internal/cache` (and the Home KV): `SESSION_STATE.getByName(<store>:<sha256(scope, session)[:32]>)`
+is one instance per store, caller scope and session key (session keys are caller-isolated by their store, either by hashing the
+Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing it (Claude) or through the `scope` address part
+(Gemini cache, Devin counter)); the instance holds a handful of `key -> string` entries in SQLite.
+
+- **Protocol** (`protocol.ts`, DO method `run(ops, now)`): ops `get` (optional sliding `extendTtlMs`), `put` (TTL, `ifGeneration`,
+  `maxEntries`), `delete` (`ifGeneration`) and `incr` (atomic counter), executed in order in one `transactionSync`; results are
+  `ok {generation, value?}`, `conflict {generation, value?}` (the current state, so a retry needs no read) or `rejected`. Generation
+  `0` is "absent"; generations are `max(last + 1, now)`, so they are never reused, not even after an empty instance deleted
+  itself (no ABA on stale tokens). The clock is the *caller's* Effect `Clock`, which is what makes TTL tests deterministic
+  (`TestClock`; start it at the real time so the alarm of the Durable Object is not armed in the past).
+- **Engine** (`engine.ts`) is synchronous over a `StateTable`: `SqliteStateTable` in the DO (values chunked into 256 Ki-unit rows
+  because a SQLite row is limited to 2 MiB while the Go caches allow 16 MiB per entry) and `MemoryStateTable` for the in-process
+  backend and unit tests. Expiry is lazy (an expired entry reads as absent) plus an alarm armed at the earliest expiry that
+  deletes expired entries and, when nothing is left, the whole instance storage (`deleteAll`, tables re-created). Bounds: TTL
+  clamp 1 s .. 24 h, value <= 20 Mi units, `maxEntries` per instance (oldest writes evicted, expired purged first).
+- **Client** (`client.ts`): `SessionStateBackend.run(address, ops)`; `durableObjectBackend` (per-request stubs from `WorkerEnv`,
+  never captured), `makeMemoryBackend(now?)` (bounded to 10240 instances) and `resolveBackend()` = the DO when `WorkerEnv`
+  binds `SESSION_STATE`, else the per-isolate memory backend (unit tests, `wrangler dev` without the binding).
+  `updateEntry` is the compare-and-swap read-modify-write loop (`known`/`slideTtl` options save the initial read).
+  Every store treats a backend failure as a cache miss (`bestEffort`, logged): a request never fails because of replay state.
+- **Stores** keep their interfaces; `makeInMemory*`/`makeMemory*` constructors are the same code over a memory backend (so tests
+  and production share one implementation): `codex/replay.ts` (store `codex-replay`; read = 1 RPC, append = get + CAS put),
+  `xai/replay.ts`, `claude/thinking-replay.ts` (the generation is the snapshot of `replaceIfUnchanged`/`deleteIfUnchanged`; Kimi
+  uses it with its own store name), `claude/continuity.ts`, `devin/credentials.ts` (`incr`, one RPC per turn),
+  `gemini/replay.ts` (batched prefetch/flush), `antigravity/replay/ledger.ts` and `gemini/antigravity-interactions.ts`.
+  The Claude thinking replay and continuity interfaces became Effect-returning (they were synchronous).
+- **Antigravity reasoning replay** (`executor/antigravity/replay/`, Go `antigravity_reasoning_replay.go` +
+  `cache/antigravity_reasoning_replay_cache.go`): `scope.ts` (session key: Claude Code scope + system lane, `Session-Id`,
+  body `session_id`, `prompt_cache_key`, derived id, else the stable id of the first user turn), `request-index.ts` (request
+  index, context fingerprints, ledger items of the history), `apply.ts` (eligibility, locating parts by call id / opaque Claude id /
+  context / occurrence, restoring native calls and signatures, inserting missing model calls), `provenance.ts` (degrading unresolved
+  reserved ids to `call_<hash>`, signing first calls, `ValidateGeminiFunctionCallPairing`), `accumulator.ts` (turns the response
+  into items; committed only after a finish reason, before `response.completed` for Responses clients, otherwise before the EOF
+  completion), `ledger.ts` (normalisation, 1 h sliding TTL, snapshot-guarded replace/delete with *tombstones*, so a writer that read
+  an older state cannot publish over a delete), `prepare.ts` (`prepareAntigravityGeminiReasoningReplayPayload`: replay, role
+  normalisation, degrade, repair, pairing check; a replay that breaks pairing is dropped and the entry invalidated; an upstream 400
+  mentioning a signature clears the entry). Only Gemini-family models use it; the replay runs after the credits flag and before the
+  boundary turns and the envelope.
+- **Interactions continuation** (`gemini/antigravity-interactions.ts`, Go `PrepareAntigravityInteractions`): for models starting
+  with `antigravity` on the native Interactions path, a completed `requires_action` interaction is stored under the conversation
+  key (caller, credential, endpoint, model, session identity or hash of the input up to the last user turn) and the sorted
+  pending call ids (hashed, NULs are not valid SQLite keys), TTL 30 min from the write, 1024 entries per conversation; the next
+  request with only matching `function_result` steps gets `previous_interaction_id` (and `environment_id`) and just those steps.
+- **Not moved (by design)**: the Responses WebSocket tool caches and xAI WebSocket id state stay in the invocation that owns the
+  socket (a live socket pins its isolate; Go loses them on restart too), see "Responses WebSocket transports".
+- **Deviations from Go**: the global entry caps (10240 / 4096 / 1024 entries) are per-instance bounds plus the TTL sweep (an
+  unbounded number of sessions costs storage only until they expire); Codex replay session keys are caller-isolated (Go isolates
+  Claude/Kimi/xAI only); Antigravity replay sessions are caller-isolated too and have no execution-session metadata key; only the
+  sequential replay application of Go is ported (its batched splice path is an optimisation that "retains the exact legacy
+  behavior"), and context fingerprints are self-consistent hashes (not byte-identical with Go's); the Gemini cache is per caller
+  instead of global; a miss no longer reserves a tombstone (the generation of the absent entry fences concurrent writers).
 
 ## Local token counting (`src/tokenizer/`, `src/executor/helps/token-count.ts`)
 
@@ -813,11 +877,11 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   ids, `webSearchModelIds` set `supportsWebSearch`; credentials without a record serve the static list (like Go before the probe finishes).
   The Go 1-minute scan is replaced by the 3 h cron (= the Go catalog TTL).
 
-Deviations from Go / not ported: the Gemini **reasoning-replay ledger** (`antigravity_reasoning_replay.go`: per-session signature/functionCall
-re-insertion; the translators' bypass sentinel, carriers and the cache cover Claude Code, and OpenAI/Responses clients get
-`skip_thought_signature_validator` on function calls) is a follow-up that needs the `SessionState` Durable Object; the **compaction capsule**
-(`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies;
-the Interactions **continuation sessions** (`PrepareAntigravityInteractions`, needs `SessionState`); a bare `[DONE]` line yields nothing in the
+The **reasoning-replay ledger** (Gemini-family models) and the Interactions **continuation sessions** run on the `SessionState` DO, see
+_SessionState Durable Object_.
+
+Deviations from Go / not ported: the **compaction capsule**
+(`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies; a bare `[DONE]` line yields nothing in the
 Interactions response translator (as in Go), so the Interactions stream ends with `interaction.completed` only; short-cooldown
 state and signature persistence are KV (eventually consistent), not the Go home KV.
 

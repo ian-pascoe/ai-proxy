@@ -8,8 +8,7 @@
  * (always last) -> HttpClient -> response translation.
  *
  * Differences from Go: stream lines are always reduced to their JSON payload before translation (Go's Vertex path
- * hands raw `data:` lines to the translators), Antigravity interactions continuation (`PrepareAntigravityInteractions`)
- * is not ported, usage v2 breakdowns are not ported, and Imagen requests without a prompt answer 400.
+ * hands raw `data:` lines to the translators), usage v2 breakdowns are not ported, and Imagen requests without a prompt answer 400.
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -25,6 +24,8 @@ import {
   type TranslatorRegistry
 } from "../../translator/registry.ts"
 import { sanitizeGeminiRequestThoughtSignatures } from "../../translator/gemini/common/signature.ts"
+import { withReplayCache } from "../../translator/gemini/openai/responses/replay-cache.ts"
+import { textSignatureKeys } from "../../translator/gemini/openai/responses/trailing-signature.ts"
 import { responseModelOf } from "../../usage/record.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
@@ -40,6 +41,13 @@ import {
   responseFormatOf,
   type StreamResult
 } from "../types.ts"
+import {
+  type ContinuationStore,
+  defaultContinuationStore,
+  type InteractionsState,
+  prepareAntigravityInteractions
+} from "./antigravity-interactions.ts"
+import { makeRequestReplayCache, type RequestReplayCache } from "./replay.ts"
 import {
   ensureGeminiBoundaryUserContent,
   ensureGeminiLeadingUserContent,
@@ -88,6 +96,8 @@ export interface GoogleVariant {
   /** Whether this attempt uses the native Interactions endpoint. */
   readonly nativeInteractions: (context: ExecutionContext, options: ExecutorOptions) => boolean
   readonly translators?: TranslatorRegistry
+  /** Antigravity Interactions continuation sessions (defaults to the `SessionState` Durable Object). */
+  readonly continuations?: ContinuationStore
 }
 
 const transportError = (error: HttpClientError.HttpClientError) =>
@@ -117,6 +127,8 @@ interface PreparedRequest {
   readonly imagen: boolean
   /** Format of the upstream (`gemini` or `interactions`). */
   readonly providerFormat: string
+  /** Antigravity Interactions continuation state of the request (native Interactions only). */
+  readonly continuation?: InteractionsState
 }
 
 /** Everything `prepare*` needs about the attempt. */
@@ -125,6 +137,8 @@ interface Attempt {
   readonly request: ExecutorRequest
   readonly options: ExecutorOptions
   readonly target: GoogleTarget
+  /** Text-signature cache of the request (`SessionState` backed), see `replay.ts`. */
+  readonly replay: RequestReplayCache
 }
 
 const requestError = (envelope: RequestEnvelope) =>
@@ -199,6 +213,7 @@ export const convertImagenToGeminiResponse = (data: string, model: string, nowNa
 export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => {
   const registry = variant.translators ?? builtinTranslators
   const to = Formats.Gemini
+  const continuations = variant.continuations ?? defaultContinuationStore
 
   const send = Effect.fnUntraced(function* (context: ExecutionContext, prepared: PreparedRequest) {
     const client = yield* HttpClient.HttpClient
@@ -277,18 +292,20 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       original = structuredClone(imagenBody)
       if (options.originalRequest !== undefined) original = convertToImagenRequest(options.originalRequest) ?? original
     } else {
-      original = registry.translateRequest(
-        from,
-        to,
-        { format: from, model: baseModel, stream, body: options.originalRequest ?? request.payload },
-        thinking.summary
-      ).body
-      const translated = registry.translateRequest(
-        from,
-        to,
-        { format: from, model: baseModel, stream, body: request.payload },
-        thinking.summary
-      )
+      if (from === Formats.OpenAIResponse) {
+        // Cached text signatures of the assistant messages in the history, loaded in one round trip.
+        const history = [options.originalRequest, request.payload].flatMap((payload) => {
+          const input = get(payload, "input")
+          return Array.isArray(input) ? textSignatureKeys(input) : []
+        })
+        yield* attempt.replay.prefetch(baseModel, history)
+      }
+      const translateWithReplay = (body: Json) =>
+        withReplayCache(attempt.replay, () =>
+          registry.translateRequest(from, to, { format: from, model: baseModel, stream, body }, thinking.summary)
+        )
+      original = translateWithReplay(options.originalRequest ?? request.payload).body
+      const translated = translateWithReplay(request.payload)
       if (translated.error !== undefined) return yield* requestError(translated)
       body = yield* thinking.apply({
         body: translated.body,
@@ -370,7 +387,15 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       source: request.payload
     })
     body = sanitizeGeminiInteractionsUnsupportedInputIds(body)
-    // TODO(session-state): Antigravity interactions continuation (`PrepareAntigravityInteractions`) needs SessionState.
+    const continuation = yield* prepareAntigravityInteractions(
+      continuations,
+      attempt.context.credential,
+      request,
+      options,
+      targetName,
+      body
+    )
+    body = continuation.body
     if (stream) body = set(body, "stream", true)
     const finalBody = payloadRules(attempt, targetName, providerFormat, original.body, body)
     const headers = headersFor(attempt)
@@ -382,7 +407,8 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       baseModel: targetName,
       to: providerFormat,
       imagen: false,
-      providerFormat
+      providerFormat,
+      continuation: continuation.state
     } satisfies PreparedRequest
   })
 
@@ -399,7 +425,13 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     options: ExecutorOptions
   ) {
     const target = yield* variant.resolveTarget(context, options)
-    return { context, request, options, target } satisfies Attempt
+    return {
+      context,
+      request,
+      options,
+      target,
+      replay: makeRequestReplayCache(options.metadata.callerScope)
+    } satisfies Attempt
   })
 
   const execute = Effect.fnUntraced(function* (
@@ -410,7 +442,9 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     if (options.alt === "responses/compact") return yield* notImplemented("/responses/compact not supported")
     const attempt = yield* resolve(context, request, options)
     const native = variant.nativeInteractions(context, options)
-    const prepared = native ? yield* prepareInteractions(attempt, false) : yield* prepareGenerate(attempt, "generate")
+    const prepared: PreparedRequest = native
+      ? yield* prepareInteractions(attempt, false)
+      : yield* prepareGenerate(attempt, "generate")
     const response = yield* send(context, prepared)
     let text = yield* response.text.pipe(Effect.mapError(transportError))
     if (prepared.imagen) {
@@ -418,12 +452,16 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     }
     const parsed = tryParseJson(text)
     context.usage.observeResponseModel(responseModelOf(parsed))
-    const out = registry.translateNonStream(
-      responseFormatOf(options),
-      prepared.providerFormat,
-      responseContext(attempt, prepared),
-      text
+    if (prepared.continuation !== undefined) yield* prepared.continuation.observe(parsed)
+    const out = withReplayCache(attempt.replay, () =>
+      registry.translateNonStream(
+        responseFormatOf(options),
+        prepared.providerFormat,
+        responseContext(attempt, prepared),
+        text
+      )
     )
+    yield* attempt.replay.flush
     if (out === undefined || out === "") {
       return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
     }
@@ -440,8 +478,13 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const { context, options } = attempt
     const responseFormat = responseFormatOf(options)
     const ctx = responseContext(attempt, prepared)
-    const translate = (payload: string): ReadonlyArray<string> =>
-      registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload)
+    // The text signatures a chunk produced are stored before the chunk reaches the client.
+    const translate = (payload: string) =>
+      Effect.sync(() =>
+        withReplayCache(attempt.replay, () =>
+          registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload)
+        )
+      ).pipe(Effect.tap(() => attempt.replay.flush))
     const failToolInput = ctx.state
     const check = (chunks: ReadonlyArray<string>) =>
       failToolInput.toolInputError !== undefined
@@ -450,6 +493,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
             Stream.fail(new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }))
           )
         : Stream.fromIterable(chunks)
+    const translated = (payload: string) => Stream.unwrap(translate(payload).pipe(Effect.map(check)))
     const lines = splitLines(response.stream).pipe(Stream.mapError(transportError))
     return Stream.concat(
       lines.pipe(
@@ -459,10 +503,10 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
           if (usage !== undefined) context.usage.publish(usage)
           const filtered = variant.vertex ? line : filterSseUsageMetadata(line)
           const payload = jsonPayload(filtered)
-          return payload === undefined ? Stream.empty : check(translate(payload))
+          return payload === undefined ? Stream.empty : translated(payload)
         })
       ),
-      Stream.suspend(() => check(translate("[DONE]")))
+      Stream.suspend(() => translated("[DONE]"))
     )
   }
 
@@ -475,12 +519,16 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const { context, options } = attempt
     const responseFormat = responseFormatOf(options)
     const ctx = responseContext(attempt, prepared)
+    const framePayload = (frame: string): string | undefined => {
+      let payload = interactionsSsePayload(frame)
+      if (payload === undefined && interactionsSseDone(frame)) payload = "[DONE]"
+      if (payload === undefined && frame.trim().startsWith("{")) payload = frame.trim()
+      return payload
+    }
     const emit = (frame: string): Stream.Stream<string, ExecutionError> => {
       const trimmed = frame.trim()
       if (trimmed === "") return Stream.empty
-      let payload = interactionsSsePayload(frame)
-      if (payload === undefined && interactionsSseDone(frame)) payload = "[DONE]"
-      if (payload === undefined && trimmed.startsWith("{")) payload = trimmed
+      const payload = framePayload(frame)
       if (payload !== undefined) {
         context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
         const usage = parseInteractionsStreamUsage(payload)
@@ -505,7 +553,16 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         { onHalt: (frame: ReadonlyArray<string>) => [frame.join("\n")] }
       )
     )
-    return frames.pipe(Stream.flatMap(emit))
+    // Antigravity continuation: completed `requires_action` interactions are remembered before their frames go out.
+    const observed = (frame: string): Stream.Stream<string, ExecutionError> => {
+      const payload = prepared.continuation === undefined ? undefined : framePayload(frame)
+      const observe =
+        prepared.continuation !== undefined && payload !== undefined && payload !== "[DONE]"
+          ? prepared.continuation.observe(tryParseJson(payload))
+          : Effect.void
+      return Stream.unwrap(observe.pipe(Effect.as(emit(frame))))
+    }
+    return frames.pipe(Stream.flatMap(observed))
   }
 
   const executeStream = Effect.fnUntraced(function* (
@@ -516,7 +573,9 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     if (options.alt === "responses/compact") return yield* notImplemented("/responses/compact not supported")
     const attempt = yield* resolve(context, request, options)
     const native = variant.nativeInteractions(context, options)
-    const prepared = native ? yield* prepareInteractions(attempt, true) : yield* prepareGenerate(attempt, "stream")
+    const prepared: PreparedRequest = native
+      ? yield* prepareInteractions(attempt, true)
+      : yield* prepareGenerate(attempt, "stream")
     const response = yield* send(context, prepared)
     const chunks = (
       native

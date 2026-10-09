@@ -4,8 +4,11 @@
  * Go source: internal/runtime/executor/devin_executor.go (`devinAuthCredentials`, `resolveDevinSessionAndCascadeIDs`,
  * `newDevinStatusError`), internal/runtime/executor/helps/devin_wire.go (`NextDevinSessionTurnIndex`: process-scoped
  * LRU of 5000 session counters). The turn counter only decides whether thread metadata carries an ordinal; it lives
- * per isolate (TODO(SessionState): move it to the SessionState Durable Object for cross-isolate continuity).
+ * in the `SessionState` Durable Object (per-isolate fallback without the binding).
  */
+import { Effect } from "effect"
+import { type BackendResolver, bestEffort, isolateMemoryBackend, resolveBackend } from "../../session-state/client.ts"
+import type { SessionAddress } from "../../session-state/protocol.ts"
 import { ExecutionError } from "../errors.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 import { DEVIN_DEFAULT_BASE_URL } from "./wire.ts"
@@ -33,24 +36,43 @@ export const devinCredentials = (
   }
 }
 
-const MAX_SESSION_COUNTERS = 5000
-const turnCounters = new Map<string, number>()
+const TURN_STORE = "devin-turns"
+const TURN_KEY = "turn"
+const TURN_TTL_MS = 24 * 3_600_000
 
-/** `NextDevinSessionTurnIndex`: the 0-based request ordinal of the session. */
-export const nextSessionTurnIndex = (sessionId: string): number => {
-  const id = sessionId.trim()
-  if (id === "") return 0
-  const current = turnCounters.get(id)
-  if (current === undefined && turnCounters.size >= MAX_SESSION_COUNTERS) {
-    turnCounters.delete(turnCounters.keys().next().value as string)
-  }
-  turnCounters.set(id, (current ?? 0) + 1)
-  return current ?? 0
+const turnAddress = (sessionId: string, callerScope: string): SessionAddress => ({
+  store: TURN_STORE,
+  scope: callerScope.trim(),
+  session: sessionId.trim()
+})
+
+/**
+ * `NextDevinSessionTurnIndex`: the 0-based request ordinal of the session. Go keeps an LRU of 5000 counters per
+ * process; here the counter is an atomic increment in the `SessionState` Durable Object (TTL 24 h, per caller scope
+ * and session) with a per-isolate fallback. Backend failures answer 0 (no ordinal), like an unknown session.
+ */
+export const nextSessionTurnIndex = (
+  sessionId: string,
+  callerScope = "",
+  backend: BackendResolver = resolveBackend()
+): Effect.Effect<number> => {
+  if (sessionId.trim() === "") return Effect.succeed(0)
+  return bestEffort(
+    "devin turn counter",
+    0,
+    Effect.gen(function* () {
+      const state = yield* backend
+      const [result] = yield* state.run(turnAddress(sessionId, callerScope), [
+        { op: "incr", key: TURN_KEY, ttlMs: TURN_TTL_MS, maxEntries: 1 }
+      ])
+      return result?.status === "ok" ? Math.max(0, Number.parseInt(result.value ?? "1", 10) - 1) : 0
+    })
+  )
 }
 
-/** `ResetDevinSessionTurnIndex`. */
-export const resetSessionTurnIndex = (sessionId: string): void => {
-  turnCounters.delete(sessionId.trim())
+/** `ResetDevinSessionTurnIndex` (per-isolate fallback store; tests). */
+export const resetSessionTurnIndex = (sessionId: string, callerScope = ""): void => {
+  Effect.runSync(isolateMemoryBackend.run(turnAddress(sessionId, callerScope), [{ op: "delete", key: TURN_KEY }]))
 }
 
 /** `resolveDevinSessionAndCascadeIDs`: the protocol session id (or a random one) as UUIDs. */

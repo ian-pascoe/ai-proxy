@@ -7,9 +7,10 @@
  *
  * Claude clients cannot carry Codex `reasoning` items, so the encrypted reasoning and tool calls of each completed
  * response are cached per (model, session) and re-inserted into the next request. The store is an interface: the
- * default is a per-isolate in-memory store (best effort; an isolate restart only loses continuity).
- * TODO(SessionState): back the store with the `SessionState` Durable Object (compare-and-swap, shared across
- * isolates) in the session follow-up slice.
+ * default keeps the entries in the `SessionState` Durable Object (shared across isolates, compare-and-swap appends,
+ * TTL 1 h) and falls back to a per-isolate in-memory store without the binding; tests use `makeInMemoryReplayStore`.
+ * Workers deviations: the entry bounds are per session (the Durable Object of a session holds one entry per model;
+ * the Go 10240-entry cap is replaced by the TTL sweep) and session keys are isolated per caller scope.
  */
 import { createHash } from "node:crypto"
 import { Effect } from "effect"
@@ -17,16 +18,27 @@ import { asString, cloneJson, get, isJsonArray, type Json, type JsonObject, set 
 import { isValidGptReasoningSignature } from "../../translator/common/signature.ts"
 import { sanitizeClaudeToolId } from "../../translator/common/claude-messages.ts"
 import { shortenCodexCallIdIfNeeded } from "../../translator/codex/claude/request.ts"
+import {
+  type BackendResolver,
+  bestEffort,
+  fixedBackend,
+  keepValue,
+  makeMemoryBackend,
+  putValue,
+  resolveBackend,
+  updateEntry
+} from "../../session-state/client.ts"
+import type { SessionAddress } from "../../session-state/protocol.ts"
 import { uuidV5Oid } from "../helps/uuid.ts"
 
 /** Marker item that opens each cached turn. */
 export const CODEX_REASONING_REPLAY_TURN_TYPE = "cpa_codex_replay_turn"
 
 const CACHE_TTL_MS = 60 * 60 * 1000
-const CACHE_MAX_ENTRIES = 10240
+const CACHE_MAX_MODELS_PER_SESSION = 64
 const CACHE_MAX_TURNS_PER_ENTRY = 256
 const CACHE_MAX_BYTES_PER_ENTRY = 16 << 20
-const EVICT_BATCH_SIZE = 128
+const STORE_NAME = "codex-replay"
 
 // ---------------------------------------------------------------------------------------------------------------
 // Store
@@ -103,64 +115,89 @@ const normalizeItem = (item: Json): Json | undefined => {
 const normalizeItems = (items: ReadonlyArray<Json>): Json[] =>
   trimItems(items.map(normalizeItem).filter((item): item is Json => item !== undefined))
 
-interface Entry {
-  items: Json[]
-  timestamp: number
-}
-
-/** Per-isolate in-memory store (`now` is injectable for tests). */
-export const makeInMemoryReplayStore = (now: () => number = Date.now): CodexReplayStore => {
-  const entries = new Map<string, Entry>()
-  const keyOf = (model: string, session: string) => `${model.trim()}\u0000${session.trim()}`
-  const purge = (at: number) => {
-    for (const [key, entry] of entries) if (at - entry.timestamp > CACHE_TTL_MS) entries.delete(key)
-  }
-  return {
-    get: (modelName, sessionKey) =>
-      Effect.sync(() => {
-        const entry = entries.get(keyOf(modelName, sessionKey))
-        if (entry === undefined) return undefined
-        if (now() - entry.timestamp > CACHE_TTL_MS) {
-          entries.delete(keyOf(modelName, sessionKey))
-          return undefined
-        }
-        return entry.items.map((item) => cloneJson(item))
-      }),
-    append: (modelName, sessionKey, items) =>
-      Effect.sync(() => {
-        const normalized = normalizeItems(items)
-        if (normalized.length === 0) return
-        const at = now()
-        purge(at)
-        const key = keyOf(modelName, sessionKey)
-        const existing = entries.get(key)?.items ?? []
-        let base = existing
-        if (base.length > 0 && asString(get(base[0], "type")).trim() !== CODEX_REASONING_REPLAY_TURN_TYPE) base = []
-        const turnId =
-          asString(get(normalized[0], "type")).trim() === CODEX_REASONING_REPLAY_TURN_TYPE
-            ? asString(get(normalized[0], "id")).trim()
-            : ""
-        const duplicate =
-          turnId !== "" &&
-          base.some(
-            (item) =>
-              asString(get(item, "type")).trim() === CODEX_REASONING_REPLAY_TURN_TYPE &&
-              asString(get(item, "id")).trim() === turnId
-          )
-        const combined = trimItems(duplicate ? [...base] : [...base, ...normalized])
-        if (combined.length === 0) return
-        if (entries.size >= CACHE_MAX_ENTRIES) {
-          const oldest = [...entries.entries()].toSorted((a, b) => a[1].timestamp - b[1].timestamp)
-          for (const [oldKey] of oldest.slice(0, EVICT_BATCH_SIZE)) entries.delete(oldKey)
-        }
-        entries.set(key, { items: combined, timestamp: at })
-      }),
-    clear: (modelName, sessionKey) => Effect.sync(() => void entries.delete(keyOf(modelName, sessionKey)))
+const parseItems = (text: string | undefined): Json[] | undefined => {
+  if (text === undefined) return undefined
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) ? (parsed as Json[]) : undefined
+  } catch {
+    return undefined
   }
 }
 
-/** Process-wide default store (one per isolate). */
-export const defaultReplayStore: CodexReplayStore = makeInMemoryReplayStore()
+/** `CacheCodexReasoningReplayItems` merge: appends a normalised turn unless its turn id is cached already. */
+export const mergeTurn = (existing: ReadonlyArray<Json>, normalized: ReadonlyArray<Json>): Json[] => {
+  let base = [...existing]
+  if (base.length > 0 && asString(get(base[0], "type")).trim() !== CODEX_REASONING_REPLAY_TURN_TYPE) base = []
+  const turnId =
+    asString(get(normalized[0], "type")).trim() === CODEX_REASONING_REPLAY_TURN_TYPE
+      ? asString(get(normalized[0], "id")).trim()
+      : ""
+  const duplicate =
+    turnId !== "" &&
+    base.some(
+      (item) =>
+        asString(get(item, "type")).trim() === CODEX_REASONING_REPLAY_TURN_TYPE &&
+        asString(get(item, "id")).trim() === turnId
+    )
+  return trimItems(duplicate ? base : [...base, ...normalized])
+}
+
+const addressOf = (sessionKey: string): SessionAddress => ({ store: STORE_NAME, scope: "", session: sessionKey.trim() })
+
+/**
+ * Store over the `SessionState` backend of the current request (Durable Object, or the per-isolate fallback): one
+ * instance per session key, one entry per model. Failures of the backend degrade to a cache miss.
+ */
+export const makeSessionStateReplayStore = (backend: BackendResolver = resolveBackend()): CodexReplayStore => ({
+  get: (modelName, sessionKey) =>
+    bestEffort(
+      "codex replay get",
+      undefined,
+      Effect.gen(function* () {
+        const state = yield* backend
+        const [result] = yield* state.run(addressOf(sessionKey), [{ op: "get", key: modelName.trim() }])
+        return result?.status === "ok" ? parseItems(result.value) : undefined
+      })
+    ),
+  append: (modelName, sessionKey, items) => {
+    const normalized = normalizeItems(items)
+    if (normalized.length === 0) return Effect.void
+    return bestEffort(
+      "codex replay append",
+      undefined,
+      Effect.gen(function* () {
+        const state = yield* backend
+        yield* updateEntry(
+          state,
+          addressOf(sessionKey),
+          modelName.trim(),
+          { ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX_MODELS_PER_SESSION },
+          (current) => {
+            const combined = mergeTurn(parseItems(current) ?? [], normalized)
+            return combined.length === 0 ? keepValue : putValue(JSON.stringify(combined))
+          }
+        )
+      })
+    )
+  },
+  clear: (modelName, sessionKey) =>
+    bestEffort(
+      "codex replay clear",
+      undefined,
+      Effect.gen(function* () {
+        const state = yield* backend
+        yield* state.run(addressOf(sessionKey), [{ op: "delete", key: modelName.trim() }])
+      })
+    )
+})
+
+/** In-memory store for tests (`now` is injectable). */
+export const makeInMemoryReplayStore = (now?: () => number): CodexReplayStore =>
+  makeSessionStateReplayStore(fixedBackend(makeMemoryBackend(now)))
+
+/** Default store: the `SessionState` Durable Object when bound, else per isolate. */
+export const defaultReplayStore: CodexReplayStore = makeSessionStateReplayStore()
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scope and session key
@@ -296,6 +333,13 @@ export const replaySessionKey = (input: ReplayScopeInput): string => {
   return ""
 }
 
+/** Workers addition: session keys are namespaced by the caller (like xAI/Kimi/Claude) so callers never share replay. */
+const isolateCallerSession = (sessionKey: string, callerScope: string): string => {
+  const scope = callerScope.trim()
+  if (sessionKey === "" || scope === "") return sessionKey
+  return `caller:${sha256Hex(scope).slice(0, 16)}:${sessionKey}`
+}
+
 /** `codexReasoningReplayScopeFromRequest`: only Claude-format callers use the replay cache. */
 export const replayScopeFromRequest = (input: ReplayScopeInput): CodexReplayScope => {
   if (input.from.trim().toLowerCase() !== "claude") return { modelName: "", sessionKey: "", requestFingerprint: "" }
@@ -305,7 +349,7 @@ export const replayScopeFromRequest = (input: ReplayScopeInput): CodexReplayScop
   const inputItems = isJsonArray(items) ? items : []
   return {
     modelName,
-    sessionKey: replaySessionKey(input),
+    sessionKey: isolateCallerSession(replaySessionKey(input), input.callerScope),
     requestFingerprint: prefixFingerprint(inputItems, inputItems.length)
   }
 }

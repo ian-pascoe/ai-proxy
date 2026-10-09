@@ -3,23 +3,32 @@
  *
  * Go source: internal/runtime/executor/xai_reasoning_replay.go (scope, caller isolation, filterXAIReasoningReplayItemsForInput,
  * cacheXAIReasoningReplayFromCompleted, clearXAIReasoningReplayAfterCompaction) and
- * internal/cache/xai_reasoning_replay_cache.go (normalisation, TTL 1 h, 10240 entries, evict batch 128).
+ * internal/cache/xai_reasoning_replay_cache.go (normalisation, sliding TTL 1 h).
  *
  * Stateless clients cannot carry the encrypted reasoning of earlier turns, so the final output items of each completed
  * response are cached per (model, session) and re-inserted into the next request. The store is an interface; the
- * default is a per-isolate in-memory store (best effort).
- * TODO(SessionState): back the store with the `SessionState` Durable Object for continuity across isolates.
+ * default keeps the entries in the `SessionState` Durable Object (shared across isolates) and falls back to a
+ * per-isolate in-memory store without the binding. The Go 10240-entry cap is replaced by per-session bounds and the
+ * TTL sweep of the Durable Object.
  */
 import { createHash } from "node:crypto"
 import { Effect } from "effect"
-import { asString, cloneJson, get, isJsonArray, type Json } from "../../json/index.ts"
+import { asString, get, isJsonArray, type Json } from "../../json/index.ts"
+import {
+  type BackendResolver,
+  bestEffort,
+  fixedBackend,
+  makeMemoryBackend,
+  resolveBackend
+} from "../../session-state/client.ts"
+import type { SessionAddress } from "../../session-state/protocol.ts"
 import { isReplaySafeGrokEncryptedContent } from "../../translator/common/signature.ts"
 import { alignToolCallIds, comparableCallIds, insertIndexFor, replaySessionKey, toolCallKeys } from "../codex/replay.ts"
 import { parseSuffix } from "../suffix.ts"
 
 const CACHE_TTL_MS = 60 * 60 * 1000
-const CACHE_MAX_ENTRIES = 10240
-const EVICT_BATCH_SIZE = 128
+const CACHE_MAX_MODELS_PER_SESSION = 64
+const STORE_NAME = "xai-replay"
 
 export interface XaiReplayStore {
   /** Normalised items of the session (a hit refreshes the TTL). */
@@ -102,47 +111,70 @@ export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undef
   return anchored ? normalized : undefined
 }
 
-interface Entry {
-  items: Json[]
-  timestamp: number
-}
+const addressOf = (sessionKey: string): SessionAddress => ({ store: STORE_NAME, scope: "", session: sessionKey.trim() })
 
-const keyOf = (model: string, session: string) => `${model.trim()}\u0000${session.trim()}`
-
-/** Per-isolate in-memory store (`now` is injectable for tests). */
-export const makeInMemoryXaiReplayStore = (now: () => number = Date.now): XaiReplayStore => {
-  const entries = new Map<string, Entry>()
-  return {
-    get: (modelName, sessionKey) =>
-      Effect.sync(() => {
-        const key = keyOf(modelName, sessionKey)
-        const entry = entries.get(key)
-        if (entry === undefined) return undefined
-        const at = now()
-        if (at - entry.timestamp > CACHE_TTL_MS) {
-          entries.delete(key)
-          return undefined
-        }
-        entry.timestamp = at
-        return entry.items.map((item) => cloneJson(item))
-      }),
-    store: (modelName, sessionKey, items) =>
-      Effect.sync(() => {
-        const normalized = normalizeReplayItems(items)
-        if (normalized === undefined) return "none" as const
-        entries.set(keyOf(modelName, sessionKey), { items: normalized, timestamp: now() })
-        if (entries.size > CACHE_MAX_ENTRIES) {
-          const oldest = [...entries.entries()].toSorted((a, b) => a[1].timestamp - b[1].timestamp)
-          for (const [oldKey] of oldest.slice(0, EVICT_BATCH_SIZE)) entries.delete(oldKey)
-        }
-        return "stored" as const
-      }),
-    delete: (modelName, sessionKey) => Effect.sync(() => void entries.delete(keyOf(modelName, sessionKey)))
+const parseItems = (text: string | undefined): Json[] | undefined => {
+  if (text === undefined) return undefined
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) ? (parsed as Json[]) : undefined
+  } catch {
+    return undefined
   }
 }
 
-/** Process-wide default store (one per isolate). */
-export const defaultXaiReplayStore: XaiReplayStore = makeInMemoryXaiReplayStore()
+/** Store over the `SessionState` backend of the current request (one instance per session key, one entry per model). */
+export const makeSessionStateXaiReplayStore = (backend: BackendResolver = resolveBackend()): XaiReplayStore => ({
+  get: (modelName, sessionKey) =>
+    bestEffort(
+      "xai replay get",
+      undefined,
+      Effect.gen(function* () {
+        const state = yield* backend
+        const [result] = yield* state.run(addressOf(sessionKey), [
+          { op: "get", key: modelName.trim(), extendTtlMs: CACHE_TTL_MS }
+        ])
+        return result?.status === "ok" ? parseItems(result.value) : undefined
+      })
+    ),
+  store: (modelName, sessionKey, items) => {
+    const normalized = normalizeReplayItems(items)
+    if (normalized === undefined) return Effect.succeed("none" as const)
+    return bestEffort(
+      "xai replay store",
+      "none" as const,
+      Effect.gen(function* () {
+        const state = yield* backend
+        const [result] = yield* state.run(addressOf(sessionKey), [
+          {
+            op: "put",
+            key: modelName.trim(),
+            value: JSON.stringify(normalized),
+            ttlMs: CACHE_TTL_MS,
+            maxEntries: CACHE_MAX_MODELS_PER_SESSION
+          }
+        ])
+        return result?.status === "ok" ? ("stored" as const) : ("none" as const)
+      })
+    )
+  },
+  delete: (modelName, sessionKey) =>
+    bestEffort(
+      "xai replay delete",
+      undefined,
+      Effect.gen(function* () {
+        const state = yield* backend
+        yield* state.run(addressOf(sessionKey), [{ op: "delete", key: modelName.trim() }])
+      })
+    )
+})
+
+/** In-memory store for tests (`now` is injectable). */
+export const makeInMemoryXaiReplayStore = (now?: () => number): XaiReplayStore =>
+  makeSessionStateXaiReplayStore(fixedBackend(makeMemoryBackend(now)))
+
+/** Default store: the `SessionState` Durable Object when bound, else per isolate. */
+export const defaultXaiReplayStore: XaiReplayStore = makeSessionStateXaiReplayStore()
 
 // ---------------------------------------------------------------------------------------------------------------
 // Scope

@@ -4,16 +4,26 @@
  *
  * Go source: internal/runtime/executor/claude_thinking_replay.go, kimi_thinking_replay.go (restore /
  * replayable / stream accumulator), internal/cache/claude_thinking_replay_cache.go (store semantics).
- * The store sits behind {@link ThinkingReplayStore}; the default implementation is a per-isolate in-memory map.
- * TODO(SessionState follow-up): back it with the SessionState Durable Object (compare-and-swap on the snapshot).
+ * The store sits behind {@link ThinkingReplayStore}; the default implementation keeps the content in the
+ * `SessionState` Durable Object (compare-and-swap on the generation snapshot, shared across isolates) and falls
+ * back to a per-isolate in-memory store when the binding is absent.
  */
 import { createHash } from "node:crypto"
+import { Effect } from "effect"
 import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
+import {
+  type BackendResolver,
+  bestEffort,
+  fixedBackend,
+  makeMemoryBackend,
+  resolveBackend
+} from "../../session-state/client.ts"
+import type { SessionAddress } from "../../session-state/protocol.ts"
 import { isArr, isObj, str } from "../../translator/common/gjson.ts"
 import { ssePayloadObject } from "../../usage/record.ts"
 
 const TTL_MS = 3 * 3600_000
-const MAX_ENTRIES = 1024
+const MAX_ENTRIES_PER_SESSION = 64
 
 export interface ReplaySnapshot {
   readonly generation: number
@@ -23,51 +33,99 @@ export interface ThinkingReplayStore {
   readonly get: (
     family: string,
     session: string
-  ) => { readonly contents: Json[]; readonly snapshot: ReplaySnapshot } | undefined
+  ) => Effect.Effect<{ readonly contents: Json[]; readonly snapshot: ReplaySnapshot } | undefined>
   /** Replaces the cached content when nobody changed it since `snapshot` (compare-and-swap). */
   readonly replaceIfUnchanged: (
     family: string,
     session: string,
     snapshot: ReplaySnapshot | undefined,
     content: Json
-  ) => boolean
-  readonly deleteIfUnchanged: (family: string, session: string, snapshot: ReplaySnapshot | undefined) => boolean
+  ) => Effect.Effect<boolean>
+  readonly deleteIfUnchanged: (
+    family: string,
+    session: string,
+    snapshot: ReplaySnapshot | undefined
+  ) => Effect.Effect<boolean>
 }
 
-export const makeMemoryReplayStore = (now: () => number = Date.now, ttlMs: number = TTL_MS): ThinkingReplayStore => {
-  const entries = new Map<string, { contents: Json[]; generation: number; expiresAt: number }>()
-  let generation = 0
-  const key = (family: string, session: string): string => `${family}\u0000${session}`
-  const live = (k: string) => {
-    const entry = entries.get(k)
-    if (entry === undefined) return undefined
-    if (entry.expiresAt <= now()) {
-      entries.delete(k)
-      return undefined
-    }
-    return entry
-  }
-  const currentGeneration = (k: string): number => live(k)?.generation ?? 0
+export interface ThinkingReplayStoreOptions {
+  /** `SessionState` store name (Claude and Kimi keep separate namespaces). */
+  readonly store?: string
+  readonly ttlMs?: number
+  readonly backend?: BackendResolver
+}
+
+/**
+ * Store over the `SessionState` backend of the current request: one instance per session key, one entry per model
+ * family. The generation of the Durable Object entry is the snapshot, so a concurrent turn of the session wins
+ * (`claude_thinking_replay_cache.go` generation/tombstone semantics).
+ */
+export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions = {}): ThinkingReplayStore => {
+  const storeName = options.store ?? "claude-thinking-replay"
+  const ttlMs = options.ttlMs ?? TTL_MS
+  const backend = options.backend ?? resolveBackend()
+  const address = (session: string): SessionAddress => ({ store: storeName, scope: "", session })
+  const expected = (snapshot: ReplaySnapshot | undefined): number => snapshot?.generation ?? 0
   return {
-    get: (family, session) => {
-      const entry = live(key(family, session))
-      return entry === undefined ? undefined : { contents: entry.contents, snapshot: { generation: entry.generation } }
-    },
-    replaceIfUnchanged: (family, session, snapshot, content) => {
-      const k = key(family, session)
-      if (currentGeneration(k) !== (snapshot?.generation ?? 0)) return false
-      if (entries.size >= MAX_ENTRIES && !entries.has(k)) entries.delete(entries.keys().next().value as string)
-      entries.set(k, { contents: [content], generation: ++generation, expiresAt: now() + ttlMs })
-      return true
-    },
-    deleteIfUnchanged: (family, session, snapshot) => {
-      const k = key(family, session)
-      if (currentGeneration(k) !== (snapshot?.generation ?? 0)) return false
-      entries.delete(k)
-      return true
-    }
+    get: (family, session) =>
+      bestEffort(
+        `${storeName} get`,
+        undefined,
+        Effect.gen(function* () {
+          const state = yield* backend
+          const [result] = yield* state.run(address(session), [{ op: "get", key: family }])
+          if (result?.status !== "ok" || result.value === undefined) return undefined
+          const content = tryParseJson(result.value)
+          return content === undefined
+            ? undefined
+            : { contents: [content], snapshot: { generation: result.generation } }
+        })
+      ),
+    replaceIfUnchanged: (family, session, snapshot, content) =>
+      bestEffort(
+        `${storeName} replace`,
+        false,
+        Effect.gen(function* () {
+          const state = yield* backend
+          const [result] = yield* state.run(address(session), [
+            {
+              op: "put",
+              key: family,
+              value: JSON.stringify(content),
+              ttlMs,
+              ifGeneration: expected(snapshot),
+              maxEntries: MAX_ENTRIES_PER_SESSION
+            }
+          ])
+          return result?.status === "ok"
+        })
+      ),
+    deleteIfUnchanged: (family, session, snapshot) =>
+      bestEffort(
+        `${storeName} delete`,
+        false,
+        Effect.gen(function* () {
+          const state = yield* backend
+          const [result] = yield* state.run(address(session), [
+            { op: "delete", key: family, ifGeneration: expected(snapshot) }
+          ])
+          return result?.status === "ok"
+        })
+      )
   }
 }
+
+/** In-memory store for tests (`now` is injectable). */
+export const makeMemoryReplayStore = (
+  now?: () => number,
+  ttlMs: number = TTL_MS,
+  store?: string
+): ThinkingReplayStore =>
+  makeSessionStateReplayStore({
+    ttlMs,
+    backend: fixedBackend(makeMemoryBackend(now)),
+    ...(store === undefined ? {} : { store })
+  })
 
 export interface ReplayScope {
   readonly modelFamily: string

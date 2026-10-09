@@ -8,8 +8,7 @@
  * the conductor (`withCredentialRefresh`); retry rounds across credentials are the conductor's, so exactly one
  * upstream request is made per attempt.
  *
- * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): the Gemini reasoning-replay ledger and the
- * `/responses/compact` capsule are not ported, web-search grounding redirect URLs are not resolved, no per-credential
+ * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): the `/responses/compact` capsule is not ported, web-search grounding redirect URLs are not resolved, no per-credential
  * HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
  */
 import { Clock, Effect, Option, Stream } from "effect"
@@ -57,6 +56,9 @@ import {
   validateRequestSignatures
 } from "./content.ts"
 import { creditsEnabled, injectEnabledCreditTypes, probeCredits } from "./credits.ts"
+import { NO_REPLAY_SCOPE, type ReplayAccumulator, type ReplayScope } from "./replay/accumulator.ts"
+import { defaultReplayLedger, type ReplayLedger } from "./replay/ledger.ts"
+import { clearReplayOnInvalidSignature, makeAccumulator, prepareReplayPayload } from "./replay/prepare.ts"
 import {
   ANTIGRAVITY_COUNT_TOKENS_PATH,
   ANTIGRAVITY_GENERATE_PATH,
@@ -109,6 +111,9 @@ interface PreparedRequest {
   /** Translated (pre-envelope) request handed to the response translators. */
   readonly translated: Json
   readonly useCredits: boolean
+  /** Reasoning replay of Gemini models: the scope (with the ledger snapshot read) and the response accumulator. */
+  readonly replayScope: ReplayScope
+  readonly replay: ReplayAccumulator | undefined
 }
 
 interface Attempt {
@@ -126,11 +131,14 @@ interface Attempt {
 
 export interface AntigravityExecutorOptions {
   readonly translators?: TranslatorRegistry
+  /** Gemini reasoning replay ledger (defaults to the `SessionState` Durable Object, per-isolate memory without it). */
+  readonly replayLedger?: ReplayLedger
 }
 
 export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {}): ProviderExecutor => {
   const registry = settings.translators ?? builtinTranslators
   const to = Formats.Antigravity
+  const ledger = settings.replayLedger ?? defaultReplayLedger
 
   const resolve = Effect.fnUntraced(function* (
     context: ExecutionContext,
@@ -323,7 +331,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
     const useCredits = options.metadata.antigravityCredits === true && creditsEnabled(context.config)
     if (useCredits) injectEnabledCreditTypes(body)
-    body = ensureBoundaryUserContent(baseModel, body)
+    // Gemini reasoning replay (signatures and native function calls of earlier turns), then the boundary turns.
+    const replay = yield* prepareReplayPayload(ledger, baseModel, request, options, body)
+    body = ensureBoundaryUserContent(baseModel, replay.payload)
+    const accumulator = makeAccumulator(replay.scope, body)
 
     const project = attempt.project
     const derivedSession = options.metadata.sessionId ?? ""
@@ -360,7 +371,9 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       body: finalBody,
       baseModel,
       translated: translatedForResponse,
-      useCredits
+      useCredits,
+      replayScope: replay.scope,
+      replay: accumulator
     } satisfies PreparedRequest
   })
 
@@ -379,6 +392,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
     const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
     context.usage.fail(response.status, text)
+    yield* clearReplayOnInvalidSignature(ledger, prepared.replayScope, response.status, text)
     if (response.status === 429) {
       const decision = decideAntigravity429(text)
       const now = yield* Clock.currentTimeMillis
@@ -460,6 +474,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
     if (!aggregate) {
       const text = yield* response.text.pipe(Effect.mapError(transportError))
+      // `cacheAntigravityReasoningReplayFromResponse`
+      if (prepared.replay !== undefined) {
+        const parsed = tryParseJson(text)
+        if (parsed !== undefined) prepared.replay.observePayload(parsed)
+        yield* prepared.replay.commit(ledger)
+      }
       const payload = yield* translateBody(attempt, prepared, text)
       return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
@@ -468,9 +488,11 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const lines = yield* splitLines(response.stream).pipe(Stream.mapError(transportError), Stream.runCollect)
     const payloads: string[] = []
     for (const line of lines) {
+      prepared.replay?.observeLine(line)
       const payload = jsonPayloadOf(filter.filter(line))
       if (payload !== undefined) payloads.push(payload)
     }
+    if (prepared.replay !== undefined) yield* prepared.replay.commit(ledger)
     const merged = JSON.stringify(convertStreamToNonStream(payloads))
     const payload = yield* translateBody(attempt, prepared, merged)
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
@@ -515,6 +537,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const lines = splitLines(response.stream).pipe(Stream.mapError(transportError))
     const body = lines.pipe(
       Stream.flatMap((line) => {
+        prepared.replay?.observeLine(line)
         // Accounting is captured before the client-facing filter renames usage.
         const usage = parseAntigravityStreamUsage(line)
         if (usage !== undefined) context.usage.publish(usage)
@@ -525,11 +548,26 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
         const chunks = translate(payload)
         context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload))
-        return withToolInputCheck(chunks)
+        // Responses clients: publish the ledger before the translated completion reaches them, so the next turn
+        // finds it (split usage/signature frames may still extend the chain until `response.completed`).
+        const commit =
+          prepared.replay?.terminal === true &&
+          !prepared.replay.committed &&
+          responseFormat === Formats.OpenAIResponse &&
+          chunks.some(isResponseCompleted)
+            ? prepared.replay.commit(ledger)
+            : Effect.void
+        return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
       })
     )
     // Only a clean end of stream may produce a synthetic terminal event (a read error never reports success).
-    const tail = Stream.suspend(() => withToolInputCheck(translate("[DONE]")))
+    // The ledger is committed before the EOF-generated completion is delivered.
+    const tail = Stream.suspend(() => {
+      const chunks = translate("[DONE]")
+      const commit =
+        prepared.replay !== undefined && !prepared.replay.committed ? prepared.replay.commit(ledger) : Effect.void
+      return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
+    })
     const chunks = Stream.concat(body, tail).pipe(
       Stream.ensuring(persistSignatures(attempt)),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
@@ -626,7 +664,9 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       body: finalBody,
       baseModel,
       translated: finalBody,
-      useCredits: false
+      useCredits: false,
+      replayScope: NO_REPLAY_SCOPE,
+      replay: undefined
     }
     const response = yield* send(attempt, prepared)
     const text = yield* response.text.pipe(Effect.mapError(transportError))
@@ -637,6 +677,13 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
   return { identifier: ANTIGRAVITY_IDENTIFIER, execute, executeStream, countTokens }
 }
+
+/** Whether a translated Responses chunk carries the `response.completed` event. */
+const isResponseCompleted = (chunk: string): boolean =>
+  chunk.split("\n").some((line) => {
+    const payload = jsonPayloadOf(line)
+    return payload !== undefined && get(tryParseJson(payload), "type") === "response.completed"
+  })
 
 /** `JSONPayload`: the JSON object of an SSE `data:` line or raw JSON line. */
 const jsonPayloadOf = (line: string): string | undefined => {

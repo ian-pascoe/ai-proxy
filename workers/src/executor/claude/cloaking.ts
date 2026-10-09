@@ -30,7 +30,7 @@ import {
   usesProgressDisplay
 } from "./classify.ts"
 import { type CloakSettings, type WirePolicy } from "./credentials.ts"
-import { type ContinuityStore, deterministicPromptId } from "./continuity.ts"
+import { type ContinuityState, deterministicPromptId } from "./continuity.ts"
 import { defaultDeviceProfile, cachedSessionId } from "./headers.ts"
 
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
@@ -483,7 +483,8 @@ export interface CloakRequest {
   readonly explicitCacheMode: boolean
   readonly incoming: Headers
   readonly sessionId: string
-  readonly continuity: ContinuityStore
+  /** Session state started by {@link planContinuity} (`ContinuityStore.begin`); undefined without a session. */
+  readonly continuity: ContinuityState | undefined
   readonly now: Date
   readonly workload?: string
 }
@@ -506,6 +507,35 @@ export class CloakError extends Error {
     readonly status = 400
   ) {
     super(message)
+  }
+}
+
+export interface ContinuityPlan {
+  readonly identity: string
+  readonly sessionId: string
+  readonly isNewPromptTurn: boolean
+  readonly explicitPromptId: string
+  /** The session date to pin on first use. */
+  readonly date: string
+}
+
+/**
+ * The `BeginClaudeContinuity`/`PinClaudeSessionDate` arguments of a request, or undefined when the request does not
+ * take part in continuity. Split from {@link applyCloaking} (synchronous) so the store call can be awaited first.
+ */
+export const planContinuity = (
+  request: Pick<CloakRequest, "config" | "credential" | "body" | "policy" | "sessionId" | "now">
+): ContinuityPlan | undefined => {
+  const { body, policy, config, credential } = request
+  if (!policy.cloak || isProbeOrHelperRequest(body)) return undefined
+  const identity = credentialIdentity(credential)
+  if (request.sessionId === "" || identity === "") return undefined
+  return {
+    identity,
+    sessionId: request.sessionId,
+    isNewPromptTurn: isNewPromptTurn(body),
+    explicitPromptId: extractBillingTags(body).promptId,
+    date: claudeCodeLocalDate(request.now, credentialTimezone(config, credential))
   }
 }
 
@@ -541,29 +571,18 @@ export const applyCloaking = (request: CloakRequest): CloakResult => {
     const existing = extractBillingTags(body)
     prevReq = existing.prevReq
     promptId = existing.promptId
-    const sessionId = request.sessionId
-    if (sessionId !== "" && credentialIdentity(credential) !== "") {
-      const state = request.continuity.begin(
-        credentialIdentity(credential),
-        sessionId,
-        isNewPromptTurn(body),
-        existing.promptId
-      )
-      if (state !== undefined) {
-        continuityKey = state.key
-        pinnedDate = request.continuity.pinDate(
-          state.key,
-          claudeCodeLocalDate(request.now, credentialTimezone(config, credential))
-        )
-        // No execution-session metadata on plain HTTP requests: the prompt id is derived from the first user text.
-        promptId =
-          existing.promptId !== ""
-            ? existing.promptId
-            : deterministicPromptId(`cpa:prompt:${billingFingerprintMessageText(body)}`)
-        if (existing.prevReq !== "") {
-          prevReq = existing.prevReq
-          previousMessageId = state.previousMessageId
-        }
+    const state = request.continuity
+    if (state !== undefined) {
+      continuityKey = state.key
+      pinnedDate = state.pinnedDate
+      // No execution-session metadata on plain HTTP requests: the prompt id is derived from the first user text.
+      promptId =
+        existing.promptId !== ""
+          ? existing.promptId
+          : deterministicPromptId(`cpa:prompt:${billingFingerprintMessageText(body)}`)
+      if (existing.prevReq !== "") {
+        prevReq = existing.prevReq
+        previousMessageId = state.previousMessageId
       }
     }
   }

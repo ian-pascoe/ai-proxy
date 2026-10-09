@@ -48,7 +48,7 @@ import { kimiChatUrl, kimiClaudeBaseUrl, kimiResponsesUrl, kimiToken, normalizeK
 import {
   cacheReplay,
   clearReplay,
-  makeKimiReplayStore,
+  makeSessionStateKimiReplayStore,
   prepareKimiReplay,
   shouldClearAfterError,
   wrapReplayStream
@@ -64,11 +64,11 @@ export const KIMI_PROVIDER = "kimi"
 
 export interface KimiExecutorOptions {
   readonly translators?: TranslatorRegistry
-  /** Thinking replay store for Claude-format callers (defaults to a per-isolate in-memory store, TTL 1 h). */
+  /** Thinking replay store for Claude-format callers (defaults to the `SessionState` Durable Object, TTL 1 h; per-isolate memory without the binding). */
   readonly replay?: ThinkingReplayStore
 }
 
-const defaultReplay = makeKimiReplayStore()
+const defaultReplay = makeSessionStateKimiReplayStore()
 
 const transportError = (error: HttpClientError.HttpClientError) =>
   new ExecutionError({
@@ -398,14 +398,15 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
-    const replay = prepareKimiReplay(replayStore, request, options)
+    const replay = yield* prepareKimiReplay(replayStore, request, options)
     const result = yield* Effect.result(claude.execute(claudeContext(context), replay.request, options))
     if (result._tag === "Failure") {
-      if (replay.scope.replayApplied && shouldClearAfterError(result.failure)) clearReplay(replayStore, replay.scope)
+      if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
+        yield* clearReplay(replayStore, replay.scope)
       return yield* result.failure
     }
     const content = get(tryParseJson(result.success.payload), "content")
-    if (Array.isArray(content)) cacheReplay(replayStore, replay.scope, content)
+    if (Array.isArray(content)) yield* cacheReplay(replayStore, replay.scope, content)
     return result.success
   })
 
@@ -414,10 +415,11 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
-    const replay = prepareKimiReplay(replayStore, request, options)
+    const replay = yield* prepareKimiReplay(replayStore, request, options)
     const result = yield* Effect.result(claude.executeStream(claudeContext(context), replay.request, options))
     if (result._tag === "Failure") {
-      if (replay.scope.replayApplied && shouldClearAfterError(result.failure)) clearReplay(replayStore, replay.scope)
+      if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
+        yield* clearReplay(replayStore, replay.scope)
       return yield* result.failure
     }
     return {
