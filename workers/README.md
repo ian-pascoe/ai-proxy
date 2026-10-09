@@ -36,10 +36,11 @@ See the architecture document. Currently implemented:
   (`jwks.ts`), principal service `AccessPrincipal` (`principal.ts`), global gate (`middleware.ts`, `layer.ts`), path policy
   (`routes.ts`) and env config (`config.ts`).
 - `src/json/` — gjson/sjson-compatible path engine over parsed JSON (`get`, `set`, `setRaw`, `del`, coercions).
+- `src/thinking/` — thinking pipeline port (`applyThinking`, suffix parsing, validation, provider appliers, reasoning-summary helpers).
 - `src/config/` — config schema, YAML/JSON codec, normalisation, `ConfigReader`, and `payload/` (`applyPayloadRules`).
 - `src/credentials/control-plane.ts` — `ControlPlane` Durable Object (config storage so far; credentials come later).
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
-  `go run ./workers/tools/fixturegen/jsonpath` and `go run ./workers/tools/fixturegen/payload`).
+  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload` and `…/thinking`).
 
 ## Cloudflare Access
 

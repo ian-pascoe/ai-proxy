@@ -110,6 +110,26 @@ client -> Cloudflare Access -> Worker
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function belongs to the Codex executor slice.
 
+## Thinking pipeline (`src/thinking/`)
+
+Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central validation → provider applier" shape.
+
+- Entry point: `applyThinking(body, options)` collapses the five Go entry points (`ApplyThinking`,
+  `…WithSummary`, `…WithSourceAndSummary`, `…WithModelInfo[AndSummary]`) via options: `sourceBody`, `summaryConfig`,
+  `normalizedUpdatesChanged`, and `modelInfo` (resolved exact model; `null` = resolved but unknown) or
+  `lookupModelInfo` (the registry lookup, `(modelId, providerKey) => info`). It returns `{ body, error? }`
+  (`ThinkingError`, HTTP 400) and never throws.
+- Bodies are parsed JSON mutated in place (`undefined` = Go's empty/invalid body). A `sourceBody` aliasing `body` is
+  cloned first. Debug logging and plugin appliers are not ported. Applier errors (Kimi sjson failures) cannot occur
+  on parsed JSON and are dropped.
+- Model capabilities come from a minimal structural `ThinkingModelInfo`/`ModelThinkingSupport` (camelCase of
+  `registry.ModelInfo`); the model registry slice supplies richer records and the lookup.
+- Summary helpers (`extractSummaryConfig`, `applySummaryConfigForProvider`, `applyTranslatedSummaryToClaude`, …) are
+  exported for the translator registry (Go calls them from `TranslateRequestEnvelope`).
+- Fixtures: `go run ./workers/tools/fixturegen/thinking` → `test/fixtures/thinking.json` (~2.7 MB; includes the Go
+  static model catalog used by the lookup). Known Go quirk not mirrored: gjson reads *unparsable* source JSON
+  leniently in `extractCodexConfig`; the Workers port only handles parsed bodies.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot
