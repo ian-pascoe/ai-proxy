@@ -1,5 +1,6 @@
 // Codex apply_patch bridge details that the Go golden corpus cannot express (transport end of a Claude stream).
 import { describe, expect, it } from "vitest"
+import type { Json } from "../src/json/index.ts"
 import { builtinTranslators } from "../src/translator/builtin.ts"
 import { makeTranslationState } from "../src/translator/registry.ts"
 
@@ -15,7 +16,7 @@ const TOOL_START = line({
   content_block: { type: "tool_use", id: "toolu_1", name: "apply_patch", input: {} }
 })
 
-const context = (tools: unknown[]) => {
+const context = (tools: Json[]) => {
   const request = { model: "claude", input: "go", tools }
   return {
     model: "claude",

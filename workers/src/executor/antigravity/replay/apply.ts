@@ -21,7 +21,7 @@ import {
   tryParseJson
 } from "../../../json/index.ts"
 import { geminiClaudeToolUseID, isGeminiClaudeToolUseID } from "../../../translator/common/claude-util.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../../translator/gemini/util/tool-names.ts"
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../../translator/common/tool-names.ts"
 import {
   canonicalJson,
   hasNativeThoughtSignature,
