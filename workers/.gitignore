@@ -6,3 +6,4 @@ dist
 # Control panel installed by `pnpm panel:sync` (large; fetched at deploy time)
 public/management.html
 public/management.html.tmp
+!.dev.vars.example

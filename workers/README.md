@@ -1,122 +1,159 @@
-# workers/ — CLIProxyAPI on Cloudflare Workers
+# CLIProxyAPI on Cloudflare Workers
 
-TypeScript + [Effect v4](https://effect.website) port of the Go proxy for plain Cloudflare Workers. Design decisions are
-in [`docs/workers-port/ARCHITECTURE.md`](../docs/workers-port/ARCHITECTURE.md); the Go code in the repository root is
-the behavioural source of truth.
+A TypeScript + [Effect v4](https://effect.website) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) that
+runs on plain Cloudflare Workers behind Cloudflare Zero Trust **Access**. It exposes OpenAI (chat completions, completions,
+Responses incl. WebSocket), Anthropic (`/v1/messages`), Gemini (`/v1beta`) and Interactions compatible APIs, backed by your
+own provider logins (OAuth) and API keys, with round-robin credential selection, cooldowns and automatic token refresh.
 
-## Requirements
+| Guide                                                   | Contents                                                |
+| ------------------------------------------------------- | ------------------------------------------------------- |
+| [ACCESS.md](../docs/workers-port/ACCESS.md)             | Create the Access application, policies, service tokens |
+| [CLIENTS.md](../docs/workers-port/CLIENTS.md)           | Claude Code, Codex CLI, SDKs, curl                      |
+| [MIGRATION.md](../docs/workers-port/MIGRATION.md)       | Moving from the Go server                               |
+| [DEVELOPMENT.md](../docs/workers-port/DEVELOPMENT.md)   | Scripts, module layout, conventions                     |
+| [ARCHITECTURE.md](../docs/workers-port/ARCHITECTURE.md) | Binding design decisions                                |
 
-- Node.js 22+ and pnpm (`packageManager` in `package.json`).
+## How it works
 
-## Commands
+- **Authentication is Cloudflare Access only.** Access sits in front of the Worker's custom domain and injects a signed
+  `Cf-Access-Jwt-Assertion`; the Worker verifies it. There are no proxy API keys. Users sign in with your IdP; tools use
+  Access **service tokens** (`CF-Access-Client-Id` / `CF-Access-Client-Secret` headers).
+- **State** lives in a `ControlPlane` Durable Object (config, credentials, cooldowns, OAuth sessions), a `SessionState`
+  Durable Object (reasoning replay/continuity caches), KV `CACHE` (model catalogs), and D1 `USAGE` (usage records).
+- **Management**: the official control panel is served at `/management.html` and the API at `/v8/management`, both for Access
+  admins only. You add credentials (OAuth login or auth-file upload) and edit config there.
 
-Run from `workers/` (or use `pnpm -C workers <script>`):
+## Provider support
 
-| Script            | Purpose                                                                  |
-| ----------------- | ------------------------------------------------------------------------ |
-| `pnpm install`    | Install dependencies                                                     |
-| `pnpm dev`        | `wrangler dev` (local Worker with local DO/KV/D1)                        |
-| `pnpm typecheck`  | `tsc --noEmit` (strict)                                                  |
-| `pnpm lint`       | `oxlint` + `prettier --check`                                            |
-| `pnpm format`     | `prettier --write`                                                       |
-| `pnpm test`       | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)    |
-| `pnpm build`      | `wrangler deploy --dry-run --outdir dist` (bundle + config check)        |
-| `pnpm types`      | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`    |
-| `pnpm panel:sync` | Install `public/management.html` (control panel) from its GitHub release |
+| Provider (credential)                                      | Client protocols served                                  | Notes                                                                                   |
+| ---------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Claude (OAuth login, API key)                              | OpenAI, Responses, Claude, Gemini, Interactions          | Claude Code cloaking and body signing; no uTLS (see limitations)                        |
+| Codex / ChatGPT (OAuth browser or device, API key)         | OpenAI, Responses (HTTP + WebSocket), Claude, Gemini     | `/backend-api/codex/*` aliases; no Codex live/realtime                                  |
+| Gemini (API key), Vertex (API key, service account upload) | OpenAI, Claude, Gemini, Responses, Interactions          | Gemini-CLI OAuth files can be imported, but there is no Gemini OAuth login in the panel |
+| Antigravity (OAuth)                                        | OpenAI, Claude, Gemini, Interactions                     | Compaction and some grounding paths still answer 501 (follow-up)                        |
+| xAI (device login, API key)                                | OpenAI, Responses (HTTP + WebSocket), images, video, TTS |                                                                                         |
+| Kimi / Kimi.ai (device login), Meta, Devin                 | OpenAI, Claude, Responses                                | Devin: authorization-code login                                                         |
+| OpenAI-compatible upstreams (API key)                      | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                    |
 
-## Layout
+The matrix is indicative: which (client protocol, provider) pairs work follows the registered translators in
+`src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error body.
 
-See the architecture document. Currently implemented:
+Endpoints: `POST /v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/messages/count_tokens`, `/v1/responses`
+(+ `/compact`, `GET` WebSocket upgrade), `GET /v1/models`, `/v1beta/models/*` (`:generateContent`, `:streamGenerateContent`, …),
+`POST /v1beta/interactions`, images, videos and speech under `/v1`, plus `/openai/v1/videos` and
+`/backend-api/codex/{responses,responses/compact,alpha/search}`. `GET /healthz` and `/` are public from the Worker's point of
+view (an Access application on the whole hostname still protects them).
 
-- `src/index.ts` — Worker entry (`fetch`, `scheduled` placeholder, `ControlPlane` export, stub `SessionState` Durable Object).
-- `src/http/` — `HttpRouter` app (`app.ts`), CORS middleware matching Go (`cors.ts`), `/healthz` and `/` (`routes.ts`).
-- `src/platform/env.ts` — `WorkerEnv` / `WorkerExecutionContext` services, provided per request via `requestContext`.
-- `src/platform/logging.ts` — logging conventions and header redaction.
-- `src/errors.ts` — base tagged errors.
-- `src/access/` — Cloudflare Access authentication: JWT verification with `jose` (`verify.ts`), per-isolate JWKS cache
-  (`jwks.ts`), principal service `AccessPrincipal` (`principal.ts`), global gate (`middleware.ts`, `layer.ts`), path policy
-  (`routes.ts`) and env config (`config.ts`).
-- `src/json/` — gjson/sjson-compatible path engine over parsed JSON (`get`, `set`, `setRaw`, `del`, coercions).
-- `src/thinking/` — thinking pipeline port (`applyThinking`, suffix parsing, validation, provider appliers, reasoning-summary helpers).
-- `src/config/` — config schema, YAML/JSON codec, normalisation, `ConfigReader`, and `payload/` (`applyPayloadRules`).
-- `src/credentials/control-plane.ts` — `ControlPlane` Durable Object (config storage so far; credentials come later).
-- `src/translator/` — translator registry (`registry.ts`), built-in pairs (`builtin.ts`), `openai/openai` passthrough,
-  `claude/` (OpenAI chat, OpenAI Responses, Gemini and Interactions clients -> Claude Messages), shared helpers in
-  `common/` and the injectable model-info lookup (`model-info.ts`).
-- `src/executor/` — executor contracts (`types.ts`, `errors.ts`), `CredentialPicker` (`picker.ts`, ControlPlane
-  adapter `control-plane-picker.ts`, test-only `static-picker.ts`), `Thinking` hook (`thinking.ts`), per-credential
-  model resolution, the OpenAI-compatible executor (`openai-compat/`) and the Claude executor (`claude/`: OAuth/API-key
-  credentials, Claude Code cloaking, CCH body signing, beta/header assembly, MCP tool-name aliasing, cache-control
-  policy, rate-limit classification).
-- `src/handlers/` — shared execution pipeline (`execute.ts`, retry/cooldown `conductor.ts`, `session.ts`), SSE responder
-  and framers (`respond.ts`, `framing.ts`), `/v1/chat/completions` and `/v1/completions` (`openai/`), `/v1/messages` and
-  `/v1/messages/count_tokens` (`claude/`), service wiring (`layer.ts`).
-- `src/usage/` — usage records, token accounting v2, stream usage parsers, TTFT, per-attempt `UsageReporter`, the D1
-  `UsageSink` and retention; `migrations/` holds the D1 schema. `src/observability/` — `X-CPA-TRACE-ID` and request logs.
-- `src/management/` — `/v8/management` API (config, credentials, api-call, model definitions, server info) and the
-  `/management.html` control panel route; `tools/panel-sync/` downloads the panel.
-- `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
-  `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator` (reads
-  `tools/fixturegen/translator/corpus/*.json`); `pnpm catalog:sync` runs `…/registry`, which also refreshes the
-  embedded model catalogs in `src/registry/catalog/`).
+### Known limitations
 
-## Claude provider limitations
+- **No uTLS / HTTP-2 fingerprint impersonation.** Workers `fetch` cannot control the TLS ClientHello or HTTP/2 settings, so
+  `wire-policy`/`tls-fingerprint` settings are ignored. Header/body cloaking for Claude Code still applies; upstream
+  providers that fingerprint TLS may treat the traffic differently.
+- **Egress IPs are Cloudflare's.** Requests to providers leave from Cloudflare data-centre addresses, not your own IP.
+  Providers that bind sessions to an IP or block cloud ranges may reject or challenge them. You cannot pin an egress IP.
+- **No outbound proxies.** `proxy-url` (global, per credential, per key group) is read but not applied.
+- **Removed features:** plugins, CLIProxyAPIHome mode, TUI, mDNS discovery, pprof, git/Postgres/object-store backends,
+  request-log files, Codex live/realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, `/v0/management`, legacy proxy API keys
+  (`api-keys` client list: imported into `access.api-keys` but not enforced).
+- **WebSocket CPU limit.** The Responses WebSocket lives in the invocation that accepted it and is bounded by the Workers
+  CPU limit (`limits.cpu_ms = 300000`, which needs the Workers Paid plan). There are no ping keep-alives
+  (`streaming.keepalive-seconds` is ignored). Clients reconnect on close; prefer HTTP/SSE if you see 1011/1012 closes.
+- **Not yet ported:** `/v1/responses/compact` for Claude/Gemini/Antigravity credentials (501), stream bootstrap buffering for
+  Codex. See ARCHITECTURE.md for per-provider "not ported" lists.
 
-- **No uTLS / HTTP-2 fingerprint impersonation.** The Go proxy can present a Claude Code (Node/Bun) TLS ClientHello
-  and HTTP/2 settings through uTLS (`wire-policy`/`tls-fingerprint`). Workers `fetch` cannot control the TLS or
-  HTTP/2 handshake, so those settings are read but not enforced; header/body cloaking still applies.
-- **`/v1/responses/compact` for Claude credentials answers 501** (the Antigravity-style compaction capsules are not
-  ported yet).
-- Continuity/diagnostics state (`previous_message_id`, thinking replay) is an in-memory per-isolate store; it moves to
-  the session Durable Object together with the retry slice.
-- Translator parity gaps (OpenAI Responses -> Claude): the Codex `apply_patch` custom-tool bridge and full
-  `internal/signature` validation are not ported (see `docs/workers-port/ARCHITECTURE.md`).
+## Local development
 
-## Cloudflare Access
+```bash
+cd workers
+pnpm install
+cp .dev.vars.example .dev.vars     # contains ACCESS_DEV_BYPASS=you@example.com
+pnpm panel:sync                    # downloads the control panel into public/ (optional locally)
+pnpm dev                           # http://localhost:8787
+```
 
-`/v1*`, `/openai/v1*`, `/backend-api/codex*` and `/v8/management*` require a valid `Cf-Access-Jwt-Assertion`; `/healthz`
-and `/` are public. Management additionally requires an admin. Configure (vars in `wrangler.jsonc`, or secrets):
+`ACCESS_DEV_BYPASS` makes every request on a loopback host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** with that
+email (`true` uses `dev@localhost`). It is ignored for any other host, so it cannot weaken a deployed Worker, but keep it out of
+`wrangler.jsonc` and out of production secrets. `.dev.vars` is git-ignored; `.dev.vars.example` is committed.
 
-| Variable                      | Meaning                                                                      |
-| ----------------------------- | ---------------------------------------------------------------------------- |
-| `ACCESS_TEAM_DOMAIN`          | `myteam` or `myteam.cloudflareaccess.com` (issuer + JWKS location)           |
-| `ACCESS_AUD`                  | comma separated Access application AUD tags                                  |
-| `ACCESS_ADMIN_EMAILS`         | comma separated admin emails (case-insensitive)                              |
-| `ACCESS_ADMIN_SERVICE_TOKENS` | comma separated admin service token client ids (`common_name`)               |
-| `ACCESS_DEV_BYPASS`           | `wrangler dev` only (put in `.dev.vars`): fake admin user for loopback hosts |
+Open `http://localhost:8787/management.html` (any non-empty text works as "management key"), add a credential, then:
 
-Empty defaults fail closed (protected routes answer 500 `Authentication service error`). Route layers whose handlers
-read the principal wrap themselves with `withAccess(routes)` (`src/access/layer.ts`) and use `yield* AccessPrincipal`
-(`{ principal, principalId, callerScope }`).
+```bash
+curl localhost:8787/v1/models
+curl localhost:8787/v1/chat/completions -H 'content-type: application/json' \
+  -d '{"model":"<model id from /v1/models>","messages":[{"role":"user","content":"hi"}]}'
+```
 
-## Management API and control panel
+Local Durable Object, KV and D1 state lives in `.wrangler/state`. For local usage records run
+`pnpm exec wrangler d1 migrations apply cliproxy-usage --local` once.
 
-`/v8/management/*` and `/management.html` are served to Access admins only (no management key, IP ban or
-`allow-remote`). The official panel ([Cli-Proxy-API-Management-Center](https://github.com/router-for-me/Cli-Proxy-API-Management-Center))
-is a single ~3 MB HTML file that is **not committed**: run `pnpm panel:sync` once (and before every deploy). It downloads
-`management.html` from the latest GitHub release into `public/` (git-ignored, served through the `ASSETS` binding) and
-refuses to install it unless its SHA-256 matches the release asset's `digest`. Options: `--tag vX.Y.Z`,
-`--repository owner/repo`, `--out path`, `--allow-unverified`; `GITHUB_TOKEN` raises the API rate limit.
+## Deploy
 
-Local use: put `ACCESS_DEV_BYPASS=you@example.com` in `.dev.vars`, run `pnpm panel:sync` and `pnpm dev`, open
-`http://localhost:8787/management.html`. The login form asks for a "management key": Access already authenticated you,
-so any non-empty text works. Usage pages read D1 (apply `migrations/` with `wrangler d1 migrations apply cliproxy-usage`);
-OAuth login needs the OAuth slice (its routes answer 404 until then).
+Prerequisites: a Cloudflare account on the **Workers Paid** plan (the CPU limit in `wrangler.jsonc`), a domain in that
+account, Zero Trust enabled, Node 22+ and `pnpm exec wrangler login` (all commands below run in `workers/`).
 
-## Conventions
+1. **Create the resources** and paste the printed ids into `wrangler.jsonc`:
 
-- Per-request Cloudflare `env` / `ctx` are passed as the `Context` argument of the web handler
-  (`handler(request, requestContext(env, ctx))`); routes read them via `yield* WorkerEnv`. Never capture them in a layer.
-- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `src/http/app.ts`.
-- Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
-- No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
-- Tests live in `test/*.test.ts` and run in workerd. Use `@effect/vitest` (`it.effect`) for Effect code and
-  `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
-- `wrangler.jsonc` uses placeholder KV/D1 ids; set real ids when deploying. `workers_dev` and `preview_urls` stay
-  disabled so Cloudflare Access cannot be bypassed.
+   ```bash
+   pnpm exec wrangler kv namespace create CACHE      # -> kv_namespaces[0].id
+   pnpm exec wrangler d1 create cliproxy-usage       # -> d1_databases[0].database_id
+   ```
 
-## Dependency notes
+   The Durable Objects (`ControlPlane`, `SessionState`) are created by the `migrations` entry in `wrangler.jsonc` during
+   deploy. The Worker is named `cliproxy-workers`; change `name` if you like.
 
-- `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
-  which `@effect/vitest@4` requires.
-- `wrangler` is pinned to the version used by the vitest plugin so a single `workerd` is installed.
+2. **Attach a custom domain.** Add to `wrangler.jsonc` (the zone must be in your account):
+
+   ```jsonc
+   "routes": [{ "pattern": "proxy.example.com", "custom_domain": true }]
+   ```
+
+   `workers_dev` and `preview_urls` are already `false`: leave them. Access can only protect the custom domain, so a
+   `workers.dev` or preview URL would bypass authentication.
+
+3. **Create the Access application** for that hostname and note its AUD tag: see [ACCESS.md](../docs/workers-port/ACCESS.md).
+
+4. **Set the Access variables** in `wrangler.jsonc` `vars` (they are identifiers, not secrets):
+   `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and the admin lists `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`.
+   Optionally set `USAGE_RETENTION_DAYS` (default `30`, `0` keeps everything). With the defaults empty, every protected route
+   answers 500 `Authentication service error` (fail closed). Do not set `ACCESS_DEV_BYPASS` here.
+
+   The Worker reads **no other secrets**: provider tokens and API keys are stored in the `ControlPlane` Durable Object through
+   the management API/panel. If you prefer secrets over `vars` for the Access values, use `pnpm exec wrangler secret put NAME` and remove the matching
+   key from `vars` so the two do not conflict.
+
+5. **Apply the D1 migrations** to the remote database:
+
+   ```bash
+   pnpm exec wrangler d1 migrations apply cliproxy-usage --remote
+   ```
+
+6. **Install the control panel** (not committed; ~3 MB, SHA-256 verified against the GitHub release):
+
+   ```bash
+   pnpm panel:sync          # GITHUB_TOKEN raises the API rate limit; --tag vX.Y.Z pins a release
+   ```
+
+7. **Deploy and verify:**
+
+   ```bash
+   pnpm build               # dry run: bundles and validates the config
+   pnpm exec wrangler deploy
+   curl https://proxy.example.com/healthz      # {"status":"ok"} once Access lets you through
+   ```
+
+8. **Add credentials.** Open `https://proxy.example.com/management.html` (sign in through Access as an admin; type any text
+   as the management key), then use _OAuth login_ for Claude/Codex/…, upload auth files, or add API keys in the config. Then
+   connect your tools: [CLIENTS.md](../docs/workers-port/CLIENTS.md). Coming from the Go server: [MIGRATION.md](../docs/workers-port/MIGRATION.md).
+
+The cron trigger (`0 */3 * * *`) refreshes model catalogs, prunes old usage rows and re-arms credential refresh alarms.
+Re-run `pnpm panel:sync` before a deploy to pick up a new panel release.
+
+## Cloudflare Access reference
+
+`/v1*`, `/openai/v1*`, `/backend-api/codex*` need a valid `Cf-Access-Jwt-Assertion`; `/v8/management*` and
+`/management.html` additionally need an admin. Variables: see [ACCESS.md](../docs/workers-port/ACCESS.md#worker-variables).
+
+## Development
+
+Scripts (`typecheck`, `lint`, `test`, `build`, …), module layout and conventions are in
+[DEVELOPMENT.md](../docs/workers-port/DEVELOPMENT.md).

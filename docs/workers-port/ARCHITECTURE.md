@@ -946,7 +946,9 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `wrangler dev`).
 - Machine clients use Access service tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access
-  single-header mode via `x-api-key`).
+  single-header mode via `x-api-key`, set on the Access application with `read_service_tokens_from_header`; the Worker only sees the
+  resulting JWT, so no Worker code is involved). User docs: `workers/README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
+  `DEVELOPMENT.md` in this directory.
 
 ## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
 
