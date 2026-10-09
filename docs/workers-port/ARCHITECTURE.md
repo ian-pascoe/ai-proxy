@@ -255,7 +255,7 @@ Core contracts every provider slice implements (Go references in each module hea
 - **Translators** (`translator/codex/<pkg>/{request,response}.ts`, registered by `codex/register.ts`): faithful ports of
   `internal/translator/codex/*` for `openai`, `openai-response`, `claude`, `gemini` and `interactions` -> `codex`. Shared
   helpers are under `translator/common/` (SSE frame builders, `UserTurnDrops`, apply_patch bridge, Responses tool winners,
-  Claude message helpers, GPT/Grok signature checks). `TranslationError` may carry the translated `body` (Go returns both
+  Claude message helpers; the signature checks are `src/signature/`). `TranslationError` may carry the translated `body` (Go returns both
   for unsupported-part refusals). Golden fixtures: `corpus/codex-*.json`; **generate them with `TZ=UTC`** (Gemini timestamps
   use the process time zone in Go). The Interactions `interaction.completed` event embeds the current time, so it is
   covered by a fake-timer unit test instead of a fixture. Request `tool_use.input` text is re-serialised compactly (Go
@@ -281,15 +281,17 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
   free-plan credentials are excluded through `ExecutionInput.disallowFreeAuth`). `/v1/alpha/search` and
   `/backend-api/codex/alpha/search` (`handlers/codex/alpha-search.ts`) forward the sanitised body to
   `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
-- **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
-  `is-compat` models, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
+- **Multi-agent v2, orphan delegation, `is-compat`** (slice #26, see "Codex client rewriting and compat variants"): the executor
+  optimises collaboration tools/namespace (`optimizeCodexMultiAgentV2RequestForAuth`, restored in stream, non-stream and WebSocket
+  events) and compat models use the `claude -> codex` compat transform.
+- **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, models.json header overrides (hook
+  `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
 
 - **WebSocket**: `executor/codex/websocket.ts` is the upstream transport (Go `CodexWebsocketsExecutor`), dispatched from
   `executeStream` like Go's `CodexAutoExecutor`; see "Responses WebSocket transports".
-- **Not ported (follow-ups)**: bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
-  `is-compat` models, local token counting (`countTokens` answers 501; needs a BPE tokenizer) and the Claude stream
-  input-token estimate, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
-  the Grok signature check, OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
+- **Not ported (follow-ups)**: stream bootstrap buffering (`upstream.codex.stream-bootstrap-*`), the Go `resolveCodexModelIsCompat`
+  config fallback when no resolved model info is bound, models.json header overrides (hook `modelHeaderOverrides` exists),
+  OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
   non-`gpt-image` models (ported but not routed).
 
 ## xAI provider and media endpoints (`src/executor/xai/`, `src/handlers/openai/{videos,speech,xai-*}.ts`)
@@ -326,12 +328,13 @@ WebSocket transports"). Reuses the Codex translators
   retrievable with the creating credential: the handler stores `{authId, routing model}` in KV (`xai/video-binding/<sha256(id)>`,
   TTL `multimedia.video-result-auth-cache-ttl`, default 3 h, KV minimum 60 s) and pins retrievals through `ExecutionInput.pinnedId`
   (`ExecutionOutput.credentialId` reports the serving credential). `/v1/audio/speech` and `/v1/tts` convert to `POST /tts`.
-- **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge and multi-agent-v2 input
-  rewriting (shared with Codex), `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+- **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge
+  (`NormalizeApplyPatchResponsesRequest`/`ApplyPatchResponsesState`, incl. the folded-dispatcher expansion; custom tools keep
+  the generic `{input}` function bridge), `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
 
-- **Not ported (follow-ups)**: the `apply_patch` Responses bridge and multi-agent-v2 input
-  rewriting (shared with Codex), local `o200k_base` token counting (`countTokens` answers 501), the Claude stream input-token
-  estimate, `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+- **Multi-agent v2** input rewriting (`rewriteCodexMultiAgentV2Input`, after the stream/model fields are set) and orphan delegation
+  (translation step) are shared with Codex. **Not ported (follow-ups)**: the `apply_patch` Responses bridge,
+  `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 ## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
@@ -389,9 +392,10 @@ upgrade request like any other (default-deny prefixes); the principal is capture
 Deviations from Go / not ported: no WebSocket ping keep-alives (`streaming.keepalive-seconds` is ignored: the Workers WebSocket API
 cannot send ping frames); terminal failures close with 1011/1012/1009 instead of dropping the TCP connection; credential pinning only
 covers WebSocket-capable credentials and the decision to pass through is based on the previously pinned credential instead of the global
-credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`), multi-agent-v2 request rewriting,
+credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`),
 stream bootstrap buffering, non-stream execution over WebSocket, `compaction_trigger` over the xAI socket (runs through HTTP compaction
-with the input the client sent) and the xAI apply_patch bridge. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
+with the input the client sent) and the xAI apply_patch bridge. The multi-agent v2 tool preparation and orphan delegation rewrite run on
+each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 ## Model registry and `/models` endpoints (`src/registry/`)
@@ -434,10 +438,16 @@ Deviations from Go: models are registered under the credential's **executor key*
 `PickRequest.providers` is matched against; the quota window starts at the model state's observation time; Go's
 `GetFirstAvailableModel` sorts with an inconsistent comparator for models without `created`, the port is deterministic
 (newest, then id); credential/catalog edits show up within the 5 s snapshot TTL (1 min for KV catalogs). Not ported: plugin
-models, and the
-Codex client catalog (`GET /v1/models?client_version=...`, `internal/client/codex/models`), which answers 501 until the Codex
-slice implements `ModelsOptions.codexClient` (the validated catalog is already refreshed into KV and exposed as
-`ModelCatalogs.codexClient`).
+models and Home.
+
+**Codex client catalog** (`GET /v1/models[/{id}]?client_version=...`, `registry/codex-client-models.ts`, port of
+`internal/client/codex/models`): every available model becomes an entry cloned from its template in `codex_client_models.json`
+(or the `gpt-5.5` template with compact instructions), with reasoning levels (`max`/`ultra` only for clients >= 0.144.0 or
+unparseable versions), modalities, priorities, Devin display names, `client.codex.optimize-multi-agent-v2` (`multi_agent_version`),
+`client.codex.enable-apply-patch` (`apply_patch_tool_type: freeform` only when every provider of the exact public model has an
+executor, `supportsApplyPatchProviders`) and `cpa_capabilities.web_search` for `client_version=cpa`. The body is serialised like
+Go's `MarshalCompact` (sorted keys, no HTML escaping). Fixtures: the real Go `OpenAIModels` handler over the registry scenarios
+(`codexClient` section of `test/fixtures/registry.json`: per-entry and whole-body hashes).
 
 ## Token refresh (`src/credentials/refresh/`)
 
@@ -509,10 +519,12 @@ Deviations from Go (all deliberate, documented in code headers):
   slides the 1 h TTL) plus one write only when the prompt id or pinned date changed, `commit` = one compare-and-swap write using
   the generation carried in `ContinuityState` (`planContinuity` computes the arguments, the store is awaited before the
   synchronous `applyCloaking`).
-- `internal/signature` is replaced by structural checks (`executor/claude/sanitize.ts`: decodable `E…`/`R…`
-  envelope); Gemini clients always receive Gemini's bypass `thoughtSignature` sentinel for Claude thinking blocks.
-- OpenAI Responses -> Claude: the Codex `apply_patch` custom-tool bridge (`internal/client/codex/apply-patch`) is not
-  ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
+- Signature handling is the full `internal/signature` port (`src/signature/`, see "Signature validation"):
+  `sanitizeClaudeMessagesForClaudeUpstream` runs before the Claude upstream request.
+- OpenAI Responses -> Claude: the Codex `apply_patch` custom tool is a strict `{"input": ...}` function upstream and the
+  response translator (`claude/openai/responses/response.ts`) decodes it into `custom_tool_call` events
+  (`ApplyPatchCallState`, identity/snapshot validation, `response.failed` + 502 on malformed input). Go's log-only invariant
+  diagnostics are omitted.
 - `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
 
 ## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
@@ -568,7 +580,8 @@ Port of `internal/translator/interactions/claude` (registered as `claude -> inte
   entries -> `<system-reminder>` user steps (held back behind pending tool results), tool results re-aligned with their `tool_use`
   order (`alignClaudeToolResults`), `tools` -> function declarations. Only inline base64 media is forwarded; a user turn emptied
   by unsendable parts is refused with a request-scoped 400 (`UserTurnDrops`). `convertClaudeRequestToInteractionsWithCompat`
-  keeps empty thinking blocks but has no caller yet (the compat executor path is not ported).
+  keeps empty thinking blocks and is selected for `is-compat` models by `translateRequestForExecutor` (the `gemini-interactions`
+  executor).
 - **Response** (`claude/response.ts`): Interactions stream events/aggregates -> Claude `message_start`/`content_block_*`/
   `message_delta`/`message_stop`/`error` frames (each frame ends with three newlines like Go) and Claude `message` bodies;
   `status: incomplete`/length finish reasons -> `max_tokens`, function calls -> `tool_use`, usage re-based so that Claude's
@@ -584,8 +597,9 @@ Port of `internal/translator/openai/{claude,gemini,openai,interactions}` plus th
 claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completions) and interactions <-> openai-response;
 `handlers/openai/routes.ts` already converts Responses-shaped bodies sent to `/v1/chat/completions`.
 
-- **Layout**: one directory per Go package; `openai/common/` holds the shared helpers (apply_patch bridge, Responses tool
-  descriptors, tool-name fixing, signature checks, user-turn-drop policy, file data). Modules cite their Go source. The
+- **Layout**: one directory per Go package; the helpers of Go's `translator/common` live in `translator/common/` (apply_patch
+  bridge, Responses tool descriptors, tool-name fixing, user-turn-drop policy, file data, ...); `openai/common/read.ts` only adds
+  OpenAI-side readers. Modules cite their Go source. The
   apply_patch identity state machine of `interactions/responses` is ported statement by statement (including the
   `ApplyPatchInputDecoder`), and every translator is covered by golden fixtures (`corpus/*-openai*.json`, `*-interactions.json`).
 - **Images**: the executor serves `openai-image` entry requests (`executor/openai-compat/images.ts`): the JSON body is
@@ -594,8 +608,7 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
   doubles of `ModelProviders` may implement the optional `modelType`) to the OpenAI-compatible executor, converting the
   non-stream answer to `response_format` (`buildImagesApiResponse`). The handler turns multipart edits into the JSON edit
   form, so the executor rebuilds `multipart/form-data` for the upstream (file names are not kept).
-- **Deviations**: `isRecognizedReasoningSignature` only knows GPT/SWE/Gemini-bypass signatures (Claude/Gemini/Kimi/Grok
-  envelope validation belongs to those provider slices); a patch-enabled Interactions stream that ends without its source
+- **Deviations**: a patch-enabled Interactions stream that ends without its source
   terminator is reported as a gateway error instead of a synthesised `response.failed` (`FinalizeToolInput`); malformed
   Interactions event JSON is only approximated (longest valid object prefix) because gjson reads lazily; raw JSON texts that
   Go copies byte for byte (`gjson.Raw`) are re-serialised compactly.
@@ -722,8 +735,7 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
 Deviations from Go: Devin's per-session turn counter is an atomic `incr` in the `SessionState` DO (TTL 24 h, per caller scope, not an
 LRU of 5000); `fetch` always sends a
 User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
-error; `internal/signature` provenance detection used for Devin thought signatures is approximated by structural checks.
-Not ported: the apply_patch bridge (Kimi/Meta/Devin), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
+error. Not ported: the apply_patch Responses bridge for Kimi `/responses`/Meta (the translated Kimi chat path has it), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs.
 
 ## SessionState Durable Object (`src/session-state/`)
@@ -841,8 +853,7 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   blocks; the capability comes from the registry record, `supportsWebSearch`).
 - **Signatures** (`src/signature/`): `claude.ts` ports the E/R/Q/CAIS validation including the strict protobuf-tree mode
   (`signature-bypass-strict`, default off) and `compatibleAntigravityClaudeThinkingSignature`; `provider.ts` the provider detection and
-  `decideSignatureCompatibility` decision table for every target (claude, gemini, gpt, kimi, swe, grok); the Gemini replay sanitiser already
-  lived in `translator/gemini/common/signature.ts`. `go run ./workers/tools/fixturegen/signature` drives the real Go package over a corpus of
+  `decideSignatureCompatibility` decision table for every target (claude, gemini, gpt, kimi, swe, grok); the Gemini envelope checks and replay sanitiser live in `gemini.ts` (re-exported by `translator/gemini/common/signature.ts`). `go run ./workers/tools/fixturegen/signature` drives the real Go package over a corpus of
   synthetic envelopes (`test/fixtures/signature.json`, `test/signature-fixtures.test.ts`).
 - **Signature cache** (`cache.ts`, `store.ts`): translators are synchronous, so the cache they read is a bounded per-isolate map with the Go
   semantics (3 h sliding TTL, 50 char minimum, gpt/claude/gemini buckets, Gemini sentinel on a miss). It is installed around the synchronous
@@ -884,6 +895,40 @@ Deviations from Go / not ported: the **compaction capsule**
 (`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies; a bare `[DONE]` line yields nothing in the
 Interactions response translator (as in Go), so the Interactions stream ends with `interaction.completed` only; short-cooldown
 state and signature persistence are KV (eventually consistent), not the Go home KV.
+
+## Signature validation (`src/signature/`)
+
+Full port of `internal/signature`: `claude.ts` (E/R/Q/CAIS validation incl. strict protobuf mode), `gemini.ts` (envelope
+inspection, `sanitizeGeminiRequestThoughtSignatures`, `validateGeminiThoughtSignatures`, `validateGeminiFunctionCallPairing`),
+`gpt.ts`, `grok.ts` (`isValidGrokEncryptedContent`, `isRecognizedReasoningSignature`), `entropy.ts`, `provider.ts` (provider
+detection by structure, `decideSignatureCompatibility` with Go's `reason` strings for every target) and `claude-messages.ts`
+(`sanitizeClaudeMessagesSignaturesForTarget`/`ForModel`/`ForClaudeUpstream`, in place on parsed bodies). The simplified checks of
+the earlier slices (`translator/common/signature.ts`, `openai/common/signature.ts`, `common/gemini-signature.ts`, the decodable-prefix
+test in `executor/claude/sanitize.ts`, Devin's approximation) are gone: the Codex/OpenAI/Claude/Kimi/xAI/Devin paths call this module.
+`go run ./workers/tools/fixturegen/signature` (`test/fixtures/signature.json`) records detection, decisions (incl. reasons),
+Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic histories and Gemini validation/pairing cases;
+`test/signature-fixtures.test.ts` compares them with the port (key order included).
+
+## Codex client rewriting and compat variants (`src/executor/helps/{codex-multi-agent-v2,translate}.ts`)
+
+- **Multi-agent v2** (`codex-multi-agent-v2.ts`, port of `internal/client/codex/optimize-multi-agent-v2`): for official Codex
+  clients (User-Agent allow-list) and `client.codex.optimize-multi-agent-v2`: `prepareCodexMultiAgentV2Tools` lists the available
+  models in the `spawn_agent` description and removes `message.encrypted` from the collaboration tools; the Codex executor
+  additionally renames the `collaboration` namespace to `collaboration-optimize` (unless the request already uses it) and restores
+  it in every response event (`restoreCodexMultiAgentV2Response`, re-marshalled like Go: sorted keys); `rewriteCodexMultiAgentV2Input`
+  turns `agent_message` items into user messages for non-Codex targets (and strips `author`/`recipient` for compat models);
+  `rewriteCodexOrphanDelegationInput` (`upstream.codex.orphan-delegation-compatibility` and `X-Openai-Subagent: collab_spawn`)
+  downgrades orphan `codex_app` delegation outputs. The Responses handler and WebSocket frames prepare the tools once
+  (`handlers/responses/codex-prepare.ts`, model list from `ModelProviders.spawnAgentSource`); executors repeat the idempotent parts
+  without the model list. Fixtures: `go run ./workers/tools/fixturegen/multiagent` (896 combinations of client identity, flags and
+  compat over the real Go functions, `test/fixtures/multiagent.json`).
+- **`is-compat` models** (`translate.ts`): `translateRequestForExecutor` replaces every direct `registry.translateRequest` of the
+  executors that Go routes through `helps.Translate*WithAPIKeyModelCompatibility` (Claude, Codex, Gemini/Vertex Interactions, Meta,
+  OpenAI-compatibility, xAI; Kimi and Antigravity use it for the multi-agent rewrite only). The registry holds the `*WithCompat`
+  request transforms (`registerCompatRequest`: claude -> codex/gemini/interactions/openai, openai/openai-response -> claude), selected
+  when the resolved model info has `isCompat` (`ThinkingModelInfo.isCompat`). The Codex reasoning sanitiser keeps reasoning content
+  and foreign `encrypted_content` for compat models. Fixtures: corpus `executor-compat.json` runs the Go helper itself
+  (`corpusCase.executor`).
 
 ## Authentication (Cloudflare Access)
 

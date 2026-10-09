@@ -1,0 +1,1807 @@
+[
+  {
+    "name": "request: custom apply_patch becomes a strict input function",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: patch arguments stream as custom tool input deltas",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\": \\\"***\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" Begin \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"Patch\\\\n\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"*** Add\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" File: \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"a.txt\\\\n\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"+héllo \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\\\\\"quote\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"d\\\\\\\" \\\\\\\\ \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"back\\\\n+\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"😀\\\\n*** \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"End Pat\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"ch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: whole arguments in one delta",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: start snapshot input without deltas",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_2\",\"name\":\"apply_patch\",\"input\":{\"input\":\"*** Begin Patch\\n*** Add File: a.txt\\n+héllo \\\"quoted\\\" \\\\ back\\n+😀\\n*** End Patch\"}}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: snapshot completes a truncated stream",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_3\",\"name\":\"apply_patch\",\"input\":{\"input\":\"*** Begin Patch\\n*** Add File: a.txt\\n+héllo \\\"quoted\\\" \\\\ back\\n+😀\\n*** End Patch\"}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** \"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: snapshot differs from the streamed input",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_4\",\"name\":\"apply_patch\",\"input\":{\"input\":\"other patch\"}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: extra argument field fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_5\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"x\\\",\\\"other\\\":1}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: non-string input fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_6\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":5}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: array arguments fail",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_7\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"[\\\"x\\\"]\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: missing input field fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_8\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"patch\\\":\\\"x\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: truncated arguments fail at the block end",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_9\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: conflicting call identity fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_10\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_11\",\"name\":\"apply_patch\",\"input\":{}}}"
+    ]
+  },
+  {
+    "name": "stream: same identity repeated is fine",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_12\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_12\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: unnamed block resolves to the only apply_patch tool",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_13\",\"name\":\"\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: interleaved patch and function calls",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_14\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_15\",\"name\":\"shell\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n**\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"* Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":1}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: text, reasoning-free message with a patch",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_16\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":1}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: two patch calls",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_17\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_18\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"second\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":1}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: escapes and surrogates decode",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_19\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"a\\\\u00e9\\\\ud83d\\\\ude00\\\\n\\\\t\\\\\\\"\\\\\\\\\\\\/\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: lone surrogate escape fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_20\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"\\\\ud83d\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: ordinary function tool is unaffected",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_21\",\"name\":\"shell\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: custom tool that is not apply_patch is unaffected",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "note",
+          "description": "n"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_22\",\"name\":\"note\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"free text\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: apply_patch declared as a function stays a function",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "function",
+          "name": "apply_patch",
+          "parameters": {
+            "type": "object"
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_23\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"x\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "stream: late snapshot after item completion is compared",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_24\",\"name\":\"apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_25\",\"name\":\"shell\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_24\",\"name\":\"apply_patch\",\"input\":{\"input\":\"different\"}}}"
+    ]
+  },
+  {
+    "name": "stream: tool_use after namespace declaration (namespace apply_patch)",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "namespace",
+          "name": "codex",
+          "tools": [
+            {
+              "type": "custom",
+              "name": "apply_patch",
+              "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+              "format": {
+                "type": "grammar",
+                "syntax": "lark",
+                "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_26\",\"name\":\"codex__apply_patch\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "non-stream: valid patch input",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_30",
+          "name": "apply_patch",
+          "input": {
+            "input": "*** Begin Patch\n*** Add File: a.txt\n+héllo \"quoted\" \\ back\n+😀\n*** End Patch"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 5,
+        "output_tokens": 9
+      }
+    }
+  },
+  {
+    "name": "non-stream: patch with text and function call",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5",
+      "content": [
+        {
+          "type": "text",
+          "text": "ok"
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_31",
+          "name": "apply_patch",
+          "input": {
+            "input": "x"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_32",
+          "name": "shell",
+          "input": {
+            "cmd": "ls"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 5,
+        "output_tokens": 9
+      }
+    }
+  },
+  {
+    "name": "non-stream: invalid patch input fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_33",
+          "name": "apply_patch",
+          "input": {
+            "input": 5
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 5,
+        "output_tokens": 9
+      }
+    }
+  },
+  {
+    "name": "non-stream: extra field fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_34",
+          "name": "apply_patch",
+          "input": {
+            "input": "x",
+            "y": 1
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 5,
+        "output_tokens": 9
+      }
+    }
+  },
+  {
+    "name": "non-stream: empty input object fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "toolu_35",
+          "name": "apply_patch",
+          "input": {}
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 5,
+        "output_tokens": 9
+      }
+    }
+  },
+  {
+    "name": "non-stream: aggregated Claude SSE",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_36\",\"name\":\"apply_patch\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\": \\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+héllo \\\\\\\"quoted\\\\\\\" \\\\\\\\ back\\\\n+😀\\\\n*** End Patch\\\"}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":0}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}\ndata: {\"type\":\"message_stop\"}\n"
+  },
+  {
+    "name": "non-stream: aggregated Claude SSE with bad arguments fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_37\",\"name\":\"apply_patch\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"x\\\",\\\"z\\\":1}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":0}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}\ndata: {\"type\":\"message_stop\"}\n"
+  },
+  {
+    "name": "non-stream: conflicting identity in SSE fails",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "patch it"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\nhunk: add_hunk | update_hunk\n"
+          }
+        },
+        {
+          "type": "function",
+          "name": "shell",
+          "description": "run",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "cmd": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_38\",\"name\":\"apply_patch\",\"input\":{}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_39\",\"name\":\"apply_patch\",\"input\":{}}}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":20}}\ndata: {\"type\":\"message_stop\"}\n"
+  }
+]

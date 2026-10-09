@@ -3,9 +3,9 @@
  *
  * Go source: internal/translator/claude/openai/responses/claude_openai-responses_request.go.
  *
- * Not ported: the Codex `apply_patch` custom tool special-casing (internal/client/codex/apply-patch); such a tool is
- * converted like any other custom tool. Signature compatibility uses the simplified Claude check from the executor
- * sanitizer instead of internal/signature. Go's log-only invariant diagnostics are omitted.
+ * The Codex `apply_patch` custom tool becomes a strict `{"input": ...}` function (`customToolToClaude`); the response
+ * translator decodes it again. Signature compatibility uses `signature/provider.ts`. Go's log-only invariant
+ * diagnostics are omitted.
  */
 import { asBool, asInt, get, type Json, type JsonObject } from "../../../../json/index.ts"
 import {
@@ -16,6 +16,7 @@ import {
 } from "../../../../thinking/index.ts"
 import { compatibleSignatureForProvider } from "../../../../signature/provider.ts"
 import { lookupModelInfo } from "../../../model-info.ts"
+import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
 import { attachCacheControl } from "../../../common/cache-control.ts"
 import { buildClaudeStructuredOutputInstruction } from "../../../common/claude-system.ts"
 import { deriveClaudeUserID } from "../../../common/claude-user-id.ts"
@@ -733,6 +734,11 @@ const customToolToClaude = (tool: Json, overrideName: string): JsonObject | unde
   }
   const description = toolDescription(tool)
   if (description !== "") out.description = description
+  if (isApplyPatchCustomTool(tool)) {
+    // The Codex freeform patch grammar becomes a strict `{"input": ...}` function (decoded again in the response).
+    out.description = applyPatchDescription(tool)
+    out.input_schema = applyPatchParameters()
+  }
   attachCacheControl(out, tool)
   return out
 }

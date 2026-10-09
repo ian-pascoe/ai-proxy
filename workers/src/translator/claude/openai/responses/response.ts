@@ -3,10 +3,20 @@
  *
  * Go source: internal/translator/claude/openai/responses/claude_openai-responses_response.go.
  *
- * Not ported: the Codex `apply_patch` custom tool bridge (ApplyPatchCallState / ApplyPatchFailure); an apply_patch
- * custom tool streams like any other custom tool (the whole input is delivered at completion).
+ * The Codex `apply_patch` custom tool bridge is included: a custom tool named `apply_patch` (original request
+ * declaration) arrives as strict `{"input": ...}` function arguments, is streamed as `response.custom_tool_call_input`
+ * deltas and any malformed or inconsistent input terminates the response with `response.failed`
+ * (`state.toolInputError`, 502 for the caller). Divergence: a patch-enabled stream that ends without its
+ * `message_stop` is detected through `state.finalizeToolInput` only once a line was translated.
  */
 import { asBool, asFloat, asInt, get, type Json, type JsonObject, tryParseJson } from "../../../../json/index.ts"
+import {
+  ApplyPatchCallState,
+  applyPatchFailure,
+  applyPatchInputDelta,
+  applyPatchInputDone,
+  isApplyPatchCustomTool
+} from "../../../common/apply-patch.ts"
 import { claudeMessagesJSONToSSE } from "../../../common/claude-native-response.ts"
 import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts"
 import type { ResponseContext, ResponseTransform } from "../../../registry.ts"
@@ -95,6 +105,13 @@ interface State {
   funcItemAdded: Map<number, boolean>
   funcArgsSent: Map<number, number>
   funcBlockStopped: Map<number, boolean>
+  /** Claude block index -> `apply_patch` decoder of a freeform patch call. */
+  applyPatchCalls: Map<number, ApplyPatchCallState>
+  funcInputSnapshot: Map<number, string>
+  funcInputSnapshotErrors: Map<number, string>
+  funcIdentityConflicts: Map<number, boolean>
+  /** First retained `apply_patch` failure; later lines produce nothing. */
+  toolInputError: string | undefined
   completedEmitted: boolean
   seq: number
   responseId: string
@@ -140,6 +157,11 @@ const newState = (request: Json | undefined): State => {
     funcItemAdded: new Map(),
     funcArgsSent: new Map(),
     funcBlockStopped: new Map(),
+    applyPatchCalls: new Map(),
+    funcInputSnapshot: new Map(),
+    funcInputSnapshotErrors: new Map(),
+    funcIdentityConflicts: new Map(),
+    toolInputError: undefined,
     completedEmitted: false,
     seq: 0,
     responseId: "",
@@ -280,6 +302,49 @@ const finalizeWebSearch = (st: State, item: WebSearchItem, status: string, nextS
   ]
 }
 
+/** `isApplyPatch`: the original request's winning declaration, not the sanitised upstream name. */
+const isApplyPatch = (st: State, name: string): boolean => {
+  const descriptor = st.toolWinners.get(st.toolNames.identity(name))
+  return descriptor !== undefined && descriptor.toolType === "custom" && isApplyPatchCustomTool(descriptor.tool)
+}
+
+/** `validateApplyPatchSnapshots`: equivalent JSON spellings pass, one patch input never silently replaces another. */
+const validateApplyPatchSnapshots = (previous: string, current: string): string | undefined => {
+  const call = new ApplyPatchCallState("", "", "", "", 0)
+  if (previous !== "") {
+    const finished = call.finishArguments(previous)
+    if ("error" in finished) return finished.error
+  }
+  const finished = call.finishArguments(current)
+  return "error" in finished ? finished.error : undefined
+}
+
+/**
+ * `finishClaudeApplyPatchArguments`: complete streamed JSON is a complete snapshot, not a prefix a later snapshot may
+ * silently extend; a partial source can still be completed by a consistent full snapshot.
+ */
+const finishClaudeApplyPatchArguments = (
+  call: ApplyPatchCallState,
+  args: string,
+  snapshot: string
+): { readonly tail: string; readonly input: string } | { readonly error: string } => {
+  if (snapshot === "") return call.finishArguments(args)
+  if (tryParseJson(args) !== undefined) {
+    const finished = call.finishArguments(args)
+    if ("error" in finished) return finished
+  }
+  return call.finishArguments(snapshot)
+}
+
+const CONFLICTING_IDENTITY = "conflicting apply_patch call identity"
+
+/** `failToolInput`: retains the first failure and emits one terminal `response.failed`. */
+const failToolInput = (st: State, error: string, nextSeq: () => number): string[] => {
+  if (st.toolInputError !== undefined) return []
+  st.toolInputError = error
+  return [emit("response.failed", applyPatchFailure(st.responseId, nextSeq()) as JsonObject)]
+}
+
 const emitFuncItem = (
   st: State,
   idx: number,
@@ -287,9 +352,22 @@ const emitFuncItem = (
   force: boolean,
   nextSeq: () => number
 ): string[] => {
-  if (st.funcItemAdded.get(idx) === true) return []
-  const name = st.funcNames.get(idx) ?? ""
+  if (st.funcItemAdded.get(idx) === true || st.toolInputError !== undefined) return []
+  let name = st.funcNames.get(idx) ?? ""
   let callId = st.funcCallIds.get(idx) ?? ""
+  if (force && name === "" && st.toolWinners.size === 1) {
+    for (const identity of st.toolWinners.keys()) {
+      if (isApplyPatch(st, identity)) {
+        name = st.toolNames.claudeName(identity)
+        st.funcNames.set(idx, name)
+      }
+    }
+  }
+  if (isApplyPatch(st, name)) {
+    if (st.funcIdentityConflicts.get(idx) === true) return failToolInput(st, CONFLICTING_IDENTITY, nextSeq)
+    const snapshotError = st.funcInputSnapshotErrors.get(idx)
+    if (snapshotError !== undefined) return failToolInput(st, snapshotError, nextSeq)
+  }
   if (!force && (name === "" || callId === "")) return []
   if (callId === "") {
     callId = `call_${st.responseId}_${idx}`
@@ -308,6 +386,18 @@ const emitFuncItem = (
       input: "",
       call_id: callId,
       name: ""
+    }
+    if (isApplyPatch(st, name) && descriptor !== undefined) {
+      st.applyPatchCalls.set(
+        idx,
+        new ApplyPatchCallState(
+          `ctc_${callId}`,
+          callId,
+          descriptor.direct ? descriptor.name : descriptor.childName,
+          descriptor.namespace,
+          outputIndex
+        )
+      )
     }
   } else {
     item = {
@@ -332,14 +422,27 @@ const emitFuncItem = (
 }
 
 const emitPendingFuncArgs = (st: State, idx: number, nextSeq: () => number): string[] => {
-  if (st.funcItemAdded.get(idx) !== true) return []
+  if (st.funcItemAdded.get(idx) !== true || st.toolInputError !== undefined) return []
   const buf = st.funcArgsBuf.get(idx)
   const sent = st.funcArgsSent.get(idx) ?? 0
   if (buf === undefined || buf.length <= sent) return []
   const fragment = buf.slice(sent)
   st.funcArgsSent.set(idx, buf.length)
-  // Custom tool input is only delivered at completion (the freeform input is wrapped in JSON by the model).
-  if (st.funcCustom.get(idx) === true) return []
+  if (st.funcCustom.get(idx) === true) {
+    // Only the `apply_patch` bridge streams freeform input; other custom tools deliver it at completion.
+    const patchCall = st.applyPatchCalls.get(idx)
+    if (patchCall === undefined) return []
+    const pushed = patchCall.pushArguments(fragment)
+    if ("error" in pushed) return failToolInput(st, pushed.error, nextSeq)
+    return pushed.text === ""
+      ? []
+      : [
+          emit(
+            "response.custom_tool_call_input.delta",
+            applyPatchInputDelta(patchCall, pushed.text, nextSeq()) as JsonObject
+          )
+        ]
+  }
   return [
     emit("response.function_call_arguments.delta", {
       type: "response.function_call_arguments.delta",
@@ -358,9 +461,10 @@ const finalizeFuncItem = (
   status: string,
   nextSeq: () => number
 ): string[] => {
-  if (st.funcItemDone.get(idx) === true) return []
+  if (st.funcItemDone.get(idx) === true || st.toolInputError !== undefined) return []
   const out = emitFuncItem(st, idx, request, true, nextSeq)
   out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+  if (st.toolInputError !== undefined) return out
   st.funcItemDone.set(idx, true)
   st.funcItemStatus.set(idx, status)
 
@@ -374,17 +478,35 @@ const finalizeFuncItem = (
   const name = st.funcNames.get(idx) ?? ""
 
   if (custom) {
-    const input = unwrapCustomToolInput(args)
+    let input: string
+    const patchCall = st.applyPatchCalls.get(idx)
+    if (patchCall !== undefined) {
+      const finished = finishClaudeApplyPatchArguments(patchCall, args, st.funcInputSnapshot.get(idx) ?? "")
+      if ("error" in finished) return [...out, ...failToolInput(st, finished.error, nextSeq)]
+      input = finished.input
+      if (finished.tail !== "") {
+        out.push(
+          emit(
+            "response.custom_tool_call_input.delta",
+            applyPatchInputDelta(patchCall, finished.tail, nextSeq()) as JsonObject
+          )
+        )
+      }
+    } else {
+      input = unwrapCustomToolInput(args)
+    }
     if (st.funcArgsDone.get(idx) !== true) {
       st.funcArgsDone.set(idx, true)
       out.push(
-        emit("response.custom_tool_call_input.done", {
-          type: "response.custom_tool_call_input.done",
-          sequence_number: nextSeq(),
-          item_id: `ctc_${callId}`,
-          output_index: outputIndex,
-          input
-        })
+        patchCall !== undefined
+          ? emit("response.custom_tool_call_input.done", applyPatchInputDone(patchCall, input, nextSeq()) as JsonObject)
+          : emit("response.custom_tool_call_input.done", {
+              type: "response.custom_tool_call_input.done",
+              sequence_number: nextSeq(),
+              item_id: `ctc_${callId}`,
+              output_index: outputIndex,
+              input
+            })
       )
     }
     const item: JsonObject = { id: `ctc_${callId}`, type: "custom_tool_call", status, input, call_id: callId, name: "" }
@@ -590,10 +712,28 @@ export const convertClaudeResponseToOpenAIResponses = (
   context: ResponseContext,
   line: string
 ): ReadonlyArray<string> => {
+  const out = convertStreamLine(context, line)
+  const st = context.state.value as State
+  if (st.toolInputError !== undefined) context.state.toolInputError = st.toolInputError
+  context.state.finalizeToolInput ??= () => finalizeToolInput(context, st)
+  return out
+}
+
+/** `FinalizeToolInput`: a patch-enabled stream that ends before `message_stop` fails instead of completing. */
+const finalizeToolInput = (context: ResponseContext, st: State): ReadonlyArray<string> => {
+  if (st.toolInputError !== undefined || st.completedEmitted) return []
+  if (![...st.toolWinners.keys()].some((name) => isApplyPatch(st, name))) return []
+  st.toolInputError = "upstream apply_patch stream ended before protocol completion"
+  context.state.toolInputError = st.toolInputError
+  st.seq++
+  return [emit("response.failed", applyPatchFailure(st.responseId, st.seq) as JsonObject)]
+}
+
+const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   const modelName = context.model
   context.state.value ??= newState(pickRequest(context.originalRequest, context.translatedRequest))
   const st = context.state.value as State
-  if (st.completedEmitted) return []
+  if (st.completedEmitted || st.toolInputError !== undefined) return []
   if (!line.startsWith("data:")) return []
   const root = tryParseJson(line.slice(5).trim())
   const request = pickRequest(context.originalRequest, context.translatedRequest)
@@ -629,6 +769,10 @@ export const convertClaudeResponseToOpenAIResponses = (
       st.funcItemAdded = new Map()
       st.funcArgsSent = new Map()
       st.funcBlockStopped = new Map()
+      st.applyPatchCalls = new Map()
+      st.funcInputSnapshot = new Map()
+      st.funcInputSnapshotErrors = new Map()
+      st.funcIdentityConflicts = new Map()
       st.funcArgsBuf = new Map()
       st.funcArgsDone = new Map()
       st.funcItemDone = new Map()
@@ -674,8 +818,11 @@ export const convertClaudeResponseToOpenAIResponses = (
       if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, "completed", nextSeq))
       for (const prevIdx of st.funcCallIds.keys()) {
         if (st.funcItemDone.get(prevIdx) !== true && prevIdx !== idx) {
-          if ((st.funcNames.get(prevIdx) ?? "") === "" && st.funcBlockStopped.get(prevIdx) !== true) continue
+          // Patch calls may interleave; a new block is not a completion snapshot for a still-open (or unnamed) call.
+          const prevName = st.funcNames.get(prevIdx) ?? ""
+          if ((isApplyPatch(st, prevName) || prevName === "") && st.funcBlockStopped.get(prevIdx) !== true) continue
           out.push(...finalizeFuncItem(st, prevIdx, request, "completed", nextSeq))
+          if (st.toolInputError !== undefined) return out
         }
       }
       for (const item of st.webSearchItems) {
@@ -715,6 +862,17 @@ export const convertClaudeResponseToOpenAIResponses = (
         const callId = str(get(cb, "id"))
         const name = str(get(cb, "name"))
         const oldId = st.funcCallIds.get(idx) ?? ""
+        const oldName = st.funcNames.get(idx) ?? ""
+        // Pending identity evidence must survive later matching updates.
+        if (callId !== "" && oldId !== "" && callId !== oldId) st.funcIdentityConflicts.set(idx, true)
+        if (isApplyPatch(st, oldName) || isApplyPatch(st, name)) {
+          if (
+            st.funcIdentityConflicts.get(idx) === true ||
+            (name !== "" && oldName !== "" && st.toolNames.identity(name) !== st.toolNames.identity(oldName))
+          ) {
+            return [...out, ...failToolInput(st, CONFLICTING_IDENTITY, nextSeq)]
+          }
+        }
         if (st.funcItemAdded.get(idx) !== true) {
           if (callId !== "" || oldId === "") st.funcCallIds.set(idx, callId)
         }
@@ -722,6 +880,28 @@ export const convertClaudeResponseToOpenAIResponses = (
         st.currentFcId = st.funcCallIds.get(idx) ?? ""
         functionOutputIndex(st, idx)
         if (!st.funcArgsBuf.has(idx)) st.funcArgsBuf.set(idx, "")
+        // An empty start input is a Claude placeholder, not an arguments fragment; populated snapshots are evidence.
+        const startInput = get(cb, "input")
+        if (exists(startInput) && (!isObj(startInput) || Object.keys(startInput).length > 0)) {
+          const rawInput = JSON.stringify(startInput)
+          const snapshotError = validateApplyPatchSnapshots(st.funcInputSnapshot.get(idx) ?? "", rawInput)
+          if (snapshotError !== undefined && !st.funcInputSnapshotErrors.has(idx)) {
+            st.funcInputSnapshotErrors.set(idx, snapshotError)
+          }
+          // Item completion does not seal the response: compare late snapshots against the finished decoder.
+          if (st.funcItemDone.get(idx) === true) {
+            const patchCall = st.applyPatchCalls.get(idx)
+            if (patchCall !== undefined) {
+              const finished = patchCall.finishArguments(rawInput)
+              if ("error" in finished) return [...out, ...failToolInput(st, finished.error, nextSeq)]
+            }
+          }
+          st.funcInputSnapshot.set(idx, rawInput)
+        }
+        if (isApplyPatch(st, st.funcNames.get(idx) ?? "")) {
+          const snapshotError = st.funcInputSnapshotErrors.get(idx)
+          if (snapshotError !== undefined) return [...out, ...failToolInput(st, snapshotError, nextSeq)]
+        }
         out.push(...emitFuncItem(st, idx, request, false, nextSeq))
         out.push(...emitPendingFuncArgs(st, idx, nextSeq))
       } else if (typ === "server_tool_use") {
@@ -866,7 +1046,10 @@ export const convertClaudeResponseToOpenAIResponses = (
       if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, toolStatus, nextSeq))
       out.push(...finalizeAssistantMessage(st, nextSeq))
       for (const idx of st.funcCallIds.keys()) {
-        if (st.funcItemDone.get(idx) !== true) out.push(...finalizeFuncItem(st, idx, request, toolStatus, nextSeq))
+        if (st.funcItemDone.get(idx) !== true) {
+          out.push(...finalizeFuncItem(st, idx, request, toolStatus, nextSeq))
+          if (st.toolInputError !== undefined) return out
+        }
       }
       for (const item of st.webSearchItems) {
         if (!item.emitted) out.push(...finalizeWebSearch(st, item, toolStatus, nextSeq))
@@ -927,11 +1110,12 @@ export const convertClaudeResponseToOpenAIResponses = (
         if (callId === "" && st.currentFcId !== "") callId = st.currentFcId
         let item: JsonObject
         if (custom) {
+          const patchCall = st.applyPatchCalls.get(idx)
           item = {
             id: `ctc_${callId}`,
             type: "custom_tool_call",
             status: funcStatus,
-            input: unwrapCustomToolInput(args),
+            input: patchCall !== undefined ? patchCall.decoder.input() : unwrapCustomToolInput(args),
             call_id: callId,
             name: ""
           }
@@ -983,6 +1167,7 @@ interface OutputItem {
   signature: string
   annotations: Json[]
   args: string
+  inputSnapshot: string
   results: Json | undefined
 }
 
@@ -997,6 +1182,13 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
 
   const reqJson = pickRequest(context.originalRequest, context.translatedRequest)
   const st = newState(reqJson)
+  context.state.value = st
+  /** A retained `apply_patch` failure: the failed response body, and the caller sees a translation failure. */
+  const failNonStream = (error: string): string => {
+    st.toolInputError = error
+    context.state.toolInputError = error
+    return JSON.stringify(get(applyPatchFailure(responseId, 0), "response"))
+  }
   const out: JsonObject = {
     id: "",
     object: "response",
@@ -1038,6 +1230,7 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
       signature: "",
       annotations: [],
       args: "",
+      inputSnapshot: "",
       results: undefined
     }
     outputItems.push(item)
@@ -1090,11 +1283,35 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
             let item = blockToItem.get(idx)
             if (item === undefined) item = newOutputItem(itemType, idx)
             const callId = str(get(cb, "id"))
+            if (callId !== "" && item.callId !== "" && callId !== item.callId) st.funcIdentityConflicts.set(idx, true)
+            if (isApplyPatch(st, item.name) || isApplyPatch(st, toolName)) {
+              if (
+                st.funcIdentityConflicts.get(idx) === true ||
+                (toolName !== "" &&
+                  item.name !== "" &&
+                  st.toolNames.identity(toolName) !== st.toolNames.identity(item.name))
+              ) {
+                return failNonStream(CONFLICTING_IDENTITY)
+              }
+            }
             if (toolName !== "") {
               item.name = toolName
               item.itemType = itemType
             }
             if (callId !== "") item.callId = callId
+            const startInput = get(cb, "input")
+            if (exists(startInput) && (!isObj(startInput) || Object.keys(startInput).length > 0)) {
+              const rawInput = JSON.stringify(startInput)
+              const snapshotError = validateApplyPatchSnapshots(item.inputSnapshot, rawInput)
+              if (snapshotError !== undefined && !st.funcInputSnapshotErrors.has(idx)) {
+                st.funcInputSnapshotErrors.set(idx, snapshotError)
+              }
+              item.inputSnapshot = rawInput
+            }
+            if (isApplyPatch(st, item.name)) {
+              const snapshotError = st.funcInputSnapshotErrors.get(idx)
+              if (snapshotError !== undefined) return failNonStream(snapshotError)
+            }
             item.id = item.itemType === "custom_tool_call" ? `ctc_${item.callId}` : `fc_${item.callId}`
             break
           }
@@ -1188,7 +1405,9 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
   if (nativeModel !== "") out.model = nativeModel
 
   const outputs: JsonObject[] = []
+  let failure: string | undefined
   outputItems.forEach((outputItem, i) => {
+    if (failure !== undefined) return
     const itemStatus = responseStatus === "incomplete" && i === outputItems.length - 1 ? "incomplete" : "completed"
     let item: JsonObject | undefined
     switch (outputItem.itemType) {
@@ -1225,17 +1444,35 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
           role: "assistant"
         }
         break
-      case "custom_tool_call":
+      case "custom_tool_call": {
+        let input: string
+        if (isApplyPatch(st, outputItem.name)) {
+          const patchCall = new ApplyPatchCallState("", "", "", "", 0)
+          const pushed = patchCall.pushArguments(outputItem.args)
+          if ("error" in pushed) {
+            failure = failNonStream(pushed.error)
+            return
+          }
+          const finished = finishClaudeApplyPatchArguments(patchCall, outputItem.args, outputItem.inputSnapshot)
+          if ("error" in finished) {
+            failure = failNonStream(finished.error)
+            return
+          }
+          input = finished.input
+        } else {
+          input = unwrapCustomToolInput(outputItem.args)
+        }
         item = {
           id: outputItem.id,
           type: "custom_tool_call",
           status: itemStatus,
-          input: unwrapCustomToolInput(outputItem.args),
+          input,
           call_id: outputItem.callId,
           name: ""
         }
         applyNamespaceFields(item, reqJson, outputItem.name)
         break
+      }
       case "function_call": {
         let args = outputItem.args
         if (args === "" && itemStatus === "completed") args = "{}"
@@ -1253,6 +1490,7 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
     }
     if (item !== undefined) outputs.push(item)
   })
+  if (failure !== undefined) return failure
   if (outputs.length > 0) out.output = outputs
 
   const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(usageTokens)

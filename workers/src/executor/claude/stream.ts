@@ -114,8 +114,15 @@ export class ClaudeStreamReader {
       chunks.push(this.#event.join(""))
       this.#event.length = 0
     }
-    if (this.options.responseFormat !== "claude" && this.options.context.state.toolInputError !== undefined) {
-      return { chunks, error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }), stop: true }
+    if (this.options.responseFormat !== "claude") {
+      // Go `EndApplyPatchStream`: a patch-enabled stream that ends before its terminator fails with the failure frame.
+      const { state } = this.options.context
+      if (state.toolInputError === undefined && state.finalizeToolInput !== undefined) {
+        chunks.push(...state.finalizeToolInput())
+      }
+      if (state.toolInputError !== undefined) {
+        return { chunks, error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }), stop: true }
+      }
     }
     this.#done = true
     return { chunks, stop: true }

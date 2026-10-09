@@ -333,6 +333,105 @@ describe("API key credential (caller-owned mode)", () => {
     expect(text.trimEnd().endsWith("data: [DONE]")).toBe(true)
   })
 
+  describe("Codex apply_patch bridge (Responses clients)", () => {
+    const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+    const patchTool = {
+      type: "custom",
+      name: "apply_patch",
+      description: "Apply a patch. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+      format: { type: "grammar", syntax: "lark", definition: "start: patch" }
+    }
+    const patchEvents = (partialJson: string[]): JsonObject[] => [
+      {
+        type: "message_start",
+        message: {
+          id: "msg_p",
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4-5",
+          content: [],
+          usage: { input_tokens: 3, output_tokens: 1 }
+        }
+      },
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "tool_use", id: "toolu_p", name: "apply_patch", input: {} }
+      },
+      ...partialJson.map((partial_json) => ({
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "input_json_delta", partial_json }
+      })),
+      { type: "content_block_stop", index: 0 },
+      { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 9 } },
+      { type: "message_stop" }
+    ]
+    const request = (stream: boolean) => ({
+      model: "sonnet",
+      stream,
+      input: "patch it",
+      tools: [patchTool]
+    })
+
+    it("declares the patch tool as a strict input function and streams the patch as custom tool input", async () => {
+      const json = JSON.stringify({ input: PATCH })
+      const p = makePipeline({
+        config: apiKeyConfig,
+        respond: () => sseResponse(sse(patchEvents([json.slice(0, 20), json.slice(20)])))
+      })
+      afterAll(p.dispose)
+      const response = await p.call("/v1/responses", postJson(request(true)))
+      expect(response.status).toBe(200)
+      const upstreamTool = (JSON.parse(p.calls[0]!.body) as { tools: JsonObject[] }).tools[0]
+      expect(upstreamTool).toMatchObject({
+        name: "apply_patch",
+        input_schema: { type: "object", required: ["input"], additionalProperties: false }
+      })
+      expect(String(upstreamTool?.description)).toContain("*** Begin Patch")
+      const text = await response.text()
+      const deltas = [...text.matchAll(/event: response\.custom_tool_call_input\.delta\ndata: (.*)/g)].map(
+        (match) => (JSON.parse(match[1] as string) as { delta: string }).delta
+      )
+      expect(deltas.join("")).toBe(PATCH)
+      expect(text).toContain('"type":"custom_tool_call"')
+      expect(text).not.toContain("response.function_call_arguments")
+    })
+
+    it("aggregates the patch for non-stream clients and fails malformed arguments with 502", async () => {
+      const ok = makePipeline({
+        config: apiKeyConfig,
+        respond: () => sseResponse(sse(patchEvents([JSON.stringify({ input: PATCH })])))
+      })
+      afterAll(ok.dispose)
+      const response = await ok.call("/v1/responses", postJson(request(false)))
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as { output: JsonObject[] }
+      expect(body.output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
+
+      const bad = makePipeline({
+        config: apiKeyConfig,
+        respond: () => sseResponse(sse(patchEvents(['{"input":"x","extra":1}'])))
+      })
+      afterAll(bad.dispose)
+      const failed = await bad.call("/v1/responses", postJson(request(false)))
+      expect(failed.status).toBe(502)
+      expect(await failed.text()).not.toContain("extra")
+    })
+
+    it("terminates a stream that fails mid-way with the sanitised error and never leaks upstream arguments", async () => {
+      const p = makePipeline({
+        config: apiKeyConfig,
+        respond: () => sseResponse(sse(patchEvents(['{"input":"x","secret":"s3cret"}'])))
+      })
+      afterAll(p.dispose)
+      const response = await p.call("/v1/responses", postJson(request(true)))
+      const text = await response.text()
+      expect(text).toContain("invalid_tool_arguments")
+      expect(text).not.toContain("s3cret")
+    })
+  })
+
   it("answers upstream failures in Claude error format with the upstream status", async () => {
     const p = makePipeline({
       config: apiKeyConfig,

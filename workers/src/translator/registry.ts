@@ -60,6 +60,11 @@ export interface TranslationState extends ClaudeInputTokenState {
    * (Go `CanFinalizeResponseStream()`).
    */
   canFinalize?: boolean
+  /**
+   * Go `FinalizeToolInput()`: called when the upstream transport ends. A translator with a patch-enabled stream that
+   * has not completed returns the terminal failure frames (and retains `toolInputError`); it never fabricates success.
+   */
+  finalizeToolInput?: () => ReadonlyArray<string>
 }
 
 export const makeTranslationState = (): TranslationState => ({ value: undefined })
