@@ -105,9 +105,9 @@ describe("POST /v1beta/interactions", () => {
     const upstream = JSON.parse(h.calls[0]?.body ?? "{}")
     expect(upstream.systemInstruction.parts[0].text).toBe("be brief")
     expect(upstream.contents[0]).toEqual({ role: "user", parts: [{ text: "hello" }] })
-    const body = await response.json()
+    const body = (await response.json()) as { steps: Array<{ content: Array<{ text: string }> }> }
     expect(body).toMatchObject({ id: "r1", object: "interaction", status: "completed" })
-    expect(body.steps[0].content[0].text).toBe("Hello")
+    expect(body.steps[0]?.content[0]?.text).toBe("Hello")
   })
 
   it("routes agent requests to the gemini-interactions provider and selects credentials as for gemini-2.5-flash", async () => {

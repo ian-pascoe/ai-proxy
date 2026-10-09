@@ -7,3 +7,7 @@ test/fixtures
 src/registry/catalog
 # Codex corpus requests are compact on purpose: Go forwards some raw JSON text (tool_use input) verbatim.
 tools/fixturegen/translator/corpus/codex-*.json
+# Gemini/Interactions corpus requests are compact on purpose: Go embeds some raw JSON text verbatim.
+tools/fixturegen/translator/corpus/*-gemini.json
+tools/fixturegen/translator/corpus/gemini-*.json
+tools/fixturegen/translator/corpus/interactions-interactions.json

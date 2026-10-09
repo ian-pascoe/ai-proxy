@@ -69,6 +69,15 @@ describe("signature carriers", () => {
   })
 })
 
+const chunk = (parts: Json[], finish?: string): string =>
+  JSON.stringify({
+    candidates: [
+      { content: { role: "model", parts }, index: 0, ...(finish === undefined ? {} : { finishReason: finish }) }
+    ],
+    responseId: "r1",
+    usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
+  })
+
 describe("trailing text signatures", () => {
   let previous = replayCache()
   beforeEach(() => {
@@ -76,15 +85,6 @@ describe("trailing text signatures", () => {
     setReplayCache(makeMemoryReplayCache())
   })
   afterEach(() => setReplayCache(previous))
-
-  const chunk = (parts: Json[], finish?: string): string =>
-    JSON.stringify({
-      candidates: [
-        { content: { role: "model", parts }, index: 0, ...(finish === undefined ? {} : { finishReason: finish }) }
-      ],
-      responseId: "r1",
-      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
-    })
 
   it("keeps a trailing signature off the timeline and restores it on the next request", () => {
     const request = { model: "gpt-5", input: "hi" }
