@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -58,8 +59,19 @@ type fixtureCase struct {
 	TokenCountOutput *string `json:"tokenCountOutput,omitempty"`
 }
 
+// compactJSON strips insignificant whitespace like a client's JSON encoder would, so raw-text reads in the Go
+// translators (gjson `.Raw`) do not depend on how the corpus file is formatted.
+func compactJSON(raw []byte) []byte {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return raw
+	}
+	return buf.Bytes()
+}
+
 func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 	ctx := context.Background()
+	c.Request = compactJSON(c.Request)
 	from := sdktranslator.FromString(c.From)
 	to := sdktranslator.FromString(c.To)
 	out := fixtureCase{corpusCase: c}
@@ -88,7 +100,7 @@ func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 	}
 	if len(c.ResponseBody) > 0 {
 		var param any
-		body := c.ResponseBody
+		body := compactJSON(c.ResponseBody)
 		// A JSON string holds a raw (possibly non-JSON) body.
 		var raw string
 		if json.Unmarshal(body, &raw) == nil {

@@ -254,3 +254,23 @@ export const executeStream = Effect.fnUntraced(function* (input: ExecutionInput)
     }
   }
 })
+
+/**
+ * Token counting (Go `ExecuteCountWithAuthManager`): the same retry/failover conductor as non-stream execution, through
+ * the provider's `countTokens`. Count requests carry no billable tokens and skip the passive quota snapshot.
+ */
+export const executeCountTokens = Effect.fnUntraced(function* (input: ExecutionInput) {
+  const prepared: Prepared = { ...(yield* prepare(input, false)), countTokens: true }
+  const result = yield* conduct(prepared, (attempt) =>
+    Effect.gen(function* () {
+      const response = yield* attempt.executor.countTokens(attempt.context, attempt.request, prepared.options)
+      yield* attempt.finish(undefined, response.headers)
+      return {
+        payload: response.payload,
+        headers: upstreamHeaders(prepared.config, response.headers)
+      } satisfies ExecutionOutput
+    })
+  )
+  if (!result.ok) return yield* finalError(prepared, result.error)
+  return result.value
+})

@@ -1,11 +1,11 @@
 /**
  * Claude message helpers shared by non-Claude targets.
  *
- * Go source: internal/translator/common/claude_system.go (SystemReminderText, ClaudeMessageSystemReminderText),
+ * Go source: internal/translator/common/claude_system.go, claude_messages.go (ClaudeMessageAccumulator), (SystemReminderText, ClaudeMessageSystemReminderText),
  * internal/translator/common/claude_messages.go (AlignClaudeToolResults), internal/util/claude_attribution.go
  * (IsClaudeCodeAttributionSystemText).
  */
-import { asString, get, isJsonArray, type Json } from "../../json/index.ts"
+import { asString, get, isJsonArray, isJsonObject, type Json, type JsonObject } from "../../json/index.ts"
 
 const ATTRIBUTION_PREFIX = "x-anthropic-billing-header:"
 
@@ -38,6 +38,52 @@ export const claudeMessageSystemReminderText = (content: Json | undefined): stri
   if (parts.length === 0) return undefined
   const text = parts.join("\n")
   return text.trim() === "" ? undefined : systemReminderText(text)
+}
+
+const claudeMessageContentParts = (content: Json | undefined): JsonObject[] => {
+  if (content === undefined || content === null) return []
+  if (typeof content === "string") return content === "" ? [] : [{ type: "text", text: content }]
+  if (!isJsonArray(content)) return []
+  return content.filter(isJsonObject)
+}
+
+/** Merges consecutive same-role messages; assistant `tool_use` blocks move behind the other content. */
+export class ClaudeMessageAccumulator {
+  readonly #messages: JsonObject[] = []
+  #role = ""
+  #content: JsonObject[] = []
+  #toolUseParts: JsonObject[] = []
+
+  append(message: JsonObject | undefined): void {
+    if (message === undefined) return
+    const role = asString(message.role)
+    if (role !== "user" && role !== "assistant") return
+    const parts = claudeMessageContentParts(message.content)
+    if (parts.length === 0) return
+    if (this.#role !== "" && this.#role !== role) this.flush()
+    this.#role = role
+    for (const part of parts) {
+      if (role === "assistant" && asString(part.type) === "tool_use") {
+        this.#toolUseParts.push(part)
+        continue
+      }
+      this.#content.push(part)
+    }
+  }
+
+  flush(): void {
+    if (this.#role === "") return
+    const parts = this.#toolUseParts.length > 0 ? [...this.#content, ...this.#toolUseParts] : this.#content
+    if (parts.length > 0) this.#messages.push({ role: this.#role, content: parts })
+    this.#role = ""
+    this.#content = []
+    this.#toolUseParts = []
+  }
+
+  messages(): JsonObject[] {
+    this.flush()
+    return this.#messages
+  }
 }
 
 /**

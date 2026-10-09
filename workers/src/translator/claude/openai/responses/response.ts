@@ -1,0 +1,1277 @@
+/**
+ * Claude Messages provider -> OpenAI Responses client (response).
+ *
+ * Go source: internal/translator/claude/openai/responses/claude_openai-responses_response.go.
+ *
+ * Not ported: the Codex `apply_patch` custom tool bridge (ApplyPatchCallState / ApplyPatchFailure); an apply_patch
+ * custom tool streams like any other custom tool (the whole input is delivered at completion).
+ */
+import { asBool, asFloat, asInt, get, type Json, type JsonObject, tryParseJson } from "../../../../json/index.ts"
+import { claudeMessagesJSONToSSE } from "../../../common/claude-native-response.ts"
+import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts"
+import type { ResponseContext, ResponseTransform } from "../../../registry.ts"
+import {
+  ClaudeToolNames,
+  CLAUDE_RESPONSES_REDACTED_THINKING_PREFIX,
+  splitResponsesQualifiedFunctionCall,
+  type ToolDescriptor,
+  responsesToolWinners,
+  unwrapCustomToolInput
+} from "./tools.ts"
+import {
+  buildResponsesWebSearchCallItem,
+  CLAUDE_WEB_SEARCH_TOOL_NAME,
+  claudeWebSearchQuery,
+  claudeWebSearchResultsToResponses,
+  responsesWebSearchCallID
+} from "./web-search.ts"
+
+interface WebSearchItem {
+  toolUseId: string
+  outputIndex: number
+  inputBuf: string
+  results: Json | undefined
+  emitted: boolean
+  status: string
+}
+
+interface MessageItem {
+  id: string
+  outputIndex: number
+  text: string
+  annotations: Json[]
+  status: string
+}
+
+interface ReasoningItem {
+  id: string
+  outputIndex: number
+  text: string
+  signature: string
+  status: string
+}
+
+interface UsageTokens {
+  inputTokens: number
+  outputTokens: number
+  cacheCreationInputTokens: number
+  cacheReadInputTokens: number
+  hasUsage: boolean
+}
+
+const mergeUsage = (u: UsageTokens, usage: Json | undefined): void => {
+  if (!exists(usage)) return
+  u.hasUsage = true
+  const input = get(usage, "input_tokens")
+  if (exists(input)) u.inputTokens = asInt(input)
+  const output = get(usage, "output_tokens")
+  if (exists(output)) u.outputTokens = asInt(output)
+  const creation = get(usage, "cache_creation_input_tokens")
+  if (exists(creation)) u.cacheCreationInputTokens = asInt(creation)
+  const read = get(usage, "cache_read_input_tokens")
+  if (exists(read)) u.cacheReadInputTokens = asInt(read)
+}
+
+const newUsage = (): UsageTokens => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheCreationInputTokens: 0,
+  cacheReadInputTokens: 0,
+  hasUsage: false
+})
+
+const responsesUsage = (
+  u: UsageTokens
+): { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens: number } => {
+  const cachedTokens = u.cacheReadInputTokens
+  const inputTokens = u.inputTokens + u.cacheCreationInputTokens + cachedTokens
+  return { inputTokens, outputTokens: u.outputTokens, totalTokens: inputTokens + u.outputTokens, cachedTokens }
+}
+
+/** Go `claudeToResponsesState` (minus the apply_patch bridge). */
+interface State {
+  toolWinners: Map<string, ToolDescriptor>
+  toolNames: ClaudeToolNames
+  funcItemAdded: Map<number, boolean>
+  funcArgsSent: Map<number, number>
+  funcBlockStopped: Map<number, boolean>
+  completedEmitted: boolean
+  seq: number
+  responseId: string
+  createdAt: number
+  nextOutputIndex: number
+  currentMsgId: string
+  currentFcId: string
+  inTextBlock: boolean
+  inFuncBlock: boolean
+  messageOpen: boolean
+  contentPartOpen: boolean
+  messageOutputIndex: number
+  funcArgsBuf: Map<number, string>
+  funcArgsDone: Map<number, boolean>
+  funcItemDone: Map<number, boolean>
+  funcItemStatus: Map<number, string>
+  funcNames: Map<number, string>
+  funcCallIds: Map<number, string>
+  funcCustom: Map<number, boolean>
+  funcOutputIndices: Map<number, number>
+  textBuf: string
+  messageAnnotations: Json[]
+  messageItems: MessageItem[]
+  reasoningActive: boolean
+  reasoningDeltasDone: boolean
+  reasoningItemId: string
+  reasoningBuf: string
+  reasoningSignature: string
+  reasoningIndex: number
+  reasoningItems: ReasoningItem[]
+  webSearchByBlock: Map<number, WebSearchItem>
+  webSearchByToolId: Map<string, WebSearchItem>
+  webSearchItems: WebSearchItem[]
+  stopReason: string
+  usage: UsageTokens
+}
+
+const newState = (request: Json | undefined): State => {
+  const winners = responsesToolWinners(request)
+  return {
+    toolWinners: winners,
+    toolNames: ClaudeToolNames.build(request, winners),
+    funcItemAdded: new Map(),
+    funcArgsSent: new Map(),
+    funcBlockStopped: new Map(),
+    completedEmitted: false,
+    seq: 0,
+    responseId: "",
+    createdAt: 0,
+    nextOutputIndex: 0,
+    currentMsgId: "",
+    currentFcId: "",
+    inTextBlock: false,
+    inFuncBlock: false,
+    messageOpen: false,
+    contentPartOpen: false,
+    messageOutputIndex: -1,
+    funcArgsBuf: new Map(),
+    funcArgsDone: new Map(),
+    funcItemDone: new Map(),
+    funcItemStatus: new Map(),
+    funcNames: new Map(),
+    funcCallIds: new Map(),
+    funcCustom: new Map(),
+    funcOutputIndices: new Map(),
+    textBuf: "",
+    messageAnnotations: [],
+    messageItems: [],
+    reasoningActive: false,
+    reasoningDeltasDone: false,
+    reasoningItemId: "",
+    reasoningBuf: "",
+    reasoningSignature: "",
+    reasoningIndex: -1,
+    reasoningItems: [],
+    webSearchByBlock: new Map(),
+    webSearchByToolId: new Map(),
+    webSearchItems: [],
+    stopReason: "",
+    usage: newUsage()
+  }
+}
+
+/** Carrier for the reasoning item's encrypted_content (signature, or redacted_thinking data behind a marker). */
+const reasoningCarrier = (block: Json | undefined): string => {
+  if (str(get(block, "type")) === "redacted_thinking") {
+    const data = get(block, "data")
+    return exists(data) && str(data) !== "" ? CLAUDE_RESPONSES_REDACTED_THINKING_PREFIX + str(data) : ""
+  }
+  const signature = get(block, "signature")
+  return exists(signature) ? str(signature) : ""
+}
+
+const incompleteDetails = (stopReason: string): { details: Json } | undefined => {
+  switch (stopReason.trim().toLowerCase()) {
+    case "max_tokens":
+      return { details: { reason: "max_output_tokens" } }
+    case "pause_turn":
+      return { details: null }
+  }
+  return undefined
+}
+
+const outputStatus = (stopReason: string): string =>
+  incompleteDetails(stopReason) !== undefined ? "incomplete" : "completed"
+
+const terminalState = (
+  stopReason: string
+): { eventType: string; status: string; details: { details: Json } | undefined } => {
+  const details = incompleteDetails(stopReason)
+  return details !== undefined
+    ? { eventType: "response.incomplete", status: "incomplete", details }
+    : { eventType: "response.completed", status: "completed", details: undefined }
+}
+
+/** `pickRequestJSON`: the original request when it is valid JSON, else the translated one. */
+const pickRequest = (original: Json | undefined, translated: Json | undefined): Json | undefined =>
+  original ?? translated
+
+const requestModelName = (original: Json | undefined, translated: Json | undefined): string => {
+  for (const raw of [original, translated]) {
+    for (const path of ["model", "request.model"]) {
+      const model = get(raw, path)
+      if (isStr(model) && model.trim() !== "") return model
+    }
+  }
+  return ""
+}
+
+const emit = (event: string, payload: JsonObject): string => `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`
+
+const sortKeysDeep = (value: Json): Json => {
+  if (isArr(value)) return value.map(sortKeysDeep)
+  if (isObj(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .toSorted()
+        .map((key) => [key, sortKeysDeep(value[key] as Json)])
+    )
+  }
+  return value
+}
+
+/** `SetResponsesToolCallIdentity` through `splitResponsesQualifiedFunctionCallFromRequest`. */
+const applyNamespaceFields = (item: JsonObject, request: Json | undefined, qualifiedName: string): void => {
+  const { name, namespace } = splitResponsesQualifiedFunctionCall(request, qualifiedName)
+  item.name = name
+  if (namespace !== "") item.namespace = namespace
+  else delete item.namespace
+}
+
+const allocateOutputIndex = (st: State): number => st.nextOutputIndex++
+
+const messageOutputIndex = (st: State): number => {
+  if (st.messageOutputIndex < 0) st.messageOutputIndex = allocateOutputIndex(st)
+  return st.messageOutputIndex
+}
+
+const functionOutputIndex = (st: State, blockIndex: number): number => {
+  const existing = st.funcOutputIndices.get(blockIndex)
+  if (existing !== undefined) return existing
+  const index = allocateOutputIndex(st)
+  st.funcOutputIndices.set(blockIndex, index)
+  return index
+}
+
+const renderWebSearch = (item: WebSearchItem): JsonObject =>
+  buildResponsesWebSearchCallItem(item.toolUseId, claudeWebSearchQuery(item.inputBuf), item.results)
+
+const finalizeWebSearch = (st: State, item: WebSearchItem, status: string, nextSeq: () => number): string[] => {
+  if (item.emitted) return []
+  item.emitted = true
+  item.status = status
+  const rendered = renderWebSearch(item)
+  rendered.status = status
+  return [
+    emit("response.output_item.done", {
+      type: "response.output_item.done",
+      sequence_number: nextSeq(),
+      output_index: item.outputIndex,
+      item: rendered
+    })
+  ]
+}
+
+const emitFuncItem = (
+  st: State,
+  idx: number,
+  request: Json | undefined,
+  force: boolean,
+  nextSeq: () => number
+): string[] => {
+  if (st.funcItemAdded.get(idx) === true) return []
+  const name = st.funcNames.get(idx) ?? ""
+  let callId = st.funcCallIds.get(idx) ?? ""
+  if (!force && (name === "" || callId === "")) return []
+  if (callId === "") {
+    callId = `call_${st.responseId}_${idx}`
+    st.funcCallIds.set(idx, callId)
+  }
+  const descriptor = st.toolWinners.get(st.toolNames.identity(name))
+  const custom = descriptor?.toolType === "custom"
+  st.funcCustom.set(idx, custom)
+  const outputIndex = functionOutputIndex(st, idx)
+  let item: JsonObject
+  if (custom) {
+    item = {
+      id: `ctc_${callId}`,
+      type: "custom_tool_call",
+      status: "in_progress",
+      input: "",
+      call_id: callId,
+      name: ""
+    }
+  } else {
+    item = {
+      id: `fc_${callId}`,
+      type: "function_call",
+      status: "in_progress",
+      arguments: "",
+      call_id: callId,
+      name: ""
+    }
+  }
+  applyNamespaceFields(item, request, name)
+  st.funcItemAdded.set(idx, true)
+  return [
+    emit("response.output_item.added", {
+      type: "response.output_item.added",
+      sequence_number: nextSeq(),
+      output_index: outputIndex,
+      item
+    })
+  ]
+}
+
+const emitPendingFuncArgs = (st: State, idx: number, nextSeq: () => number): string[] => {
+  if (st.funcItemAdded.get(idx) !== true) return []
+  const buf = st.funcArgsBuf.get(idx)
+  const sent = st.funcArgsSent.get(idx) ?? 0
+  if (buf === undefined || buf.length <= sent) return []
+  const fragment = buf.slice(sent)
+  st.funcArgsSent.set(idx, buf.length)
+  // Custom tool input is only delivered at completion (the freeform input is wrapped in JSON by the model).
+  if (st.funcCustom.get(idx) === true) return []
+  return [
+    emit("response.function_call_arguments.delta", {
+      type: "response.function_call_arguments.delta",
+      sequence_number: nextSeq(),
+      item_id: `fc_${st.funcCallIds.get(idx) ?? ""}`,
+      output_index: functionOutputIndex(st, idx),
+      delta: fragment
+    })
+  ]
+}
+
+const finalizeFuncItem = (
+  st: State,
+  idx: number,
+  request: Json | undefined,
+  status: string,
+  nextSeq: () => number
+): string[] => {
+  if (st.funcItemDone.get(idx) === true) return []
+  const out = emitFuncItem(st, idx, request, true, nextSeq)
+  out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+  st.funcItemDone.set(idx, true)
+  st.funcItemStatus.set(idx, status)
+
+  const outputIndex = functionOutputIndex(st, idx)
+  const buf = st.funcArgsBuf.get(idx) ?? ""
+  let args = buf.length > 0 ? buf : ""
+  const custom = st.funcCustom.get(idx) === true
+  if (!custom && args === "" && status === "completed") args = "{}"
+  let callId = st.funcCallIds.get(idx) ?? ""
+  if (callId === "") callId = st.currentFcId
+  const name = st.funcNames.get(idx) ?? ""
+
+  if (custom) {
+    const input = unwrapCustomToolInput(args)
+    if (st.funcArgsDone.get(idx) !== true) {
+      st.funcArgsDone.set(idx, true)
+      out.push(
+        emit("response.custom_tool_call_input.done", {
+          type: "response.custom_tool_call_input.done",
+          sequence_number: nextSeq(),
+          item_id: `ctc_${callId}`,
+          output_index: outputIndex,
+          input
+        })
+      )
+    }
+    const item: JsonObject = { id: `ctc_${callId}`, type: "custom_tool_call", status, input, call_id: callId, name: "" }
+    applyNamespaceFields(item, request, name)
+    out.push(
+      emit("response.output_item.done", {
+        type: "response.output_item.done",
+        sequence_number: nextSeq(),
+        output_index: outputIndex,
+        item
+      })
+    )
+  } else {
+    if (st.funcArgsDone.get(idx) !== true) {
+      st.funcArgsDone.set(idx, true)
+      out.push(
+        emit("response.function_call_arguments.done", {
+          type: "response.function_call_arguments.done",
+          sequence_number: nextSeq(),
+          item_id: `fc_${callId}`,
+          output_index: outputIndex,
+          arguments: args
+        })
+      )
+    }
+    const item: JsonObject = {
+      id: `fc_${callId}`,
+      type: "function_call",
+      status,
+      arguments: args,
+      call_id: callId,
+      name: ""
+    }
+    applyNamespaceFields(item, request, name)
+    out.push(
+      emit("response.output_item.done", {
+        type: "response.output_item.done",
+        sequence_number: nextSeq(),
+        output_index: outputIndex,
+        item
+      })
+    )
+  }
+  st.inFuncBlock = false
+  return out
+}
+
+const finalizeReasoningDeltas = (st: State, nextSeq: () => number): string[] => {
+  if (!st.reasoningActive || st.reasoningDeltasDone) return []
+  st.reasoningDeltasDone = true
+  const full = st.reasoningBuf
+  return [
+    emit("response.reasoning_summary_text.done", {
+      type: "response.reasoning_summary_text.done",
+      sequence_number: nextSeq(),
+      item_id: st.reasoningItemId,
+      output_index: st.reasoningIndex,
+      summary_index: 0,
+      text: full
+    }),
+    emit("response.reasoning_summary_part.done", {
+      type: "response.reasoning_summary_part.done",
+      sequence_number: nextSeq(),
+      item_id: st.reasoningItemId,
+      output_index: st.reasoningIndex,
+      summary_index: 0,
+      part: { type: "summary_text", text: full }
+    })
+  ]
+}
+
+const finalizeReasoningItem = (st: State, status: string, nextSeq: () => number): string[] => {
+  if (!st.reasoningActive && st.reasoningItemId === "") return []
+  const out = finalizeReasoningDeltas(st, nextSeq)
+  const full = st.reasoningBuf
+  out.push(
+    emit("response.output_item.done", {
+      type: "response.output_item.done",
+      sequence_number: nextSeq(),
+      output_index: st.reasoningIndex,
+      item: {
+        id: st.reasoningItemId,
+        type: "reasoning",
+        status,
+        encrypted_content: st.reasoningSignature,
+        summary: [{ type: "summary_text", text: full }]
+      }
+    })
+  )
+  st.reasoningItems.push({
+    id: st.reasoningItemId,
+    outputIndex: st.reasoningIndex,
+    text: full,
+    signature: st.reasoningSignature,
+    status
+  })
+  st.reasoningActive = false
+  st.reasoningItemId = ""
+  st.reasoningBuf = ""
+  st.reasoningSignature = ""
+  st.reasoningIndex = -1
+  return out
+}
+
+const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] => {
+  if (!st.messageOpen) return []
+  const fullText = st.textBuf
+  const outputIndex = messageOutputIndex(st)
+  const status = outputStatus(st.stopReason)
+  const annotations = sortKeysDeep(st.messageAnnotations) as Json[]
+  const out: string[] = []
+  out.push(
+    emit("response.output_text.done", {
+      type: "response.output_text.done",
+      sequence_number: nextSeq(),
+      item_id: st.currentMsgId,
+      output_index: outputIndex,
+      content_index: 0,
+      text: fullText,
+      logprobs: []
+    })
+  )
+  out.push(
+    emit("response.content_part.done", {
+      type: "response.content_part.done",
+      sequence_number: nextSeq(),
+      item_id: st.currentMsgId,
+      output_index: outputIndex,
+      content_index: 0,
+      part: {
+        type: "output_text",
+        annotations: annotations.length > 0 ? annotations : [],
+        logprobs: [],
+        text: fullText
+      }
+    })
+  )
+  out.push(
+    emit("response.output_item.done", {
+      type: "response.output_item.done",
+      sequence_number: nextSeq(),
+      output_index: outputIndex,
+      item: {
+        id: st.currentMsgId,
+        type: "message",
+        status,
+        content: [
+          { type: "output_text", annotations: annotations.length > 0 ? annotations : [], logprobs: [], text: fullText }
+        ],
+        role: "assistant"
+      }
+    })
+  )
+  st.messageItems.push({
+    id: st.currentMsgId,
+    outputIndex,
+    text: fullText,
+    annotations: [...st.messageAnnotations],
+    status
+  })
+  st.inTextBlock = false
+  st.messageOpen = false
+  st.contentPartOpen = false
+  st.currentMsgId = ""
+  st.messageOutputIndex = -1
+  st.textBuf = ""
+  st.messageAnnotations = []
+  return out
+}
+
+/** Request fields echoed into the response object (Go key order). */
+const echoRequestFields = (target: JsonObject, req: Json | undefined): void => {
+  if (!exists(req)) return
+  const has = (key: string): Json | undefined => get(req, key)
+  const v = (key: string, convert: (value: Json | undefined) => Json): void => {
+    const value = has(key)
+    if (exists(value)) target[key] = convert(value)
+  }
+  v("instructions", str)
+  v("max_output_tokens", asInt)
+  v("max_tool_calls", asInt)
+  v("model", str)
+  v("parallel_tool_calls", asBool)
+  v("previous_response_id", str)
+  v("prompt_cache_key", str)
+  v("reasoning", (value) => sortKeysDeep(value as Json))
+  v("safety_identifier", str)
+  v("service_tier", str)
+  v("store", asBool)
+  v("temperature", asFloat)
+  v("text", (value) => sortKeysDeep(value as Json))
+  v("tool_choice", (value) => sortKeysDeep(value as Json))
+  v("tools", (value) => sortKeysDeep(value as Json))
+  v("top_logprobs", asInt)
+  v("top_p", asFloat)
+  v("truncation", str)
+  v("user", (value) => sortKeysDeep(value as Json))
+  v("metadata", (value) => sortKeysDeep(value as Json))
+}
+
+/** `ConvertClaudeResponseToOpenAIResponses`. */
+export const convertClaudeResponseToOpenAIResponses = (
+  context: ResponseContext,
+  line: string
+): ReadonlyArray<string> => {
+  const modelName = context.model
+  context.state.value ??= newState(pickRequest(context.originalRequest, context.translatedRequest))
+  const st = context.state.value as State
+  if (st.completedEmitted) return []
+  if (!line.startsWith("data:")) return []
+  const root = tryParseJson(line.slice(5).trim())
+  const request = pickRequest(context.originalRequest, context.translatedRequest)
+  const ev = str(get(root, "type"))
+  let out: string[] = []
+  const nextSeq = (): number => ++st.seq
+
+  switch (ev) {
+    case "message_start": {
+      const msg = get(root, "message")
+      if (!exists(msg)) break
+      st.responseId = str(get(msg, "id"))
+      st.createdAt = Math.floor(Date.now() / 1000)
+      st.textBuf = ""
+      st.messageAnnotations = []
+      st.messageItems = []
+      st.reasoningBuf = ""
+      st.reasoningActive = false
+      st.reasoningDeltasDone = false
+      st.nextOutputIndex = 0
+      st.inTextBlock = false
+      st.inFuncBlock = false
+      st.messageOpen = false
+      st.contentPartOpen = false
+      st.currentMsgId = ""
+      st.currentFcId = ""
+      st.messageOutputIndex = -1
+      st.reasoningItemId = ""
+      st.reasoningSignature = ""
+      st.reasoningIndex = -1
+      st.reasoningItems = []
+      st.stopReason = ""
+      st.funcItemAdded = new Map()
+      st.funcArgsSent = new Map()
+      st.funcBlockStopped = new Map()
+      st.funcArgsBuf = new Map()
+      st.funcArgsDone = new Map()
+      st.funcItemDone = new Map()
+      st.funcItemStatus = new Map()
+      st.funcNames = new Map()
+      st.funcCallIds = new Map()
+      st.funcCustom = new Map()
+      st.funcOutputIndices = new Map()
+      st.usage = newUsage()
+      mergeUsage(st.usage, get(msg, "usage"))
+      const requestModel = requestModelName(context.originalRequest, context.translatedRequest) || modelName
+      const created: JsonObject = {
+        type: "response.created",
+        sequence_number: nextSeq(),
+        response: {
+          id: st.responseId,
+          object: "response",
+          created_at: st.createdAt,
+          status: "in_progress",
+          background: false,
+          error: null,
+          output: []
+        }
+      }
+      if (requestModel !== "") (created.response as JsonObject).model = requestModel
+      out.push(emit("response.created", created))
+      const inProgress: JsonObject = {
+        type: "response.in_progress",
+        sequence_number: nextSeq(),
+        response: { id: st.responseId, object: "response", created_at: st.createdAt, status: "in_progress", output: [] }
+      }
+      if (requestModel !== "") (inProgress.response as JsonObject).model = requestModel
+      out.push(emit("response.in_progress", inProgress))
+      break
+    }
+    case "content_block_start": {
+      const cb = get(root, "content_block")
+      if (!exists(cb)) return out
+      const idx = asInt(get(root, "index"))
+      const typ = str(get(cb, "type"))
+
+      if (typ !== "text") out.push(...finalizeAssistantMessage(st, nextSeq))
+      if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, "completed", nextSeq))
+      for (const prevIdx of st.funcCallIds.keys()) {
+        if (st.funcItemDone.get(prevIdx) !== true && prevIdx !== idx) {
+          if ((st.funcNames.get(prevIdx) ?? "") === "" && st.funcBlockStopped.get(prevIdx) !== true) continue
+          out.push(...finalizeFuncItem(st, prevIdx, request, "completed", nextSeq))
+        }
+      }
+      for (const item of st.webSearchItems) {
+        if (!item.emitted && item.results !== undefined) out.push(...finalizeWebSearch(st, item, "completed", nextSeq))
+      }
+
+      if (typ === "text") {
+        st.inTextBlock = true
+        const outputIndex = messageOutputIndex(st)
+        if (st.currentMsgId === "") st.currentMsgId = `msg_${st.responseId}_${st.messageItems.length}`
+        if (!st.messageOpen) {
+          out.push(
+            emit("response.output_item.added", {
+              type: "response.output_item.added",
+              sequence_number: nextSeq(),
+              output_index: outputIndex,
+              item: { id: st.currentMsgId, type: "message", status: "in_progress", content: [], role: "assistant" }
+            })
+          )
+          st.messageOpen = true
+        }
+        if (!st.contentPartOpen) {
+          out.push(
+            emit("response.content_part.added", {
+              type: "response.content_part.added",
+              sequence_number: nextSeq(),
+              item_id: st.currentMsgId,
+              output_index: outputIndex,
+              content_index: 0,
+              part: { type: "output_text", annotations: [], logprobs: [], text: "" }
+            })
+          )
+          st.contentPartOpen = true
+        }
+      } else if (typ === "tool_use") {
+        st.inFuncBlock = true
+        const callId = str(get(cb, "id"))
+        const name = str(get(cb, "name"))
+        const oldId = st.funcCallIds.get(idx) ?? ""
+        if (st.funcItemAdded.get(idx) !== true) {
+          if (callId !== "" || oldId === "") st.funcCallIds.set(idx, callId)
+        }
+        if (name !== "" && st.funcItemAdded.get(idx) !== true) st.funcNames.set(idx, name)
+        st.currentFcId = st.funcCallIds.get(idx) ?? ""
+        functionOutputIndex(st, idx)
+        if (!st.funcArgsBuf.has(idx)) st.funcArgsBuf.set(idx, "")
+        out.push(...emitFuncItem(st, idx, request, false, nextSeq))
+        out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+      } else if (typ === "server_tool_use") {
+        if (str(get(cb, "name")) === CLAUDE_WEB_SEARCH_TOOL_NAME) {
+          const toolUseId = str(get(cb, "id"))
+          const item: WebSearchItem = {
+            toolUseId,
+            outputIndex: allocateOutputIndex(st),
+            inputBuf: "",
+            results: undefined,
+            emitted: false,
+            status: ""
+          }
+          st.webSearchByBlock.set(idx, item)
+          st.webSearchByToolId.set(toolUseId, item)
+          st.webSearchItems.push(item)
+          out.push(
+            emit("response.output_item.added", {
+              type: "response.output_item.added",
+              sequence_number: nextSeq(),
+              output_index: item.outputIndex,
+              item: {
+                id: responsesWebSearchCallID(item.toolUseId),
+                type: "web_search_call",
+                status: "in_progress",
+                action: { type: "search", query: "" }
+              }
+            })
+          )
+        }
+      } else if (typ === "web_search_tool_result") {
+        const item = st.webSearchByToolId.get(str(get(cb, "tool_use_id")))
+        if (item !== undefined) item.results = claudeWebSearchResultsToResponses(get(cb, "content"))
+      } else if (typ === "thinking" || typ === "redacted_thinking") {
+        st.reasoningActive = true
+        st.reasoningDeltasDone = false
+        st.reasoningIndex = allocateOutputIndex(st)
+        st.reasoningBuf = ""
+        st.reasoningSignature = reasoningCarrier(cb)
+        st.reasoningItemId = `rs_${st.responseId}_${idx}`
+        out.push(
+          emit("response.output_item.added", {
+            type: "response.output_item.added",
+            sequence_number: nextSeq(),
+            output_index: st.reasoningIndex,
+            item: {
+              id: st.reasoningItemId,
+              type: "reasoning",
+              status: "in_progress",
+              encrypted_content: st.reasoningSignature,
+              summary: []
+            }
+          }),
+          emit("response.reasoning_summary_part.added", {
+            type: "response.reasoning_summary_part.added",
+            sequence_number: nextSeq(),
+            item_id: st.reasoningItemId,
+            output_index: st.reasoningIndex,
+            summary_index: 0,
+            part: { type: "summary_text", text: "" }
+          })
+        )
+      }
+      break
+    }
+    case "content_block_delta": {
+      const d = get(root, "delta")
+      if (!exists(d)) return out
+      const dt = str(get(d, "type"))
+      if (dt === "text_delta") {
+        const t = get(d, "text")
+        if (exists(t)) {
+          out.push(
+            emit("response.output_text.delta", {
+              type: "response.output_text.delta",
+              sequence_number: nextSeq(),
+              item_id: st.currentMsgId,
+              output_index: messageOutputIndex(st),
+              content_index: 0,
+              delta: str(t),
+              logprobs: []
+            })
+          )
+          st.textBuf += str(t)
+        }
+      } else if (dt === "input_json_delta") {
+        const idx = asInt(get(root, "index"))
+        const item = st.webSearchByBlock.get(idx)
+        const pj = get(d, "partial_json")
+        if (item !== undefined) {
+          if (exists(pj)) item.inputBuf += str(pj)
+          return []
+        }
+        if (exists(pj)) {
+          st.funcArgsBuf.set(idx, (st.funcArgsBuf.get(idx) ?? "") + str(pj))
+          out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+        }
+      } else if (dt === "thinking_delta") {
+        if (st.reasoningActive) {
+          const t = get(d, "thinking")
+          if (exists(t)) {
+            st.reasoningBuf += str(t)
+            out.push(
+              emit("response.reasoning_summary_text.delta", {
+                type: "response.reasoning_summary_text.delta",
+                sequence_number: nextSeq(),
+                item_id: st.reasoningItemId,
+                output_index: st.reasoningIndex,
+                summary_index: 0,
+                delta: str(t)
+              })
+            )
+          }
+        }
+      } else if (dt === "signature_delta") {
+        if (st.reasoningActive) {
+          const signature = get(d, "signature")
+          if (exists(signature) && str(signature) !== "") st.reasoningSignature = str(signature)
+        }
+        return []
+      } else if (dt === "citations_delta") {
+        const citation = get(d, "citation")
+        if (exists(citation) && citation !== null) st.messageAnnotations.push(citation)
+        return []
+      }
+      break
+    }
+    case "content_block_stop":
+      st.funcBlockStopped.set(asInt(get(root, "index")), true)
+      if (st.inTextBlock) st.inTextBlock = false
+      else if (st.inFuncBlock) st.inFuncBlock = false
+      else if (st.reasoningActive) out.push(...finalizeReasoningDeltas(st, nextSeq))
+      return out
+    case "message_delta": {
+      mergeUsage(st.usage, get(root, "usage"))
+      const stopReason = get(root, "delta.stop_reason")
+      if (exists(stopReason)) st.stopReason = str(stopReason)
+      return []
+    }
+    case "message_stop": {
+      const toolStatus = outputStatus(st.stopReason)
+      if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, toolStatus, nextSeq))
+      out.push(...finalizeAssistantMessage(st, nextSeq))
+      for (const idx of st.funcCallIds.keys()) {
+        if (st.funcItemDone.get(idx) !== true) out.push(...finalizeFuncItem(st, idx, request, toolStatus, nextSeq))
+      }
+      for (const item of st.webSearchItems) {
+        if (!item.emitted) out.push(...finalizeWebSearch(st, item, toolStatus, nextSeq))
+      }
+
+      const { eventType, status: responseStatus, details } = terminalState(st.stopReason)
+      const response: JsonObject = {
+        id: st.responseId,
+        object: "response",
+        created_at: st.createdAt,
+        status: responseStatus,
+        background: false,
+        error: null
+      }
+      const completed: JsonObject = { type: eventType, sequence_number: nextSeq(), response }
+      if (details !== undefined) response.incomplete_details = details.details
+      echoRequestFields(response, request)
+
+      const output: Json[] = []
+      for (const reasoning of st.reasoningItems) {
+        output[reasoning.outputIndex] = {
+          id: reasoning.id,
+          type: "reasoning",
+          status: reasoning.status === "" ? "completed" : reasoning.status,
+          encrypted_content: reasoning.signature,
+          summary: [{ type: "summary_text", text: reasoning.text }]
+        }
+      }
+      for (const message of st.messageItems) {
+        output[message.outputIndex] = {
+          id: message.id,
+          type: "message",
+          status: message.status,
+          content: [
+            {
+              type: "output_text",
+              annotations: message.annotations.length > 0 ? sortKeysDeep(message.annotations) : [],
+              logprobs: [],
+              text: message.text
+            }
+          ],
+          role: "assistant"
+        }
+      }
+      for (const item of st.webSearchItems) {
+        const rendered = renderWebSearch(item)
+        rendered.status = item.status === "" ? "completed" : item.status
+        output[item.outputIndex] = rendered
+      }
+      for (const idx of [...st.funcArgsBuf.keys()].toSorted((a, b) => a - b)) {
+        const funcStatus = st.funcItemStatus.get(idx) || "completed"
+        const custom = st.funcCustom.get(idx) === true
+        let args = !custom && funcStatus === "completed" ? "{}" : ""
+        const buf = st.funcArgsBuf.get(idx) ?? ""
+        if (buf.length > 0) args = buf
+        let callId = st.funcCallIds.get(idx) ?? ""
+        const name = st.funcNames.get(idx) ?? ""
+        if (callId === "" && st.currentFcId !== "") callId = st.currentFcId
+        let item: JsonObject
+        if (custom) {
+          item = {
+            id: `ctc_${callId}`,
+            type: "custom_tool_call",
+            status: funcStatus,
+            input: unwrapCustomToolInput(args),
+            call_id: callId,
+            name: ""
+          }
+        } else {
+          item = {
+            id: `fc_${callId}`,
+            type: "function_call",
+            status: funcStatus,
+            arguments: args,
+            call_id: callId,
+            name: ""
+          }
+        }
+        applyNamespaceFields(item, request, name)
+        output[st.funcOutputIndices.get(idx) ?? 0] = item
+      }
+      if (output.length > 0) response.output = output
+
+      const reasoningLength = st.reasoningItems.reduce((sum, reasoning) => sum + utf8Length(reasoning.text), 0)
+      const reasoningTokens = Math.trunc(reasoningLength / 4)
+      if (st.usage.hasUsage || reasoningTokens > 0) {
+        const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(st.usage)
+        const usage: JsonObject = {
+          input_tokens: inputTokens,
+          input_tokens_details: { cached_tokens: cachedTokens },
+          output_tokens: outputTokens,
+          output_tokens_details: { reasoning_tokens: reasoningTokens }
+        }
+        if (totalTokens > 0 || st.usage.hasUsage) usage.total_tokens = totalTokens
+        response.usage = usage
+      }
+      st.completedEmitted = true
+      out.push(emit(eventType, completed))
+      break
+    }
+  }
+  return out
+}
+
+const utf8Length = (text: string): number => new TextEncoder().encode(text).length
+
+interface OutputItem {
+  outputIndex: number
+  itemType: string
+  id: string
+  callId: string
+  name: string
+  text: string
+  signature: string
+  annotations: Json[]
+  args: string
+  results: Json | undefined
+}
+
+/** `ConvertClaudeResponseToOpenAIResponsesNonStream`. */
+export const convertClaudeResponseToOpenAIResponsesNonStream = (context: ResponseContext, body: string): string => {
+  const [raw, nativeModel] = claudeMessagesJSONToSSE(body)
+  const chunks: string[] = []
+  for (const rawLine of raw.split("\n")) {
+    const line = rawLine.replace(/\r+$/u, "")
+    if (line.startsWith("data:")) chunks.push(line.slice(5))
+  }
+
+  const reqJson = pickRequest(context.originalRequest, context.translatedRequest)
+  const st = newState(reqJson)
+  const out: JsonObject = {
+    id: "",
+    object: "response",
+    created_at: 0,
+    status: "completed",
+    background: false,
+    error: null,
+    incomplete_details: null,
+    output: [],
+    usage: {
+      input_tokens: 0,
+      input_tokens_details: { cached_tokens: 0 },
+      output_tokens: 0,
+      output_tokens_details: {},
+      total_tokens: 0
+    }
+  }
+
+  let responseId = ""
+  let createdAt = 0
+  let stopReason = ""
+  const usageTokens = newUsage()
+  const blockToItem = new Map<number, OutputItem>()
+  const webSearchByToolId = new Map<string, OutputItem>()
+  const outputItems: OutputItem[] = []
+  let nextOutputIndex = 0
+  let messageCount = 0
+  let activeMessageItem: OutputItem | undefined
+  let pendingAnnotations: Json[] = []
+
+  const newOutputItem = (itemType: string, blockIndex: number): OutputItem => {
+    const item: OutputItem = {
+      outputIndex: nextOutputIndex++,
+      itemType,
+      id: "",
+      callId: "",
+      name: "",
+      text: "",
+      signature: "",
+      annotations: [],
+      args: "",
+      results: undefined
+    }
+    outputItems.push(item)
+    blockToItem.set(blockIndex, item)
+    return item
+  }
+
+  for (const ch of chunks) {
+    const root = tryParseJson(ch.trim())
+    const ev = str(get(root, "type"))
+    if (ev === "message_stop") break
+    switch (ev) {
+      case "message_start": {
+        const msg = get(root, "message")
+        if (exists(msg)) {
+          responseId = str(get(msg, "id"))
+          createdAt = Math.floor(Date.now() / 1000)
+          mergeUsage(usageTokens, get(msg, "usage"))
+        }
+        break
+      }
+      case "content_block_start": {
+        const cb = get(root, "content_block")
+        if (!exists(cb)) break
+        const idx = asInt(get(root, "index"))
+        const typ = str(get(cb, "type"))
+        if (typ !== "text") activeMessageItem = undefined
+        switch (typ) {
+          case "text": {
+            let item = activeMessageItem
+            if (item === undefined) {
+              item = newOutputItem("message", idx)
+              item.id = `msg_${responseId}_${messageCount}`
+              messageCount++
+            } else {
+              blockToItem.set(idx, item)
+            }
+            if (pendingAnnotations.length > 0) {
+              item.annotations.push(...pendingAnnotations)
+              pendingAnnotations = []
+            }
+            activeMessageItem = item
+            break
+          }
+          case "tool_use": {
+            let itemType = "function_call"
+            const toolName = str(get(cb, "name"))
+            if (st.toolWinners.get(st.toolNames.identity(toolName))?.toolType === "custom")
+              itemType = "custom_tool_call"
+            let item = blockToItem.get(idx)
+            if (item === undefined) item = newOutputItem(itemType, idx)
+            const callId = str(get(cb, "id"))
+            if (toolName !== "") {
+              item.name = toolName
+              item.itemType = itemType
+            }
+            if (callId !== "") item.callId = callId
+            item.id = item.itemType === "custom_tool_call" ? `ctc_${item.callId}` : `fc_${item.callId}`
+            break
+          }
+          case "server_tool_use": {
+            if (str(get(cb, "name")) !== CLAUDE_WEB_SEARCH_TOOL_NAME) break
+            const toolUseId = str(get(cb, "id"))
+            const item = newOutputItem("web_search_call", idx)
+            item.id = responsesWebSearchCallID(toolUseId)
+            item.callId = toolUseId
+            webSearchByToolId.set(toolUseId, item)
+            const input = get(cb, "input")
+            if (isObj(input) && claudeWebSearchQuery(JSON.stringify(input)) !== "") item.args += JSON.stringify(input)
+            break
+          }
+          case "web_search_tool_result": {
+            const item = webSearchByToolId.get(str(get(cb, "tool_use_id")))
+            if (item !== undefined) item.results = claudeWebSearchResultsToResponses(get(cb, "content"))
+            break
+          }
+          case "thinking":
+          case "redacted_thinking": {
+            const item = newOutputItem("reasoning", idx)
+            item.id = `rs_${responseId}_${idx}`
+            item.signature = reasoningCarrier(cb)
+            break
+          }
+        }
+        break
+      }
+      case "content_block_delta": {
+        const d = get(root, "delta")
+        if (!exists(d)) break
+        const item = blockToItem.get(asInt(get(root, "index")))
+        switch (str(get(d, "type"))) {
+          case "text_delta":
+            if (item !== undefined && item.itemType === "message") {
+              const t = get(d, "text")
+              if (exists(t)) item.text += str(t)
+            }
+            break
+          case "input_json_delta":
+            if (
+              item !== undefined &&
+              (item.itemType === "function_call" ||
+                item.itemType === "custom_tool_call" ||
+                item.itemType === "web_search_call")
+            ) {
+              const pj = get(d, "partial_json")
+              if (exists(pj)) item.args += str(pj)
+            }
+            break
+          case "thinking_delta":
+            if (item !== undefined && item.itemType === "reasoning") {
+              const t = get(d, "thinking")
+              if (exists(t)) item.text += str(t)
+            }
+            break
+          case "signature_delta":
+            if (item !== undefined && item.itemType === "reasoning") {
+              const signature = get(d, "signature")
+              if (exists(signature) && str(signature) !== "") item.signature = str(signature)
+            }
+            break
+          case "citations_delta": {
+            const citation = get(d, "citation")
+            if (exists(citation) && citation !== null) {
+              if (item !== undefined && item.itemType === "message") item.annotations.push(citation)
+              else if (activeMessageItem !== undefined) activeMessageItem.annotations.push(citation)
+              else pendingAnnotations.push(citation)
+            }
+            break
+          }
+        }
+        break
+      }
+      case "message_delta": {
+        mergeUsage(usageTokens, get(root, "usage"))
+        const value = get(root, "delta.stop_reason")
+        if (exists(value)) stopReason = str(value)
+        break
+      }
+    }
+  }
+
+  const { status: responseStatus, details } = terminalState(stopReason)
+  out.id = responseId
+  out.created_at = createdAt
+  out.status = responseStatus
+  if (details !== undefined) out.incomplete_details = details.details
+  echoRequestFields(out, reqJson)
+  if (nativeModel !== "") out.model = nativeModel
+
+  const outputs: JsonObject[] = []
+  outputItems.forEach((outputItem, i) => {
+    const itemStatus = responseStatus === "incomplete" && i === outputItems.length - 1 ? "incomplete" : "completed"
+    let item: JsonObject | undefined
+    switch (outputItem.itemType) {
+      case "reasoning":
+        item = {
+          id: outputItem.id,
+          type: "reasoning",
+          status: itemStatus,
+          encrypted_content: outputItem.signature,
+          summary: [{ type: "summary_text", text: outputItem.text }]
+        }
+        break
+      case "web_search_call":
+        item = buildResponsesWebSearchCallItem(
+          outputItem.callId,
+          claudeWebSearchQuery(outputItem.args),
+          outputItem.results
+        )
+        item.status = itemStatus
+        break
+      case "message":
+        item = {
+          id: outputItem.id,
+          type: "message",
+          status: itemStatus,
+          content: [
+            {
+              type: "output_text",
+              annotations: outputItem.annotations.length > 0 ? sortKeysDeep(outputItem.annotations) : [],
+              logprobs: [],
+              text: outputItem.text
+            }
+          ],
+          role: "assistant"
+        }
+        break
+      case "custom_tool_call":
+        item = {
+          id: outputItem.id,
+          type: "custom_tool_call",
+          status: itemStatus,
+          input: unwrapCustomToolInput(outputItem.args),
+          call_id: outputItem.callId,
+          name: ""
+        }
+        applyNamespaceFields(item, reqJson, outputItem.name)
+        break
+      case "function_call": {
+        let args = outputItem.args
+        if (args === "" && itemStatus === "completed") args = "{}"
+        item = {
+          id: outputItem.id,
+          type: "function_call",
+          status: itemStatus,
+          arguments: args,
+          call_id: outputItem.callId,
+          name: ""
+        }
+        applyNamespaceFields(item, reqJson, outputItem.name)
+        break
+      }
+    }
+    if (item !== undefined) outputs.push(item)
+  })
+  if (outputs.length > 0) out.output = outputs
+
+  const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(usageTokens)
+  const usage = out.usage as JsonObject
+  if (inputTokens !== 0) usage.input_tokens = inputTokens
+  if (cachedTokens !== 0) (usage.input_tokens_details as JsonObject).cached_tokens = cachedTokens
+  if (outputTokens !== 0) usage.output_tokens = outputTokens
+  if (totalTokens !== 0) usage.total_tokens = totalTokens
+  const reasoningLength = outputItems
+    .filter((item) => item.itemType === "reasoning")
+    .reduce((sum, item) => sum + utf8Length(item.text), 0)
+  if (reasoningLength > 0) {
+    const reasoningTokens = Math.trunc(reasoningLength / 4)
+    if (reasoningTokens > 0) (usage.output_tokens_details as JsonObject).reasoning_tokens = reasoningTokens
+  }
+  return JSON.stringify(out)
+}
+
+export const claudeToOpenAIResponsesResponse: ResponseTransform = {
+  stream: convertClaudeResponseToOpenAIResponses,
+  nonStream: convertClaudeResponseToOpenAIResponsesNonStream
+}

@@ -7,6 +7,7 @@
  * buildConfiguredModelInfo, applyModelPrefixes). Ids are derived from config positions (never from key material).
  */
 import type { Config, OpenAICompatGroup } from "../config/schema.ts"
+import { claudeConfigCredentials } from "./claude/config-credentials.ts"
 import { openAICompatibleProviderKey } from "./models.ts"
 import type { CredentialSnapshot } from "./picker.ts"
 
@@ -97,5 +98,6 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
       out.push(make(keyIndex, key["api-key"].trim(), key.weight))
     })
   })
+  out.push(...claudeConfigCredentials(config["api-keys"].claude, forceModelPrefix))
   return out
 }

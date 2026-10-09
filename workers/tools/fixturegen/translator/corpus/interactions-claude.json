@@ -1,0 +1,585 @@
+[
+  {
+    "name": "request: string input, system and generation config",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "Hello",
+      "system_instruction": "Be brief",
+      "generation_config": {
+        "max_output_tokens": 200,
+        "top_p": 0.9,
+        "temperature": 0.4,
+        "stop_sequences": ["END"]
+      },
+      "stream": true
+    }
+  },
+  {
+    "name": "request: camelCase config and parts input",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "input": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Hi there"
+          }
+        ]
+      },
+      "systemInstruction": {
+        "parts": [
+          {
+            "text": "sys a"
+          },
+          {
+            "text": "sys b"
+          }
+        ]
+      },
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "topP": 0.5,
+        "stopSequences": ["x"],
+        "thinkingLevel": "high"
+      }
+    }
+  },
+  {
+    "name": "request: steps with function calls and results",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": [
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "text",
+              "text": "Weather?"
+            }
+          ]
+        },
+        {
+          "type": "thought",
+          "content": [
+            {
+              "type": "thinking",
+              "text": "hmm"
+            }
+          ]
+        },
+        {
+          "type": "model_output",
+          "content": [
+            {
+              "type": "text",
+              "text": "Checking"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "id": "call 1",
+          "name": "get weather",
+          "arguments": {
+            "city": "Paris"
+          }
+        },
+        {
+          "type": "function_call",
+          "call_id": "c2",
+          "name": "noargs"
+        },
+        {
+          "type": "function_result",
+          "call_id": "call 1",
+          "result": {
+            "temp": 21
+          }
+        },
+        {
+          "type": "function_result",
+          "call_id": "c2",
+          "result": "plain",
+          "is_error": true
+        },
+        {
+          "type": "function_result",
+          "name": "zed",
+          "output": [
+            {
+              "type": "text",
+              "text": "a"
+            },
+            {
+              "type": "image",
+              "mime_type": "image/png",
+              "data": "AAAA"
+            },
+            {
+              "type": "audio",
+              "data": "BBBB"
+            }
+          ]
+        },
+        {
+          "type": "function_result",
+          "call_id": "c3"
+        },
+        {
+          "type": "user_input",
+          "content": "Thanks"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: nested steps with roles and instructions",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": [
+        {
+          "role": "developer",
+          "steps": [
+            {
+              "type": "user_input",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "dev rule"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "steps": [
+            {
+              "type": "user_input",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "question"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "steps": [
+            {
+              "type": "model_output",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "answer"
+                },
+                {
+                  "type": "thinking",
+                  "text": "drop me? no, assistant keeps"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "wrapped model"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "parts": [
+            {
+              "text": "wrapped sys"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "wrapped user"
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "mime_type": "image/jpeg",
+          "data": "CCCC"
+        },
+        {
+          "type": "document",
+          "uri": "https://x.test/a.pdf"
+        },
+        {
+          "text": "bare text"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: user turn with only an unsupported attachment is refused",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": [
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "audio",
+              "mime_type": "audio/wav",
+              "data": "DDDD"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: unsupported attachment kept alive by neighbouring text",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": [
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "text",
+              "text": "look"
+            },
+            {
+              "type": "video",
+              "data": "EEEE"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tools and tool choice variants",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "tools": [
+        {
+          "function_declarations": [
+            {
+              "name": "a b",
+              "description": "desc",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "functionDeclarations": [
+            {
+              "name": "c",
+              "parametersJsonSchema": {
+                "type": "object",
+                "properties": {
+                  "z": {
+                    "type": "integer"
+                  },
+                  "a": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "d",
+            "description": "fd"
+          }
+        },
+        {
+          "name": ""
+        },
+        {
+          "google_search": {}
+        },
+        {
+          "name": "e",
+          "input_schema": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      ],
+      "tool_choice": {
+        "type": "function",
+        "function": {
+          "name": "a b"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: tool choice strings",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "tools": [
+        {
+          "name": "t"
+        }
+      ],
+      "generation_config": {
+        "tool_choice": "required"
+      }
+    }
+  },
+  {
+    "name": "request: tool choice auto then camel",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "toolChoice": {
+        "type": "auto"
+      },
+      "generationConfig": {
+        "toolChoice": "any"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning effort levels",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "reasoning": {
+        "effort": "medium"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning none",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "reasoning": {
+        "thinking_level": "none"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning adaptive then unknown level",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "generation_config": {
+        "thinking_level": "auto"
+      },
+      "reasoning": {
+        "effort": "max"
+      }
+    }
+  },
+  {
+    "name": "request: unknown level maps to adaptive effort",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "reasoning": {
+        "effort": "ultra"
+      }
+    }
+  },
+  {
+    "name": "request: budget level",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "x",
+      "generation_config": {
+        "reasoning": {
+          "effort": "low"
+        }
+      }
+    }
+  },
+  {
+    "name": "response: streamed thought, text and function calls",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "input": "hi"
+    },
+    "responseLines": [
+      "event: message_start",
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01I\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":20,\"output_tokens\":1,\"cache_read_input_tokens\":3}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Hmm\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":1}",
+      "data: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_7\",\"name\":\"get_weather\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":2}",
+      "data: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_8\",\"name\":\"pre\",\"input\":{\"a\":1}}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":3}",
+      "data: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":4}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":30,\"thinking_tokens\":12,\"cache_creation_input_tokens\":2}}",
+      "data: {\"type\":\"message_stop\"}",
+      "data: {\"type\":\"ping\"}",
+      "data: [DONE]",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "response: streamed error",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "input": "hi"
+    },
+    "responseLines": [
+      "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "response: non-stream from the event stream",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "hi"
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01I\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":20,\"output_tokens\":1,\"cache_read_input_tokens\":3}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Hmm\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":0}\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":1}\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_7\",\"name\":\"get_weather\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":2}\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_8\",\"name\":\"pre\",\"input\":{\"a\":1}}}\ndata: {\"type\":\"content_block_stop\",\"index\":3}\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"text_delta\",\"text\":\"orphan\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":4}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":30,\"thinking_tokens\":12,\"cache_creation_input_tokens\":2}}\ndata: {\"type\":\"message_stop\"}\ndata: {\"type\":\"ping\"}\n"
+  },
+  {
+    "name": "response: non-stream from a message",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "hi"
+    },
+    "responseBody": {
+      "id": "msg_02",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "think",
+          "signature": "s"
+        },
+        {
+          "type": "text",
+          "text": "Answer"
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_9",
+          "name": "calc",
+          "input": {
+            "x": [1, 2]
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_10",
+          "name": "noin"
+        },
+        {
+          "type": "image",
+          "source": {}
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 7,
+        "output_tokens": 9,
+        "cache_read_input_tokens": 1
+      }
+    }
+  },
+  {
+    "name": "response: non-stream message without usage",
+    "from": "interactions",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "input": "hi"
+    },
+    "responseBody": {
+      "content": [
+        {
+          "type": "text",
+          "text": "x"
+        }
+      ]
+    }
+  }
+]

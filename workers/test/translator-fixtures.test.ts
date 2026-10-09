@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest"
 import { summaryHooks as thinkingSummaryHooks } from "../src/executor/thinking.ts"
 import type { Json } from "../src/json/index.ts"
 import { builtinTranslators } from "../src/translator/builtin.ts"
+import { setModelInfoLookup } from "../src/translator/model-info.ts"
 import { makeTranslationState } from "../src/translator/registry.ts"
+import { catalogLookup } from "./support/thinking.ts"
+
+// Translators that consult the model registry (e.g. Claude adaptive thinking) use the Go static catalog.
+setModelInfoLookup(catalogLookup)
 
 interface FixtureCase {
   readonly name: string
@@ -36,9 +41,31 @@ const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>("./fixtu
   eager: true
 })
 
+/** Wall-clock fields the Go translators stamp with `time.Now()`; their values cannot match across runs. */
+const normalizeClock = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(normalizeClock)
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        (key === "created" || key === "created_at" || key === "completed_at") && typeof item === "number" && item > 1e9
+          ? 0
+          : (key === "createTime" || key === "created" || key === "updated") &&
+              typeof item === "string" &&
+              /^\d{4}-\d\d-\d\dT/.test(item)
+            ? "<time>"
+            : typeof item === "string" && /^interaction_\d{15,}$/.test(item)
+              ? "interaction_<n>"
+              : normalizeClock(item)
+      ])
+    )
+  }
+  return value
+}
+
 const canonicalJson = (text: string): string | undefined => {
   try {
-    return JSON.stringify(JSON.parse(text))
+    return JSON.stringify(normalizeClock(JSON.parse(text)))
   } catch {
     return undefined
   }

@@ -60,9 +60,9 @@
     "total_tokens": 4
    }
   },
-  "translatedRequest": "{\n      \"model\": \"upstream-model\",\n      \"messages\": [\n        { \"role\": \"system\", \"content\": \"be brief\" },\n        { \"role\": \"user\", \"content\": [{ \"type\": \"text\", \"text\": \"hi \u003cb\u003e\u0026\u003c/b\u003e\" }] }\n      ],\n      \"temperature\": 0.25,\n      \"max_tokens\": 64,\n      \"tools\": [{ \"type\": \"function\", \"function\": { \"name\": \"f\", \"parameters\": { \"type\": \"object\" } } }],\n      \"metadata\": { \"z\": 1, \"a\": 2 }\n    }",
-  "responseBodyText": "{\n      \"id\": \"chatcmpl-1\",\n      \"object\": \"chat.completion\",\n      \"model\": \"upstream-model\",\n      \"choices\": [{ \"index\": 0, \"message\": { \"role\": \"assistant\", \"content\": \"ok\" }, \"finish_reason\": \"stop\" }],\n      \"usage\": { \"prompt_tokens\": 3, \"completion_tokens\": 1, \"total_tokens\": 4 }\n    }",
-  "nonStreamOutput": "{\n      \"id\": \"chatcmpl-1\",\n      \"object\": \"chat.completion\",\n      \"model\": \"upstream-model\",\n      \"choices\": [{ \"index\": 0, \"message\": { \"role\": \"assistant\", \"content\": \"ok\" }, \"finish_reason\": \"stop\" }],\n      \"usage\": { \"prompt_tokens\": 3, \"completion_tokens\": 1, \"total_tokens\": 4 }\n    }"
+  "translatedRequest": "{\"model\":\"upstream-model\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi \u003cb\u003e\u0026\u003c/b\u003e\"}]}],\"temperature\":0.25,\"max_tokens\":64,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"parameters\":{\"type\":\"object\"}}}],\"metadata\":{\"z\":1,\"a\":2}}",
+  "responseBodyText": "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1,\"total_tokens\":4}}",
+  "nonStreamOutput": "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1,\"total_tokens\":4}}"
  },
  {
   "name": "request: matching model is kept as-is",
@@ -76,7 +76,7 @@
    "messages": [],
    "n": 1
   },
-  "translatedRequest": "{ \"stream\": true, \"model\": \"upstream-model\", \"messages\": [], \"n\": 1 }"
+  "translatedRequest": "{\"stream\":true,\"model\":\"upstream-model\",\"messages\":[],\"n\":1}"
  },
  {
   "name": "request: missing and non-string models are set",
@@ -92,7 +92,7 @@
     }
    ]
   },
-  "translatedRequest": "{ \"messages\": [{ \"role\": \"user\", \"content\": \"x\" }] ,\"model\":\"m\"}"
+  "translatedRequest": "{\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"model\":\"m\"}"
  },
  {
   "name": "request: numeric model replaced",
@@ -104,7 +104,7 @@
    "model": 5,
    "messages": []
   },
-  "translatedRequest": "{ \"model\": \"m\", \"messages\": [] }"
+  "translatedRequest": "{\"model\":\"m\",\"messages\":[]}"
  },
  {
   "name": "stream: data prefix stripped, [DONE] swallowed and later chunks dropped",
@@ -126,7 +126,7 @@
    "data: {\"id\":\"c1\",\"choices\":[],\"cost\":\"0\"}",
    "data: [DONE]"
   ],
-  "translatedRequest": "{ \"model\": \"upstream-model\", \"messages\": [], \"stream\": true }",
+  "translatedRequest": "{\"model\":\"upstream-model\",\"messages\":[],\"stream\":true}",
   "streamOutputs": [
    [
     "{\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"He\"},\"finish_reason\":null}]}"
@@ -156,7 +156,7 @@
    "messages": []
   },
   "responseBody": "plain text body",
-  "translatedRequest": "{ \"model\": \"m\", \"messages\": [] }",
+  "translatedRequest": "{\"model\":\"m\",\"messages\":[]}",
   "responseBodyText": "plain text body",
   "nonStreamOutput": "plain text body"
  },
@@ -178,7 +178,7 @@
     "total_tokens": 42
    }
   },
-  "translatedRequest": "{ \"model\": \"m\", \"messages\": [] }",
+  "translatedRequest": "{\"model\":\"m\",\"messages\":[]}",
   "tokenCountOutput": "{ \"usage\": { \"prompt_tokens\": 42, \"completion_tokens\": 0, \"total_tokens\": 42 } }"
  },
  {
@@ -193,6 +193,6 @@
    "reasoning_effort": "high",
    "include_reasoning": false
   },
-  "translatedRequest": "{ \"model\": \"m\", \"messages\": [], \"reasoning_effort\": \"high\", \"include_reasoning\": false }"
+  "translatedRequest": "{\"model\":\"m\",\"messages\":[],\"reasoning_effort\":\"high\",\"include_reasoning\":false}"
  }
 ]

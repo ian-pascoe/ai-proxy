@@ -1,0 +1,684 @@
+[
+ {
+  "name": "request: simple user message with sampling and stop",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hello"
+    }
+   ],
+   "max_tokens": 256,
+   "top_p": 0.9,
+   "stop": [
+    "END",
+    "STOP"
+   ],
+   "user": "u-1"
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":256,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello\"}]}],\"metadata\":{\"user_id\":\"u-1\"},\"top_p\":0.9,\"stop_sequences\":[\"END\",\"STOP\"],\"stream\":true}"
+ },
+ {
+  "name": "request: system, developer, multi-turn with tools and results",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "system",
+     "content": "You are a weather bot."
+    },
+    {
+     "role": "developer",
+     "content": [
+      {
+       "type": "text",
+       "text": "Be terse."
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "Weather in Paris \u0026 Rome?"
+    },
+    {
+     "role": "assistant",
+     "content": "Checking.",
+     "tool_calls": [
+      {
+       "id": "call_1",
+       "type": "function",
+       "function": {
+        "name": "get_weather",
+        "arguments": "{\"city\":\"Paris\"}"
+       }
+      },
+      {
+       "id": "call_2",
+       "type": "function",
+       "function": {
+        "name": "mcp.tool:x",
+        "arguments": "[1,2]"
+       }
+      },
+      {
+       "id": "call_3",
+       "type": "function",
+       "function": {
+        "name": "bad_args",
+        "arguments": "not json"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "call_1",
+     "content": "Sunny, 21C"
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "call_2",
+     "content": [
+      {
+       "type": "text",
+       "text": "part one"
+      },
+      "part two"
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "call_2",
+     "content": "duplicate wins last"
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "call_3",
+     "content": {
+      "type": "text",
+      "text": "obj"
+     }
+    },
+    {
+     "role": "user",
+     "content": "Thanks"
+    }
+   ],
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Get weather",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      },
+      "strict": true
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "mcp.tool:x",
+      "parameters": {
+       "anyOf": [
+        {
+         "type": "object",
+         "properties": {
+          "b": {
+           "type": "number"
+          },
+          "a": {
+           "type": "string"
+          }
+         }
+        },
+        {
+         "type": "string"
+        }
+       ],
+       "properties": {
+        "z": {
+         "type": "integer"
+        }
+       }
+      }
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "tool_choice": "required",
+   "parallel_tool_calls": false,
+   "max_completion_tokens": 2048
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":2048,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Weather in Paris \u0026 Rome?\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Checking.\"},{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Paris\"}},{\"type\":\"tool_use\",\"id\":\"call_2\",\"name\":\"mcp_tool_x\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call_3\",\"name\":\"bad_args\",\"input\":{}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"call_1\",\"content\":\"Sunny, 21C\"},{\"type\":\"tool_result\",\"tool_use_id\":\"call_2\",\"content\":\"duplicate wins last\"},{\"type\":\"tool_result\",\"tool_use_id\":\"call_3\",\"content\":[{\"type\":\"text\",\"text\":\"obj\"}]},{\"type\":\"text\",\"text\":\"Thanks\"}]}],\"metadata\":{\"user_id\":\"10a4fb944381afd687dbb11c33e08f8515fe6e6f22264702e61f6c23cf524bea\"},\"stream\":false,\"system\":[{\"type\":\"text\",\"text\":\"You are a weather bot.\"},{\"type\":\"text\",\"text\":\"Be terse.\"}],\"tools\":[{\"name\":\"get_weather\",\"description\":\"Get weather\",\"input_schema\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"strict\":true},{\"name\":\"mcp_tool_x\",\"description\":\"\",\"input_schema\":{\"properties\":{\"a\":{\"type\":\"string\"},\"b\":{\"type\":\"number\"},\"z\":{\"type\":\"integer\"}},\"type\":\"object\"}}],\"tool_choice\":{\"type\":\"any\",\"disable_parallel_tool_use\":true}}"
+ },
+ {
+  "name": "request: images, files and cache control",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "system",
+     "content": [
+      {
+       "type": "text",
+       "text": "Cached system",
+       "cache_control": {
+        "type": "ephemeral"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Look at this",
+       "cache_control": {
+        "type": "ephemeral"
+       }
+      },
+      {
+       "type": "image_url",
+       "image_url": {
+        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+       }
+      },
+      {
+       "type": "image_url",
+       "image_url": {
+        "url": "https://example.com/cat.jpg"
+       }
+      },
+      {
+       "type": "file",
+       "file": {
+        "file_data": "data:application/pdf;base64,JVBERi0="
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "I see."
+      }
+     ],
+     "cache_control": {
+      "type": "ephemeral"
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Look at this\",\"cache_control\":{\"type\":\"ephemeral\"}},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}},{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"https://example.com/cat.jpg\"}},{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"application/pdf\",\"data\":\"JVBERi0=\"}}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"I see.\",\"cache_control\":{\"type\":\"ephemeral\"}}]}],\"metadata\":{\"user_id\":\"4ef616730bcc7dfbe10a9173cc5254b045f41ebf72afe84f97ed374f7ab92189\"},\"stream\":false,\"system\":[{\"type\":\"text\",\"text\":\"Cached system\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
+ },
+ {
+  "name": "request: user turn with only an unsupported file is refused",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "file",
+       "file": {
+        "file_id": "file-1"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[],\"metadata\":{\"user_id\":\"801295ffbcd6d4d71445af776fc9c88a0aa48a86ef817314e30bd4e10c1b2987\"},\"stream\":false}",
+  "requestError": "unsupported content part: file"
+ },
+ {
+  "name": "request: reasoning effort on a legacy budget model",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "reasoning_effort": "high",
+   "messages": [
+    {
+     "role": "user",
+     "content": "think"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"think\"}]}],\"metadata\":{\"user_id\":\"a5fd9666e1793b3567b1327df203bc9bd219f9b13b3b62fdb876526180c7c625\"},\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":24576},\"stream\":false}"
+ },
+ {
+  "name": "request: reasoning effort on an adaptive model",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-opus-4-6",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "reasoning_effort": "xhigh",
+   "messages": [
+    {
+     "role": "user",
+     "content": "think"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-opus-4-6\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"think\"}]}],\"metadata\":{\"user_id\":\"a5fd9666e1793b3567b1327df203bc9bd219f9b13b3b62fdb876526180c7c625\"},\"thinking\":{\"type\":\"adaptive\"},\"output_config\":{\"effort\":\"max\"},\"stream\":false}"
+ },
+ {
+  "name": "request: reasoning effort none and auto",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-opus-4-6",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "reasoning_effort": "none",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-opus-4-6\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"thinking\":{\"type\":\"disabled\"},\"stream\":false}"
+ },
+ {
+  "name": "request: reasoning effort auto",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-opus-4-6",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "reasoning_effort": "auto",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"claude-opus-4-6\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"thinking\":{\"type\":\"adaptive\"},\"stream\":false}"
+ },
+ {
+  "name": "request: allowed_tools choice filters tools",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ],
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "a.b",
+      "parameters": {
+       "type": "object"
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "c"
+     }
+    }
+   ],
+   "tool_choice": {
+    "type": "allowed_tools",
+    "allowed_tools": {
+     "mode": "required",
+     "tools": [
+      {
+       "type": "function",
+       "function": {
+        "name": "a.b"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"stream\":false,\"tools\":[{\"name\":\"a_b\",\"description\":\"\",\"input_schema\":{\"properties\":{},\"type\":\"object\"}}],\"tool_choice\":{\"type\":\"any\"}}"
+ },
+ {
+  "name": "request: function tool choice and response_format json_schema",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "system",
+     "content": "sys"
+    }
+   ],
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "parameters": {
+       "type": "object"
+      },
+      "cache_control": {
+       "type": "ephemeral"
+      }
+     }
+    }
+   ],
+   "tool_choice": {
+    "type": "function",
+    "function": {
+     "name": "f"
+    }
+   },
+   "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+     "name": "Out",
+     "description": "d",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"\"}]}],\"metadata\":{\"user_id\":\"801295ffbcd6d4d71445af776fc9c88a0aa48a86ef817314e30bd4e10c1b2987\"},\"stream\":false,\"system\":[{\"type\":\"text\",\"text\":\"sys\"},{\"type\":\"text\",\"text\":\"You must format your entire response as valid JSON that conforms strictly to the following JSON schema:\\nSchema Name: Out\\nSchema Description: d\\nJSON Schema:\\n{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"a\\\":{\\\"type\\\":\\\"string\\\"}}}\\nDo not include any explanations, markdown code blocks (such as ```json), or any text outside of the JSON object.\"}],\"tools\":[{\"name\":\"f\",\"description\":\"\",\"input_schema\":{\"properties\":{},\"type\":\"object\"},\"cache_control\":{\"type\":\"ephemeral\"}}],\"tool_choice\":{\"type\":\"tool\",\"name\":\"f\"}}"
+ },
+ {
+  "name": "request: json_object format and none tool choice",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ],
+   "response_format": {
+    "type": "json_object"
+   },
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f"
+     }
+    }
+   ],
+   "tool_choice": "none"
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"stream\":false,\"system\":[{\"type\":\"text\",\"text\":\"You must format your entire response as a valid JSON object. Do not include any explanations, markdown code blocks (such as ```json), or any text outside of the JSON object.\"}],\"tools\":[{\"name\":\"f\",\"description\":\"\",\"input_schema\":{\"type\":\"object\",\"properties\":{}}}],\"tool_choice\":{\"type\":\"none\"}}"
+ },
+ {
+  "name": "response: streamed thinking, text and tool calls",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "weather"
+    }
+   ],
+   "stream": true
+  },
+  "responseLines": [
+   "event: message_start",
+   "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01ABC\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"cache_creation_input_tokens\":10,\"cache_read_input_tokens\":5,\"output_tokens\":1}}}",
+   "event: content_block_start",
+   "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think.\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig\"}}",
+   "data: {\"type\":\"content_block_stop\",\"index\":0}",
+   "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\" \u003cworld\u003e \u0026 more\"}}",
+   "data: {\"type\":\"content_block_stop\",\"index\":1}",
+   "data: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01XYZ\",\"name\":\"get_weather\",\"input\":{}}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}",
+   "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}",
+   "data: {\"type\":\"content_block_stop\",\"index\":2}",
+   "data: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_02\",\"name\":\"noargs\",\"input\":{}}}",
+   "data: {\"type\":\"content_block_stop\",\"index\":3}",
+   "event: ping",
+   "data: {\"type\":\"ping\"}",
+   "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":42}}",
+   "data: {\"type\":\"message_stop\"}",
+   "data: {\"type\":\"unknown_event\"}",
+   "data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}"
+  ],
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"weather\"}]}],\"metadata\":{\"user_id\":\"3051cc5ee9c582d849d64d7cb5b48cb22f4ba5bcae885ebb6bea70cd4eaf9b28\"},\"stream\":true}",
+  "streamOutputs": [
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}"
+   ],
+   [],
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Let me think.\"},\"finish_reason\":null}]}"
+   ],
+   [],
+   [],
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}"
+   ],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" \u003cworld\u003e \u0026 more\"},\"finish_reason\":null}]}"
+   ],
+   [],
+   [],
+   [],
+   [],
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"toolu_01XYZ\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}"
+   ],
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"toolu_02\",\"type\":\"function\",\"function\":{\"name\":\"noargs\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}"
+   ],
+   [],
+   [],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":42,\"total_tokens\":82,\"prompt_tokens_details\":{\"cached_tokens\":5,\"cached_creation_tokens\":10,\"cache_write_tokens\":10}}}"
+   ],
+   [
+    "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion.chunk\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":42,\"total_tokens\":82,\"prompt_tokens_details\":{\"cached_tokens\":5,\"cached_creation_tokens\":10,\"cache_write_tokens\":10}}}"
+   ],
+   [],
+   [
+    "{\"error\":{\"message\":\"Overloaded\",\"type\":\"overloaded_error\"}}"
+   ]
+  ]
+ },
+ {
+  "name": "response: non-stream message with tools and usage",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "weather"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "msg_01ABC",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-sonnet-4-5-20250929",
+   "content": [
+    {
+     "type": "thinking",
+     "thinking": "Reasoning here",
+     "signature": "sigABC"
+    },
+    {
+     "type": "text",
+     "text": "It is sunny."
+    },
+    {
+     "type": "tool_use",
+     "id": "toolu_01XYZ",
+     "name": "get_weather",
+     "input": {
+      "city": "Paris"
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "toolu_02",
+     "name": "noargs",
+     "input": {}
+    }
+   ],
+   "stop_reason": "tool_use",
+   "stop_sequence": null,
+   "usage": {
+    "input_tokens": 25,
+    "cache_creation_input_tokens": 10,
+    "cache_read_input_tokens": 5,
+    "output_tokens": 42
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"weather\"}]}],\"metadata\":{\"user_id\":\"3051cc5ee9c582d849d64d7cb5b48cb22f4ba5bcae885ebb6bea70cd4eaf9b28\"},\"stream\":false}",
+  "responseBodyText": "{\"id\":\"msg_01ABC\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Reasoning here\",\"signature\":\"sigABC\"},{\"type\":\"text\",\"text\":\"It is sunny.\"},{\"type\":\"tool_use\",\"id\":\"toolu_01XYZ\",\"name\":\"get_weather\",\"input\":{\"city\":\"Paris\"}},{\"type\":\"tool_use\",\"id\":\"toolu_02\",\"name\":\"noargs\",\"input\":{}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":25,\"cache_creation_input_tokens\":10,\"cache_read_input_tokens\":5,\"output_tokens\":42}}",
+  "nonStreamOutput": "{\"id\":\"msg_01ABC\",\"object\":\"chat.completion\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"It is sunny.\",\"reasoning_content\":\"Reasoning here\",\"tool_calls\":[{\"id\":\"toolu_01XYZ\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}},{\"id\":\"toolu_02\",\"type\":\"function\",\"function\":{\"name\":\"noargs\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":40,\"completion_tokens\":42,\"total_tokens\":82,\"prompt_tokens_details\":{\"cached_tokens\":5,\"cached_creation_tokens\":10,\"cache_write_tokens\":10}}}"
+ },
+ {
+  "name": "response: non-stream max_tokens",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "msg_02",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-sonnet-4-5-20250929",
+   "content": [
+    {
+     "type": "text",
+     "text": "cut off"
+    }
+   ],
+   "stop_reason": "max_tokens",
+   "stop_sequence": null,
+   "usage": {
+    "input_tokens": 3,
+    "output_tokens": 9
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"stream\":false}",
+  "responseBodyText": "{\"id\":\"msg_02\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[{\"type\":\"text\",\"text\":\"cut off\"}],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"output_tokens\":9}}",
+  "nonStreamOutput": "{\"id\":\"msg_02\",\"object\":\"chat.completion\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"cut off\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":9,\"total_tokens\":12,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cached_creation_tokens\":0,\"cache_write_tokens\":0}}}"
+ },
+ {
+  "name": "response: non-stream refusal",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5-20250929",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "messages": [
+    {
+     "role": "user",
+     "content": "x"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "msg_03",
+   "type": "message",
+   "role": "assistant",
+   "model": "claude-sonnet-4-5-20250929",
+   "content": [
+    {
+     "type": "text",
+     "text": "no"
+    }
+   ],
+   "stop_reason": "refusal",
+   "stop_sequence": null
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5-20250929\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"metadata\":{\"user_id\":\"b7a49f4444f6ab9fb22d0c6593d65329fc15dc7d325b5d2f58b298b3077b7387\"},\"stream\":false}",
+  "responseBodyText": "{\"id\":\"msg_03\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[{\"type\":\"text\",\"text\":\"no\"}],\"stop_reason\":\"refusal\",\"stop_sequence\":null}",
+  "nonStreamOutput": "{\"id\":\"msg_03\",\"object\":\"chat.completion\",\"created\":1791549955,\"model\":\"claude-sonnet-4-5-20250929\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"no\"},\"finish_reason\":\"content_filter\"}],\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cached_creation_tokens\":0,\"cache_write_tokens\":0}}}"
+ }
+]

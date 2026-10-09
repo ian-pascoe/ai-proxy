@@ -1,0 +1,996 @@
+[
+  {
+    "name": "request: string input, instructions and sampling",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "Hello",
+      "instructions": "Be brief",
+      "max_output_tokens": 2000,
+      "service_tier": "priority",
+      "temperature": 0.5
+    }
+  },
+  {
+    "name": "request: system and developer items become system blocks",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "instructions": "top",
+      "input": [
+        {
+          "role": "developer",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "dev rule",
+              "cache_control": {
+                "type": "ephemeral"
+              }
+            },
+            {
+              "type": "input_image",
+              "image_url": "https://x.test/i.png"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "sys text"
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "Hi"
+            }
+          ]
+        }
+      ],
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "name": "o",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "request: messages with images and files",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "look"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,AAAA"
+            },
+            {
+              "type": "input_image",
+              "image_url": "https://x.test/a.png"
+            },
+            {
+              "type": "input_file",
+              "file_data": "data:application/pdf;base64,BBBB"
+            },
+            {
+              "type": "input_file",
+              "file_data": "RAW"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "seen",
+              "annotations": [
+                {
+                  "type": "web_search_result_location",
+                  "encrypted_index": "ei",
+                  "url": "u"
+                },
+                {
+                  "type": "x"
+                }
+              ]
+            },
+            {
+              "type": "refusal",
+              "refusal": "no"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "plain string content"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: user turn with only audio is refused",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_audio",
+              "input_audio": {
+                "data": "x"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: function and custom tool calls with outputs",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ],
+      "tool_choice": {
+        "type": "function",
+        "name": "get_weather"
+      },
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "encrypted_content": "opaque-not-claude",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "thought"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_1",
+          "name": "get_weather",
+          "arguments": "{\"city\":\"Paris\"}"
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_2",
+          "name": "shell_cmd",
+          "input": "ls -la"
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_3",
+          "namespace": "mcp__srv",
+          "name": "lookup",
+          "arguments": "not json"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call_1",
+          "output": "Sunny"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_2",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "file list"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,CCCC"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan",
+          "output": "standalone"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "thanks"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: reasoning items, redacted thinking and foreign signature",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "reasoning",
+          "encrypted_content": "claude-redacted-thinking:DATA"
+        },
+        {
+          "type": "reasoning",
+          "encrypted_content": "foreign-opaque",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "x"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "encrypted_content": "",
+          "content": [
+            {
+              "type": "reasoning_text",
+              "text": "via content"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "a"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: dangling tool use gets a synthesized result",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "name": "f",
+          "arguments": "{}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "next"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: trailing assistant prefill dropped on new models",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-6",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "prefill"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: web_search_call replay",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "web_search_call",
+          "id": "ws_srvtoolu_77",
+          "action": {
+            "type": "search",
+            "query": "cats"
+          },
+          "results": [
+            {
+              "type": "web_search_result",
+              "url": "u",
+              "encrypted_content": "e"
+            },
+            {
+              "url": "v"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "name": "f",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "c1",
+          "output": "ok"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: agent_message and additional_tools",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "agent_message",
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "delegated task"
+            }
+          ]
+        },
+        {
+          "type": "additional_tools",
+          "tools": [
+            {
+              "type": "function",
+              "name": "extra",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        }
+      ],
+      "tool_choice": "required"
+    }
+  },
+  {
+    "name": "request: reasoning effort on a legacy budget model",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "reasoning": {
+        "effort": "high"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning effort on an adaptive model",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-opus-4-6",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "reasoning": {
+        "effort": "medium"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning effort none and auto on an adaptive model",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-opus-4-6",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "reasoning": {
+        "effort": "none"
+      }
+    }
+  },
+  {
+    "name": "request: reasoning effort auto on an adaptive model",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-opus-4-6",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "reasoning": {
+        "effort": "auto"
+      }
+    }
+  },
+  {
+    "name": "request: tool choice auto and required without tools",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tool_choice": "required"
+    }
+  },
+  {
+    "name": "response: streamed reasoning, text, tools and web search",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ],
+      "reasoning": {
+        "effort": "high"
+      },
+      "metadata": {
+        "b": 1,
+        "a": 2
+      }
+    },
+    "responseLines": [
+      "event: message_start",
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01R\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":20,\"output_tokens\":1,\"cache_read_input_tokens\":4,\"cache_creation_input_tokens\":2}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think about this.\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"EsigABC\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":0}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"redacted_thinking\",\"data\":\"REDACTED\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":1}",
+      "data: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello \"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"url\":\"https://a.com\",\"encrypted_index\":\"ei\",\"title\":\"A\"}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"world\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":2}",
+      "data: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":3}",
+      "data: {\"type\":\"content_block_start\",\"index\":4,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_2\",\"name\":\"shell_cmd\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"ls -la\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":4}",
+      "data: {\"type\":\"content_block_start\",\"index\":5,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_3\",\"name\":\"mcp__srv__lookup\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":5}",
+      "data: {\"type\":\"content_block_start\",\"index\":6,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srvtoolu_1\",\"name\":\"web_search\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"cats\\\"}\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":6}",
+      "data: {\"type\":\"content_block_start\",\"index\":7,\"content_block\":{\"type\":\"web_search_tool_result\",\"tool_use_id\":\"srvtoolu_1\",\"content\":[{\"type\":\"web_search_result\",\"url\":\"https://a.com\",\"title\":\"A\",\"encrypted_content\":\"enc\",\"page_age\":null}]}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":7}",
+      "data: {\"type\":\"content_block_start\",\"index\":8,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"Done\"}}",
+      "data: {\"type\":\"content_block_stop\",\"index\":8}",
+      "event: message_delta",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":99}}",
+      "data: {\"type\":\"message_stop\"}",
+      "data: {\"type\":\"ping\"}"
+    ]
+  },
+  {
+    "name": "response: streamed truncation",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_02R\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}",
+      "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"cut\"}}",
+      "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_9\",\"name\":\"get_weather\",\"input\":{}}}",
+      "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"ci\"}}",
+      "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"output_tokens\":7}}",
+      "data: {\"type\":\"message_stop\"}"
+    ]
+  },
+  {
+    "name": "response: non-stream from the event stream",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ],
+      "instructions": "i",
+      "temperature": 0.3,
+      "parallel_tool_calls": true,
+      "user": "u1"
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01R\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":20,\"output_tokens\":1,\"cache_read_input_tokens\":4,\"cache_creation_input_tokens\":2}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think about this.\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"EsigABC\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":0}\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"redacted_thinking\",\"data\":\"REDACTED\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":1}\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello \"}}\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"citations_delta\",\"citation\":{\"type\":\"web_search_result_location\",\"url\":\"https://a.com\",\"encrypted_index\":\"ei\",\"title\":\"A\"}}}\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"text_delta\",\"text\":\"world\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":2}\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"\\\"Paris\\\"}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":3}\ndata: {\"type\":\"content_block_start\",\"index\":4,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_2\",\"name\":\"shell_cmd\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":4,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"input\\\":\\\"ls -la\\\"}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":4}\ndata: {\"type\":\"content_block_start\",\"index\":5,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_3\",\"name\":\"mcp__srv__lookup\",\"input\":{}}}\ndata: {\"type\":\"content_block_stop\",\"index\":5}\ndata: {\"type\":\"content_block_start\",\"index\":6,\"content_block\":{\"type\":\"server_tool_use\",\"id\":\"srvtoolu_1\",\"name\":\"web_search\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":6,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"cats\\\"}\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":6}\ndata: {\"type\":\"content_block_start\",\"index\":7,\"content_block\":{\"type\":\"web_search_tool_result\",\"tool_use_id\":\"srvtoolu_1\",\"content\":[{\"type\":\"web_search_result\",\"url\":\"https://a.com\",\"title\":\"A\",\"encrypted_content\":\"enc\",\"page_age\":null}]}}\ndata: {\"type\":\"content_block_stop\",\"index\":7}\ndata: {\"type\":\"content_block_start\",\"index\":8,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":8,\"delta\":{\"type\":\"text_delta\",\"text\":\"Done\"}}\ndata: {\"type\":\"content_block_stop\",\"index\":8}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":99}}\ndata: {\"type\":\"message_stop\"}\ndata: {\"type\":\"ping\"}\n"
+  },
+  {
+    "name": "response: non-stream from a message",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "msg_03R",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "hmm",
+          "signature": "EsigX"
+        },
+        {
+          "type": "text",
+          "text": "Answer",
+          "citations": [
+            {
+              "type": "char_location",
+              "encrypted_index": "ei"
+            }
+          ]
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_5",
+          "name": "get_weather",
+          "input": {
+            "city": "Rome"
+          }
+        },
+        {
+          "type": "server_tool_use",
+          "id": "srvtoolu_5",
+          "name": "web_search",
+          "input": {
+            "query": "dogs"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "srvtoolu_5",
+          "content": [
+            {
+              "type": "web_search_result",
+              "url": "https://b.com",
+              "title": "B",
+              "encrypted_content": "e2"
+            }
+          ]
+        }
+      ],
+      "stop_reason": "tool_use",
+      "usage": {
+        "input_tokens": 7,
+        "output_tokens": 9,
+        "cache_read_input_tokens": 1
+      }
+    }
+  },
+  {
+    "name": "response: non-stream truncated",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5-20250929",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Get weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": ["city"]
+          }
+        },
+        {
+          "type": "custom",
+          "name": "shell_cmd",
+          "description": "Run a command"
+        },
+        {
+          "type": "web_search",
+          "external_web_access": true,
+          "max_uses": 3,
+          "filters": {
+            "allowed_domains": ["a.com"]
+          },
+          "user_location": {
+            "type": "approximate",
+            "country": "US"
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__srv",
+          "tools": [
+            {
+              "type": "function",
+              "name": "lookup",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          ]
+        },
+        {
+          "type": "image_generation"
+        },
+        {
+          "type": "function",
+          "name": "bad name!"
+        }
+      ]
+    },
+    "responseBody": "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_02R\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5-20250929\",\"content\":[],\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"cut\"}}\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_9\",\"name\":\"get_weather\",\"input\":{}}}\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"ci\"}}\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},\"usage\":{\"output_tokens\":7}}\ndata: {\"type\":\"message_stop\"}\n"
+  }
+]

@@ -39,17 +39,34 @@ See the architecture document. Currently implemented:
 - `src/thinking/` — thinking pipeline port (`applyThinking`, suffix parsing, validation, provider appliers, reasoning-summary helpers).
 - `src/config/` — config schema, YAML/JSON codec, normalisation, `ConfigReader`, and `payload/` (`applyPayloadRules`).
 - `src/credentials/control-plane.ts` — `ControlPlane` Durable Object (config storage so far; credentials come later).
-- `src/translator/` — translator registry (`registry.ts`), built-in pairs (`builtin.ts`), `openai/openai` passthrough.
+- `src/translator/` — translator registry (`registry.ts`), built-in pairs (`builtin.ts`), `openai/openai` passthrough,
+  `claude/` (OpenAI chat, OpenAI Responses, Gemini and Interactions clients -> Claude Messages), shared helpers in
+  `common/` and the injectable model-info lookup (`model-info.ts`).
 - `src/executor/` — executor contracts (`types.ts`, `errors.ts`), `CredentialPicker` (`picker.ts`, ControlPlane
-  adapter `control-plane-picker.ts`, test-only `static-picker.ts`), `Thinking` hook (`thinking.ts`), per-credential model resolution and the OpenAI-compatible
-  executor (`openai-compat/`).
-- `src/handlers/` — shared execution pipeline (`execute.ts`, retry/cooldown `conductor.ts`, `session.ts`), SSE responder and framers (`respond.ts`, `framing.ts`),
-  `/v1/chat/completions` and `/v1/completions` (`openai/`), service wiring (`layer.ts`).
+  adapter `control-plane-picker.ts`, test-only `static-picker.ts`), `Thinking` hook (`thinking.ts`), per-credential
+  model resolution, the OpenAI-compatible executor (`openai-compat/`) and the Claude executor (`claude/`: OAuth/API-key
+  credentials, Claude Code cloaking, CCH body signing, beta/header assembly, MCP tool-name aliasing, cache-control
+  policy, rate-limit classification).
+- `src/handlers/` — shared execution pipeline (`execute.ts`, retry/cooldown `conductor.ts`, `session.ts`), SSE responder
+  and framers (`respond.ts`, `framing.ts`), `/v1/chat/completions` and `/v1/completions` (`openai/`), `/v1/messages` and
+  `/v1/messages/count_tokens` (`claude/`), service wiring (`layer.ts`).
 - `src/usage/` — usage records, per-attempt `UsageReporter`, `UsageSink` (no-op until persistence lands).
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
   `go run ./workers/tools/fixturegen/jsonpath`, `…/payload`, `…/thinking` and `…/translator` (reads
   `tools/fixturegen/translator/corpus/*.json`); `pnpm catalog:sync` runs `…/registry`, which also refreshes the
   embedded model catalogs in `src/registry/catalog/`).
+
+## Claude provider limitations
+
+- **No uTLS / HTTP-2 fingerprint impersonation.** The Go proxy can present a Claude Code (Node/Bun) TLS ClientHello
+  and HTTP/2 settings through uTLS (`wire-policy`/`tls-fingerprint`). Workers `fetch` cannot control the TLS or
+  HTTP/2 handshake, so those settings are read but not enforced; header/body cloaking still applies.
+- **`/v1/responses/compact` for Claude credentials answers 501** (the Antigravity-style compaction capsules are not
+  ported yet).
+- Continuity/diagnostics state (`previous_message_id`, thinking replay) is an in-memory per-isolate store; it moves to
+  the session Durable Object together with the retry slice.
+- Translator parity gaps (OpenAI Responses -> Claude): the Codex `apply_patch` custom-tool bridge and full
+  `internal/signature` validation are not ported (see `docs/workers-port/ARCHITECTURE.md`).
 
 ## Cloudflare Access
 

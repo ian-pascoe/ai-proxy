@@ -4,7 +4,7 @@
  * Go source: internal/translator/common/parts.go (UnsupportedPartError, UserTurnDrops, UserRun,
  * IsInteractionsInstructionStep, InteractionsAttachmentType, IsHTTPURL).
  */
-import { asString, get, isJsonObject, type Json } from "../../json/index.ts"
+import { asString, get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts"
 import { TranslationError } from "../registry.ts"
 
 /** A request-scoped rejection: the part type was present but the target has no equivalent. */
@@ -88,6 +88,19 @@ export const interactionsAttachmentType = (part: Json | undefined): string => {
   if (get(part, "fileData") !== undefined || get(part, "file_data") !== undefined) return "fileData"
   return ""
 }
+
+/** `GeminiPartIsSendable`. */
+export const geminiPartIsSendable = (part: JsonObject): boolean => {
+  const text = part.text
+  if (text === undefined || asString(text).trim() !== "") return true
+  for (const key of ["functionCall", "functionResponse", "inlineData", "inline_data", "fileData", "file_data"]) {
+    if (part[key] !== undefined) return true
+  }
+  return false
+}
+
+export const countSendableGeminiParts = (parts: readonly JsonObject[]): number =>
+  parts.filter(geminiPartIsSendable).length
 
 /** `IsHTTPURL`: absolute http(s) URL with a host. */
 export const isHttpUrl = (value: string): boolean => {

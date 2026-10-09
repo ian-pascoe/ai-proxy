@@ -7,6 +7,7 @@
  */
 import { Context, Layer } from "effect"
 import { makeCodexExecutor } from "./codex/executor.ts"
+import { makeClaudeExecutor } from "./claude/executor.ts"
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts"
 import type { ProviderExecutor } from "./types.ts"
 
@@ -31,7 +32,13 @@ export const makeExecutorRegistry = (): { readonly get: (provider: string) => Pr
       const cached = cache.get(key)
       if (cached !== undefined) return cached
       const executor =
-        key === "codex" ? makeCodexExecutor() : isOpenAICompatProvider(key) ? makeOpenAICompatExecutor(key) : undefined
+        key === "codex"
+          ? makeCodexExecutor()
+          : key === "claude"
+            ? makeClaudeExecutor()
+            : isOpenAICompatProvider(key)
+              ? makeOpenAICompatExecutor(key)
+              : undefined
       if (executor === undefined) return undefined
       cache.set(key, executor)
       return executor

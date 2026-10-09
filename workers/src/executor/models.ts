@@ -11,6 +11,7 @@
  * configuration order).
  */
 import type { Config, OpenAICompatGroup } from "../config/schema.ts"
+import { resolveClaudeKeyConfig } from "./claude/credentials.ts"
 import type { CredentialSnapshot } from "./picker.ts"
 import { parseSuffix, preserveSuffix } from "./suffix.ts"
 
@@ -94,6 +95,12 @@ export const executionModelCandidates = (
   routeModel: string
 ): string[] => {
   const requested = stripCredentialPrefix(routeModel.trim(), credential)
+  if (credential.provider === "claude") {
+    const match = resolveClaudeKeyConfig(config, credential)
+    const pool =
+      match === undefined ? [] : resolveModelAliasPool(requested, match.entry.models ?? match.group.models ?? [])
+    if (pool.length > 0) return pool
+  }
   if (isOpenAICompatCredential(credential)) {
     const group = resolveCompatConfig(config, credential)
     const pool = group === undefined ? [] : resolveModelAliasPool(requested, group.models ?? [])

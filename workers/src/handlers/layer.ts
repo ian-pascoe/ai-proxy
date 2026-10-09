@@ -17,6 +17,7 @@ import { ExecutorRegistry } from "../executor/registry.ts"
 import { Thinking } from "../executor/thinking.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
+import { ClaudeRoutes } from "./claude/routes.ts"
 import { ModelProviders } from "./model-providers.ts"
 import { AlphaSearchRoutes } from "./codex/alpha-search.ts"
 import { ImagesRoutes } from "./openai/images.ts"
@@ -39,7 +40,7 @@ export interface ProxyLayerOptions {
 }
 
 /** All proxy route layers (provider slices add theirs here). */
-export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes, ResponsesRoutes, ImagesRoutes, AlphaSearchRoutes)
+export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes, ResponsesRoutes, ImagesRoutes, AlphaSearchRoutes, ClaudeRoutes)
 
 /**
  * Proxy routes with their services provided. Handlers still read `AccessPrincipal`: wrap the result with

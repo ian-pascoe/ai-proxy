@@ -370,6 +370,37 @@ URL; Kimi/Claude device/uTLS headers are constants/subsets; `META_MINT_URL` and 
 probe, never scheduled) are not ported; Antigravity project discovery / credits probe and Claude device-id/profile
 preparation belong to their executor slices (use `patchCredentialMetadata`).
 
+## Claude provider (`src/executor/claude/`, `src/translator/claude/`)
+
+Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translator/claude/*` and the helpers they use.
+
+- **Credentials**: OAuth access tokens (`metadata.access_token`) and API keys (`api-keys.claude[]`, synthesised by
+  `claude/config-credentials.ts`); base URL defaults to `https://api.anthropic.com`. OAuth credentials get the Claude
+  Code treatment (cloaking); API-key credentials to first-party hosts keep caller-owned mode (caller betas verbatim,
+  body `betas` appended). Custom `base-url` gateways skip upstream `count_tokens` and estimate locally.
+- **Request order** (matches the Go executor and the payload-rules barrier): translate -> thinking -> sanitise ->
+  cloaking (system relocation, billing block, identity, date reminder, user_id, context management) ->
+  MCP tool aliasing -> cache-control policy -> payload rules -> CCH signing (`cch=` is `xxh64` over the normalised
+  final body; only the five hex digits change) -> HTTP. Signing is the last step so it covers payload-rule output.
+- **Responses**: Claude upstream always streams for non-stream clients; tool aliases are restored in non-stream bodies
+  and stream lines; `ExecutionError` classification (`ratelimit.ts`) separates credential-scoped (unified-limit 429/401),
+  request-scoped (Fast mode entitlement) and model-level failures for the picker.
+- **Translators**: OpenAI chat, OpenAI Responses, Gemini and Interactions clients -> Claude, each with request and
+  response (stream/non-stream/token-count) functions, golden-tested against Go through the translator corpus.
+  `claude -> claude` has no translator (registry fallback forces `model`). Model capabilities (adaptive levels,
+  max tokens) come from `translator/model-info.ts`, which the model registry slice populates.
+
+Deviations from Go (all deliberate, documented in code headers):
+
+- No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is parsed but not enforced.
+- Device-profile stabilisation, Fable/Opus-5.5 context-management reconcilers, `rebuildMidSystem` and Kimi attribution
+  are not ported; continuity and thinking-replay stores are in-memory per isolate (TODO: session Durable Object).
+- `internal/signature` is replaced by structural checks (`executor/claude/sanitize.ts`: decodable `E…`/`R…`
+  envelope); Gemini clients always receive Gemini's bypass `thoughtSignature` sentinel for Claude thinking blocks.
+- OpenAI Responses -> Claude: the Codex `apply_patch` custom-tool bridge (`internal/client/codex/apply-patch`) is not
+  ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
+- `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot

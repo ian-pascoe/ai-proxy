@@ -2,6 +2,7 @@
  * Built-in translator registrations (Go: internal/translator/init.go imports every pair's `init.go`).
  * Provider slices add their pairs here.
  */
+import { registerClaudeTranslators } from "./claude/register.ts"
 import { Formats } from "./formats.ts"
 import { convertOpenAIRequestToOpenAI, openAIToOpenAIResponse } from "./openai/openai/chat-completions.ts"
 import { TranslatorRegistry } from "./registry.ts"
@@ -11,6 +12,7 @@ import { registerCodexTranslators } from "./codex/register.ts"
 export const registerBuiltinTranslators = (registry: TranslatorRegistry): TranslatorRegistry => {
   registry.register(Formats.OpenAI, Formats.OpenAI, convertOpenAIRequestToOpenAI, openAIToOpenAIResponse)
   registerCodexTranslators(registry)
+  registerClaudeTranslators(registry)
   return registry
 }
 
