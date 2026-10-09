@@ -1,0 +1,676 @@
+[
+ {
+  "name": "request: system, generation config, tools and a function round trip",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "systemInstruction": {
+    "parts": [
+     {
+      "text": "Be terse."
+     },
+     {
+      "text": "Use metric units."
+     }
+    ]
+   },
+   "generationConfig": {
+    "temperature": 0.3,
+    "maxOutputTokens": 256,
+    "topP": 0.8,
+    "stopSequences": [
+     "x"
+    ],
+    "thinkingConfig": {
+     "thinkingLevel": "HIGH",
+     "thinkingBudget": 1024,
+     "includeThoughts": true
+    },
+    "responseModalities": [
+     "TEXT"
+    ]
+   },
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Weather",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        }
+       }
+      },
+      {
+       "name": "ping",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "googleSearch": {}
+    },
+    {
+     "codeExecution": {}
+    },
+    {
+     "urlContext": {
+      "x": 1
+     }
+    }
+   ],
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "Weather in Paris?"
+      },
+      {
+       "inlineData": {
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+       }
+      },
+      {
+       "fileData": {
+        "mimeType": "application/pdf",
+        "fileUri": "gs://b/a.pdf"
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "hmm",
+       "thought": true,
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      },
+      {
+       "functionCall": {
+        "name": "get_weather",
+        "id": "c1",
+        "args": {
+         "city": "Paris"
+        }
+       },
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "get_weather",
+        "id": "c1",
+        "response": {
+         "temp": 20
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "It is 20C."
+      },
+      {
+       "text": "",
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": ""
+      },
+      {
+       "text": "and tomorrow?"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"Weather in Paris?\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"image\",\"mime_type\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"document\",\"uri\":\"gs://b/a.pdf\",\"mime_type\":\"application/pdf\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"hmm\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":{\"city\":\"Paris\"},\"call_id\":\"c1\"},{\"type\":\"function_result\",\"name\":\"get_weather\",\"result\":{\"temp\":20},\"call_id\":\"c1\"},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"It is 20C.\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"and tomorrow?\"}]}],\"system_instruction\":\"Be terse.\\nUse metric units.\",\"generation_config\":{\"temperature\":0.3,\"max_output_tokens\":256,\"top_p\":0.8,\"stop_sequences\":[\"x\"],\"thinking_config\":{\"thinking_level\":\"HIGH\",\"thinking_budget\":1024,\"include_thoughts\":true},\"response_modalities\":[\"TEXT\"],\"thinking_level\":\"high\",\"thinking_budget\":1024,\"thinking_summaries\":\"auto\"},\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}},\"type\":\"function\"},{\"name\":\"ping\",\"parameters\":{\"type\":\"object\"},\"type\":\"function\"},{\"type\":\"google_search\"},{\"type\":\"code_execution\"},{\"type\":\"url_context\",\"url_context\":{\"x\":1}}],\"stream\":false}"
+ },
+ {
+  "name": "request: stream flag is forwarded",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "hi"
+      }
+     ]
+    }
+   ],
+   "system_instruction": "sys",
+   "tools": [
+    {
+     "name": "direct",
+     "description": "d",
+     "parameters": {
+      "type": "object"
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"system_instruction\":\"sys\",\"tools\":[{\"description\":\"d\",\"name\":\"direct\",\"parameters\":{\"type\":\"object\"},\"type\":\"function\"}],\"stream\":true}"
+ },
+ {
+  "name": "request: user turn with only a file without uri is refused",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "fileData": {
+        "mimeType": "application/pdf"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[],\"stream\":false}",
+  "requestError": "unsupported content part: fileData"
+ },
+ {
+  "name": "stream: interaction events become Gemini chunks with usage on completion",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "systemInstruction": {
+    "parts": [
+     {
+      "text": "Be terse."
+     },
+     {
+      "text": "Use metric units."
+     }
+    ]
+   },
+   "generationConfig": {
+    "temperature": 0.3,
+    "maxOutputTokens": 256,
+    "topP": 0.8,
+    "stopSequences": [
+     "x"
+    ],
+    "thinkingConfig": {
+     "thinkingLevel": "HIGH",
+     "thinkingBudget": 1024,
+     "includeThoughts": true
+    },
+    "responseModalities": [
+     "TEXT"
+    ]
+   },
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Weather",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        }
+       }
+      },
+      {
+       "name": "ping",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "googleSearch": {}
+    },
+    {
+     "codeExecution": {}
+    },
+    {
+     "urlContext": {
+      "x": 1
+     }
+    }
+   ],
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "Weather in Paris?"
+      },
+      {
+       "inlineData": {
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+       }
+      },
+      {
+       "fileData": {
+        "mimeType": "application/pdf",
+        "fileUri": "gs://b/a.pdf"
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "hmm",
+       "thought": true,
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      },
+      {
+       "functionCall": {
+        "name": "get_weather",
+        "id": "c1",
+        "args": {
+         "city": "Paris"
+        }
+       },
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "get_weather",
+        "id": "c1",
+        "response": {
+         "temp": 20
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "It is 20C."
+      },
+      {
+       "text": "",
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": ""
+      },
+      {
+       "text": "and tomorrow?"
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "event: interaction.created\ndata: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"int_1\",\"model\":\"gemini-2.5-pro\"}}",
+   "{\"event_type\":\"interaction.status_update\",\"interaction_id\":\"int_1\",\"status\":\"in_progress\"}",
+   "{\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"thought\"}}",
+   "{\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"content\":{\"type\":\"text\",\"text\":\"pondering\"}}}",
+   "{\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_signature\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}}",
+   "{\"event_type\":\"step.start\",\"index\":1,\"step\":{\"type\":\"function_call\",\"id\":\"call_5\",\"name\":\"get_weather\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}}",
+   "{\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}",
+   "{\"event_type\":\"step.start\",\"index\":2,\"step\":{\"type\":\"model_output\"}}",
+   "{\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"text\",\"text\":\"Sunny\"}}",
+   "{\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"text\",\"text\":\"\"}}",
+   "{\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"int_1\",\"service_tier\":\"standard\",\"usage\":{\"total_input_tokens\":5,\"total_output_tokens\":6,\"total_tokens\":13,\"total_thought_tokens\":2,\"total_cached_tokens\":1}}}",
+   "",
+   "[DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"Weather in Paris?\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"image\",\"mime_type\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"document\",\"uri\":\"gs://b/a.pdf\",\"mime_type\":\"application/pdf\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"hmm\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":{\"city\":\"Paris\"},\"call_id\":\"c1\"},{\"type\":\"function_result\",\"name\":\"get_weather\",\"result\":{\"temp\":20},\"call_id\":\"c1\"},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"It is 20C.\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"and tomorrow?\"}]}],\"system_instruction\":\"Be terse.\\nUse metric units.\",\"generation_config\":{\"temperature\":0.3,\"max_output_tokens\":256,\"top_p\":0.8,\"stop_sequences\":[\"x\"],\"thinking_config\":{\"thinking_level\":\"HIGH\",\"thinking_budget\":1024,\"include_thoughts\":true},\"response_modalities\":[\"TEXT\"],\"thinking_level\":\"high\",\"thinking_budget\":1024,\"thinking_summaries\":\"auto\"},\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}},\"type\":\"function\"},{\"name\":\"ping\",\"parameters\":{\"type\":\"object\"},\"type\":\"function\"},{\"type\":\"google_search\"},{\"type\":\"code_execution\"},{\"type\":\"url_context\",\"url_context\":{\"x\":1}}],\"stream\":true}",
+  "streamOutputs": [
+   [],
+   [],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"pondering\",\"thought\":true}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_1\"}"
+   ],
+   [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"},\"id\":\"call_5\"},\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Sunny\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_1\"}"
+   ],
+   [],
+   [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}],\"role\":\"model\"},\"index\":0,\"finishReason\":\"STOP\"}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_1\",\"usageMetadata\":{\"serviceTier\":\"standard\",\"promptTokenCount\":5,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":5}],\"candidatesTokenCount\":6,\"totalTokenCount\":13,\"thoughtsTokenCount\":2,\"cachedContentTokenCount\":1}}"
+   ],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "stream: failure events map to Gemini error bodies",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "x"
+      }
+     ]
+    }
+   ]
+  },
+  "responseLines": [
+   "{\"event_type\":\"interaction.failed\",\"error\":{\"code\":\"resource_exhausted\",\"message\":\"quota\"}}",
+   "{\"event_type\":\"response.failed\",\"error\":{\"code\":\"418\"}}",
+   "{\"event_type\":\"response.failed\",\"interaction\":{\"error\":{\"message\":\"boom\",\"status\":\"unavailable\"}}}"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "{\"error\":{\"code\":429,\"message\":\"quota\",\"status\":\"RESOURCE_EXHAUSTED\"}}"
+   ],
+   [
+    "{\"error\":{\"code\":418,\"message\":\"upstream error occurred\",\"status\":\"INVALID_ARGUMENT\"}}"
+   ],
+   [
+    "{\"error\":{\"code\":503,\"message\":\"boom\",\"status\":\"UNAVAILABLE\"}}"
+   ]
+  ]
+ },
+ {
+  "name": "non-stream: interaction steps become a Gemini response with usage",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "systemInstruction": {
+    "parts": [
+     {
+      "text": "Be terse."
+     },
+     {
+      "text": "Use metric units."
+     }
+    ]
+   },
+   "generationConfig": {
+    "temperature": 0.3,
+    "maxOutputTokens": 256,
+    "topP": 0.8,
+    "stopSequences": [
+     "x"
+    ],
+    "thinkingConfig": {
+     "thinkingLevel": "HIGH",
+     "thinkingBudget": 1024,
+     "includeThoughts": true
+    },
+    "responseModalities": [
+     "TEXT"
+    ]
+   },
+   "tools": [
+    {
+     "functionDeclarations": [
+      {
+       "name": "get_weather",
+       "description": "Weather",
+       "parametersJsonSchema": {
+        "type": "object",
+        "properties": {
+         "city": {
+          "type": "string"
+         }
+        }
+       }
+      },
+      {
+       "name": "ping",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "googleSearch": {}
+    },
+    {
+     "codeExecution": {}
+    },
+    {
+     "urlContext": {
+      "x": 1
+     }
+    }
+   ],
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "Weather in Paris?"
+      },
+      {
+       "inlineData": {
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+       }
+      },
+      {
+       "fileData": {
+        "mimeType": "application/pdf",
+        "fileUri": "gs://b/a.pdf"
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "hmm",
+       "thought": true,
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      },
+      {
+       "functionCall": {
+        "name": "get_weather",
+        "id": "c1",
+        "args": {
+         "city": "Paris"
+        }
+       },
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "functionResponse": {
+        "name": "get_weather",
+        "id": "c1",
+        "response": {
+         "temp": 20
+        }
+       }
+      }
+     ]
+    },
+    {
+     "role": "model",
+     "parts": [
+      {
+       "text": "It is 20C."
+      },
+      {
+       "text": "",
+       "thoughtSignature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": ""
+      },
+      {
+       "text": "and tomorrow?"
+      }
+     ]
+    }
+   ]
+  },
+  "responseBody": {
+   "interaction": {
+    "id": "int_2",
+    "model": "gemini-2.5-pro",
+    "service_tier": "flex",
+    "steps": [
+     {
+      "type": "thought",
+      "content": [
+       {
+        "type": "text",
+        "text": "plan"
+       }
+      ]
+     },
+     {
+      "type": "function_call",
+      "call_id": "c2",
+      "name": "f",
+      "arguments": "{\"a\":1}",
+      "signature": "EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="
+     },
+     {
+      "type": "function_result",
+      "call_id": "c2",
+      "name": "f",
+      "result": "{\"ok\":true}"
+     },
+     {
+      "type": "function_result",
+      "call_id": "c3",
+      "name": "g",
+      "result": {
+       "$ref": "#/d"
+      }
+     },
+     {
+      "type": "model_output",
+      "content": [
+       {
+        "type": "text",
+        "text": "done"
+       },
+       {
+        "type": "image",
+        "mime_type": "image/png",
+        "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+       }
+      ]
+     }
+    ]
+   },
+   "usage": {
+    "total_input_tokens": 4,
+    "total_output_tokens": 5,
+    "total_tokens": 9,
+    "reasoning_tokens": 1,
+    "cached_tokens": 2
+   }
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"Weather in Paris?\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"image\",\"mime_type\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"document\",\"uri\":\"gs://b/a.pdf\",\"mime_type\":\"application/pdf\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"hmm\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":{\"city\":\"Paris\"},\"call_id\":\"c1\"},{\"type\":\"function_result\",\"name\":\"get_weather\",\"result\":{\"temp\":20},\"call_id\":\"c1\"},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"It is 20C.\"}]},{\"type\":\"thought\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"and tomorrow?\"}]}],\"system_instruction\":\"Be terse.\\nUse metric units.\",\"generation_config\":{\"temperature\":0.3,\"max_output_tokens\":256,\"top_p\":0.8,\"stop_sequences\":[\"x\"],\"thinking_config\":{\"thinking_level\":\"HIGH\",\"thinking_budget\":1024,\"include_thoughts\":true},\"response_modalities\":[\"TEXT\"],\"thinking_level\":\"high\",\"thinking_budget\":1024,\"thinking_summaries\":\"auto\"},\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}},\"type\":\"function\"},{\"name\":\"ping\",\"parameters\":{\"type\":\"object\"},\"type\":\"function\"},{\"type\":\"google_search\"},{\"type\":\"code_execution\"},{\"type\":\"url_context\",\"url_context\":{\"x\":1}}],\"stream\":false}",
+  "responseBodyText": "{\"interaction\":{\"id\":\"int_2\",\"model\":\"gemini-2.5-pro\",\"service_tier\":\"flex\",\"steps\":[{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"plan\"}]},{\"type\":\"function_call\",\"call_id\":\"c2\",\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"type\":\"function_result\",\"call_id\":\"c2\",\"name\":\"f\",\"result\":\"{\\\"ok\\\":true}\"},{\"type\":\"function_result\",\"call_id\":\"c3\",\"name\":\"g\",\"result\":{\"$ref\":\"#/d\"}},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"done\"},{\"type\":\"image\",\"mime_type\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}]}]},\"usage\":{\"total_input_tokens\":4,\"total_output_tokens\":5,\"total_tokens\":9,\"reasoning_tokens\":1,\"cached_tokens\":2}}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"plan\",\"thought\":true},{\"functionCall\":{\"name\":\"f\",\"args\":{\"a\":1},\"id\":\"c2\"},\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"},{\"functionResponse\":{\"name\":\"f\",\"response\":{\"ok\":true},\"id\":\"c2\"}},{\"functionResponse\":{\"name\":\"g\",\"response\":{\"result\":\"{\\\"$ref\\\":\\\"#/d\\\"}\"},\"id\":\"c3\"}},{\"text\":\"done\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==\"}}],\"role\":\"model\"},\"index\":0,\"finishReason\":\"STOP\"}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"int_2\",\"usageMetadata\":{\"serviceTier\":\"flex\",\"promptTokenCount\":4,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":4}],\"candidatesTokenCount\":5,\"totalTokenCount\":9,\"thoughtsTokenCount\":1,\"cachedContentTokenCount\":2}}"
+ },
+ {
+  "name": "non-stream: top-level steps and generated id",
+  "from": "gemini",
+  "to": "interactions",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "needs": [
+   "id-normalization"
+  ],
+  "request": {
+   "contents": [
+    {
+     "role": "user",
+     "parts": [
+      {
+       "text": "x"
+      }
+     ]
+    }
+   ]
+  },
+  "responseBody": {
+   "steps": [
+    {
+     "type": "model_output",
+     "content": "plain"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}]}],\"stream\":false}",
+  "responseBodyText": "{\"steps\":[{\"type\":\"model_output\",\"content\":\"plain\"}]}",
+  "nonStreamOutput": "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"plain\"}],\"role\":\"model\"},\"index\":0,\"finishReason\":\"STOP\"}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"response_1791551474621786352\"}"
+ }
+]

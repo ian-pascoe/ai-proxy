@@ -1,0 +1,81 @@
+[
+  {
+    "name": "request: system, generation config, tools and a function round trip",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"systemInstruction":{"parts":[{"text":"Be terse."},{"text":"Use metric units."}]},"generationConfig":{"temperature":0.3,"maxOutputTokens":256,"topP":0.8,"stopSequences":["x"],"thinkingConfig":{"thinkingLevel":"HIGH","thinkingBudget":1024,"includeThoughts":true},"responseModalities":["TEXT"]},"tools":[{"functionDeclarations":[{"name":"get_weather","description":"Weather","parametersJsonSchema":{"type":"object","properties":{"city":{"type":"string"}}}},{"name":"ping","parameters":{"type":"object"}}]},{"googleSearch":{}},{"codeExecution":{}},{"urlContext":{"x":1}}],"contents":[{"role":"user","parts":[{"text":"Weather in Paris?"},{"inlineData":{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"fileData":{"mimeType":"application/pdf","fileUri":"gs://b/a.pdf"}}]},{"role":"model","parts":[{"text":"hmm","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"get_weather","id":"c1","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"functionResponse":{"name":"get_weather","id":"c1","response":{"temp":20}}}]},{"role":"model","parts":[{"text":"It is 20C."},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"text":""},{"text":"and tomorrow?"}]}]}
+  },
+  {
+    "name": "request: stream flag is forwarded",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"contents":[{"role":"user","parts":[{"text":"hi"}]}],"system_instruction":"sys","tools":[{"name":"direct","description":"d","parameters":{"type":"object"}}]}
+  },
+  {
+    "name": "request: user turn with only a file without uri is refused",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"contents":[{"role":"user","parts":[{"fileData":{"mimeType":"application/pdf"}}]}]}
+  },
+  {
+    "name": "stream: interaction events become Gemini chunks with usage on completion",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"systemInstruction":{"parts":[{"text":"Be terse."},{"text":"Use metric units."}]},"generationConfig":{"temperature":0.3,"maxOutputTokens":256,"topP":0.8,"stopSequences":["x"],"thinkingConfig":{"thinkingLevel":"HIGH","thinkingBudget":1024,"includeThoughts":true},"responseModalities":["TEXT"]},"tools":[{"functionDeclarations":[{"name":"get_weather","description":"Weather","parametersJsonSchema":{"type":"object","properties":{"city":{"type":"string"}}}},{"name":"ping","parameters":{"type":"object"}}]},{"googleSearch":{}},{"codeExecution":{}},{"urlContext":{"x":1}}],"contents":[{"role":"user","parts":[{"text":"Weather in Paris?"},{"inlineData":{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"fileData":{"mimeType":"application/pdf","fileUri":"gs://b/a.pdf"}}]},{"role":"model","parts":[{"text":"hmm","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"get_weather","id":"c1","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"functionResponse":{"name":"get_weather","id":"c1","response":{"temp":20}}}]},{"role":"model","parts":[{"text":"It is 20C."},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"text":""},{"text":"and tomorrow?"}]}]},
+    "responseLines": [
+      "event: interaction.created\ndata: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"int_1\",\"model\":\"gemini-2.5-pro\"}}",
+      "{\"event_type\":\"interaction.status_update\",\"interaction_id\":\"int_1\",\"status\":\"in_progress\"}",
+      "{\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"thought\"}}",
+      "{\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"content\":{\"type\":\"text\",\"text\":\"pondering\"}}}",
+      "{\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_signature\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}}",
+      "{\"event_type\":\"step.start\",\"index\":1,\"step\":{\"type\":\"function_call\",\"id\":\"call_5\",\"name\":\"get_weather\",\"signature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}}",
+      "{\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}",
+      "{\"event_type\":\"step.start\",\"index\":2,\"step\":{\"type\":\"model_output\"}}",
+      "{\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"text\",\"text\":\"Sunny\"}}",
+      "{\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"text\",\"text\":\"\"}}",
+      "{\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"int_1\",\"service_tier\":\"standard\",\"usage\":{\"total_input_tokens\":5,\"total_output_tokens\":6,\"total_tokens\":13,\"total_thought_tokens\":2,\"total_cached_tokens\":1}}}",
+      "",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: failure events map to Gemini error bodies",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"contents":[{"role":"user","parts":[{"text":"x"}]}]},
+    "responseLines": [
+      "{\"event_type\":\"interaction.failed\",\"error\":{\"code\":\"resource_exhausted\",\"message\":\"quota\"}}",
+      "{\"event_type\":\"response.failed\",\"error\":{\"code\":\"418\"}}",
+      "{\"event_type\":\"response.failed\",\"interaction\":{\"error\":{\"message\":\"boom\",\"status\":\"unavailable\"}}}"
+    ]
+  },
+  {
+    "name": "non-stream: interaction steps become a Gemini response with usage",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"systemInstruction":{"parts":[{"text":"Be terse."},{"text":"Use metric units."}]},"generationConfig":{"temperature":0.3,"maxOutputTokens":256,"topP":0.8,"stopSequences":["x"],"thinkingConfig":{"thinkingLevel":"HIGH","thinkingBudget":1024,"includeThoughts":true},"responseModalities":["TEXT"]},"tools":[{"functionDeclarations":[{"name":"get_weather","description":"Weather","parametersJsonSchema":{"type":"object","properties":{"city":{"type":"string"}}}},{"name":"ping","parameters":{"type":"object"}}]},{"googleSearch":{}},{"codeExecution":{}},{"urlContext":{"x":1}}],"contents":[{"role":"user","parts":[{"text":"Weather in Paris?"},{"inlineData":{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"fileData":{"mimeType":"application/pdf","fileUri":"gs://b/a.pdf"}}]},{"role":"model","parts":[{"text":"hmm","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"get_weather","id":"c1","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"functionResponse":{"name":"get_weather","id":"c1","response":{"temp":20}}}]},{"role":"model","parts":[{"text":"It is 20C."},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"text":""},{"text":"and tomorrow?"}]}]},
+    "responseBody": {"interaction":{"id":"int_2","model":"gemini-2.5-pro","service_tier":"flex","steps":[{"type":"thought","content":[{"type":"text","text":"plan"}]},{"type":"function_call","call_id":"c2","name":"f","arguments":"{\"a\":1}","signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"type":"function_result","call_id":"c2","name":"f","result":"{\"ok\":true}"},{"type":"function_result","call_id":"c3","name":"g","result":{"$ref":"#/d"}},{"type":"model_output","content":[{"type":"text","text":"done"},{"type":"image","mime_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]}]},"usage":{"total_input_tokens":4,"total_output_tokens":5,"total_tokens":9,"reasoning_tokens":1,"cached_tokens":2}}
+  },
+  {
+    "name": "non-stream: top-level steps and generated id",
+    "from": "gemini",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"contents":[{"role":"user","parts":[{"text":"x"}]}]},
+    "responseBody": {"steps":[{"type":"model_output","content":"plain"}]}
+  }
+]

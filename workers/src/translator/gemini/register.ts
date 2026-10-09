@@ -8,6 +8,16 @@ import type { TranslatorRegistry } from "../registry.ts"
 import { convertClaudeRequestToGemini } from "./claude/request.ts"
 import { geminiToClaudeResponse } from "./claude/response.ts"
 import { convertGeminiRequestToGemini, geminiToGeminiResponse } from "./gemini/gemini.ts"
+import {
+  convertGeminiRequestToInteractions,
+  convertInteractionsRequestToGemini,
+  convertInteractionsRequestToInteractions
+} from "./interactions/requests.ts"
+import {
+  geminiToInteractionsResponse,
+  interactionsPassthroughResponse,
+  interactionsToGeminiResponse
+} from "./interactions/responses.ts"
 import { convertOpenAIRequestToGemini } from "./openai/chat-request.ts"
 import { geminiToOpenAIResponse } from "./openai/chat-response.ts"
 
@@ -16,3 +26,11 @@ export const registerGeminiTranslators = (registry: TranslatorRegistry): Transla
     .register(Formats.Gemini, Formats.Gemini, convertGeminiRequestToGemini, geminiToGeminiResponse)
     .register(Formats.Claude, Formats.Gemini, convertClaudeRequestToGemini, geminiToClaudeResponse)
     .register(Formats.OpenAI, Formats.Gemini, convertOpenAIRequestToGemini, geminiToOpenAIResponse)
+    .register(
+      Formats.Interactions,
+      Formats.Interactions,
+      convertInteractionsRequestToInteractions,
+      interactionsPassthroughResponse
+    )
+    .register(Formats.Interactions, Formats.Gemini, convertInteractionsRequestToGemini, geminiToInteractionsResponse)
+    .register(Formats.Gemini, Formats.Interactions, convertGeminiRequestToInteractions, interactionsToGeminiResponse)

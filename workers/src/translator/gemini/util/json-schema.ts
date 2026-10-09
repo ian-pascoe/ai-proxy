@@ -194,7 +194,8 @@ const strings = (doc: Doc, path: string): string[] => {
   return isJsonArray(arr) ? arr.map(asString) : []
 }
 
-const sortKeysDeep = (value: Json): Json => {
+/** Go re-marshals decoded maps with sorted keys. */
+export const sortKeysDeep = (value: Json): Json => {
   if (isJsonArray(value)) return value.map(sortKeysDeep)
   if (!isJsonObject(value)) return value
   const out: JsonObject = {}

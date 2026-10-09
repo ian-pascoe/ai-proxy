@@ -1,0 +1,100 @@
+[
+  {
+    "name": "request: system, generation config, tools, tool choice, thought signature carrier, function round trip",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gemini-2.5-pro","stream":false,"service_tier":"priority","system_instruction":"You are a weather assistant.","generation_config":{"temperature":0.4,"top_p":0.9,"max_output_tokens":512,"stop_sequences":["END"],"thinking_level":"high","thinking_summaries":"auto","tool_choice":"auto"},"response_modalities":["text","image"],"tools":[{"type":"function","name":"get_weather","description":"Weather lookup","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},{"type":"google_search"},{"type":"code_execution"},{"type":"url_context","url_context":{"max":2}}],"tool_choice":{"type":"function","function":{"name":"get_weather"}},"input":[{"type":"user_input","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","mime_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"document","uri":"gs://bucket/doc.pdf","mime_type":"application/pdf"}]},{"type":"thought","signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=","content":[{"type":"text","text":"I should call the tool"}]},{"type":"function_call","id":"call_1","name":"get_weather","arguments":{"city":"Paris"}},{"type":"function_result","call_id":"call_1","name":"get_weather","result":{"temp":21}},{"type":"function_result","call_id":"call_2","name":"other","result":"{\"ok\":true}"},{"type":"model_output","content":[{"type":"text","text":"It is 21C."}]},{"type":"user_input","content":"Thanks, and tomorrow?"}]}
+  },
+  {
+    "name": "request: string input",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"gemini-2.5-flash","input":"hello","response_modalities":["audio"]}
+  },
+  {
+    "name": "request: nested steps wrapper with model role and native parts",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","input":{"role":"user","steps":[{"type":"user_input","parts":[{"text":"hi"},{"inlineData":{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"fileData":{"mimeType":"video/mp4","fileUri":"gs://b/v.mp4"}}]},{"role":"model","steps":[{"type":"model_output","content":"hello"},{"type":"function_call","call_id":"c9","name":"f","arguments":{"a":1},"signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"type":"function_result","call_id":"c9","name":"f","result":{"$ref":"#/x"}}]}}
+  },
+  {
+    "name": "request: developer step content and tools with function declarations pass through",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","tools":[{"functionDeclarations":[{"name":"x","parameters":{"type":"object"}}]}],"input":[{"type":"user_input","role":"developer","content":[{"type":"text","text":"dev note"}]},{"type":"user_input","content":[{"type":"text","text":"go"}]}]}
+  },
+  {
+    "name": "request: tools without a type are normalised, camelCase generation config is kept",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","generationConfig":{"thinkingConfig":{"thinkingLevel":"low"},"temperature":1,"toolChoice":"x"},"tools":[{"google_search":{}},{"name":"n","description":"d","parameters":{"type":"object"}},{"function_declarations":[{"name":"z"}]}],"tool_choice":"required","input":"x"}
+  },
+  {
+    "name": "request: user turn whose only attachment cannot be carried is refused",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","input":[{"type":"user_input","content":[{"type":"image"}]}]}
+  },
+  {
+    "name": "stream: thought, text, function call and result steps, completion with usage",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"gemini-2.5-pro","stream":false,"service_tier":"priority","system_instruction":"You are a weather assistant.","generation_config":{"temperature":0.4,"top_p":0.9,"max_output_tokens":512,"stop_sequences":["END"],"thinking_level":"high","thinking_summaries":"auto","tool_choice":"auto"},"response_modalities":["text","image"],"tools":[{"type":"function","name":"get_weather","description":"Weather lookup","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},{"type":"google_search"},{"type":"code_execution"},{"type":"url_context","url_context":{"max":2}}],"tool_choice":{"type":"function","function":{"name":"get_weather"}},"input":[{"type":"user_input","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","mime_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"document","uri":"gs://bucket/doc.pdf","mime_type":"application/pdf"}]},{"type":"thought","signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=","content":[{"type":"text","text":"I should call the tool"}]},{"type":"function_call","id":"call_1","name":"get_weather","arguments":{"city":"Paris"}},{"type":"function_result","call_id":"call_1","name":"get_weather","result":{"temp":21}},{"type":"function_result","call_id":"call_2","name":"other","result":"{\"ok\":true}"},{"type":"model_output","content":[{"type":"text","text":"It is 21C."}]},{"type":"user_input","content":"Thanks, and tomorrow?"}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Thinking\",\"thought\":true,\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}]}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello \"},{\"text\":\"world\"}]},\"index\":0}]}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"id\":\"call_9\",\"args\":{\"city\":\"Paris\"}},\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}]}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionResponse\":{\"name\":\"get_weather\",\"response\":{\"t\":1}}}]},\"index\":0}]}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":7,\"thoughtsTokenCount\":2,\"totalTokenCount\":14,\"cachedContentTokenCount\":1}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: [DONE] without usage completes the interaction",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"m","input":"x"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"a\"}]},\"index\":0}]}",
+      "[DONE]",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: steps for thought, text, function call, image and carrier",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gemini-2.5-pro","stream":false,"service_tier":"priority","system_instruction":"You are a weather assistant.","generation_config":{"temperature":0.4,"top_p":0.9,"max_output_tokens":512,"stop_sequences":["END"],"thinking_level":"high","thinking_summaries":"auto","tool_choice":"auto"},"response_modalities":["text","image"],"tools":[{"type":"function","name":"get_weather","description":"Weather lookup","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},{"type":"google_search"},{"type":"code_execution"},{"type":"url_context","url_context":{"max":2}}],"tool_choice":{"type":"function","function":{"name":"get_weather"}},"input":[{"type":"user_input","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","mime_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"document","uri":"gs://bucket/doc.pdf","mime_type":"application/pdf"}]},{"type":"thought","signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=","content":[{"type":"text","text":"I should call the tool"}]},{"type":"function_call","id":"call_1","name":"get_weather","arguments":{"city":"Paris"}},{"type":"function_result","call_id":"call_1","name":"get_weather","result":{"temp":21}},{"type":"function_result","call_id":"call_2","name":"other","result":"{\"ok\":true}"},{"type":"model_output","content":[{"type":"text","text":"It is 21C."}]},{"type":"user_input","content":"Thanks, and tomorrow?"}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"why","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"text":"answer"},{"functionCall":{"name":"f","args":{"x":1}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"inlineData":{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":4,"thoughtsTokenCount":1,"totalTokenCount":8,"cachedContentTokenCount":2},"responseId":"resp-77"}
+  },
+  {
+    "name": "non-stream: generated interaction id without a responseId",
+    "from": "interactions",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"model":"m","input":"x"},
+    "responseBody": {"candidates":[{"content":{"parts":[]}}]}
+  }
+]
