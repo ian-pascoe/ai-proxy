@@ -1,4 +1,18 @@
 {
+ "antigravitySessions": [
+  {
+   "derived": "ctx:v1:abc",
+   "id": "-343153222512140981"
+  },
+  {
+   "derived": "ctx:v1:0123456789abcdef",
+   "id": "-1008492153426790619"
+  },
+  {
+   "derived": "",
+   "id": ""
+  }
+ ],
  "canonical": [
   {
    "name": "openai simple",

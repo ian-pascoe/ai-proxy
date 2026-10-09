@@ -91,8 +91,8 @@ const credentialEndpoint = (context: ExecutionContext) => ({
 /**
  * `applyPromptCacheKey`: a client-supplied `prompt_cache_key`, else (Claude callers) the Claude Code agent scope, else a
  * stable key derived from the provider session (`ProviderSessionUUID`: the execution session, then the derived session
- * identity). SEAM(#29 part 1): the derived content-hash identity reaches executors as `ExecutionMetadata.sessionId`; once
- * the derivation lands, nothing changes here.
+ * identity: `ExecutionMetadata.derivedSessionId`, produced by `session-routing/identity.ts#deriveId`, absent when the
+ * client sent an explicit session marker).
  */
 const applyPromptCacheKey = (
   provider: string,
@@ -126,7 +126,7 @@ const applyPromptCacheKey = (
   const sessionId =
     executionId !== ""
       ? providerSessionUuid(provider, "execution-session", executionId)
-      : providerSessionUuid(provider, "derived-session", options.metadata.sessionId)
+      : providerSessionUuid(provider, "derived-session", options.metadata.derivedSessionId)
   if (sessionId === "") return translated
   const providerName = provider.trim() || group.name.trim()
   const identity = [

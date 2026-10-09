@@ -277,6 +277,7 @@ Core contracts every provider slice implements (Go references in each module hea
     leading instructions and the first user input (only when no explicit marker exists); used when the LCP matcher does not
     apply (no non-system turn) and recorded in usage even with affinity off. Last fallback: the FNV message hash of the first
     system/user/assistant messages (`msg:<hex>`, short hash as parent).
+  - The derived id also reaches executors as `ExecutionMetadata.derivedSessionId` (`ctx:v1:...`, absent with an explicit marker): OpenAI-compatible prompt-cache keys and Antigravity's `derivedAntigravitySessionId` hash it like Go's `DerivedSessionUUID`.
   - Deviations: the Go JSON `Raw` text is replaced by the compact re-serialisation of the parsed body (sampling of >16 KiB JSON
     parts and `original_size` are measured on it), a sparse sample cut inside a multi-byte character decodes to U+FFFD, and
     execution-session (WebSocket) metadata ids are not consulted. Go parity is tested with `tools/fixturegen/session`

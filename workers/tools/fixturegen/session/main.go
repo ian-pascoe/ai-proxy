@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/vertex"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/session"
@@ -293,6 +294,20 @@ func vertexCases() []vertexCase {
 	return cases
 }
 
+type antigravitySession struct {
+	Derived string `json:"derived"`
+	ID      string `json:"id"`
+}
+
+func antigravitySessions() []antigravitySession {
+	var out []antigravitySession
+	for _, derived := range []string{"ctx:v1:abc", "ctx:v1:0123456789abcdef", ""} {
+		meta := map[string]any{cliproxyexecutor.DerivedSessionIDMetadataKey: derived}
+		out = append(out, antigravitySession{Derived: derived, ID: helps.DerivedAntigravitySessionID(meta)})
+	}
+	return out
+}
+
 func openaiBody(messages ...string) string { return msgs(messages...) }
 
 func scenarios() []scenario {
@@ -462,11 +477,12 @@ func main() {
 		run(&scs[index])
 	}
 	doc := map[string]any{
-		"canonical": canonicalCases(),
-		"derive":    deriveCases(),
-		"identity":  identityCases(),
-		"scenarios": scs,
-		"vertex":    vertexCases(),
+		"canonical":           canonicalCases(),
+		"derive":              deriveCases(),
+		"identity":            identityCases(),
+		"scenarios":           scs,
+		"vertex":              vertexCases(),
+		"antigravitySessions": antigravitySessions(),
 	}
 	encoded, err := json.MarshalIndent(doc, "", " ")
 	if err != nil {

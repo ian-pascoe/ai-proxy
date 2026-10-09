@@ -82,7 +82,8 @@ export const executionMetadata = (
   callerScope: string,
   requestPath: string,
   headers: Headers,
-  sessionId?: string
+  sessionId?: string,
+  derivedSessionId?: string
 ): ExecutionMetadata => {
   const idempotencyKey = headers.get("idempotency-key") ?? undefined
   const reasoningEffort = stringField(input.body, "reasoning_effort") ?? stringField(input.body, "reasoning.effort")
@@ -95,6 +96,7 @@ export const executionMetadata = (
     ...(idempotencyKey !== undefined && idempotencyKey !== "" ? { idempotencyKey } : {}),
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
     ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(derivedSessionId !== undefined ? { derivedSessionId } : {}),
     ...(input.websocket !== undefined ? { websocket: input.websocket } : {})
   }
 }
@@ -154,7 +156,14 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
     originalRequest,
     sourceFormat: input.entryProtocol,
     ...(input.responseFormat !== undefined ? { responseFormat: input.responseFormat } : {}),
-    metadata: executionMetadata(input, identity.callerScope, url.pathname, headers, sessionInfo?.sessionId)
+    metadata: executionMetadata(
+      input,
+      identity.callerScope,
+      url.pathname,
+      headers,
+      sessionInfo?.sessionId,
+      routing.derivedId
+    )
   }
   return {
     config,

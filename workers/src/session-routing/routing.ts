@@ -25,6 +25,8 @@ export interface SessionRouting {
   /** Derived / message-hash identity for requests the LCP matcher does not handle. */
   readonly fallbackSession?: RoutingSession
   /** The identity recorded in usage when the credential pick does not settle on another one (LCP). */
+  /** `ctx:v1:<hash>` (Go `derived_session_id` metadata); only without an explicit marker. */
+  readonly derivedId?: string
   readonly usageSession?: { readonly id: string; readonly parentId?: string }
 }
 
@@ -58,7 +60,8 @@ export const prepareSessionRouting = (input: SessionRoutingInput): SessionRoutin
     ? ""
     : deriveId(input.format, input.body, input.callerScope)
   let usageSession = derived === "" ? undefined : usageIdentity(`derived:${derived}`, undefined)
-  if (!input.affinity) return usageSession === undefined ? {} : { usageSession }
+  const derivedId = derived === "" ? {} : { derivedId: derived }
+  if (!input.affinity) return usageSession === undefined ? {} : { ...derivedId, usageSession }
 
   const prepared = prepareFingerprints(extractCanonicalTurns(input.format, input.body))
   const lcp =
@@ -79,6 +82,7 @@ export const prepareSessionRouting = (input: SessionRoutingInput): SessionRoutin
     }
   }
   return {
+    ...derivedId,
     ...(lcp === undefined ? {} : { lcp }),
     ...(fallbackSession === undefined ? {} : { fallbackSession }),
     ...(usageSession === undefined ? {} : { usageSession })

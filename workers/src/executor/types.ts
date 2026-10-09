@@ -73,6 +73,11 @@ export interface ExecutionMetadata {
   readonly callerScope: string
   /** Session identity for affinity/prompt caching, when known. */
   readonly sessionId?: string
+  /**
+   * Context-derived identity (`ctx:v1:<sha256>`, Go `derived_session_id`): only present when the request carries no
+   * explicit session marker. Provider prompt-cache keys hash it (`DerivedSessionUUID`).
+   */
+  readonly derivedSessionId?: string
   /** Set for requests that arrive over the Responses WebSocket (`handlers/responses/websocket`). */
   readonly websocket?: WebsocketExecution
   /**

@@ -13,6 +13,7 @@
  *
  * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): no per-credential HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
  */
+import { derivedAntigravitySessionId } from "./derived-session.ts"
 import { translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Option, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -353,7 +354,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const accumulator = makeAccumulator(replay.scope, body)
 
     const project = attempt.project
-    const derivedSession = options.metadata.sessionId ?? ""
+    const derivedSession = derivedAntigravitySessionId(options.metadata.derivedSessionId ?? "")
     body = geminiToAntigravity(baseModel, body, project, derivedSession, yield* Clock.currentTimeMillis)
     const translatedForResponse = structuredClone(body)
     body = shapeRequestPayload(baseModel, body)

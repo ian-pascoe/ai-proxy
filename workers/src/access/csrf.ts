@@ -71,7 +71,12 @@ const YAML_TYPES = new Set(["application/yaml", "application/x-yaml", "text/yaml
  */
 const managementTypeAllowed = (method: string, path: string, type: string): boolean => {
   if (isJsonType(type)) return true
-  if (method === "POST" && path === `${MANAGEMENT_PREFIX}/credentials`) return type === "multipart/form-data"
+  if (
+    method === "POST" &&
+    (path === `${MANAGEMENT_PREFIX}/credentials` || path === `${MANAGEMENT_PREFIX}/oauth/import`)
+  ) {
+    return type === "multipart/form-data"
+  }
   if (method === "PUT" && path === `${MANAGEMENT_PREFIX}/config.yaml`) return YAML_TYPES.has(type)
   return false
 }

@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest"
 import { extractSessionInfo } from "../src/handlers/session.ts"
 import type { Json } from "../src/json/index.ts"
+import { derivedAntigravitySessionId } from "../src/executor/antigravity/derived-session.ts"
 import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts"
 import {
   boundSessionIdentity,
@@ -168,6 +169,14 @@ describe("LCP matcher scenarios (Go parity)", () => {
         results.push(actual)
         expect(actual, `step ${index} (${step.op})`).toEqual(expected)
       })
+    })
+  }
+})
+
+describe("derived Antigravity session ids (Go parity)", () => {
+  for (const entry of fixtures.antigravitySessions) {
+    it(`derived ${JSON.stringify(entry.derived)}`, () => {
+      expect(derivedAntigravitySessionId(entry.derived)).toBe(entry.id)
     })
   }
 })

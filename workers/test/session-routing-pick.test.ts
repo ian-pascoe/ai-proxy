@@ -222,3 +222,27 @@ describe("picked credentials expose the session for usage", () => {
     expect(result.ok && result.session?.id).toMatch(/^lcp:v1:/)
   })
 })
+
+describe("derived identity feeds executor metadata", () => {
+  it("exposes the raw ctx:v1 id only without an explicit marker", () => {
+    const body = conversation("sys", "hello")
+    const plain = prepareSessionRouting({
+      headers: new Headers(),
+      body,
+      format: "openai",
+      callerScope: SCOPE,
+      explicit: undefined,
+      affinity: false
+    })
+    expect(plain.derivedId).toMatch(/^ctx:v1:[0-9a-f]{64}$/)
+    const marked = prepareSessionRouting({
+      headers: new Headers({ "X-Session-ID": "abc" }),
+      body,
+      format: "openai",
+      callerScope: SCOPE,
+      explicit: undefined,
+      affinity: false
+    })
+    expect(marked.derivedId).toBeUndefined()
+  })
+})

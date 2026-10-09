@@ -109,7 +109,7 @@ describe("OpenAI-compatible executor parity", () => {
       const base = options().metadata
       const metadata = {
         ...base,
-        ...(entry.derived !== undefined ? { sessionId: entry.derived } : {}),
+        ...(entry.derived !== undefined ? { derivedSessionId: entry.derived } : {}),
         ...(entry.execution !== undefined ? { websocket: { sessionId: entry.execution, requireUpstream: false } } : {})
       }
       await execute(
@@ -129,7 +129,7 @@ describe("OpenAI-compatible executor parity", () => {
       model: "m",
       payload: json({ model: "m", messages: [{ role: "user", content: "x" }], ...extra })
     })
-    const withSession = options({ metadata: { ...options().metadata, sessionId: "s" } })
+    const withSession = options({ metadata: { ...options().metadata, derivedSessionId: "s" } })
     const h1 = await harness(mockCredential(), completion, YAML)
     await execute(executor, h1, request({ prompt_cache_key: " client " }), withSession)
     expect(get(JSON.parse(h1.calls[0]!.text) as Json, "prompt_cache_key")).toBe("client")
