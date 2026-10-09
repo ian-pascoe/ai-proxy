@@ -14,6 +14,7 @@ import { withApiKeyScope } from "./helps/oauth-scope.ts"
 import { makeKimiExecutor } from "./kimi/executor.ts"
 import { makeMetaExecutor } from "./meta/executor.ts"
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts"
+import { makeXaiExecutor } from "./xai/executor.ts"
 import type { ProviderExecutor } from "./types.ts"
 
 export class ExecutorRegistry extends Context.Service<
@@ -32,6 +33,7 @@ const isOpenAICompatProvider = (provider: string): boolean =>
 /** Fixed provider keys (one executor each). */
 const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
   codex: makeCodexExecutor,
+  xai: makeXaiExecutor,
   claude: makeClaudeExecutor,
   gemini: makeGeminiExecutor,
   "gemini-interactions": makeGeminiInteractionsExecutor,

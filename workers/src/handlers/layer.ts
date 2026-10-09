@@ -23,6 +23,8 @@ import { GeminiRoutes } from "./gemini/routes.ts"
 import { ModelProviders } from "./model-providers.ts"
 import { AlphaSearchRoutes } from "./codex/alpha-search.ts"
 import { ImagesRoutes } from "./openai/images.ts"
+import { SpeechRoutes } from "./openai/speech.ts"
+import { VideoRoutes } from "./openai/videos.ts"
 import { OpenAIRoutes } from "./openai/routes.ts"
 import { ResponsesRoutes } from "./responses/routes.ts"
 
@@ -48,7 +50,9 @@ export const ProxyRoutes = Layer.mergeAll(
   ImagesRoutes,
   AlphaSearchRoutes,
   ClaudeRoutes,
-  GeminiRoutes
+  GeminiRoutes,
+  VideoRoutes,
+  SpeechRoutes
 )
 
 /**

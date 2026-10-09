@@ -280,8 +280,46 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
 - **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
   `is-compat` models, local token counting (`countTokens` answers 501; needs a BPE tokenizer) and the Claude stream
   input-token estimate, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
-  the Grok signature check, xAI/OpenAI-compatible image models, and the Responses-tool image path being reachable only for
+  the Grok signature check, OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
   non-`gpt-image` models (ported but not routed).
+
+## xAI provider and media endpoints (`src/executor/xai/`, `src/handlers/openai/{videos,speech,xai-*}.ts`)
+
+Port of `xai_executor*.go` (HTTP/SSE only; the Responses WebSocket executor belongs to #18). Reuses the Codex translators
+(`* -> codex`, compaction `* -> openai-response`) and the Codex output helpers.
+
+- **Base URLs and identity** (`credentials.ts`, `headers.ts`): `using_api` (attribute, metadata, `auth_kind`; OAuth defaults to
+  `false`) selects the API (`https://api.x.ai/v1`) or the CLI chat proxy (`https://cli-chat-proxy.grok.com/v1`) for chat and
+  media; `/responses/compact` and `/tts` always use the official API (the proxy 404s and a 404 would cool the pool).
+  The CLI identity headers (`X-XAI-Token-Auth`, `x-grok-client-version`, `xai-grok-workspace/<ver>` UA, ...) are only sent for
+  `POST /responses` against the proxy. The client version comes from KV `CACHE` key `xai/client-version` (fallback `1.0.46`),
+  written by the cron task `xai-client-version-refresh` (npm `@xai-official/grok/latest`, strict `x.y.z` >= 1.0.13) and read through
+  `Effect.serviceOption(WorkerEnv)` with a one-minute per-isolate cache, so executor signatures stay unchanged.
+- **Responses shaping** (`executor.ts` `prepare`): translate -> `Thinking.apply` (target format `xai`) -> model/stream -> tool
+  normalisation (`tools.ts`, `tool-choice.ts`: namespace flattening or folding into dispatcher functions above 200 tools,
+  `custom` -> `function`, `$ref` inlining, schema simplification, `additional_tools` promotion, hosted-tool choices, orphaned
+  `tool_choice`, `web_search` client alias, optional `x_search` injection) -> reasoning replay -> input normalisation
+  (`input.ts`) -> `prompt_cache_key`/`x-grok-conv-id` -> `finalizePayload` (user payload rules, last). Response events
+  (`response.ts`, `stream.ts`) get reasoning-text -> summary normalisation, namespace/alias restoration, hidden X Search trace
+  filtering and a rebuilt `response.output`. Non-stream requests still stream upstream and aggregate; truncated streams answer 408.
+- **Compaction**: `responses/compact` posts to the official API; a streaming request with a `compaction_trigger` input item is
+  executed through compact and re-emitted as a synthetic Responses SSE stream (`compact.ts`).
+- **Reasoning replay** (`replay.ts`): Claude/Responses callers get cached encrypted reasoning, assistant text and tool calls of the
+  previous turn re-inserted (TTL 1 h, 10240 entries). Same pattern as Codex: a store interface with a per-isolate in-memory default
+  (TODO(SessionState) for the Durable Object); session keys are isolated per Access `callerScope` (no scope, no replay).
+- **Errors** (`errors.ts`): 403 "bad credentials" -> 401 (conductor refresh + retry), 429 `free-usage-exhausted` -> 24 h cooldown
+  hint (`retryAfterMs`), speech 404s that do not say the model is unavailable are request-scoped.
+- **Media** (`media.ts` + handlers): executor entry protocols `openai-image`/`openai-video`/`openai-speech` (whole bodies returned
+  verbatim; `ExecutorResponse.bytes` carries audio). `/v1/images/{generations,edits}` accept `grok-imagine-image*` (converted to
+  the xAI shape and back; streams replay the result as `*.completed` frames like Go). `/v1/videos*` (xAI-native) and
+  `/openai/v1/videos*` (OpenAI shape, `sora-2` maps to `grok-imagine-video`, content downloads proxied). Video results are only
+  retrievable with the creating credential: the handler stores `{authId, routing model}` in KV (`xai/video-binding/<sha256(id)>`,
+  TTL `multimedia.video-result-auth-cache-ttl`, default 3 h, KV minimum 60 s) and pins retrievals through `ExecutionInput.pinnedId`
+  (`ExecutionOutput.credentialId` reports the serving credential). `/v1/audio/speech` and `/v1/tts` convert to `POST /tts`.
+- **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge and multi-agent-v2 input
+  rewriting (shared with Codex), local `o200k_base` token counting (`countTokens` answers 501), the Claude stream input-token
+  estimate, `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+  for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 ## Model registry and `/models` endpoints (`src/registry/`)
 

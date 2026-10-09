@@ -81,6 +81,8 @@ export interface ExecutionContext {
 export interface ExecutorResponse {
   /** Client-format body. */
   readonly payload: string
+  /** Binary body (audio); when set, `payload` is empty and handlers write these bytes verbatim. */
+  readonly bytes?: Uint8Array | undefined
   /** Upstream response headers (forwarded only with `passthrough-headers`). */
   readonly headers: Headers
 }

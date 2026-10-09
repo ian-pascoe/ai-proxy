@@ -1,0 +1,561 @@
+/**
+ * xAI (Grok) executor, HTTP/SSE transport.
+ *
+ * Go source: internal/runtime/executor/xai_executor.go, xai_executor_execute.go (Execute, executeCompact,
+ * executeCompactionTriggerStream), xai_executor_stream.go (ExecuteStream), xai_executor_request.go
+ * (prepareResponsesRequestTo, xaiResolveComposerSessionID), xai_executor_media.go / xai_executor_speech.go (see media.ts).
+ * Pipeline per attempt: translate -> Thinking.apply -> model/stream fields -> tool normalisation -> reasoning replay ->
+ * input normalisation -> prompt cache key -> finalizePayload (user payload rules, always last) -> headers -> fetch.
+ *
+ * Not ported (documented follow-ups): the WebSocket transport (#18), the apply_patch response bridge and
+ * multi-agent-v2 input rewriting, local token counting (needs a BPE tokenizer) and the Claude stream input-token
+ * estimate. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
+ */
+import { Clock, Effect, Stream } from "effect"
+import { splitLines } from "../../http/sse.ts"
+import { asString, cloneJson, del, get, isJsonObject, type Json, set, tryParseJson } from "../../json/index.ts"
+import { builtinTranslators } from "../../translator/builtin.ts"
+import { Formats } from "../../translator/formats.ts"
+import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
+import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
+import { ExecutionError } from "../errors.ts"
+import { ensureResponsesUsageDetails, OutputItemCollector, parseCodexUsage } from "../codex/output.ts"
+import { claudeCodeExecutionScope } from "../codex/replay.ts"
+import { normalizeCodexInstructions, setIfDifferent } from "../codex/request.ts"
+import { finalizePayload } from "../helps/payload.ts"
+import { providerSessionUuid, uuidV5Oid } from "../helps/uuid.ts"
+import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
+import { parseSuffix } from "../suffix.ts"
+import { Thinking } from "../thinking.ts"
+import {
+  type ExecutionContext,
+  type ExecutorOptions,
+  type ExecutorRequest,
+  type ExecutorResponse,
+  type ProviderExecutor,
+  responseFormatOf,
+  type StreamResult
+} from "../types.ts"
+import { buildCompactionTriggerStreamChunks } from "./compact.ts"
+import { joinUrl, XAI_PROVIDER, xaiChatBaseUrl, xaiCompactBaseUrl } from "./credentials.ts"
+import { xaiStatusError } from "./errors.ts"
+import { buildXaiChatHeaders, buildXaiHeaders } from "./headers.ts"
+import {
+  normalizeImageRefs,
+  normalizeInputCustomToolCalls,
+  normalizeInputNamespaceToolCalls,
+  normalizeInputReasoningItems,
+  preserveOutputControls,
+  sanitizeInputEncryptedContent
+} from "./input.ts"
+import {
+  executeImages,
+  executeSpeech,
+  executeVideos,
+  type FinalizeBody,
+  isImageRequest,
+  isSpeechRequest,
+  isVideoRequest,
+  streamingUnsupported
+} from "./media.ts"
+import {
+  applyReplayCache,
+  cacheReplayFromCompleted,
+  clearReplayAfterCompaction,
+  defaultXaiReplayStore,
+  replayScopeFromRequest,
+  type XaiReplayScope,
+  type XaiReplayStore
+} from "./replay.ts"
+import { EventPipeline, normalizeReasoningSummaryEvent, patchCompletedOutput } from "./response.ts"
+import { XaiStreamReader } from "./stream.ts"
+import {
+  aliasClientWebSearchFunction,
+  aliasClientWebSearchInput,
+  clampToolsLimit,
+  ensureNativeXSearchTool,
+  hasClientWebSearchFunction,
+  normalizeForcedImageGenerationToolChoice,
+  normalizeForcedWebSearchToolChoice,
+  normalizeNamespaceToolChoice,
+  normalizeToolChoiceForTools,
+  pruneOrphanedToolChoice,
+  resolveClientWebSearchAlias,
+  toolChoiceRequiresHostedToolOnly
+} from "./tool-choice.ts"
+import {
+  collectClientDeclaredToolKeys,
+  collectNamespaceToolRefs,
+  inputHasItemType,
+  normalizeTools,
+  promoteAdditionalTools,
+  removeInputItemsByType,
+  requestHasNativeXSearch,
+  totalFlattenedToolsCount,
+  XAI_MAX_TOOLS
+} from "./tools.ts"
+import { sendUpstream, transportError } from "./transport.ts"
+import { currentXaiClientVersion } from "./version.ts"
+
+export interface XaiExecutorOptions {
+  readonly translators?: TranslatorRegistry
+  /** Reasoning replay store (defaults to the per-isolate in-memory store, see replay.ts). */
+  readonly replayStore?: XaiReplayStore
+}
+
+const COMPOSER_MODEL_PREFIX = "grok-composer-"
+
+interface PreparedRequest {
+  /** Final business payload (after payload rules once `finalize` ran). */
+  body: Json
+  readonly baseModel: string
+  readonly responseFormat: string
+  readonly providerFormat: string
+  /** The client's original body (translator response context). */
+  readonly original: Json
+  readonly originalTranslated: Json
+  readonly pipeline: EventPipeline
+  readonly sessionId: string
+  readonly replayScope: XaiReplayScope
+}
+
+/** `helps.NewPayloadFinalizer`: user payload rules are the last mutation of the business payload. */
+const makeFinalize =
+  (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions) =>
+  (model: string, protocol: string, original: Json | undefined, body: Json): Json =>
+    finalizePayload(
+      context.config,
+      XAI_PROVIDER,
+      {
+        model,
+        requestedModel: options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model,
+        protocol,
+        fromProtocol: options.sourceFormat,
+        requestPath: options.metadata.requestPath,
+        headers: options.headers,
+        ...(original !== undefined ? { original } : {})
+      },
+      body
+    )
+
+/** `xaiResolveComposerSessionID`. */
+const resolveSessionId = (request: ExecutorRequest, options: ExecutorOptions, baseModel: string): string => {
+  const promptCacheKey = get(request.payload, "prompt_cache_key")
+  if (promptCacheKey !== undefined && promptCacheKey !== null && asString(promptCacheKey).trim() !== "") {
+    return asString(promptCacheKey).trim()
+  }
+  const derived = providerSessionUuid(XAI_PROVIDER, "derived-session", options.metadata.sessionId)
+  if (derived !== "") return derived
+  if (!baseModel.trim().toLowerCase().startsWith(COMPOSER_MODEL_PREFIX)) return ""
+  // grok-composer-* needs an isolated conversation id: the Claude Code agent scope, else a random one.
+  const scope = claudeCodeExecutionScope(request.payload, options.headers)
+  if (baseModel.trim() !== "" && scope !== undefined) {
+    return uuidV5Oid(["cli-proxy-api:codex:claude-code", baseModel.trim(), scope].join("\u0000"))
+  }
+  return crypto.randomUUID()
+}
+
+const responseContext = (prepared: PreparedRequest, request: ExecutorRequest): ResponseContext => ({
+  model: request.model,
+  originalRequest: prepared.original,
+  translatedRequest: prepared.body,
+  state: makeTranslationState()
+})
+
+const failedTranslation = () => new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
+
+const finalizePrepared = (
+  context: ExecutionContext,
+  request: ExecutorRequest,
+  options: ExecutorOptions,
+  prepared: PreparedRequest
+): void => {
+  prepared.body = makeFinalize(context, request, options)(
+    prepared.baseModel,
+    prepared.providerFormat,
+    prepared.originalTranslated,
+    prepared.body
+  )
+  const effort = asString(get(prepared.body, "reasoning.effort"))
+  context.usage.setReasoningEffort(effort !== "" ? effort : undefined)
+}
+
+const mediaFinalize = (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions): FinalizeBody => {
+  const finalize = makeFinalize(context, request, options)
+  // Payload rules target the "openai" protocol for images, videos and speech; the baseline is the client body.
+  return (model, original, body) => finalize(model, "openai", original, body)
+}
+
+/** Local BPE token counting is not ported yet. */
+const countTokens: ProviderExecutor["countTokens"] = () =>
+  Effect.fail(
+    new ExecutionError({
+      status: 501,
+      message: "token counting is not supported for xai yet",
+      requestScoped: true
+    })
+  )
+
+const incompleteStreamError = () =>
+  new ExecutionError({
+    status: 408,
+    message: "xai stream error: stream disconnected before response.completed or response.incomplete"
+  })
+
+export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): ProviderExecutor => {
+  const registry = executorOptions.translators ?? builtinTranslators
+  const replayStore = executorOptions.replayStore ?? defaultXaiReplayStore
+
+  /** `prepareResponsesRequestTo`. */
+  const prepare = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+    mode: { readonly stream: boolean; readonly to: string }
+  ) {
+    const thinking = yield* Thinking
+    const baseModel = parseSuffix(request.model).modelName
+    const from = options.sourceFormat
+    const to = mode.to
+    const original = options.originalRequest ?? request.payload
+
+    const translated = registry.translateRequest(
+      from,
+      to,
+      { format: from, model: baseModel, stream: mode.stream, body: request.payload },
+      thinking.summary
+    )
+    if (translated.error !== undefined) {
+      return yield* new ExecutionError({
+        status: translated.error.status,
+        message: translated.error.message,
+        requestScoped: true
+      })
+    }
+    const originalEnvelope =
+      original === request.payload
+        ? { body: cloneJson(translated.body) }
+        : registry.translateRequest(
+            from,
+            to,
+            { format: from, model: baseModel, stream: mode.stream, body: original },
+            thinking.summary
+          )
+    const originalTranslated = preserveOutputControls(originalEnvelope.body, original, from)
+    let body = preserveOutputControls(translated.body, request.payload, from)
+
+    body = yield* thinking.apply({
+      body,
+      model: request.model,
+      from,
+      to: XAI_PROVIDER,
+      provider: XAI_PROVIDER,
+      source: request.payload,
+      ...(options.originalRequest !== undefined ? { originalSource: options.originalRequest } : {}),
+      configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
+      modelInfo: request.modelInfo,
+      lookupModelInfo: request.modelLookup
+    })
+
+    body = setIfDifferent(body, "model", baseModel)
+    body = setIfDifferent(body, "stream", mode.stream)
+    for (const field of ["previous_response_id", "prompt_cache_retention", "safety_identifier", "stream_options"]) {
+      body = del(body, field)
+    }
+
+    const willInjectXSearch = context.config.upstream.xai["inject-x-search"]
+    const shouldFold =
+      totalFlattenedToolsCount(body, willInjectXSearch, toolChoiceRequiresHostedToolOnly(body)) > XAI_MAX_TOOLS
+    const namespaceTools = collectNamespaceToolRefs(body, shouldFold)
+    // Collected before normalisation flattens the namespace wrappers so keys match the restored response shape.
+    const clientDeclaredTools = collectClientDeclaredToolKeys(body)
+    body = normalizeTools(body, shouldFold)
+    body = promoteAdditionalTools(body)
+    let webSearchAlias = ""
+    if (hasClientWebSearchFunction(body, namespaceTools)) {
+      webSearchAlias = resolveClientWebSearchAlias(body)
+      body = aliasClientWebSearchFunction(body, webSearchAlias, namespaceTools)
+    }
+    // Drop choices that point at tools removed by the normalisation before any x_search injection.
+    body = normalizeNamespaceToolChoice(body, shouldFold)
+    body = pruneOrphanedToolChoice(body)
+    body = normalizeForcedWebSearchToolChoice(body)
+    body = normalizeForcedImageGenerationToolChoice(body)
+    body = normalizeToolChoiceForTools(body)
+    if (willInjectXSearch && !toolChoiceRequiresHostedToolOnly(body)) body = ensureNativeXSearchTool(body)
+    body = clampToolsLimit(body, XAI_MAX_TOOLS, namespaceTools)
+
+    const replayScope = replayScopeFromRequest({
+      from,
+      model: request.model,
+      requestPayload: request.payload,
+      body,
+      headers: options.headers,
+      callerScope: options.metadata.callerScope
+    })
+    yield* applyReplayCache(replayStore, replayScope, body)
+
+    body = normalizeInputCustomToolCalls(body)
+    body = normalizeInputNamespaceToolCalls(body, shouldFold)
+    if (webSearchAlias !== "") body = aliasClientWebSearchInput(body, webSearchAlias, namespaceTools)
+    body = normalizeInputReasoningItems(body)
+    body = sanitizeInputEncryptedContent(body)
+    body = normalizeCodexInstructions(body, false)
+    // stop is supported by Chat Completions but not by xAI's Responses API.
+    body = del(body, "stop")
+    body = normalizeImageRefs(body)
+
+    const sessionId = resolveSessionId(request, options, baseModel)
+    if (sessionId !== "") body = setIfDifferent(body, "prompt_cache_key", sessionId)
+
+    return {
+      body,
+      baseModel,
+      responseFormat: responseFormatOf(options),
+      providerFormat: to,
+      original,
+      originalTranslated,
+      pipeline: new EventPipeline({
+        namespaceTools,
+        webSearchAlias,
+        filterInternalXSearch: requestHasNativeXSearch(body),
+        clientDeclaredTools
+      }),
+      sessionId,
+      replayScope
+    } satisfies PreparedRequest
+  })
+
+  const chatHeaders = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    options: ExecutorOptions,
+    prepared: PreparedRequest,
+    stream: boolean
+  ) {
+    return buildXaiChatHeaders({
+      credential: context.credential,
+      clientHeaders: options.headers,
+      stream,
+      convId: prepared.sessionId,
+      ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
+      clientVersion: yield* currentXaiClientVersion
+    })
+  })
+
+  /** Opens the upstream `/responses` stream for a prepared chat request. */
+  const openResponses = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+    ttft: "first-byte" | "token-event" = "first-byte"
+  ) {
+    const prepared = yield* prepare(context, request, options, { stream: true, to: Formats.Codex })
+    finalizePrepared(context, request, options, prepared)
+    const headers = yield* chatHeaders(context, options, prepared, true)
+    const response = yield* sendUpstream(context, {
+      method: "POST",
+      url: joinUrl(xaiChatBaseUrl(context.credential), "/responses"),
+      headers,
+      body: JSON.stringify(prepared.body),
+      ttft,
+      classify: xaiStatusError
+    })
+    return { prepared, response }
+  })
+
+  // -------------------------------------------------------------------------------------------------------------
+  // Responses: non-stream (aggregates the upstream SSE until the terminal event)
+  // -------------------------------------------------------------------------------------------------------------
+
+  const executeResponses = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const { prepared, response } = yield* openResponses(context, request, options)
+    const text = yield* response.text.pipe(Effect.mapError(transportError))
+    const collector = new OutputItemCollector()
+    for (const line of text.split("\n")) {
+      if (!line.startsWith("data:")) continue
+      const parsed = tryParseJson(line.slice("data:".length).trim())
+      if (parsed === undefined) continue
+      const event = prepared.pipeline.process(normalizeReasoningSummaryEvent(parsed))
+      if (event === undefined) continue
+      context.usage.observeResponseModel(responseModelOf(event))
+      const type = asString(get(event, "type"))
+      if (type === "response.output_item.done") {
+        collector.collect(event)
+        continue
+      }
+      if ((type !== "response.completed" && type !== "response.incomplete") || !isJsonObject(event)) continue
+      const completed = normalizeReasoningSummaryEvent(patchCompletedOutput(event, collector))
+      if (type === "response.completed") yield* cacheReplayFromCompleted(replayStore, prepared.replayScope, completed)
+      let out = registry.translateNonStream(
+        prepared.responseFormat,
+        prepared.providerFormat,
+        responseContext(prepared, request),
+        JSON.stringify(completed)
+      )
+      if (out === undefined || out === "") return yield* failedTranslation()
+      const detail = parseCodexUsage(event)
+      if (detail !== undefined) context.usage.publish(detail)
+      if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+      return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
+    }
+    const error = incompleteStreamError()
+    context.usage.fail(error.status, error.message)
+    return yield* error
+  })
+
+  // -------------------------------------------------------------------------------------------------------------
+  // Responses: stream
+  // -------------------------------------------------------------------------------------------------------------
+
+  const executeResponsesStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const { prepared, response } = yield* openResponses(context, request, options, "token-event")
+    const reader = new XaiStreamReader({
+      nowMs: () => Date.now(),
+      registry,
+      responseFormat: prepared.responseFormat,
+      providerFormat: prepared.providerFormat,
+      context: responseContext(prepared, request),
+      usage: context.usage,
+      pipeline: prepared.pipeline
+    })
+    const chunks = splitLines(response.stream).pipe(
+      Stream.mapError(transportError),
+      Stream.mapAccumEffect(
+        () => reader,
+        (state, line: string) =>
+          Effect.gen(function* () {
+            const step = state.push(line)
+            if (step.cacheCompleted !== undefined) {
+              yield* cacheReplayFromCompleted(replayStore, prepared.replayScope, step.cacheCompleted)
+            }
+            return [state, [step]] as const
+          }),
+        { onHalt: (state) => [state.end()] }
+      ),
+      Stream.flatMap((step) => Stream.fromIterable(step.chunks.filter((chunk) => chunk.length > 0))),
+      Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
+    )
+    return { headers: new Headers(response.headers), chunks } satisfies StreamResult
+  })
+
+  // -------------------------------------------------------------------------------------------------------------
+  // Compaction
+  // -------------------------------------------------------------------------------------------------------------
+
+  /** `executeCompactRequest`: `POST /responses/compact` on the official API. */
+  const compactRequest = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const prepared = yield* prepare(context, request, options, { stream: false, to: Formats.OpenAIResponse })
+    let body = prepared.body
+    for (const field of ["stream", "tools"]) body = del(body, field)
+    // Compact deletes tools after preparation, which can leave a forced hosted-tool choice behind.
+    body = normalizeToolChoiceForTools(body)
+    for (const field of ["max_output_tokens", "temperature", "top_p", "top_k", "stop"]) body = del(body, field)
+    body = removeInputItemsByType(body, "compaction_trigger")
+    const previousResponseId = asString(get(request.payload, "previous_response_id")).trim()
+    if (previousResponseId !== "") body = set(body, "previous_response_id", previousResponseId)
+    prepared.body = body
+    finalizePrepared(context, request, options, prepared)
+    // Official API / custom compact endpoints use standard API headers, not the chat proxy identity.
+    const headers = buildXaiHeaders({
+      credential: context.credential,
+      clientHeaders: options.headers,
+      stream: false,
+      convId: prepared.sessionId,
+      ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {})
+    })
+    const response = yield* sendUpstream(context, {
+      method: "POST",
+      url: joinUrl(xaiCompactBaseUrl(context.credential), "/responses/compact"),
+      headers,
+      body: JSON.stringify(prepared.body),
+      classify: xaiStatusError
+    })
+    const text = yield* response.text.pipe(Effect.mapError(transportError))
+    context.usage.observeResponseModel(responseModelOf(tryParseJson(text)))
+    yield* clearReplayAfterCompaction(replayStore, prepared.replayScope)
+    return { prepared, text, headers: new Headers(response.headers) }
+  })
+
+  const executeCompact = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const { prepared, text, headers } = yield* compactRequest(context, request, options)
+    const usage = parseOpenAIUsage(text)
+    let out = registry.translateNonStream(
+      prepared.responseFormat,
+      prepared.providerFormat,
+      responseContext(prepared, request),
+      text
+    )
+    if (out === undefined || out === "") {
+      context.usage.publish(usage)
+      return yield* failedTranslation()
+    }
+    context.usage.publish(usage)
+    if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+    return { payload: out, headers } satisfies ExecutorResponse
+  })
+
+  /** `executeCompactionTriggerStream`: the compact answer replayed as a synthetic Responses stream. */
+  const executeCompactionTriggerStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const { prepared, text, headers } = yield* compactRequest(context, request, options)
+    context.usage.publish(parseOpenAIUsage(text))
+    const nowMs = yield* Clock.currentTimeMillis
+    const chunks = buildCompactionTriggerStreamChunks({
+      body: prepared.body,
+      baseModel: prepared.baseModel,
+      requestModel: asString(get(prepared.original, "model")),
+      compact: tryParseJson(text) ?? {},
+      nowMs
+    })
+    const out = new Headers(headers)
+    out.set("content-type", "text/event-stream")
+    return { headers: out, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
+  })
+
+  // -------------------------------------------------------------------------------------------------------------
+  // Entry points
+  // -------------------------------------------------------------------------------------------------------------
+
+  const execute: ProviderExecutor["execute"] = (context, request, options) => {
+    if (options.alt === "responses/compact") return executeCompact(context, request, options)
+    if (isImageRequest(options))
+      return executeImages(context, request, options, mediaFinalize(context, request, options))
+    if (isVideoRequest(options))
+      return executeVideos(context, request, options, mediaFinalize(context, request, options))
+    if (isSpeechRequest(options))
+      return executeSpeech(context, request, options, mediaFinalize(context, request, options))
+    return executeResponses(context, request, options)
+  }
+
+  const executeStream: ProviderExecutor["executeStream"] = (context, request, options) => {
+    if (options.alt === "responses/compact") return Effect.fail(streamingUnsupported("/responses/compact"))
+    if (isSpeechRequest(options)) return Effect.fail(streamingUnsupported("/audio/speech"))
+    if (isImageRequest(options)) return Effect.fail(streamingUnsupported("/images"))
+    if (isVideoRequest(options)) return Effect.fail(streamingUnsupported("/videos"))
+    if (inputHasItemType(request.payload, "compaction_trigger")) {
+      return executeCompactionTriggerStream(context, request, options)
+    }
+    return executeResponsesStream(context, request, options)
+  }
+
+  return { identifier: XAI_PROVIDER, execute, executeStream, countTokens }
+}

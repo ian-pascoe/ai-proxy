@@ -9,6 +9,7 @@ import { FetchHttpClient, type HttpClient } from "effect/http"
 import { ConfigReader } from "./config/reader.ts"
 import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts"
 import { CatalogStore } from "./registry/catalog-store.ts"
+import { refreshXaiClientVersion } from "./executor/xai/version.ts"
 import { refreshCatalogs } from "./registry/refresh.ts"
 import { pruneExpiredUsage } from "./usage/retention.ts"
 
@@ -25,6 +26,8 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   { name: "model-catalog-refresh", run: refreshCatalogs },
   // Usage history older than `USAGE_RETENTION_DAYS` is deleted from D1.
   { name: "usage-retention", run: pruneExpiredUsage },
+  // helps.StartXAIVersionUpdater (3 h): latest Grok CLI version from npm into KV for the chat-proxy identity headers.
+  { name: "xai-client-version-refresh", run: refreshXaiClientVersion() },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
   {
     name: "credential-refresh-sweep",

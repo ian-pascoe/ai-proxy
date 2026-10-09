@@ -4,23 +4,33 @@
  *
  * Go source: sdk/api/handlers/openai/openai_images_handlers.go (ImagesGenerations, ImagesEdits, imagesEditsFromJSON,
  * imagesEditsFromMultipart, buildOpenAICompatImagesJSONRequest, collectRoutedImages, streamRoutedImages,
- * collectImagesWithModel, streamOpenAICompatImages). The Codex tool models (`gpt-image-*`) and models the registry
- * types as `openai-image` (OpenAI-compatible providers, `image: true` in config) are served here; xAI image models
- * belong to their provider slice. Multipart edits are converted to the JSON form (`images[].image_url`, `mask.image_url`) before execution
- * (Go does the same in the executor, `codexRewriteOpenAIImageEditMultipartToJSON`).
+ * collectImagesWithModel, streamOpenAICompatImages). Served here: the Codex tool models (`gpt-image-*`), models the
+ * registry types as `openai-image` (OpenAI-compatible providers, `image: true` in config) and the xAI
+ * `grok-imagine-image*` models (`xai-images.ts`). Multipart edits are converted to the JSON form (`images[].image_url`,
+ * `mask.image_url`) before execution (Go does the same in the executor, `codexRewriteOpenAIImageEditMultipartToJSON`).
  */
-import { Clock, Effect } from "effect"
+import { Clock, Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
-import { ExecutionError } from "../../executor/errors.ts"
+import { ExecutionError, type ExecutionError as ExecutionErrorType } from "../../executor/errors.ts"
+import type { Config } from "../../config/schema.ts"
 import { invalidRequestBody, openAIErrorBody } from "../../http/errors.ts"
 import { SSE_KEEP_ALIVE, sseEvent } from "../../http/sse.ts"
 import { asInt, asString, get, isJsonArray, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
 import { ModelProviders } from "../model-providers.ts"
 import { CODEX_DEFAULT_IMAGE_TOOL_MODEL } from "../../executor/codex/images.ts"
-import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
+import { executeNonStream, executeStream, type ExecutionInput, type StreamOutput } from "../execute.ts"
 import type { StreamFramer } from "../framing.ts"
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse, streamResponse } from "../respond.ts"
+import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import {
+  buildEditRequest,
+  buildGenerationsRequest,
+  buildImagesApiResponse as buildXaiImagesApiResponse,
+  buildImagesStreamFrames,
+  collectImages,
+  isXaiImagesModel,
+  XAI_IMAGE_MODEL_NAMES
+} from "./xai-images.ts"
 
 const CODEX_IMAGE_MODELS = [
   "gpt-image-1.5",
@@ -94,7 +104,7 @@ const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
 const unsupportedModel = (model: string): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(
     invalidRequestBody(
-      `Model ${model} is not supported on /v1/images/generations or /v1/images/edits. Use ${CODEX_IMAGE_MODELS.join(", ")}, or a configured openai-compatibility image model.`
+      `Model ${model} is not supported on /v1/images/generations or /v1/images/edits. Use ${[...CODEX_IMAGE_MODELS, ...XAI_IMAGE_MODEL_NAMES].join(", ")}, or a configured openai-compatibility image model.`
     ),
     { status: 400, contentType: "application/json" }
   )
@@ -164,6 +174,64 @@ const multipartEditToJson = async (form: FormData): Promise<JsonObject> => {
   return out
 }
 
+interface XaiImagesInput {
+  readonly edits: boolean
+  readonly body: Json
+  readonly model: string
+  readonly stream: boolean
+  readonly request: HttpServerRequest.HttpServerRequest
+  readonly config: Config
+  readonly onError: (error: ExecutionErrorType) => HttpServerResponse.HttpServerResponse
+}
+
+/**
+ * xAI image models: the request is converted to the xAI shape and executed non-stream; a stream request replays the
+ * result as `<image_generation|image_edit>.completed` frames (xAI has no image streaming).
+ */
+const handleXai = (input: XaiImagesInput) =>
+  Effect.gen(function* () {
+    const { body, edits, model, stream, onError } = input
+    const responseFormat = asString(get(body, "response_format")).trim() || "b64_json"
+    let xaiRequest: JsonObject
+    if (edits) {
+      const images = collectImages(body)
+      if (images.length === 0) return badRequest("image is required")
+      xaiRequest = buildEditRequest(body, model, responseFormat, images)
+    } else {
+      xaiRequest = buildGenerationsRequest(body, model, responseFormat)
+    }
+    const execution: ExecutionInput = {
+      entryProtocol: "openai-image",
+      model: asString(xaiRequest["model"]),
+      body: xaiRequest,
+      alt: "",
+      request: input.request,
+      allowImageModel: true
+    }
+    const nowSeconds = Math.floor((yield* Clock.currentTimeMillis) / 1000)
+    if (stream) {
+      const prefix = edits ? "image_edit" : "image_generation"
+      const start = executeNonStream(execution).pipe(
+        Effect.flatMap((output) => {
+          const frames = buildImagesStreamFrames(output.payload, responseFormat, prefix, nowSeconds)
+          return frames instanceof ExecutionError
+            ? Effect.fail(frames)
+            : Effect.succeed({ chunks: Stream.fromIterable(frames), headers: output.headers } satisfies StreamOutput)
+        })
+      )
+      return yield* streamResponse(start, {
+        framer: imagesFramer(),
+        onError,
+        keepAliveSeconds: input.config.requests.streaming["keepalive-seconds"]
+      })
+    }
+    const result = yield* Effect.result(executeNonStream(execution))
+    if (result._tag === "Failure") return onError(result.failure)
+    const out = buildXaiImagesApiResponse(result.success.payload, responseFormat, nowSeconds)
+    if (out instanceof ExecutionError) return onError(out)
+    return jsonResponse(out, result.success.headers)
+  })
+
 const handle = (edits: boolean) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
@@ -172,7 +240,7 @@ const handle = (edits: boolean) =>
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false })
     const config = configResult.success
     if (config.multimedia["disable-image-generation"] === true) return HttpServerResponse.empty({ status: 404 })
-    const onError = (error: ExecutionError) =>
+    const onError = (error: ExecutionErrorType) =>
       errorResponse("openai", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     let body: Json
@@ -214,8 +282,9 @@ const handle = (edits: boolean) =>
 
     let model = (formModel !== "" ? formModel : asString(get(body, "model"))).trim()
     if (model === "") model = CODEX_DEFAULT_IMAGE_TOOL_MODEL
+    const xai = isXaiImagesModel(model)
     let compat = false
-    if (!isCodexImagesToolModel(model)) {
+    if (!xai && !isCodexImagesToolModel(model)) {
       const providers = yield* ModelProviders
       const type =
         providers.modelType === undefined
@@ -226,6 +295,7 @@ const handle = (edits: boolean) =>
     }
     if (asString(get(body, "prompt")).trim() === "") return badRequest("prompt is required")
     const stream = formStream || get(body, "stream") === true
+    if (xai) return yield* handleXai({ edits, body, model, stream, request, config, onError })
 
     // `buildOpenAICompatImagesJSONRequest`: model set, `stream: true` or removed.
     const payload: JsonObject = { ...(body as JsonObject), model }

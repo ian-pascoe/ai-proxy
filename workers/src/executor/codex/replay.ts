@@ -279,7 +279,7 @@ export interface ReplayScopeInput {
 }
 
 /** `codexReasoningReplaySessionKey`. */
-const replaySessionKey = (input: ReplayScopeInput): string => {
+export const replaySessionKey = (input: ReplayScopeInput): string => {
   if (input.from.trim().toLowerCase() === "claude") {
     const scope = claudeCodeExecutionScope(input.requestPayload, input.headers)
     if (scope !== undefined) return scope
@@ -322,14 +322,14 @@ interface ReplayTurn {
   items: Json[]
 }
 
-const comparableCallIds = (callId: string): string[] => {
+export const comparableCallIds = (callId: string): string[] => {
   const id = callId.trim()
   if (id === "") return []
   const visible = shortenCodexCallIdIfNeeded(sanitizeClaudeToolId(id))
   return visible === "" || visible === id ? [id] : [id, visible]
 }
 
-const toolCallKeys = (item: Json): string[] => {
+export const toolCallKeys = (item: Json): string[] => {
   const type = asString(get(item, "type")).trim()
   if (type !== "function_call" && type !== "custom_tool_call") return []
   return comparableCallIds(asString(get(item, "call_id"))).map((id) => `${type}:${id}`)
@@ -409,7 +409,7 @@ const outputCallIds = (inputItems: readonly Json[]): Map<string, string> => {
 }
 
 /** `codexAlignReasoningReplayToolCallIDs`: replayed calls take the call id their output uses. */
-const alignToolCallIds = (inputItems: readonly Json[], replayItems: Json[]): Json[] => {
+export const alignToolCallIds = (inputItems: readonly Json[], replayItems: Json[]): Json[] => {
   const outputs = outputCallIds(inputItems)
   if (outputs.size === 0) return replayItems
   return replayItems.map((item) => {
@@ -436,7 +436,7 @@ const shouldInsertBefore = (item: Json): boolean => {
 }
 
 /** `codexReasoningReplayInsertIndex`. */
-const insertIndexFor = (inputItems: readonly Json[], replayItems: readonly Json[]): number => {
+export const insertIndexFor = (inputItems: readonly Json[], replayItems: readonly Json[]): number => {
   const replayCallIds = new Set<string>()
   for (const item of replayItems) {
     const type = asString(get(item, "type")).trim()

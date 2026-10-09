@@ -145,6 +145,12 @@ const ensureUsageDetailsAt = (root: JsonObject, path: string): boolean => {
   return changed
 }
 
+/** Fills the token detail objects of the Responses usage in a terminal event (in place). */
+export const ensureUsageDetailsInEvent = (event: JsonObject): void => {
+  ensureUsageDetailsAt(event, "response.usage")
+  ensureUsageDetailsAt(event, "usage")
+}
+
 const ensureDetailsInJson = (text: string): string | undefined => {
   let parsed: Json
   try {

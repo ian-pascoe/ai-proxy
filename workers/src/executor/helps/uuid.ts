@@ -20,3 +20,10 @@ export const uuidV5 = (namespace: string, name: string): string => {
 
 /** `uuidV5(NameSpaceOID, name)`. */
 export const uuidV5Oid = (name: string): string => uuidV5(NAMESPACE_OID, name)
+
+/** `helps.stableProviderSessionUUID`: provider-scoped stable UUID of a session identity (`""` for an empty one). */
+export const providerSessionUuid = (provider: string, kind: string, identity: string | undefined): string => {
+  const name = provider.trim().toLowerCase()
+  const value = (identity ?? "").trim()
+  return name === "" || value === "" ? "" : uuidV5Oid(["cli-proxy-api", name, kind, value].join("\u0000"))
+}

@@ -46,10 +46,16 @@ export interface ExecutionInput {
   readonly forcedProvider?: string
   /** Select the credential as if for this model while executing `model` (Go `auth_selection_model`). */
   readonly authSelectionModel?: string
+  /** Require this credential (xAI video retrieval is bound to the credential that created the video). */
+  readonly pinnedId?: string
 }
 
 export interface ExecutionOutput {
   readonly payload: string
+  /** Binary body (audio) when the executor returned one; `payload` is empty then. */
+  readonly bytes?: Uint8Array | undefined
+  /** The credential that served the request (xAI video binding). */
+  readonly credentialId: string
   /** Filtered upstream headers when `passthrough-headers` is enabled. */
   readonly headers: Headers | undefined
 }
@@ -155,7 +161,8 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
             ...(sessionInfo.isFork ? { isFork: true } : {})
           },
     ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
-    ...(input.authSelectionModel === undefined ? {} : { selectionModel: input.authSelectionModel })
+    ...(input.authSelectionModel === undefined ? {} : { selectionModel: input.authSelectionModel }),
+    ...(input.pinnedId !== undefined ? { pinnedId: input.pinnedId } : {})
   } satisfies Prepared
 })
 
@@ -175,7 +182,11 @@ export const executeNonStream = Effect.fnUntraced(function* (input: ExecutionInp
       yield* attempt.finish(undefined, response.headers)
       return {
         payload:
-          attempt.rewriteTo === "" ? response.payload : rewriteResponseModel(response.payload, attempt.rewriteTo),
+          attempt.rewriteTo === "" || response.bytes !== undefined
+            ? response.payload
+            : rewriteResponseModel(response.payload, attempt.rewriteTo),
+        ...(response.bytes !== undefined ? { bytes: response.bytes } : {}),
+        credentialId: attempt.picked.credential.id,
         headers: upstreamHeaders(prepared.config, response.headers)
       } satisfies ExecutionOutput
     })
@@ -275,6 +286,7 @@ export const executeCountTokens = Effect.fnUntraced(function* (input: ExecutionI
       yield* attempt.finish(undefined, response.headers)
       return {
         payload: response.payload,
+        credentialId: attempt.picked.credential.id,
         headers: upstreamHeaders(prepared.config, response.headers)
       } satisfies ExecutionOutput
     })
