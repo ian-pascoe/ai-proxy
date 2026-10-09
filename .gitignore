@@ -31,6 +31,7 @@ auths/*
 # Documentation
 docs/*
 !docs/management-api-v8.md
+!docs/workers-port/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
