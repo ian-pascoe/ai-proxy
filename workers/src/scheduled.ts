@@ -21,7 +21,15 @@ export interface ScheduledTask {
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   // internal/registry catalog updaters (3 h): general, Codex client and Devin catalogs into KV.
-  { name: "model-catalog-refresh", run: refreshCatalogs }
+  { name: "model-catalog-refresh", run: refreshCatalogs },
+  // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
+  {
+    name: "credential-refresh-sweep",
+    run: Effect.gen(function* () {
+      const env = yield* WorkerEnv
+      yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").sweepRefresh())
+    })
+  }
 ]
 
 export const ScheduledLayer = Layer.mergeAll(

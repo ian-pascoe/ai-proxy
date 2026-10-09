@@ -1,9 +1,12 @@
 import { DurableObject } from "cloudflare:workers"
 import { Effect, Schema } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { ConfigStore, decodeStoredConfig, type ConfigSnapshotWire, type PutConfigResult } from "../config/store.ts"
 import type { Config } from "../config/schema.ts"
 import type { JsonObject } from "../json/index.ts"
+import { isTokenPayloadKey } from "./merge.ts"
 import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts"
+import { RefreshManager, type RefreshOptions, type RefreshResult, type RunSummary } from "./refresh/index.ts"
 import { Lease, PickRequest, ReportResult, type PickResult, type ReportOutcome } from "./selection/types.ts"
 import { CredentialStore } from "./store.ts"
 import type { CredentialSummary } from "./summary.ts"
@@ -13,6 +16,11 @@ const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
 const decodeLease = Schema.decodeUnknownSync(Lease)
 const decodeReportResult = Schema.decodeUnknownSync(ReportResult)
 
+const PROTECTED_KEYS = new Set(["type", "disabled", "api_key", "dca_token", "dca_expired", "dca_expires_at"])
+
+/** Keys `patchCredentialMetadata` must not write: token lifecycle, identity of the provider, the disabled flag. */
+const isProtectedMetadataKey = (key: string): boolean => isTokenPayloadKey(key) || PROTECTED_KEYS.has(key)
+
 export type SetDisabledResult =
   { readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "config_credential" }
 
@@ -20,12 +28,13 @@ export type SetDisabledResult =
  * Singleton Durable Object (`CONTROL_PLANE.getByName("global")`): the single writer for config, credentials,
  * cooldown state and refresh scheduling (see docs/workers-port/ARCHITECTURE.md).
  *
- * Implements the config store and the credential store/selection (`pick`, `report`, credential management).
- * Methods are exposed to the Worker through JS RPC and exchange plain data only.
+ * Implements the config store, the credential store/selection (`pick`, `report`, credential management) and OAuth
+ * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
 export class ControlPlane extends DurableObject<Env> {
   readonly #config: ConfigStore
   readonly #pool: CredentialPool
+  readonly #refresh: RefreshManager
   #configView: ConfigView | undefined
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -33,7 +42,17 @@ export class ControlPlane extends DurableObject<Env> {
     this.#config = new ConfigStore(ctx.storage.sql)
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
-      config: () => this.#currentConfig()
+      config: () => this.#currentConfig(),
+      decorate: (credential) => this.#refresh.decorate(credential)
+    })
+    this.#refresh = new RefreshManager({
+      host: this.#pool,
+      alarm: {
+        set: (at) => ctx.storage.setAlarm(at),
+        clear: () => ctx.storage.deleteAlarm()
+      },
+      http: FetchHttpClient.layer,
+      workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"]
     })
   }
 
@@ -91,23 +110,101 @@ export class ControlPlane extends DurableObject<Env> {
    * Creates or replaces the auth file `name` (parsed object or JSON text). `mergeExisting` (default true) carries user
    * settings of the previous file over, as a re-login does.
    */
-  upsertCredential(name: string, content: string | JsonObject, options?: { mergeExisting?: boolean }): UpsertResult {
-    return this.#pool.upsert(name, content, { mergeExisting: options?.mergeExisting ?? true })
+  async upsertCredential(
+    name: string,
+    content: string | JsonObject,
+    options?: { mergeExisting?: boolean }
+  ): Promise<UpsertResult> {
+    const result = this.#pool.upsert(name, content, { mergeExisting: options?.mergeExisting ?? true })
+    if (result.ok) await this.#rearm()
+    return result
   }
 
   /** Imports a Go auth JSON file verbatim (an existing credential of the same name is replaced). */
-  importAuthFile(name: string, content: string | JsonObject): UpsertResult {
-    return this.#pool.upsert(name, content, { mergeExisting: false })
+  async importAuthFile(name: string, content: string | JsonObject): Promise<UpsertResult> {
+    const result = this.#pool.upsert(name, content, { mergeExisting: false })
+    if (result.ok) await this.#rearm()
+    return result
   }
 
   /** Removes a stored credential and its runtime state. */
-  removeCredential(id: string): { readonly removed: boolean } {
-    return { removed: this.#pool.remove(id) }
+  async removeCredential(id: string): Promise<{ readonly removed: boolean }> {
+    const removed = this.#pool.remove(id)
+    if (removed) {
+      this.#refresh.forget(id)
+      await this.#rearm()
+    }
+    return { removed }
   }
 
   /** Disables or re-enables a stored credential (persisted as `disabled` in its file JSON). */
-  setCredentialDisabled(id: string, disabled: boolean): SetDisabledResult {
+  async setCredentialDisabled(id: string, disabled: boolean): Promise<SetDisabledResult> {
     const result = this.#pool.setDisabled(id, disabled)
-    return result === "ok" ? { ok: true } : { ok: false, error: result }
+    if (result !== "ok") return { ok: false, error: result }
+    await this.#rearm()
+    return { ok: true }
+  }
+
+  // --- token refresh (refresh/manager.ts) ----------------------------------------------------------------------
+
+  /** Durable Object alarm: refreshes due credentials and re-arms the single multiplexed alarm. */
+  override async alarm(): Promise<void> {
+    await this.#refresh.onAlarm()
+  }
+
+  /**
+   * Request-time refresh after the upstream answered 401 (`tryRefreshAfterUnauthorized`): pass the access token that
+   * was rejected so concurrent 401s share one refresh and an already replaced token is not refreshed again. On success
+   * the executor retries once with `credential.metadata.access_token`. Never throws: failures are structured.
+   */
+  refreshNow(credentialId: string, rejectedAccessToken?: string): Promise<RefreshResult> {
+    const options: RefreshOptions = rejectedAccessToken === undefined ? {} : { rejectedAccessToken }
+    return this.#refresh.refreshNow(credentialId, options)
+  }
+
+  /** Manual refresh (management): ignores the terminal-unauthorized gating. */
+  forceRefresh(credentialId: string): Promise<RefreshResult> {
+    return this.#refresh.refreshNow(credentialId, { force: true })
+  }
+
+  /**
+   * Returns the credential ready to use: a cached/minted Vertex service-account token, a minted Meta key, or a
+   * refreshed OAuth token when the stored one is missing/expired (Antigravity: within 5 min). Executors call it when
+   * the picked snapshot has no usable `metadata.access_token`.
+   */
+  ensureFresh(credentialId: string): Promise<RefreshResult> {
+    return this.#refresh.ensureFresh(credentialId)
+  }
+
+  /** Cron safety sweep: refreshes what is overdue and re-arms a lost alarm. */
+  sweepRefresh(): Promise<RunSummary> {
+    return this.#refresh.sweep()
+  }
+
+  /**
+   * Merges non-token settings into a stored credential's file (`UpdatePreparedAuth`: request preparation results such
+   * as Antigravity `project_id` or Claude profile fields). `null` deletes a key. Token material, `type` and
+   * `disabled` cannot be written here.
+   */
+  async patchCredentialMetadata(
+    credentialId: string,
+    patch: JsonObject
+  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "forbidden_key" }> {
+    const target = this.#pool.refreshTarget(credentialId)
+    if (target === undefined) return { ok: false, error: "not_found" }
+    if (Object.keys(patch).some(isProtectedMetadataKey)) return { ok: false, error: "forbidden_key" }
+    const metadata: JsonObject = { ...target.credential.metadata }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) delete metadata[key]
+      else metadata[key] = value
+    }
+    this.#pool.commitRefresh(credentialId, { metadata })
+    await this.#rearm()
+    return { ok: true }
+  }
+
+  /** Credential changes move refresh deadlines; a failure to re-arm must never fail the management call. */
+  async #rearm(): Promise<void> {
+    await this.#refresh.rearm().catch(() => undefined)
   }
 }

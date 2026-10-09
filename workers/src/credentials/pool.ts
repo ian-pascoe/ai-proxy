@@ -48,6 +48,20 @@ export interface PoolOptions {
   readonly config: () => ConfigView
   readonly now?: () => number
   readonly newId?: () => string
+  /** Adjusts the credential handed to executors by `pick` (never persisted), e.g. cached Vertex access tokens. */
+  readonly decorate?: (credential: Credential) => Credential
+}
+
+/** A stored (auth file) credential with its runtime state: the unit the refresh manager works on. */
+export interface RefreshTarget {
+  readonly credential: Credential
+  readonly state: CredentialState
+}
+
+export interface RefreshCommit {
+  /** Complete new auth-file metadata; omitted when only the runtime state changes. */
+  readonly metadata?: JsonObject
+  readonly state?: CredentialState
 }
 
 export type UpsertResult =
@@ -75,6 +89,7 @@ export class CredentialPool {
   readonly #config: () => ConfigView
   readonly #now: () => number
   readonly #newId: () => string
+  readonly #decorate: (credential: Credential) => Credential
   readonly #rotation = new RotationState()
   readonly #affinity = new SessionCache()
   readonly #poolOffsets = new Map<string, number>()
@@ -86,6 +101,7 @@ export class CredentialPool {
     this.#config = options.config
     this.#now = options.now ?? Date.now
     this.#newId = options.newId ?? (() => crypto.randomUUID())
+    this.#decorate = options.decorate ?? ((credential) => credential)
     this.#states = options.store.loadStates()
   }
 
@@ -178,7 +194,7 @@ export class CredentialPool {
     }
     return {
       ok: true,
-      credential: toSnapshot(credential),
+      credential: toSnapshot(this.#decorate(credential)),
       route: {
         requestedModel: route.requestedModel,
         routeModel: route.routeModel,
@@ -228,6 +244,38 @@ export class CredentialPool {
       for (const key of lease.affinityKeys ?? []) this.#affinity.compareAndDelete(key, credential.id)
     }
     return { ok: true, applied: true }
+  }
+
+  /** Stored credentials (never config API keys: they have no tokens) with their runtime state. */
+  refreshTargets(): RefreshTarget[] {
+    const targets: RefreshTarget[] = []
+    for (const credential of this.#current().credentials.values()) {
+      if (credential.source === "file") targets.push({ credential, state: this.#state(credential.id) })
+    }
+    return targets
+  }
+
+  refreshTarget(id: string): RefreshTarget | undefined {
+    const credential = this.#current().credentials.get(id)
+    return credential === undefined || credential.source !== "file" ? undefined : { credential, state: this.#state(id) }
+  }
+
+  /**
+   * Persists a refresh result: new auth-file metadata (token changes bump `credentialVersion`, session bindings and
+   * runtime state are kept) and/or the runtime state. Synchronous, so the write is durable before the caller returns.
+   */
+  commitRefresh(id: string, change: RefreshCommit): RefreshTarget | undefined {
+    const stored = this.#store.get(id)
+    if (stored === undefined) return undefined
+    if (change.metadata !== undefined) {
+      this.#store.upsert(id, stored.provider, change.metadata, { mergeExisting: false })
+      this.#invalidate()
+    }
+    if (change.state !== undefined) {
+      this.#states.set(id, change.state)
+      this.#store.saveState(id, change.state)
+    }
+    return this.refreshTarget(id)
   }
 
   list(): CredentialSummary[] {

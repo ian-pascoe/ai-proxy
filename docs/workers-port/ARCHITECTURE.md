@@ -235,6 +235,48 @@ Codex client catalog (`GET /v1/models?client_version=...`, `internal/client/code
 slice implements `ModelsOptions.codexClient` (the validated catalog is already refreshed into KV and exposed as
 `ModelCatalogs.codexClient`).
 
+## Token refresh (`src/credentials/refresh/`)
+
+Port of `auto_refresh_loop.go` + `conductor_refresh.go` + the per-provider `Refresh` executors. The `RefreshManager`
+(Cloudflare-free, unit tested with a fake host/alarm/clock) is owned by the `ControlPlane` DO, which is the only writer:
+
+- **Scheduling** (`schedule.ts`): `nextRefreshCheckAt` is a pure function of (now, credential, state) with the Go leads
+  (codex 24 h, claude 4 h, antigravity 30 min, xai/kimi/kimi-ai/kimi.ai 5 min; devin, meta, kimi.com, vertex never).
+  One alarm is multiplexed over all credentials: `rearm()` takes the minimum over the stored credentials (no heap) and
+  is called after every credential mutation, after each alarm run and by the cron `sweepRefresh()`. `alarm()` refreshes
+  what is due (`oauth.auth-auto-refresh-workers`, default 16, concurrently) and always re-arms, never sooner than 30 s
+  when a credential is still due (guards against spinning). A running refresh pushes that credential's next check 60 s.
+- **Single writer / dedupe**: one in-flight refresh per credential; the alarm, concurrent 401 recoveries and management
+  calls share its outcome. `refreshNow(id, rejectedAccessToken?)` first records the rejected token (only when the token
+  has no expiry of its own, like Go), returns the current credential without an upstream call when the token was
+  already replaced, and otherwise refreshes. `forceRefresh(id)` ignores the terminal-unauthorized gating.
+- **Persistence** (`pool.commitRefresh`, synchronous SQLite): new metadata is merged three-way (`three-way.ts`, the
+  `MergeRefreshedAuth` metadata rules; user edits made while the refresh ran win, token keys take the refreshed value)
+  and written before any caller sees the token, then runtime state (`outcome.ts`: failure table of credentials.md §9.2,
+  back-off 5 min / invalid_grant 1->30 min, terminal 401, 30 s ineffective-refresh guard, concurrent cooldowns kept).
+  A refresh whose base tokens were replaced meanwhile (re-login) is discarded. `credentialVersion` bumps on rotation,
+  so leases of the old tokens are ignored by `report`.
+- **Protocols** (`claude|codex|antigravity|xai|kimi|meta.ts`): `(context) => Effect<updatedMetadata, RefreshError,
+  HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in production, a recording client in
+  tests). Each HTTP call is bounded to 30 s, a whole refresh to 120 s. Claude retries only HTTP >= 500 and blocks the
+  credential for `Retry-After` on 429; Codex retries three times except `refresh_token_reused`.
+- **Request-time preparation** (`ensureFresh(id)`): returns a snapshot with a usable `metadata.access_token`: Meta mints
+  the API key from the DCA token (persisted first), OAuth providers refresh when the token is missing/expired/rejected
+  (Antigravity: within 5 min), **Vertex** mints a service-account token. `patchCredentialMetadata(id, patch)` persists
+  preparation results (Antigravity `project_id`, Claude profile fields) without touching token material.
+- **Vertex** (`vertex.ts`): no auth-file refresh. RS256 JWT-bearer grant with WebCrypto (PEM repaired like
+  `keyutil.go`, PKCS#1 wrapped into PKCS#8, scope cloud-platform, 1 h lifetime). The token is cached in DO memory per
+  credential (fingerprint = `credentialVersion:updatedAt`) until `exp - 60 s`, never persisted. Executors get it two ways:
+  `pick` returns a snapshot whose `metadata.access_token`/`expired` are injected from the cache when still valid
+  (`CredentialPool` `decorate` hook), and `ensureFresh` mints on a miss (concurrent callers share one mint). An executor
+  therefore does: `if (!snapshot.metadata.access_token) snapshot = (await controlPlane.ensureFresh(id)).credential`.
+
+Deviations from Go: credentials without a refresh token are never scheduled (Go loops every 30 s on an unchanged auth);
+Codex keeps `email`/`plan_type` when the new `id_token` lacks them; a cached xAI `token_endpoint` must be an https x.ai
+URL; Kimi/Claude device/uTLS headers are constants/subsets; `META_MINT_URL` and Devin's metadata refresh (protobuf quota
+probe, never scheduled) are not ported; Antigravity project discovery / credits probe and Claude device-id/profile
+preparation belong to their executor slices (use `patchCredentialMetadata`).
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot
