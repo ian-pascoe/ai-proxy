@@ -351,19 +351,16 @@ describe("Meta executor", () => {
     expect(h.usage.failed).toBe(true)
   })
 
-  it("counts tokens only after the local tokenizer slice (501 for now)", async () => {
+  it("counts tokens locally without calling the upstream", async () => {
     const h = await harness(metaKey(), () => sse([completed()]))
-    const error = await Effect.runPromise(
-      Effect.flip(
-        executor
-          .countTokens(
-            h.context,
-            { model: "muse-spark", payload: json(responsesRequest()) as Json },
-            responsesOptions()
-          )
-          .pipe(Effect.provide(h.layers))
-      )
+    const response = await Effect.runPromise(
+      executor
+        .countTokens(h.context, { model: "muse-spark", payload: json(responsesRequest()) as Json }, responsesOptions())
+        .pipe(Effect.provide(h.layers))
     )
-    expect(error.status).toBe(501)
+    expect(JSON.parse(response.payload)).toEqual({
+      response: { usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } }
+    })
+    expect(h.calls).toHaveLength(0)
   })
 })

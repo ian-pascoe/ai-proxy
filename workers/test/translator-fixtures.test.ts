@@ -109,7 +109,8 @@ describe("translator golden fixtures", () => {
               model: c.model,
               originalRequest: c.request,
               translatedRequest: envelope.body,
-              state: makeTranslationState()
+              // The Go corpus runs the raw translators; the Claude input token estimate has its own fixtures.
+              state: { ...makeTranslationState(), claudeInputTokensHandled: true }
             }
             const outputs = c.responseLines.map((line) =>
               builtinTranslators.translateStream(c.from, c.to, context, line).map(normalizeChunk)

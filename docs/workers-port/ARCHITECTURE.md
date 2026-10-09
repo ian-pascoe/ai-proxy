@@ -278,8 +278,7 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
   `/backend-api/codex/alpha/search` (`handlers/codex/alpha-search.ts`) forward the sanitised body to
   `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
 - **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, multi-agent-v2/orphan-delegation rewriting,
-  `is-compat` models, local token counting (`countTokens` answers 501; needs a BPE tokenizer) and the Claude stream
-  input-token estimate, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
+  `is-compat` models, models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
   the Grok signature check, OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
   non-`gpt-image` models (ported but not routed).
 
@@ -317,8 +316,7 @@ Port of `xai_executor*.go` (HTTP/SSE only; the Responses WebSocket executor belo
   TTL `multimedia.video-result-auth-cache-ttl`, default 3 h, KV minimum 60 s) and pins retrievals through `ExecutionInput.pinnedId`
   (`ExecutionOutput.credentialId` reports the serving credential). `/v1/audio/speech` and `/v1/tts` convert to `POST /tts`.
 - **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge and multi-agent-v2 input
-  rewriting (shared with Codex), local `o200k_base` token counting (`countTokens` answers 501), the Claude stream input-token
-  estimate, `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+  rewriting (shared with Codex), `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 ## Model registry and `/models` endpoints (`src/registry/`)
@@ -644,9 +642,53 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
 Deviations from Go: Devin's per-session turn counter and Kimi's replay store are per isolate; `fetch` always sends a
 User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
 error; `internal/signature` provenance detection used for Devin thought signatures is approximated by structural checks.
-Not ported: the apply_patch bridge (Kimi/Meta/Devin), Claude stream input-token estimates, local token counting for Meta
-(`countTokens` answers 501), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
+Not ported: the apply_patch bridge (Kimi/Meta/Devin), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs.
+
+## Local token counting (`src/tokenizer/`, `src/executor/helps/token-count.ts`)
+
+Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_executor_tokens.go` (also Meta),
+`xai_executor_tokens.go`, `helps/claude_input_tokens.go` and `claude_executor_tokens.go` (gateway estimate). It replaces the
+501 answers of `countTokens` for Codex, xAI, Meta and OpenAI-compatibility providers and the heuristic Claude estimate.
+
+- **Tokenizer** (`bpe.ts`, `encodings.ts`): no npm dependency. `BpeCodec.count` is the Go `codec.Codec.Count` algorithm: the
+  encoding's pre-tokenisation regex (translated to JavaScript), a whole-piece vocabulary hit counts one token, otherwise the
+  piece is merged from bytes by lowest rank (leftmost wins ties); pieces over 192 bytes use an equivalent O(n log n) heap merge
+  (Go's loop is quadratic). Special tokens are plain text, like Go. Encodings: `o200k_base` and `cl100k_base`; model mapping
+  `encodingForModel` (`TokenizerForModel`: empty/gpt-4/gpt-3 -> cl100k, everything else o200k) and `encodingForCodexModel`
+  (gpt-5/4.1/4o -> o200k, otherwise cl100k).
+- **Ranks** are `src/tokenizer/ranks/{o200k_base,cl100k_base}.bin` (`count:u32le`, then `len:u8,bytes` per token in rank order,
+  1.6 MB + 0.7 MB), generated from the Go vocabularies by `go run ./workers/tools/fixturegen/tokens`. They are wrangler `Data`
+  modules (default rule for `*.bin`; vitest handles the import too), i.e. raw bytes without JavaScript to parse. The `Map` is
+  built lazily on the first `count` of an encoding (o200k ~190 ms, cl100k ~80 ms once per isolate, in workerd), so module
+  load stays cheap: `wrangler check startup` (`pnpm check:startup`) reports ~105-120 ms active startup before and after the
+  slice (the 1 s limit is not at risk). Bundle size grows from 946 KiB to 2419 KiB gzipped (free plan limit 3 MiB, paid 10 MiB):
+  dropping `cl100k_base` would save ~0.4 MiB if the limit becomes tight.
+- **Regex fidelity**: Go's `regexp2` generated matchers differ from the textbook patterns, and parity is defined by Go:
+  U+007F (DEL) is never matched (dropped), `\s*[\r\n]+` ends at the first newline run (`" \n \n"` is two pieces), and `\s` is
+  `unicode.IsSpace` (U+0085 yes, U+FEFF no). `encodings.ts` encodes these quirks; `strings.TrimSpace` is `goTrimSpace`.
+- **Counters** (`helps/token-count.ts`): `countOpenAIChatTokens`, `countCodexInputTokens`, `countXaiInputTokens` collect segments
+  of the *final* upstream body (after payload rules) exactly like the Go collectors. Executors: Codex shapes the body like Go's
+  `CountTokens` (translate with `stream=false`, thinking, model, field deletions, instructions, payload rules; no replay, cache
+  key or tool-schema normalisation), OpenAI-compatibility skips max-token/cache-key shaping, xAI reuses `prepare` + payload
+  rules, Meta reuses `prepareMetaRequest(..., stream=false)` after the token check. Responses are produced by the registry's
+  `translateTokenCount`. Devin keeps Go's `len/4`; Claude/Kimi use upstream `count_tokens` where Go does.
+- **Claude stream input tokens** (`tokenizer/claude-input.ts`): `TranslatorRegistry.translateStream` applies Go's
+  `ClaudeInputTokenState` for every `claude` client served by a non-Claude provider format (all executors, including future
+  ones, without per-call-site wiring): the first `message_start` whose `message.usage.input_tokens` is missing/0 gets the
+  `o200k_base` estimate of the client's original request (`ResponseContext.originalRequest`); the once-per-attempt flag is
+  `TranslationState.claudeInputTokensHandled`. Estimation failures leave the chunk untouched. The raw Go translator corpus
+  tests set the flag so they keep exercising the bare translators.
+- **Fixtures** (`test/fixtures/tokens.json`, `go run ./workers/tools/fixturegen/tokens`): ~390 texts x 2 encodings (edge cases,
+  scripts, emoji, whitespace/newline/DEL fuzz, long pieces), the model -> encoding table, Claude estimates, 390 `CountTokens`
+  answers of the real Go Codex/OpenAI-compat/xAI/Meta/Claude executors, and 21 stream scenarios through
+  `helps.TranslateStreamWithClaudeInputTokens` (real translators plus a passthrough format for framing edge cases).
+  Tests: `tokenizer-parity`, `tokenizer-units`, `token-count-executors`, `claude-input-tokens`.
+
+Deviations from Go: raw JSON segments are `JSON.stringify` output of the parsed body (Go counts raw bytes: pretty-printed tool
+schemas or `1.0` numbers sent by a client count slightly differently); Unicode property tables (`\p{L}` ...) come from V8, not
+Go's `unicode` package, so characters assigned after the older table can be classified differently; a stream estimate error is
+silent (Go logs a warning).
 
 ## Authentication (Cloudflare Access)
 

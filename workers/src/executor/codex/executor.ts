@@ -7,8 +7,7 @@
  * sanitising -> user payload rules (final barrier) -> upstream fetch -> response translation.
  *
  * Not ported (documented follow-ups): websocket transport (#18), bootstrap buffering and retries (retry slice),
- * multi-agent-v2 rewriting, `is-compat` model handling, local token counting (needs a BPE tokenizer) and the Claude
- * stream input-token estimate.
+ * multi-agent-v2 rewriting and `is-compat` model handling. `CountTokens` counts locally (`helps/token-count.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -17,12 +16,14 @@ import { asString, cloneJson, del, get, isJsonObject, type Json, set, tryParseJs
 import { builtinTranslators } from "../../translator/builtin.ts"
 import { Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
+import { encodingForCodexModel, getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
 import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { normalizeCodexToolSchemas } from "../helps/codex-tool-schema.ts"
 import { sanitizeCodexInputItemIds } from "../helps/codex-input-ids.ts"
 import { finalizePayload } from "../helps/payload.ts"
+import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
 import { Thinking } from "../thinking.ts"
@@ -706,15 +707,59 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     return executeResponsesStream(context, request, options)
   }
 
-  /** Local BPE token counting is not ported yet. */
-  const countTokens: ProviderExecutor["countTokens"] = () =>
-    Effect.fail(
-      new ExecutionError({
-        status: 501,
-        message: "token counting is not supported for codex yet",
-        requestScoped: true
-      })
+  /**
+   * `CountTokens`: the request is shaped like `prepare` up to the payload rules (no replay, cache key, image tool or
+   * schema normalisation), then counted locally with the model's BPE encoding.
+   */
+  const countTokens = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const thinking = yield* Thinking
+    const baseModel = parseSuffix(request.model).modelName
+    const from = options.sourceFormat
+    const to = Formats.Codex
+    const responseFormat = responseFormatOf(options)
+    const pair = translatePair(context, request, options, to, baseModel, false, thinking.summary)
+    if (pair instanceof ExecutionError) return yield* pair
+    const { translated, original } = pair
+
+    let body = yield* thinking.apply({
+      body: translated.body,
+      model: request.model,
+      from,
+      to,
+      provider: CODEX_PROVIDER,
+      source: request.payload,
+      ...(options.originalRequest !== undefined ? { originalSource: options.originalRequest } : {}),
+      configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
+      modelInfo: request.modelInfo,
+      lookupModelInfo: request.modelLookup
+    })
+    body = setIfDifferent(body, "model", baseModel)
+    for (const field of [
+      "previous_response_id",
+      "generate",
+      "prompt_cache_retention",
+      "safety_identifier",
+      "stream_options"
+    ]) {
+      body = del(body, field)
+    }
+    body = setIfDifferent(body, "stream", false)
+    body = normalizeCodexInstructions(
+      body,
+      isNativeCodexRequest(request.payload, options.headers, from, responseFormat)
     )
+    body = finalize(context, options, baseModel, request.model, to, original.body, body)
+
+    const count = countCodexInputTokens(getCodec(encodingForCodexModel(baseModel)), body)
+    return {
+      payload: registry.translateTokenCount(responseFormat, to, count, buildResponsesUsageJson(count)),
+      headers: new Headers()
+    } satisfies ExecutorResponse
+  })
 
   return { identifier: CODEX_PROVIDER, execute, executeStream, countTokens }
 }

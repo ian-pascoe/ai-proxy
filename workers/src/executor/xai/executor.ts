@@ -8,8 +8,7 @@
  * input normalisation -> prompt cache key -> finalizePayload (user payload rules, always last) -> headers -> fetch.
  *
  * Not ported (documented follow-ups): the WebSocket transport (#18), the apply_patch response bridge and
- * multi-agent-v2 input rewriting, local token counting (needs a BPE tokenizer) and the Claude stream input-token
- * estimate. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
+ * multi-agent-v2 input rewriting. `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the conductor (`withCredentialRefresh`), not by the executor.
  */
 import { Clock, Effect, Stream } from "effect"
 import { splitLines } from "../../http/sse.ts"
@@ -17,12 +16,14 @@ import { asString, cloneJson, del, get, isJsonObject, type Json, set, tryParseJs
 import { builtinTranslators } from "../../translator/builtin.ts"
 import { Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
+import { getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
 import { ExecutionError } from "../errors.ts"
 import { ensureResponsesUsageDetails, OutputItemCollector, parseCodexUsage } from "../codex/output.ts"
 import { claudeCodeExecutionScope } from "../codex/replay.ts"
 import { normalizeCodexInstructions, setIfDifferent } from "../codex/request.ts"
 import { finalizePayload } from "../helps/payload.ts"
+import { buildResponsesUsageJson, countXaiInputTokens } from "../helps/token-count.ts"
 import { providerSessionUuid, uuidV5Oid } from "../helps/uuid.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -185,16 +186,6 @@ const mediaFinalize = (context: ExecutionContext, request: ExecutorRequest, opti
   // Payload rules target the "openai" protocol for images, videos and speech; the baseline is the client body.
   return (model, original, body) => finalize(model, "openai", original, body)
 }
-
-/** Local BPE token counting is not ported yet. */
-const countTokens: ProviderExecutor["countTokens"] = () =>
-  Effect.fail(
-    new ExecutionError({
-      status: 501,
-      message: "token counting is not supported for xai yet",
-      requestScoped: true
-    })
-  )
 
 const incompleteStreamError = () =>
   new ExecutionError({
@@ -556,6 +547,26 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     }
     return executeResponsesStream(context, request, options)
   }
+
+  /** `CountTokens`: the Responses request as it would be sent upstream, counted locally with `o200k_base`. */
+  const countTokens = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const prepared = yield* prepare(context, request, options, { stream: false, to: Formats.Codex })
+    finalizePrepared(context, request, options, prepared)
+    const count = countXaiInputTokens(getCodec("o200k_base"), prepared.body)
+    return {
+      payload: registry.translateTokenCount(
+        prepared.responseFormat,
+        prepared.providerFormat,
+        count,
+        buildResponsesUsageJson(count)
+      ),
+      headers: new Headers()
+    } satisfies ExecutorResponse
+  })
 
   return { identifier: XAI_PROVIDER, execute, executeStream, countTokens }
 }

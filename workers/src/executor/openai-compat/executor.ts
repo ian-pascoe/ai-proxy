@@ -9,8 +9,9 @@
  * Images (`openai-image` source format) take the `executeImages` path below: the body is forwarded to
  * `{base-url}/images/generations|edits` (see `images.ts`).
  *
- * Not ported yet (later slices): `/responses/compact` (Responses slice), local token counting
- * (needs a BPE tokenizer), the text-only tool-result normalisation for models whose `input-modalities` exclude
+ * `CountTokens` counts locally with the model's BPE encoding (`helps/token-count.ts`).
+ *
+ * Not ported yet (later slices): `/responses/compact` (Responses slice), the text-only tool-result normalisation for models whose `input-modalities` exclude
  * images, and derived prompt cache keys (session identity lives in the conductor slice; a client-supplied
  * `prompt_cache_key` is honoured).
  */
@@ -21,6 +22,7 @@ import { splitLines } from "../../http/sse.ts"
 import { builtinTranslators } from "../../translator/builtin.ts"
 import { EntryOnlyFormats, Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
+import { encodingForModel, getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIStreamUsage, parseOpenAIUsage, responseModelOf, ssePayloadObject } from "../../usage/record.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { ensureResponsesUsageDetails } from "../codex/output.ts"
@@ -32,6 +34,7 @@ import {
   shouldUseMaxCompletionTokens
 } from "../helps/openai-compat-models.ts"
 import { openAICompatRetryAfterMs } from "../helps/retry-after.ts"
+import { buildOpenAIUsageJson, countOpenAIChatTokens } from "../helps/token-count.ts"
 import { resolveCompatConfig } from "../models.ts"
 import { parseSuffix } from "../suffix.ts"
 import { Thinking } from "../thinking.ts"
@@ -99,16 +102,6 @@ const responseContext = (request: ExecutorRequest, options: ExecutorOptions, tra
   translatedRequest: translated,
   state: makeTranslationState()
 })
-
-/** Local BPE token counting is not ported yet. */
-const countTokens = (_context: ExecutionContext, _request: ExecutorRequest, _options: ExecutorOptions) =>
-  Effect.fail(
-    new ExecutionError({
-      status: 501,
-      message: "token counting is not supported for openai-compatibility providers yet",
-      requestScoped: true
-    })
-  )
 
 export interface OpenAICompatExecutorOptions {
   /** Translator registry (defaults to the built-in one). */
@@ -386,6 +379,68 @@ export const makeOpenAICompatExecutor = (
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
+  })
+
+  /**
+   * `CountTokens`: translate to Chat Completions, thinking and payload rules (no max-token or cache-key shaping, no
+   * credential needed), then count locally with the model's BPE encoding.
+   */
+  const countTokens = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const thinking = yield* Thinking
+    const baseModel = parseSuffix(request.model).modelName
+    const from = options.sourceFormat
+    const responseFormat = responseFormatOf(options)
+    const translate = (payload: Json) =>
+      registry.translateRequest(
+        from,
+        to,
+        { format: from, model: baseModel, stream: false, body: payload },
+        thinking.summary
+      )
+    const translated = translate(request.payload)
+    if (translated.error !== undefined) {
+      return yield* new ExecutionError({
+        status: translated.error.status,
+        message: translated.error.message,
+        requestScoped: true
+      })
+    }
+    const original = options.originalRequest === undefined ? translated : translate(options.originalRequest)
+    let body = yield* thinking.apply({
+      body: translated.body,
+      model: request.model,
+      from,
+      to,
+      provider,
+      source: request.payload,
+      ...(options.originalRequest === undefined ? {} : { originalSource: options.originalRequest }),
+      configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
+      modelInfo: request.modelInfo,
+      lookupModelInfo: request.modelLookup
+    })
+    body = finalizePayload(
+      context.config,
+      provider,
+      {
+        model: baseModel,
+        requestedModel: options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model,
+        protocol: to,
+        fromProtocol: from,
+        requestPath: options.metadata.requestPath,
+        headers: options.headers,
+        original: original.body
+      },
+      body
+    )
+    const count = countOpenAIChatTokens(getCodec(encodingForModel(baseModel)), body)
+    return {
+      payload: registry.translateTokenCount(responseFormat, to, count, buildOpenAIUsageJson(count)),
+      headers: new Headers()
+    } satisfies ExecutorResponse
   })
 
   return { identifier: provider, execute, executeStream, countTokens }

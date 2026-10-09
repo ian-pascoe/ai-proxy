@@ -6,7 +6,7 @@
  * The upstream always streams (non-stream callers get the aggregated terminal event). The lazy DCA -> API-key mint is
  * done by the conductor through `ControlPlane.ensureFresh` before the attempt (`withCredentialRefresh`).
  *
- * Not ported: the apply_patch bridge, local token counting (`countTokens` answers 501), outbound proxies.
+ * `CountTokens` counts the prepared body locally with `o200k_base`. Not ported: the apply_patch bridge, outbound proxies.
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http"
@@ -36,6 +36,8 @@ import type {
 } from "../types.ts"
 import { META_CLIENT_ID, META_USER_AGENT, requireMetaToken } from "./credentials.ts"
 import { metaStreamEventError, wrapMetaUpstreamError } from "./errors.ts"
+import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts"
+import { getCodec } from "../../tokenizer/index.ts"
 import { type MetaPrepared, prepareMetaRequest } from "./request.ts"
 
 export const META_PROVIDER = "meta"
@@ -235,11 +237,28 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
-  /** Local `o200k_base` token counting is not ported yet. */
-  const countTokens: ProviderExecutor["countTokens"] = () =>
-    Effect.fail(
-      new ExecutionError({ status: 501, message: "token counting is not supported for meta yet", requestScoped: true })
-    )
+  /** `CountTokens`: the Responses body that would be sent upstream, counted locally with `o200k_base`. */
+  const countTokens: ProviderExecutor["countTokens"] = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    yield* Effect.try({
+      try: () => requireMetaToken(context.credential),
+      catch: (error) => error as ExecutionError
+    })
+    const prepared = yield* prepareMetaRequest(registry, context, request, options, META_PROVIDER, false)
+    const count = countCodexInputTokens(getCodec("o200k_base"), prepared.body)
+    return {
+      payload: registry.translateTokenCount(
+        prepared.responseFormat,
+        Formats.Codex,
+        count,
+        buildResponsesUsageJson(count)
+      ),
+      headers: new Headers()
+    } satisfies ExecutorResponse
+  })
 
   return { identifier: META_PROVIDER, execute, executeStream, countTokens }
 }

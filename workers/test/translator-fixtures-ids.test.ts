@@ -98,7 +98,8 @@ describe("translator golden fixtures with generated ids", () => {
             model: c.model,
             originalRequest: c.request,
             translatedRequest: envelope.body,
-            state: makeTranslationState()
+            // The Go corpus runs the raw translators; the Claude input token estimate has its own fixtures.
+            state: { ...makeTranslationState(), claudeInputTokensHandled: true }
           })
           if (c.responseLines !== undefined) {
             const state = context()

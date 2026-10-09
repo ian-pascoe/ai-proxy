@@ -47,9 +47,9 @@ import {
   replayScopeValid,
   type ThinkingReplayStore
 } from "./thinking-replay.ts"
-import { countInputTokens } from "./tokens.ts"
 import { mergeUsage, parseClaudeStreamUsage, parseClaudeUsage } from "./usage.ts"
 import type { UsageDetail } from "../../usage/record.ts"
+import { countClaudeInputTokens } from "../../tokenizer/claude-input.ts"
 
 const defaultContinuity = makeMemoryContinuityStore()
 const defaultReplay = makeMemoryReplayStore()
@@ -389,7 +389,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
     const body = yield* prepareLocalCountBody(input)
-    const count = countInputTokens(body)
+    const count = countClaudeInputTokens(body)
     const out = registry.translateTokenCount(
       responseFormat,
       Formats.Claude,

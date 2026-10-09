@@ -46,19 +46,16 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
   context: ExecutionContext,
   request: ExecutorRequest,
   options: ExecutorOptions,
-  provider: string
+  provider: string,
+  /** `false` only for local token counting (Go `prepareResponsesRequest(..., false)`); upstream calls always stream. */
+  stream = true
 ) {
   const thinking = yield* Thinking
   const baseModel = parseSuffix(request.model).modelName
   const from = options.sourceFormat
   const to = Formats.Codex
   const translate = (payload: Json) =>
-    registry.translateRequest(
-      from,
-      to,
-      { format: from, model: baseModel, stream: true, body: payload },
-      thinking.summary
-    )
+    registry.translateRequest(from, to, { format: from, model: baseModel, stream, body: payload }, thinking.summary)
   const translated = translate(request.payload)
   if (translated.error !== undefined) {
     return yield* new ExecutionError({
@@ -85,7 +82,7 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
     lookupModelInfo: request.modelLookup
   })
   body = setIfDifferent(body, "model", baseModel)
-  body = setIfDifferent(body, "stream", true)
+  body = setIfDifferent(body, "stream", stream)
   for (const field of [
     "generate",
     "prompt_cache_retention",

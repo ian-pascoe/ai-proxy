@@ -15,7 +15,8 @@
  *    `ApplySummaryConfigForModel`) are injected through {@link SummaryHooks} so the thinking slice owns them.
  */
 import { cloneJson, get, type Json, set } from "../json/index.ts"
-import type { Format } from "./formats.ts"
+import { applyClaudeInputTokens, type ClaudeInputTokenState } from "../tokenizer/claude-input.ts"
+import { Formats, type Format } from "./formats.ts"
 
 /** A request translator refused the request (Go `RequestEnvelope.Err`); maps to a request-scoped 400. */
 export class TranslationError extends Error {
@@ -50,7 +51,7 @@ export type RequestTransform = (model: string, body: Json, stream: boolean) => J
 export type RequestEnvelopeTransform = (envelope: RequestEnvelope) => RequestEnvelope
 
 /** Per-request mutable translator state (Go `param *any`). Allocate one per upstream attempt. */
-export interface TranslationState {
+export interface TranslationState extends ClaudeInputTokenState {
   value: unknown
   /** A retained tool-input translation failure; suppresses raw fallbacks (Go `ToolInputError()`). */
   toolInputError?: string
@@ -184,11 +185,16 @@ export class TranslatorRegistry {
     return { ...input, body, format: provider }
   }
 
-  /** `TranslateStream`: without a stream transform the upstream line is passed through unchanged. */
+  /**
+   * `TranslateStream`: without a stream transform the upstream line is passed through unchanged. Claude clients served
+   * by another protocol get the estimated input tokens in `message_start` (Go `TranslateStreamWithClaudeInputTokens`).
+   */
   translateStream(client: Format, provider: Format, context: ResponseContext, line: string): ReadonlyArray<string> {
     const transform = this.#responses.get(key(client, provider))?.stream
-    if (transform === undefined) return [line]
-    return transform(context, line)
+    const chunks = transform === undefined ? [line] : transform(context, line)
+    return client === Formats.Claude && provider !== Formats.Claude
+      ? applyClaudeInputTokens(context.state, context.originalRequest, chunks)
+      : chunks
   }
 
   /** `TranslateNonStream`: without a transform the body is returned unchanged; `undefined` on translation failure. */
