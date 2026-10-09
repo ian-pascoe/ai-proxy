@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers"
 import { Effect, Schema } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { FetchHttpClient, type HttpClient } from "effect/http"
 import { ConfigStore, decodeStoredConfig, type ConfigSnapshotWire, type PutConfigResult } from "../config/store.ts"
 import type { Config } from "../config/schema.ts"
 import type { JsonObject } from "../json/index.ts"
@@ -25,6 +25,16 @@ import {
   type RefreshOneResult
 } from "../management/credential-ops.ts"
 import { applyFieldPatch } from "./field-patch.ts"
+import {
+  type CallbackInput,
+  type CallbackResult,
+  makeOAuthService,
+  type OAuthService,
+  type StartInput,
+  type StartResult,
+  type StatusResult
+} from "../oauth/service.ts"
+import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts"
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
 const decodeLease = Schema.decodeUnknownSync(Lease)
@@ -53,6 +63,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #config: ConfigStore
   readonly #pool: CredentialPool
   readonly #refresh: RefreshManager
+  readonly #oauth: OAuthService
   #configView: ConfigView | undefined
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -71,6 +82,27 @@ export class ControlPlane extends DurableObject<Env> {
       },
       http: FetchHttpClient.layer,
       workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"]
+    })
+    this.#oauth = makeOAuthService({
+      sessions: new OAuthSessions(new SqliteSessionTable(ctx.storage.sql)),
+      sink: {
+        get: (name) => this.#pool.refreshTarget(name)?.credential.metadata,
+        list: () =>
+          this.#pool.refreshTargets().map(({ credential }) => ({
+            id: credential.id,
+            type: typeof credential.metadata.type === "string" ? credential.metadata.type : "",
+            metadata: credential.metadata
+          })),
+        save: async (name, metadata) => {
+          const result = this.#pool.upsert(name, metadata, { mergeExisting: false })
+          if (!result.ok) return { ok: false, message: result.message }
+          await this.#rearm()
+          return { ok: true }
+        },
+        remove: async (id) => {
+          await this.removeCredential(id)
+        }
+      }
     })
   }
 
@@ -336,6 +368,32 @@ export class ControlPlane extends DurableObject<Env> {
     }
     const token = apiCallToken(credential)
     return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token }
+  }
+
+  // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------
+
+  /** Starts a provider login (`GET /oauth/auth-url`): returns the URL to open and the session `state`. */
+  oauthStart(input: StartInput): Promise<StartResult> {
+    return this.#runOAuth(this.#oauth.start(input))
+  }
+
+  /** `GET /oauth/status`: pending/ok/error; for device logins each call advances the upstream poll when due. */
+  oauthStatus(state: string): Promise<StatusResult> {
+    return this.#runOAuth(this.#oauth.status(state))
+  }
+
+  /** Completes a callback login from a pasted/redirected `code` + `state` (management and public browser routes). */
+  oauthCallback(input: CallbackInput): Promise<CallbackResult> {
+    return this.#runOAuth(this.#oauth.callback(input))
+  }
+
+  /** `DELETE /oauth/session`: cancels a pending login. */
+  oauthCancel(state: string): Promise<{ readonly cancelled: boolean }> {
+    return Effect.runPromise(this.#oauth.cancel(state))
+  }
+
+  #runOAuth<A>(effect: Effect.Effect<A, never, HttpClient.HttpClient>): Promise<A> {
+    return Effect.runPromise(effect.pipe(Effect.provide(FetchHttpClient.layer)))
   }
 
   /** Credential changes move refresh deadlines; a failure to re-arm must never fail the management call. */

@@ -492,6 +492,8 @@ the panel's "management key" is ignored (any text logs in).
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
 - **Not here**: `/oauth/*` (OAuth slice), plugins, Home, `/v0/management`. `/observability/usage/*` lives in
   `usage-routes.ts` (see "Usage accounting and observability").
+
+- **Not here**: `/oauth/*` (see _Provider OAuth logins_), `/observability/usage/*` (usage slice), plugins, Home, `/v0/management`.
 - **Panel asset**: `GET /management.html` serves `public/management.html` through the `ASSETS` binding
   (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
   (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
@@ -563,8 +565,41 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
 - Machine clients use Access service tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access
   single-header mode via `x-api-key`).
 
-## Provider OAuth logins
+## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
 
-Provider client IDs require `localhost` redirect URIs, so authorization-code logins use a "paste the redirect URL"
-flow in management (`POST /v8/management/oauth/callback`). Device-code flows (Codex device, xAI, Kimi, Meta) work
-natively. Credential JSON files from the Go server can be imported through management.
+Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_files_devin_oauth.go`, `oauth_callback.go`,
+`oauth_sessions.go`) and `internal/auth/*`. The panel's OAuth page works unchanged: `GET /v8/management/oauth/auth-url?provider=`
+(`claude`, `codex`, `antigravity`, `devin`, `xai`, `meta`, `kimi`, `kimi-ai`; `is_webui` ignored) returns `{status,url,state}`
+(+ `flow:"device"`, `user_code`, `expires_in` for device logins), `GET /oauth/status?state=` answers `ok|wait|error`,
+`DELETE /oauth/session?state=` cancels and `POST|GET /oauth/callback` takes `{provider, redirect_url | state+code}`.
+
+- **Sessions** (`session-store.ts`): a SQLite table in the `ControlPlane` DO with the Go rules (TTL 30 min, completed kept 1 min,
+  `SetError` refreshes the TTL, cancel only for pending sessions). Flow secrets (PKCE verifier, device code) stay in the row and are
+  wiped when the session ends; replies never contain them. A busy lease (2 min, released in `ensuring`) lets one exchange/poll run
+  per session, and the credential is saved only while the session is still pending (a cancel racing the exchange wins).
+- **Authorization-code logins** (Claude, Codex, Antigravity, Devin): provider client IDs only allow `localhost`/`127.0.0.1`
+  redirect URIs, so the user pastes the redirected URL (`POST /oauth/callback`). The request performs the token exchange itself
+  (no waiter goroutine/file hand-off); like Go it answers `{"status":"ok"}` once the callback is accepted and failures show up in
+  `/oauth/status` (messages are Go's: `State code error` cannot occur because the state *is* the session key; `Bad request`,
+  `Failed to exchange authorization code for tokens[: cause]`, `Timeout waiting for OAuth callback`, ...). The callback window is
+  5 minutes. PKCE (S256, 96 bytes; Devin 64) and states use WebCrypto; authorization URLs use Go's `url.Values.Encode` ordering.
+- **Device logins** (Codex `?provider=codex&flow=device`, xAI, Meta, Kimi/Kimi.ai): `auth-url` requests the device code, the panel
+  polls `/oauth/status` and each poll performs the upstream poll when `nextPollAt` has passed (xAI immediately, others after one
+  interval; `slow_down` +5 s except Kimi), so providers are never polled faster than their interval. Windows: xAI 30 min, Meta/
+  Kimi/Codex 15 min (or the device code's `expires_in`). No DO alarms are needed.
+- **Credentials** are the Go files (same keys, same names: `claude-<sha8(org|account)>-<email>.json`, `codex-<sha8(account)>-<email>-<plan>.json`,
+  `antigravity-<email>.json`, `xai-<email|sub>.json`, `meta-<email>-<sha16>.json`, `kimi[-ai]-<ms>.json`, `devin-<user>.json`, plus
+  `disabled`). `record.ts` replays `saveTokenRecord`: same-name user settings are kept (never tokens), a Claude login migrates the
+  legacy email/account-named file, then the file is stored through the pool (`importAuthFile` semantics) and is selectable at once.
+- **Public browser callbacks** (`/anthropic/callback`, `/codex/callback`, `/antigravity/callback`, `/callback`, `/devin/callback`;
+  `public-routes.ts`) exist for users that rewrite the localhost host to the Worker. They are outside the Access admin gate, so
+  they only act on the `state` of a pending *callback* login of the route's provider and answer with a static page (no-store,
+  never containing code/state/tokens/errors); everything else is a neutral 400.
+
+Deviations from Go: Antigravity's client version is the Go fallback (`2.9.1`, no Hub manifest polling) and project discovery runs
+inside the login (non-fatal); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
+exchange errors include the (scrubbed) upstream status/body like Go but cap it at 512 chars; device-flow states carry a random
+suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
+Claude provider). Not ported: `POST /oauth/import?provider=vertex` (belongs to the Vertex/Gemini slice; service-account files can be
+uploaded through `POST /credentials`), plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go
+server can still be imported through management.

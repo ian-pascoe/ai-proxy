@@ -5,6 +5,7 @@ import { HttpRouter } from "effect/http"
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts"
 import { RootRoutes } from "../../src/http/routes.ts"
 import { ManagementRoutes } from "../../src/management/routes.ts"
+import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts"
 import { requestContext } from "../../src/platform/env.ts"
 import { ModelRegistryLive } from "../../src/registry/live.ts"
 import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts"
@@ -49,9 +50,12 @@ export const makeHarness = (http: MockHandler = () => ({ status: 404 }), binding
   const outbound = mockHttp(http)
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
   const routes = ManagementRoutes.pipe(Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer)))
-  const web = HttpRouter.toWebHandler(Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(routes)), {
-    disableLogger: true
-  })
+  const web = HttpRouter.toWebHandler(
+    Layer.mergeAll(RootRoutes, OAuthCallbackRoutes, access, makeWithAccess(access)(routes)),
+    {
+      disableLogger: true
+    }
+  )
   const call: Harness["call"] = async (path, init = {}) => {
     const { auth, ...rest } = init
     const headers = new Headers(rest.headers)

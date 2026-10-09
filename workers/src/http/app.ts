@@ -5,6 +5,7 @@ import { ProxyLayer } from "../handlers/layer.ts"
 import { ManagementRoutesLive } from "../management/routes.ts"
 import { WorkersLoggerLayer } from "../observability/logger.ts"
 import { TraceLayer } from "../observability/trace.ts"
+import { OAuthCallbackRoutes } from "../oauth/public-routes.ts"
 import { ModelRoutesLive } from "../registry/live.ts"
 import { RootRoutes } from "./routes.ts"
 
@@ -15,6 +16,7 @@ import { RootRoutes } from "./routes.ts"
  */
 export const AppLayer = Layer.mergeAll(
   RootRoutes,
+  OAuthCallbackRoutes,
   AccessLayer,
   ProxyLayer,
   withAccess(ModelRoutesLive),

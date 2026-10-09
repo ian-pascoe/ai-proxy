@@ -209,8 +209,8 @@ describe("server information", () => {
     expect((await json("/v8/management/observability/logs/requests/abc")).status).toBe(404)
   })
 
-  it("leaves OAuth login and plugin routes to their own slices", async () => {
-    for (const path of ["/v8/management/oauth/auth-url?provider=claude", "/v8/management/plugins"]) {
+  it("leaves plugin routes unported", async () => {
+    for (const path of ["/v8/management/plugins"]) {
       expect((await call(path)).status, path).toBe(404)
     }
     // Unknown management paths still need the admin gate.
