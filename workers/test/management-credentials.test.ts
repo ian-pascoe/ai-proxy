@@ -401,12 +401,16 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     const stub = controlPlane()
     const picked = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" })
     if (!picked.ok) throw new Error("pick failed")
-    await stub.report(picked.lease, { success: false, httpStatus: 500, error: { message: "boom", retryable: true } })
+    await stub.report(picked.lease, { success: false, httpStatus: 429, error: { message: "limit", retryable: true } })
     expect((await list()).files[0]).toMatchObject({ failed: 1 })
+    expect((await list()).files[0]?.cooldowns).toEqual([expect.objectContaining({ scope: "model" })])
 
     expect(
       await json("/v8/management/routing/cooldown/reset", jsonInit("POST", { auth_index: authIndexOf("x.json") }))
-    ).toMatchObject({ status: 200, body: { status: "ok", auth_index: authIndexOf("x.json"), models: [] } })
+    ).toMatchObject({
+      status: 200,
+      body: { status: "ok", auth_index: authIndexOf("x.json"), models: ["claude-sonnet-4-5"] }
+    })
     expect(
       await json("/v8/management/routing/cooldown/reset", jsonInit("POST", { auth_index: "ffffffffffffffff" }))
     ).toMatchObject({
