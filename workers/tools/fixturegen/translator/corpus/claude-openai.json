@@ -1,0 +1,1233 @@
+[
+  {
+    "name": "request: system, images, tools, tool_result, tool_choice and stop sequences",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude-sonnet-4",
+      "max_tokens": 1024,
+      "temperature": 0.7,
+      "stop_sequences": [
+        "END",
+        "<stop>"
+      ],
+      "system": [
+        {
+          "type": "text",
+          "text": "You are helpful."
+        },
+        {
+          "type": "text",
+          "text": "x-anthropic-billing-header: cc_version=1;"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "What is in this image? <b>"
+            },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgo="
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Let me check the weather."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_01",
+              "name": "get_weather",
+              "input": {
+                "city": "Paris",
+                "units": "c"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_01",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "22C sunny"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "Thanks, and tomorrow?"
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Weather lookup",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "units": {
+                "type": "string",
+                "enum": [
+                  "c",
+                  "f"
+                ]
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "name": "noop",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "tool_choice": {
+        "type": "auto",
+        "disable_parallel_tool_use": true
+      },
+      "user": "u-1"
+    }
+  },
+  {
+    "name": "request: thinking enabled with budget maps to reasoning_effort",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "max_tokens": 10,
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 8000
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: thinking enabled without budget uses output_config effort",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "thinking": {
+        "type": "enabled"
+      },
+      "output_config": {
+        "effort": " High "
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: thinking enabled without budget or effort is auto",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "thinking": {
+        "type": "enabled"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: adaptive thinking defaults to xhigh",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "thinking": {
+        "type": "adaptive"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: adaptive thinking carries output_config effort",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "thinking": {
+        "type": "adaptive"
+      },
+      "output_config": {
+        "effort": "medium"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: disabled thinking maps to none",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "thinking": {
+        "type": "disabled"
+      },
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: top_p only used when temperature missing",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "top_p": 0.9,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice any",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": {
+        "type": "any"
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice none",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": {
+        "type": "none"
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice tool",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": {
+        "type": "tool",
+        "name": "get_weather"
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice tool without name",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": {
+        "type": "tool"
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice unknown fails closed",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": {
+        "type": "weird"
+      },
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice string form",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tool_choice": "auto",
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: schema normalization (properties, boolean subschemas, unicode patterns)",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "tools": [
+        {
+          "name": "t",
+          "description": "d",
+          "input_schema": {
+            "type": "object",
+            "pattern": "^\\p{L}+$",
+            "properties": {
+              "a": true,
+              "b": {
+                "type": "object"
+              },
+              "c": {
+                "type": "array",
+                "items": true
+              },
+              "d": {
+                "type": "string",
+                "pattern": "\\p{Lu}"
+              },
+              "e": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "patternProperties": {
+              "\\p{L}": {
+                "type": "string"
+              },
+              "^x": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "a"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_result images are relayed in a user message",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "shot",
+              "input": {}
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "t1",
+              "content": [
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgo="
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_result with text and image and trailing user text",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "shot",
+              "input": {
+                "a": 1
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "t1",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "done"
+                },
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "url",
+                    "url": "https://example.com/a.png"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "look"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool results are aligned to the tool_use order",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "a",
+              "name": "f",
+              "input": {}
+            },
+            {
+              "type": "tool_use",
+              "id": "b",
+              "name": "g",
+              "input": {
+                "x": 1
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "b",
+              "content": "B"
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "a",
+              "content": "A"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: system role messages become reminders",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "user",
+          "content": "start"
+        },
+        {
+          "role": "system",
+          "content": "remember the rules"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "ok"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "go"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: thinking blocks without GPT signature are dropped",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "hmm",
+              "signature": "abc"
+            },
+            {
+              "type": "redacted_thinking",
+              "data": "zzz"
+            },
+            {
+              "type": "text",
+              "text": "a"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "next"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: document parts become file parts and unsupported user-only parts are refused",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "JVBERi0="
+              },
+              "filename": "a.pdf"
+            },
+            {
+              "type": "text",
+              "text": "read"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: user turn with only an unsupported part is refused",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "document",
+              "source": {
+                "type": "file",
+                "file_id": "f1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_result object content and non-text array items",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "c",
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "t1",
+              "name": "f",
+              "input": {
+                "k": "v"
+              }
+            },
+            {
+              "type": "tool_use",
+              "id": "t2",
+              "name": "g"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "t1",
+              "content": {
+                "type": "text",
+                "text": "obj text"
+              }
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "t2",
+              "content": [
+                {
+                  "type": "foo",
+                  "a": 1
+                },
+                "plain"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: text with trailing usage chunk",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hel\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo <b>\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":5,\"total_tokens\":25,\"prompt_tokens_details\":{\"cached_tokens\":4}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: tool calls with interleaved text, parallel calls and tool-name casing restored",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        },
+        {
+          "name": "noop",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c2\",\"model\":\"gpt-4o\",\"created\":5,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Checking\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"Get_Weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" now\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"'Paris'}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call.def\",\"function\":{\"name\":\"noop\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":7,\"prompt_tokens_details\":{\"cached_tokens\":2,\"cache_write_tokens\":3}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: reasoning then text, finish_reason length, usage-less [DONE]",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c3\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"Let me \"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"think\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Answer\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"length\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: reasoning details only",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c4\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_details\":[{\"type\":\"reasoning.text\",\"text\":\"step1\"},{\"text\":\"step2\"}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c4\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"alt\",\"content\":\"x\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}",
+      "event: ping",
+      "",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: empty tool name for the whole stream gets a synthesized name",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c5\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"\",\"arguments\":\"{\\\"a\\\":1}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: truncated tool arguments report max_tokens",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c6\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c6\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: omitted tool_call index keeps parallel calls apart",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c7\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call_1\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}},{\"id\":\"call_2\",\"function\":{\"name\":\"g\",\"arguments\":\"{\\\"x\\\":1}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c7\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: late usage only chunk after stop is ignored",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "claude",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c8\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"x\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}",
+      "data: {\"id\":\"c8\",\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: text, reasoning and tool calls with cache usage",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "tools": [
+        {
+          "name": "get_weather",
+          "input_schema": {
+            "type": "object"
+          }
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "chatcmpl-9",
+      "object": "chat.completion",
+      "model": "gpt-4o",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "The answer",
+            "reasoning_content": "because",
+            "tool_calls": [
+              {
+                "id": "call:1",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"city\":\"Paris\"}"
+                }
+              },
+              {
+                "id": "call_2",
+                "type": "function",
+                "function": {
+                  "name": "noop",
+                  "arguments": "not json"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 30,
+        "completion_tokens": 9,
+        "prompt_tokens_details": {
+          "cached_tokens": 10,
+          "cache_write_tokens": 5
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: array content parts",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "x",
+      "model": "m",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "reasoning",
+                "text": "r1"
+              },
+              {
+                "type": "text",
+                "text": "t1"
+              },
+              {
+                "type": "text",
+                "text": "t2"
+              },
+              {
+                "type": "tool_calls",
+                "tool_calls": [
+                  {
+                    "id": "c1",
+                    "function": {
+                      "name": "f",
+                      "arguments": "{}"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "other"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: plain stop without usage",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "x",
+      "model": "m",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "ok"
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: length finish and missing finish reason",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "x",
+      "model": "m",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "content": "ok"
+          },
+          "finish_reason": "length"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: no finish_reason with tool call",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "x",
+      "model": "m",
+      "choices": [
+        {
+          "message": {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "id": "c1",
+                "function": {
+                  "name": "f",
+                  "arguments": "{\"a\":1}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "token count: claude input_tokens",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "claude",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    },
+    "tokenCount": 1234,
+    "tokenCountUsage": {
+      "usage": {
+        "prompt_tokens": 1234
+      }
+    }
+  }
+]

@@ -1,0 +1,440 @@
+[
+  {
+    "name": "request: messages, tools and generation config",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "messages": [
+        {
+          "role": "system",
+          "content": "sys one"
+        },
+        {
+          "role": "developer",
+          "content": [
+            {
+              "type": "text",
+              "text": "dev two"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "look"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/png;base64,iVBORw0KGgo="
+              }
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "https://e.com/a.png"
+              }
+            },
+            {
+              "type": "input_audio",
+              "input_audio": {
+                "data": "UklGRg==",
+                "format": "wav"
+              }
+            },
+            {
+              "type": "file",
+              "file": {
+                "filename": "a.pdf",
+                "file_data": "data:application/pdf;base64,JVBERi0="
+              }
+            },
+            {
+              "type": "file",
+              "file": {
+                "file_url": "https://e.com/f.txt",
+                "filename": "f.txt"
+              }
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "calling",
+          "reasoning_content": "hmm",
+          "tool_calls": [
+            {
+              "id": "call_1",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Paris\"}"
+              }
+            },
+            {
+              "id": "call_2",
+              "type": "function",
+              "function": {
+                "name": "noargs"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_1",
+          "content": "22C"
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_2",
+          "content": [
+            {
+              "type": "text",
+              "text": "x"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "thanks"
+        }
+      ],
+      "max_tokens": 100,
+      "max_completion_tokens": 200,
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "presence_penalty": 0.1,
+      "frequency_penalty": 0.2,
+      "n": 2,
+      "stop": [
+        "END"
+      ],
+      "tool_choice": "required",
+      "response_format": {
+        "type": "json_object"
+      },
+      "modalities": [
+        "text",
+        "image"
+      ],
+      "service_tier": "auto",
+      "previous_response_id": "int_0",
+      "environment_id": "env",
+      "agent_config": {
+        "a": 1
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "description": "Weather",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "web_search"
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": ""
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"int_1\",\"status\":\"in_progress\",\"model\":\"gemini-2.5-pro\",\"environment_id\":\"env_9\"}}",
+      "data: {\"event_type\":\"interaction.status_update\",\"interaction_id\":\"int_1\",\"status\":\"in_progress\"}",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"thought\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"content\":{\"type\":\"text\",\"text\":\"thinking\"}}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":0}",
+      "data: {\"event_type\":\"step.start\",\"index\":1,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"text\",\"text\":\"Hello\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"text\",\"text\":\" world\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":1}",
+      "data: {\"event_type\":\"step.start\",\"index\":2,\"step\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"name\":\"get_weather\",\"arguments\":{}}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{\\\"city\\\":\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"\\\"Paris\\\"}\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":2}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"int_1\",\"status\":\"completed\",\"usage\":{\"total_input_tokens\":10,\"total_output_tokens\":4,\"total_tokens\":14,\"total_cached_tokens\":2,\"total_thought_tokens\":1}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "request: reasoning effort becomes thinking_level with a summary default",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "reasoning_effort": " HIGH ",
+      "messages": [
+        {
+          "role": "user",
+          "content": "x"
+        }
+      ]
+    },
+    "needs": [
+      "thinking-summary"
+    ]
+  },
+  {
+    "name": "request: antigravity renames colliding tool names and uses agent_config limits",
+    "from": "openai",
+    "to": "interactions",
+    "model": "antigravity-agent",
+    "stream": false,
+    "request": {
+      "model": "antigravity-agent",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "c1",
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "arguments": "{\"p\":1}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "c1",
+          "content": "data"
+        }
+      ],
+      "max_tokens": 50,
+      "tool_choice": {
+        "type": "function",
+        "function": {
+          "name": "write_file"
+        }
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "read_file",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"int_a\",\"model\":\"antigravity-agent\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"function_call\",\"id\":\"fc\",\"name\":\"external_read_file\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{}\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"int_a\",\"status\":\"completed\"}}"
+    ]
+  },
+  {
+    "name": "request: user turn with an unsendable file is refused",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "file",
+              "file": {
+                "file_id": "file-1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: user turn keeps text beside a dropped audio part",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_audio",
+              "input_audio": {}
+            },
+            {
+              "type": "text",
+              "text": "still here"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: empty messages and tool_choice object",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "stream": false,
+      "messages": [],
+      "tool_choice": {
+        "type": "function",
+        "function": {
+          "name": "f"
+        }
+      }
+    }
+  },
+  {
+    "name": "stream: failure and incomplete completion",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "messages": [
+        {
+          "role": "user",
+          "content": "x"
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"int_2\",\"model\":\"gemini-2.5-pro\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"cut\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"int_2\",\"status\":\"incomplete\",\"finish_reason\":\"max_tokens\"}}",
+      "data: {\"event_type\":\"interaction.failed\",\"error\":{\"message\":\"boom\",\"code\":\"E1\"}}",
+      "data: {\"event_type\":\"response.failed\",\"interaction\":{\"error\":{\"type\":\"overloaded\"}}}",
+      "event: ignored"
+    ]
+  },
+  {
+    "name": "non-stream: interaction with steps and usage",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "x"
+        }
+      ]
+    },
+    "responseBody": {
+      "interaction": {
+        "id": "int_3",
+        "model": "gemini-2.5-pro",
+        "status": "completed",
+        "environment_id": "env",
+        "steps": [
+          {
+            "type": "thought",
+            "content": [
+              {
+                "type": "text",
+                "text": "why"
+              }
+            ]
+          },
+          {
+            "type": "model_output",
+            "content": [
+              {
+                "type": "text",
+                "text": "Because"
+              },
+              {
+                "type": "text",
+                "text": " so"
+              }
+            ]
+          },
+          {
+            "type": "function_call",
+            "id": "fc",
+            "name": "f",
+            "arguments": {
+              "a": 1
+            }
+          }
+        ],
+        "usage": {
+          "total_input_tokens": 3,
+          "total_output_tokens": 4,
+          "total_tokens": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: flat interaction incomplete",
+    "from": "openai",
+    "to": "interactions",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "user",
+          "content": "x"
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "int_4",
+      "model": "gemini-2.5-pro",
+      "status": "incomplete",
+      "steps": [
+        {
+          "type": "model_output",
+          "content": "plain string content"
+        }
+      ],
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    }
+  }
+]

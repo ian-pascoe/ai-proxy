@@ -1,0 +1,704 @@
+[
+  {
+    "name": "request: system, generation config, parts, tools and tool results",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "systemInstruction": {
+        "parts": [
+          {
+            "text": "Be brief."
+          },
+          {
+            "text": "hidden",
+            "thought": true
+          }
+        ]
+      },
+      "generationConfig": {
+        "temperature": 0.4,
+        "maxOutputTokens": 512,
+        "topP": 0.8,
+        "topK": 40,
+        "stopSequences": [
+          "STOP",
+          "<end>"
+        ],
+        "candidateCount": 2,
+        "responseModalities": [
+          "TEXT",
+          "image",
+          "Video"
+        ],
+        "thinkingConfig": {
+          "thinkingBudget": 4096,
+          "includeThoughts": true
+        }
+      },
+      "service_tier": "priority",
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "Describe "
+            },
+            {
+              "inlineData": {
+                "mimeType": "image/png",
+                "data": "iVBORw0KGgo="
+              }
+            },
+            {
+              "fileData": {
+                "mimeType": "application/pdf",
+                "fileUri": "gs://bucket/a.pdf"
+              }
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "thinking...",
+              "thought": true
+            },
+            {
+              "functionCall": {
+                "name": "get_weather",
+                "args": {
+                  "city": "Paris"
+                }
+              }
+            },
+            {
+              "functionCall": {
+                "id": "call_x",
+                "name": "get_weather",
+                "args": {
+                  "city": "Rome"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "functionResponse": {
+                "name": "get_weather",
+                "response": {
+                  "content": {
+                    "temp": 22
+                  }
+                }
+              }
+            },
+            {
+              "functionResponse": {
+                "id": "call_x",
+                "name": "get_weather",
+                "response": {
+                  "temp": 25
+                }
+              }
+            },
+            {
+              "functionResponse": {
+                "name": "other",
+                "response": {
+                  "ok": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "only thought",
+              "thought": true
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "thanks"
+            },
+            {
+              "inline_data": {
+                "mime_type": "audio/wav",
+                "data": "UklGRg=="
+              }
+            },
+            {
+              "file_data": {
+                "mime_type": "text/plain",
+                "file_uri": "https://example.com/a.txt"
+              }
+            },
+            {
+              "fileData": {
+                "mimeType": "application/octet-stream",
+                "fileUri": "gs://b/c"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "functionDeclarations": [
+            {
+              "name": "get_weather",
+              "description": "Weather",
+              "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                  "city": {
+                    "type": "STRING"
+                  }
+                },
+                "required": [
+                  "city"
+                ]
+              }
+            },
+            {
+              "name": "raw",
+              "parametersJsonSchema": {
+                "type": "object",
+                "properties": {
+                  "a": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "ANY",
+          "allowedFunctionNames": [
+            "get_weather"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "request: thinkingLevel and snake_case fields",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "system_instruction": {
+        "parts": [
+          {
+            "text": "sys"
+          }
+        ]
+      },
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinking_level": "HIGH"
+        }
+      },
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: snake_case thinking budget",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinking_budget": -1
+        }
+      },
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: toolConfig NONE",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "NONE"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: toolConfig AUTO",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "AUTO"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: toolConfig ANY multiple",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "ANY",
+          "allowedFunctionNames": [
+            "a",
+            "b"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "request: toolConfig ANY none",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "ANY"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: toolConfig unknown",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ],
+      "toolConfig": {
+        "functionCallingConfig": {
+          "mode": "VALIDATED"
+        }
+      }
+    }
+  },
+  {
+    "name": "request: empty contents",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": []
+    }
+  },
+  {
+    "name": "request: multiple text parts are joined",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "a"
+            },
+            {
+              "text": "b"
+            }
+          ]
+        },
+        {
+          "role": "model",
+          "parts": [
+            {
+              "text": "c"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: reasoning, text, finish and usage-only chunk",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"think\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data: {\"id\":\"c1\",\"model\":\"gpt-4o\",\"choices\":[],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":3,\"total_tokens\":12,\"completion_tokens_details\":{\"reasoning_tokens\":1},\"prompt_tokens_details\":{\"cached_tokens\":2}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: tool call accumulated and emitted at finish",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c2\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c2\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: tolerant tool arguments (barewords, numbers, nested)",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_9\",\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"location\\\": \\u5317\\u4eac, \\\"unit\\\": celsius, \\\"n\\\": 42, \\\"f\\\": 1.5, \\\"ok\\\": true, \\\"nil\\\": null, \\\"obj\\\": {\\\"a\\\":[1,2]}, \\\"bad\\\": {oops}, \\\"s\\\": \\\"x\\\\\\\"y\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"length\"}]}",
+      "event: ignored",
+      "not json"
+    ]
+  },
+  {
+    "name": "stream: non-function tool call types are skipped and content filter maps to SAFETY",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c4\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"type\":\"custom\",\"function\":{\"name\":\"x\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"c4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"content_filter\"}],\"usage\":{\"prompt_tokens\":1}}",
+      "data: {\"id\":\"c4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"x\"},\"finish_reason\":null}],\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}"
+    ]
+  },
+  {
+    "name": "stream: usage in choice chunk without finish reason",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseLines": [
+      "data: {\"id\":\"c5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":null}],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":2,\"total_tokens\":6}}",
+      "data: {\"id\":\"c5\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":[{\"text\":\"a\"},{\"text\":\"b\"}]},\"finish_reason\":null}]}"
+    ]
+  },
+  {
+    "name": "non-stream: reasoning, text, tool calls and usage",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "x",
+      "model": "gpt-4o",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "reasoning_content": "why",
+            "content": "The answer",
+            "tool_calls": [
+              {
+                "id": "call_1",
+                "type": "function",
+                "function": {
+                  "name": "f",
+                  "arguments": "{\"a\":1}"
+                }
+              },
+              {
+                "id": "",
+                "type": "function",
+                "function": {
+                  "name": "g",
+                  "arguments": "garbage"
+                }
+              },
+              {
+                "id": "c3",
+                "type": "custom",
+                "function": {
+                  "name": "h",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "prompt_tokens_details": {
+          "cached_tokens": 3
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: two choices merge into one candidate",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseBody": {
+      "model": "m",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "first"
+          },
+          "finish_reason": "stop"
+        },
+        {
+          "index": 1,
+          "message": {
+            "role": "assistant",
+            "content": "second"
+          },
+          "finish_reason": "length"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: empty choices",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "responseBody": {
+      "model": "m",
+      "choices": [],
+      "usage": {
+        "input_tokens": 2,
+        "output_tokens": 1
+      }
+    }
+  },
+  {
+    "name": "token count: gemini totalTokens",
+    "from": "gemini",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "contents": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "tokenCount": 77,
+    "tokenCountUsage": {
+      "usage": {
+        "prompt_tokens": 77
+      }
+    }
+  }
+]

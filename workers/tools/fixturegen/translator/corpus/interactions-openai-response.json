@@ -1,0 +1,455 @@
+[
+  {
+    "name": "request: string input, system instruction and generation config",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "hi",
+      "system_instruction": "Be brief.",
+      "previous_interaction_id": "int_prev",
+      "environment_id": "env_1",
+      "agent_config": {
+        "type": "x"
+      },
+      "generation_config": {
+        "tool_choice": "auto",
+        "thinking_level": " HIGH ",
+        "thinking_summaries": "auto"
+      },
+      "response_modalities": [
+        "text"
+      ],
+      "service_tier": "flex",
+      "response_format": {
+        "type": "json_object"
+      }
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-5\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\"}}",
+      "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"think\"}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"more\"}]}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\"}}",
+      "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":1,\"content_index\":0,\"delta\":\"Hello\"}",
+      "data: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_1\",\"output_index\":1,\"content_index\":0,\"delta\":\" world\"}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello world\"}]}}",
+      "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"model\":\"gpt-5\",\"usage\":{\"input_tokens\":5,\"output_tokens\":7,\"total_tokens\":12,\"input_tokens_details\":{\"cached_tokens\":2},\"output_tokens_details\":{\"reasoning_tokens\":3}}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "request: steps with media, thoughts, calls and results",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "stream": true,
+      "input": [
+        {
+          "type": "user_input",
+          "content": [
+            {
+              "type": "text",
+              "text": "look"
+            },
+            {
+              "type": "image",
+              "data": "iVBO",
+              "mime_type": "image/png"
+            },
+            {
+              "type": "image",
+              "image_url": "https://e.com/a.png"
+            },
+            {
+              "type": "audio",
+              "data": "UklGRg==",
+              "mime_type": "audio/wav"
+            },
+            {
+              "type": "video",
+              "url": "https://e.com/v.mp4"
+            },
+            {
+              "type": "document",
+              "data": "JVBERi0=",
+              "mime_type": "application/pdf",
+              "filename": "a.pdf"
+            },
+            {
+              "type": "mystery"
+            }
+          ]
+        },
+        {
+          "type": "thought",
+          "content": [
+            {
+              "type": "text",
+              "text": "considering"
+            }
+          ]
+        },
+        {
+          "type": "model_output",
+          "content": [
+            {
+              "type": "text",
+              "text": "calling"
+            },
+            {
+              "type": "image",
+              "data": "AAAA"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "id": "fc_1",
+          "name": "get_weather",
+          "arguments": {
+            "city": "Paris"
+          }
+        },
+        {
+          "type": "function_result",
+          "call_id": "fc_1",
+          "name": "get_weather",
+          "result": {
+            "temp": 22
+          }
+        },
+        {
+          "type": "function_call",
+          "call_id": "fc_2",
+          "name": "noargs"
+        },
+        {
+          "type": "function_result",
+          "call_id": "fc_2",
+          "output": "plain"
+        },
+        "a bare string step",
+        {
+          "type": "user_input",
+          "content": "short form"
+        },
+        {
+          "type": "unknown"
+        }
+      ],
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object"
+          }
+        },
+        {
+          "function_declarations": [
+            {
+              "name": "decl",
+              "description": "d",
+              "parametersJsonSchema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "nested",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "google_search"
+        }
+      ],
+      "tool_choice": {
+        "type": "function",
+        "name": "get_weather"
+      }
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_2\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"get_weather\"}}",
+      "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\"}",
+      "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_1\",\"output_index\":0,\"delta\":\"\\\"Paris\\\"}\"}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"id\":\"fc_2\",\"call_id\":\"call_2\",\"name\":\"noargs\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"id\":\"fc_2\",\"call_id\":\"call_2\",\"name\":\"noargs\",\"arguments\":\"{}\"}}",
+      "data: {\"type\":\"response.incomplete\",\"response\":{\"id\":\"resp_2\",\"status\":\"incomplete\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}}",
+      "data: [DONE]",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "request: single object input and legacy tool choice location",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": {
+        "type": "user_input",
+        "content": {
+          "type": "text",
+          "text": "one"
+        }
+      },
+      "tool_choice": "none",
+      "generation_config": {
+        "thinkingConfig": {
+          "thinkingLevel": "Low"
+        }
+      },
+      "system_instruction": {
+        "parts": [
+          {
+            "text": "a"
+          },
+          {
+            "text": "b"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "request: system instruction object text and empty input",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "system_instruction": {
+        "text": "obj"
+      },
+      "input": [],
+      "stream": true
+    }
+  },
+  {
+    "name": "request: antigravity names map back",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "antigravity-agent",
+    "stream": false,
+    "request": {
+      "model": "antigravity-agent",
+      "input": [
+        {
+          "type": "function_call",
+          "call_id": "c",
+          "name": "external_read_file",
+          "arguments": {
+            "p": 1
+          }
+        },
+        {
+          "type": "function_result",
+          "call_id": "c",
+          "name": "external_read_file",
+          "result": "ok"
+        }
+      ],
+      "tools": [
+        {
+          "name": "external_read_file"
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: unkeyed text, fallback from done and completed output",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "stream": true
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_fb\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_9\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_9\",\"content\":[{\"type\":\"output_text\",\"text\":\"only in done\"},{\"type\":\"refusal\",\"refusal\":\"x\"}]}}",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"unkeyed\"}",
+      "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_9\",\"output\":[{\"type\":\"message\",\"id\":\"msg_9\",\"content\":[{\"type\":\"output_text\",\"text\":\"only in done\"}]},{\"type\":\"message\",\"id\":\"msg_10\",\"content\":[{\"type\":\"output_text\",\"text\":\"final only\"}]},{\"type\":\"function_call\",\"name\":\"x\"}]}}",
+      "event: ignored",
+      "data: {broken"
+    ]
+  },
+  {
+    "name": "stream: text without created event and done only",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "stream": true
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_nc\"}}",
+      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"a\"}",
+      "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"b\"}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: antigravity function names",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "antigravity-agent",
+    "stream": true,
+    "request": {
+      "model": "antigravity-agent",
+      "input": "x",
+      "stream": true
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_ag\"}}",
+      "data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"call_id\":\"c1\",\"name\":\"read_file\"}}",
+      "data: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"delta\":\"{}\"}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"call_id\":\"c1\",\"name\":\"read_file\",\"arguments\":\"{}\"}}",
+      "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\"}}"
+    ]
+  },
+  {
+    "name": "stream: function call done without argument deltas and a late call item",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": true,
+    "request": {
+      "model": "gpt-5",
+      "input": "x",
+      "stream": true
+    },
+    "responseLines": [
+      "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_late\"}}",
+      "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc\",\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\"}}",
+      "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"status\":\"completed\"}}"
+    ]
+  },
+  {
+    "name": "non-stream: output items and usage",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x"
+    },
+    "responseBody": {
+      "id": "resp_n",
+      "model": "gpt-5",
+      "status": "completed",
+      "output": [
+        {
+          "type": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "why"
+            },
+            {
+              "type": "summary_text",
+              "text": ""
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "Because"
+            },
+            {
+              "type": "refusal",
+              "refusal": "no"
+            },
+            {
+              "text": "loose"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "name": "get_weather",
+          "arguments": "{\"city\":\"Paris\"}"
+        },
+        {
+          "type": "web_search_call"
+        }
+      ],
+      "usage": {
+        "input_tokens": 3,
+        "output_tokens": 4,
+        "total_tokens": 7,
+        "input_tokens_details": {
+          "cached_tokens": 1
+        },
+        "output_tokens_details": {
+          "reasoning_tokens": 2
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: incomplete without usage",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": "x"
+    },
+    "responseBody": {
+      "id": "resp_i",
+      "status": "incomplete",
+      "output": []
+    }
+  },
+  {
+    "name": "non-stream: antigravity function names",
+    "from": "interactions",
+    "to": "openai-response",
+    "model": "antigravity-agent",
+    "stream": false,
+    "request": {
+      "model": "antigravity-agent",
+      "input": "x"
+    },
+    "responseBody": {
+      "id": "r",
+      "output": [
+        {
+          "type": "function_call",
+          "call_id": "c",
+          "name": "read_file",
+          "arguments": "{}"
+        }
+      ]
+    }
+  }
+]

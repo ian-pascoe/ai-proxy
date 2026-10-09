@@ -1,0 +1,1429 @@
+[
+ {
+  "name": "request: system, images, tools, tool_result, tool_choice and stop sequences",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude-sonnet-4",
+   "max_tokens": 1024,
+   "temperature": 0.7,
+   "stop_sequences": [
+    "END",
+    "\u003cstop\u003e"
+   ],
+   "system": [
+    {
+     "type": "text",
+     "text": "You are helpful."
+    },
+    {
+     "type": "text",
+     "text": "x-anthropic-billing-header: cc_version=1;"
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "What is in this image? \u003cb\u003e"
+      },
+      {
+       "type": "image",
+       "source": {
+        "type": "base64",
+        "media_type": "image/png",
+        "data": "iVBORw0KGgo="
+       }
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "Let me check the weather."
+      },
+      {
+       "type": "tool_use",
+       "id": "toolu_01",
+       "name": "get_weather",
+       "input": {
+        "city": "Paris",
+        "units": "c"
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "toolu_01",
+       "content": [
+        {
+         "type": "text",
+         "text": "22C sunny"
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": "Thanks, and tomorrow?"
+      }
+     ]
+    }
+   ],
+   "tools": [
+    {
+     "name": "get_weather",
+     "description": "Weather lookup",
+     "input_schema": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       },
+       "units": {
+        "type": "string",
+        "enum": [
+         "c",
+         "f"
+        ]
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "name": "noop",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "tool_choice": {
+    "type": "auto",
+    "disable_parallel_tool_use": true
+   },
+   "user": "u-1"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":[{\"type\":\"text\",\"text\":\"You are helpful.\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"What is in this image? \u003cb\u003e\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\"}}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Let me check the weather.\"}],\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"city\\\":\\\"Paris\\\",\\\"units\\\":\\\"c\\\"}\",\"name\":\"get_weather\"},\"id\":\"toolu_01\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"toolu_01\",\"content\":\"22C sunny\",\"name\":\"get_weather\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Thanks, and tomorrow?\"}]}],\"max_tokens\":1024,\"temperature\":0.7,\"stop\":[\"END\",\"\\u003cstop\\u003e\"],\"stream\":true,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"Weather lookup\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"},\"units\":{\"enum\":[\"c\",\"f\"],\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}}},{\"type\":\"function\",\"function\":{\"name\":\"noop\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"auto\",\"parallel_tool_calls\":false,\"user\":\"u-1\"}"
+ },
+ {
+  "name": "request: thinking enabled with budget maps to reasoning_effort",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "max_tokens": 10,
+   "thinking": {
+    "type": "enabled",
+    "budget_tokens": 8000
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":10,\"stream\":false,\"reasoning_effort\":\"medium\"}"
+ },
+ {
+  "name": "request: thinking enabled without budget uses output_config effort",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "thinking": {
+    "type": "enabled"
+   },
+   "output_config": {
+    "effort": " High "
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"reasoning_effort\":\"high\"}"
+ },
+ {
+  "name": "request: thinking enabled without budget or effort is auto",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "thinking": {
+    "type": "enabled"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"reasoning_effort\":\"auto\"}"
+ },
+ {
+  "name": "request: adaptive thinking defaults to xhigh",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "thinking": {
+    "type": "adaptive"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"reasoning_effort\":\"xhigh\"}"
+ },
+ {
+  "name": "request: adaptive thinking carries output_config effort",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "thinking": {
+    "type": "adaptive"
+   },
+   "output_config": {
+    "effort": "medium"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"reasoning_effort\":\"medium\"}"
+ },
+ {
+  "name": "request: disabled thinking maps to none",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "thinking": {
+    "type": "disabled"
+   },
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"reasoning_effort\":\"none\"}"
+ },
+ {
+  "name": "request: top_p only used when temperature missing",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "top_p": 0.9,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"top_p\":0.9,\"stream\":false}"
+ },
+ {
+  "name": "request: tool_choice any",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": {
+    "type": "any"
+   },
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"required\"}"
+ },
+ {
+  "name": "request: tool_choice none",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": {
+    "type": "none"
+   },
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"none\"}"
+ },
+ {
+  "name": "request: tool_choice tool",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": {
+    "type": "tool",
+    "name": "get_weather"
+   },
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"get_weather\"}}}"
+ },
+ {
+  "name": "request: tool_choice tool without name",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": {
+    "type": "tool"
+   },
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"none\"}"
+ },
+ {
+  "name": "request: tool_choice unknown fails closed",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": {
+    "type": "weird"
+   },
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"none\"}"
+ },
+ {
+  "name": "request: tool_choice string form",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tool_choice": "auto",
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}],\"tool_choice\":\"auto\"}"
+ },
+ {
+  "name": "request: schema normalization (properties, boolean subschemas, unicode patterns)",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "tools": [
+    {
+     "name": "t",
+     "description": "d",
+     "input_schema": {
+      "type": "object",
+      "pattern": "^\\p{L}+$",
+      "properties": {
+       "a": true,
+       "b": {
+        "type": "object"
+       },
+       "c": {
+        "type": "array",
+        "items": true
+       },
+       "d": {
+        "type": "string",
+        "pattern": "\\p{Lu}"
+       },
+       "e": {
+        "type": "object",
+        "additionalProperties": true
+       }
+      },
+      "patternProperties": {
+       "\\p{L}": {
+        "type": "string"
+       },
+       "^x": {
+        "type": "object"
+       }
+      },
+      "required": [
+       "a"
+      ],
+      "additionalProperties": false
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"t\",\"description\":\"d\",\"parameters\":{\"additionalProperties\":false,\"patternProperties\":{\"^x\":{\"properties\":{},\"type\":\"object\"}},\"properties\":{\"a\":{},\"b\":{\"properties\":{},\"type\":\"object\"},\"c\":{\"items\":{},\"type\":\"array\"},\"d\":{\"type\":\"string\"},\"e\":{\"additionalProperties\":true,\"properties\":{},\"type\":\"object\"}},\"required\":[\"a\"],\"type\":\"object\"}}}]}"
+ },
+ {
+  "name": "request: tool_result images are relayed in a user message",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "t1",
+       "name": "shot",
+       "input": {}
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "t1",
+       "content": [
+        {
+         "type": "image",
+         "source": {
+          "type": "base64",
+          "media_type": "image/png",
+          "data": "iVBORw0KGgo="
+         }
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"shot\"},\"id\":\"t1\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"t1\",\"content\":\"[Tool returned image content; the images follow in the next user message.]\",\"name\":\"shot\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\"}}]}],\"stream\":false}"
+ },
+ {
+  "name": "request: tool_result with text and image and trailing user text",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "t1",
+       "name": "shot",
+       "input": {
+        "a": 1
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "t1",
+       "content": [
+        {
+         "type": "text",
+         "text": "done"
+        },
+        {
+         "type": "image",
+         "source": {
+          "type": "url",
+          "url": "https://example.com/a.png"
+         }
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": "look"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"a\\\":1}\",\"name\":\"shot\"},\"id\":\"t1\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"t1\",\"content\":\"done\",\"name\":\"shot\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://example.com/a.png\"}},{\"type\":\"text\",\"text\":\"look\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "request: tool results are aligned to the tool_use order",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "a",
+       "name": "f",
+       "input": {}
+      },
+      {
+       "type": "tool_use",
+       "id": "b",
+       "name": "g",
+       "input": {
+        "x": 1
+       }
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "b",
+       "content": "B"
+      },
+      {
+       "type": "tool_result",
+       "tool_use_id": "a",
+       "content": "A"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"f\"},\"id\":\"a\",\"type\":\"function\"},{\"function\":{\"arguments\":\"{\\\"x\\\":1}\",\"name\":\"g\"},\"id\":\"b\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"a\",\"content\":\"A\",\"name\":\"f\"},{\"role\":\"tool\",\"tool_call_id\":\"b\",\"content\":\"B\",\"name\":\"g\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: system role messages become reminders",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "user",
+     "content": "start"
+    },
+    {
+     "role": "system",
+     "content": "remember the rules"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "text",
+       "text": "ok"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "go"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"start\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"\\u003csystem-reminder\\u003e\\nremember the rules\\n\\u003c/system-reminder\\u003e\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]},{\"role\":\"user\",\"content\":\"go\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: thinking blocks without GPT signature are dropped",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "user",
+     "content": "q"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "hmm",
+       "signature": "abc"
+      },
+      {
+       "type": "redacted_thinking",
+       "data": "zzz"
+      },
+      {
+       "type": "text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "next"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"q\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}]},{\"role\":\"user\",\"content\":\"next\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: document parts become file parts and unsupported user-only parts are refused",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "document",
+       "source": {
+        "type": "base64",
+        "media_type": "application/pdf",
+        "data": "JVBERi0="
+       },
+       "filename": "a.pdf"
+      },
+      {
+       "type": "text",
+       "text": "read"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"file\",\"file\":{\"filename\":\"a.pdf\",\"file_data\":\"data:application/pdf;base64,JVBERi0=\"}},{\"type\":\"text\",\"text\":\"read\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "request: user turn with only an unsupported part is refused",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "document",
+       "source": {
+        "type": "file",
+        "file_id": "f1"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[],\"stream\":false}",
+  "requestError": "unsupported content part: document"
+ },
+ {
+  "name": "request: tool_result object content and non-text array items",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "c",
+   "messages": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "tool_use",
+       "id": "t1",
+       "name": "f",
+       "input": {
+        "k": "v"
+       }
+      },
+      {
+       "type": "tool_use",
+       "id": "t2",
+       "name": "g"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "tool_result",
+       "tool_use_id": "t1",
+       "content": {
+        "type": "text",
+        "text": "obj text"
+       }
+      },
+      {
+       "type": "tool_result",
+       "tool_use_id": "t2",
+       "content": [
+        {
+         "type": "foo",
+         "a": 1
+        },
+        "plain"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"k\\\":\\\"v\\\"}\",\"name\":\"f\"},\"id\":\"t1\",\"type\":\"function\"},{\"function\":{\"arguments\":\"{}\",\"name\":\"g\"},\"id\":\"t2\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"t1\",\"content\":\"obj text\",\"name\":\"f\"},{\"role\":\"tool\",\"tool_call_id\":\"t2\",\"content\":\"{\\\"type\\\":\\\"foo\\\",\\\"a\\\":1}\\n\\nplain\",\"name\":\"g\"}],\"stream\":false}"
+ },
+ {
+  "name": "stream: text with trailing usage chunk",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hel\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo \u003cb\u003e\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":5,\"total_tokens\":25,\"prompt_tokens_details\":{\"cached_tokens\":4}}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"chatcmpl-1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"gpt-4o\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n"
+   ],
+   [
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hel\"}}\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo \u003cb\u003e\"}}\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   ],
+   [
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":16,\"output_tokens\":5,\"cache_read_input_tokens\":4}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: tool calls with interleaved text, parallel calls and tool-name casing restored",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    },
+    {
+     "name": "noop",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c2\",\"model\":\"gpt-4o\",\"created\":5,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Checking\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"Get_Weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" now\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"'Paris'}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call.def\",\"function\":{\"name\":\"noop\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c2\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":7,\"prompt_tokens_details\":{\"cached_tokens\":2,\"cache_write_tokens\":3}}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}},{\"type\":\"function\",\"function\":{\"name\":\"noop\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}]}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c2\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"gpt-4o\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Checking\"}}\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_abc\",\"name\":\"get_weather\",\"input\":{}}}\n\n"
+   ],
+   [],
+   [],
+   [],
+   [],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_def\",\"name\":\"noop\",\"input\":{}}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{}\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":2}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":3,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":3,\"delta\":{\"type\":\"text_delta\",\"text\":\" now\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":3}\n\n",
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":5,\"output_tokens\":7,\"cache_read_input_tokens\":2,\"cache_creation_input_tokens\":3}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: reasoning then text, finish_reason length, usage-less [DONE]",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c3\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"Let me \"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"think\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Answer\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"length\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c3\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me \"}}\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"think\"}}\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"Answer\"}}\n\n"
+   ],
+   [
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n"
+   ],
+   [
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: reasoning details only",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c4\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_details\":[{\"type\":\"reasoning.text\",\"text\":\"step1\"},{\"text\":\"step2\"}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c4\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"alt\",\"content\":\"x\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}",
+   "event: ping",
+   "",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c4\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"step1\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"step2\"}}\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"alt\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ],
+   [],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "stream: empty tool name for the whole stream gets a synthesized name",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c5\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"\",\"arguments\":\"{\\\"a\\\":1}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c5\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n"
+   ],
+   [
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"tool_0\",\"input\":{}}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"a\\\":1}\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   ],
+   [
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: truncated tool arguments report max_tokens",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c6\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c6\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"f\",\"input\":{}}}\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"a\\\":\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+   ],
+   [
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: omitted tool_call index keeps parallel calls apart",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c7\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call_1\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}},{\"id\":\"call_2\",\"function\":{\"name\":\"g\",\"arguments\":\"{\\\"x\\\":1}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"c7\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c7\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"f\",\"input\":{}}}\n\n"
+   ],
+   [
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{}\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_2\",\"name\":\"g\",\"input\":{}}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"x\\\":1}\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n"
+   ],
+   [
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: late usage only chunk after stop is ignored",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "claude",
+   "stream": true,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"c8\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"x\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}",
+   "data: {\"id\":\"c8\",\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"c8\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n",
+    "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+    "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"x\"}}\n\n",
+    "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+    "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}\n\n",
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+   ],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "non-stream: text, reasoning and tool calls with cache usage",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "tools": [
+    {
+     "name": "get_weather",
+     "input_schema": {
+      "type": "object"
+     }
+    }
+   ],
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "chatcmpl-9",
+   "object": "chat.completion",
+   "model": "gpt-4o",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "The answer",
+      "reasoning_content": "because",
+      "tool_calls": [
+       {
+        "id": "call:1",
+        "type": "function",
+        "function": {
+         "name": "get_weather",
+         "arguments": "{\"city\":\"Paris\"}"
+        }
+       },
+       {
+        "id": "call_2",
+        "type": "function",
+        "function": {
+         "name": "noop",
+         "arguments": "not json"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 30,
+    "completion_tokens": 9,
+    "prompt_tokens_details": {
+     "cached_tokens": 10,
+     "cache_write_tokens": 5
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"\",\"parameters\":{\"properties\":{},\"type\":\"object\"}}}]}",
+  "responseBodyText": "{\"id\":\"chatcmpl-9\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"The answer\",\"reasoning_content\":\"because\",\"tool_calls\":[{\"id\":\"call:1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}},{\"id\":\"call_2\",\"type\":\"function\",\"function\":{\"name\":\"noop\",\"arguments\":\"not json\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":30,\"completion_tokens\":9,\"prompt_tokens_details\":{\"cached_tokens\":10,\"cache_write_tokens\":5}}}",
+  "nonStreamOutput": "{\"id\":\"chatcmpl-9\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"gpt-4o\",\"content\":[{\"type\":\"text\",\"text\":\"The answer\"},{\"type\":\"thinking\",\"thinking\":\"because\"},{\"type\":\"tool_use\",\"id\":\"call_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Paris\"}},{\"type\":\"tool_use\",\"id\":\"call_2\",\"name\":\"noop\",\"input\":{}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":15,\"output_tokens\":9,\"cache_read_input_tokens\":10,\"cache_creation_input_tokens\":5}}"
+ },
+ {
+  "name": "non-stream: array content parts",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "x",
+   "model": "m",
+   "choices": [
+    {
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "reasoning",
+        "text": "r1"
+       },
+       {
+        "type": "text",
+        "text": "t1"
+       },
+       {
+        "type": "text",
+        "text": "t2"
+       },
+       {
+        "type": "tool_calls",
+        "tool_calls": [
+         {
+          "id": "c1",
+          "function": {
+           "name": "f",
+           "arguments": "{}"
+          }
+         }
+        ]
+       },
+       {
+        "type": "other"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"x\",\"model\":\"m\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"reasoning\",\"text\":\"r1\"},{\"type\":\"text\",\"text\":\"t1\"},{\"type\":\"text\",\"text\":\"t2\"},{\"type\":\"tool_calls\",\"tool_calls\":[{\"id\":\"c1\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},{\"type\":\"other\"}]}}]}",
+  "nonStreamOutput": "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"r1\"},{\"type\":\"text\",\"text\":\"t1t2\"},{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"f\",\"input\":{}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}"
+ },
+ {
+  "name": "non-stream: plain stop without usage",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "x",
+   "model": "m",
+   "choices": [
+    {
+     "message": {
+      "role": "assistant",
+      "content": "ok"
+     },
+     "finish_reason": "stop"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"x\",\"model\":\"m\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}",
+  "nonStreamOutput": "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}"
+ },
+ {
+  "name": "non-stream: length finish and missing finish reason",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "x",
+   "model": "m",
+   "choices": [
+    {
+     "message": {
+      "role": "assistant",
+      "content": "ok"
+     },
+     "finish_reason": "length"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"x\",\"model\":\"m\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"length\"}]}",
+  "nonStreamOutput": "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}"
+ },
+ {
+  "name": "non-stream: no finish_reason with tool call",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "x",
+   "model": "m",
+   "choices": [
+    {
+     "message": {
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "c1",
+        "function": {
+         "name": "f",
+         "arguments": "{\"a\":1}"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"x\",\"model\":\"m\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"c1\",\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\"}}]}}]}",
+  "nonStreamOutput": "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"tool_use\",\"id\":\"c1\",\"name\":\"f\",\"input\":{\"a\":1}}],\"stop_reason\":\"tool_use\",\"stop_sequence\":null,\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}"
+ },
+ {
+  "name": "token count: claude input_tokens",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "claude",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "tokenCount": 1234,
+  "tokenCountUsage": {
+   "usage": {
+    "prompt_tokens": 1234
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false}",
+  "tokenCountOutput": "{\"input_tokens\":1234}"
+ }
+]

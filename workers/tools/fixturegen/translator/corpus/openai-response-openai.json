@@ -1,0 +1,2399 @@
+[
+  {
+    "name": "request: full Codex-style request (tools, namespaces, custom, shell, history, formats)",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "instructions": "You are Codex.",
+      "max_output_tokens": 2048,
+      "parallel_tool_calls": false,
+      "reasoning": {
+        "effort": " High ",
+        "summary": "auto"
+      },
+      "text": {
+        "format": {
+          "type": "json_schema",
+          "name": "out",
+          "description": "d",
+          "strict": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "tool_choice": {
+        "type": "function",
+        "name": "get_weather"
+      },
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": [
+        {
+          "type": "message",
+          "role": "developer",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "dev note"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "look at this"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,iVBORw0KGgo=",
+              "detail": "original"
+            },
+            {
+              "type": "input_file",
+              "file_id": "file-1",
+              "filename": "a.pdf"
+            },
+            {
+              "type": "input_file",
+              "file_data": "data:application/pdf;base64,JVBERi0=",
+              "filename": "b.pdf"
+            },
+            {
+              "type": "input_audio",
+              "input_audio": {
+                "data": "UklGRg==",
+                "format": "wav"
+              }
+            },
+            {
+              "type": "input_video",
+              "video_url": "https://example.com/v.mp4"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "thinking about it"
+            }
+          ],
+          "encrypted_content": "abc"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "Let me check."
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_1",
+          "name": "get_weather",
+          "arguments": "{\"city\":\"Paris\"}"
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_2",
+          "namespace": "mcp__docs__",
+          "name": "search",
+          "arguments": "{\"q\":\"x\"}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call_1",
+          "output": "22C"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call_2",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "doc one"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,iVBORw0KGgo="
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_3",
+          "name": "apply_patch",
+          "input": "*** Begin Patch\n*** End Patch"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_3",
+          "output": "Done!"
+        },
+        {
+          "type": "shell_call",
+          "call_id": "call_4",
+          "action": {
+            "commands": [
+              "ls -la"
+            ]
+          }
+        },
+        {
+          "type": "shell_call_output",
+          "call_id": "call_4",
+          "output": [
+            {
+              "stdout": "a b",
+              "stderr": "",
+              "outcome": {
+                "type": "exit",
+                "exit_code": 0
+              }
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "thanks"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: string input",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": "hello",
+      "reasoning": {
+        "effort": "low"
+      }
+    }
+  },
+  {
+    "name": "request: instructions only, no input",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "instructions": "be brief"
+    }
+  },
+  {
+    "name": "request: orphan outputs become user text and empty ones are dropped",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "function_call_output",
+          "call_id": "nope",
+          "output": "orphan result"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "empty",
+          "output": ""
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "nope2",
+          "output": [
+            {
+              "type": "output_text",
+              "text": "x"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "go"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: outputs without call ids are matched by order and name",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tools": [
+        {
+          "type": "function",
+          "name": "f",
+          "parameters": {}
+        },
+        {
+          "type": "function",
+          "name": "g",
+          "parameters": {}
+        }
+      ],
+      "input": [
+        {
+          "type": "function_call",
+          "call_id": "a",
+          "name": "f",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call",
+          "call_id": "b",
+          "name": "g",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "name": "g",
+          "output": "G"
+        },
+        {
+          "type": "function_call_output",
+          "name": "f",
+          "output": "F"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: out-of-order tool outputs are re-aligned",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "function_call",
+          "call_id": "a",
+          "name": "f",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call",
+          "call_id": "b",
+          "name": "g",
+          "arguments": "{}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "interleaved"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "b",
+          "output": "B"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "a",
+          "output": "A"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: assistant message followed by function call merges tool_calls",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "reasoning": {
+        "effort": "medium"
+      },
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "calling"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "a",
+          "name": "f",
+          "arguments": "{\"x\":1}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "a",
+          "output": "{\"ok\":true}"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: reasoning fallback text when only effort is configured",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "reasoning": {
+        "effort": "high"
+      },
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": "q"
+        },
+        {
+          "type": "function_call",
+          "call_id": "a",
+          "name": "f",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "a",
+          "output": "r"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool output with image parts is converted to content parts",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "function_call",
+          "call_id": "a",
+          "name": "screenshot",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "a",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "here"
+            },
+            {
+              "type": "input_image",
+              "image_url": "data:image/png;base64,iVBORw0KGgo=",
+              "detail": "low"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "b",
+          "name": "screenshot",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "b",
+          "output": "[{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://e.com/x.png\",\"detail\":\"bogus\"}}]"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: user turn with an unsendable file is refused",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_file",
+              "file_url": "https://example.com/a.pdf"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_choice variants",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tool_choice": "required",
+      "tools": [
+        {
+          "type": "function",
+          "name": "f",
+          "parameters": {}
+        }
+      ],
+      "input": "x"
+    }
+  },
+  {
+    "name": "request: tool_choice custom and namespaced",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tool_choice": {
+        "type": "custom",
+        "name": "search",
+        "namespace": "mcp__docs__"
+      },
+      "tools": [
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search"
+            }
+          ]
+        }
+      ],
+      "input": "x"
+    }
+  },
+  {
+    "name": "request: tool_choice shell and unknown object",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tool_choice": {
+        "type": "shell"
+      },
+      "tools": [
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        }
+      ],
+      "input": "x"
+    }
+  },
+  {
+    "name": "request: tool_choice allowed_tools passes through",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tool_choice": {
+        "type": "allowed_tools",
+        "mode": "auto",
+        "tools": [
+          {
+            "type": "function",
+            "name": "f"
+          }
+        ]
+      },
+      "tools": [
+        {
+          "type": "function",
+          "name": "f",
+          "parameters": {}
+        }
+      ],
+      "input": "x"
+    }
+  },
+  {
+    "name": "request: long namespaced tool names are capped and disambiguated",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "tools": [
+        {
+          "type": "namespace",
+          "name": "mcp__a_very_long_server_name_for_testing_truncation__one",
+          "tools": [
+            {
+              "type": "function",
+              "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+              "parameters": {}
+            }
+          ]
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__a_very_long_server_name_for_testing_truncation__two",
+          "tools": [
+            {
+              "type": "function",
+              "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+              "parameters": {}
+            }
+          ]
+        }
+      ],
+      "input": [
+        {
+          "type": "function_call",
+          "call_id": "c1",
+          "namespace": "mcp__a_very_long_server_name_for_testing_truncation__two",
+          "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+          "arguments": "{}"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: additional_tools input item supplies tools",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "additional_tools",
+          "tools": [
+            {
+              "type": "function",
+              "name": "extra",
+              "description": "from lite",
+              "parameters": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "hi"
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: text format json_object and max tokens",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "max_output_tokens": 10,
+      "text": {
+        "format": {
+          "type": "json_object"
+        }
+      },
+      "input": "x"
+    }
+  },
+  {
+    "name": "request: shell tool withdrawn but history replayed",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": [
+        {
+          "type": "shell_call",
+          "call_id": "s1",
+          "action": {
+            "commands": [
+              "pwd"
+            ]
+          }
+        },
+        {
+          "type": "shell_call_output",
+          "call_id": "s1",
+          "output": "ok"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": "next"
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: text with reasoning, usage after finish and [DONE]",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Let me \"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"think.\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world <b>\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":4,\"total_tokens\":15,\"prompt_tokens_details\":{\"cached_tokens\":2},\"completion_tokens_details\":{\"reasoning_tokens\":1}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: function call arguments streamed",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: namespaced function call is split back into namespace and name",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_ns\",\"type\":\"function\",\"function\":{\"name\":\"mcp__docs__search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: apply_patch custom tool streams decoded input",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_p\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"inp\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"ut\\\":\\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+hel\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"lo\\\\n*** End Patch\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: invalid apply_patch arguments fail the response",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_p\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"other\\\":1}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: generic custom tool unwraps input",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_s\",\"type\":\"function\",\"function\":{\"name\":\"run_script\",\"arguments\":\"{\\\"input\\\":\\\"echo hi\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: shell call is validated and emitted as shell_call",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_sh\",\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\",\"arguments\":\"{\\\"commands\\\":[\\\"ls\\\"],\\\"timeout_ms\\\":1000}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: invalid shell action fails the response",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_sh\",\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\",\"arguments\":\"{\\\"commands\\\":[]}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: text then tool call then length finish marks incomplete",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_x\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Ro\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"length\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: parallel tool calls and missing ids",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\"}},{\"index\":1,\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"B\\\"}\"}}]},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: content_filter, non-chunk objects and empty lines are ignored",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "",
+      "event: ping",
+      "data: {\"id\":\"x\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"ignored\"}}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"a\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"content_filter\"}]}",
+      "data: [DONE]",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: DONE before any content produces nothing",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: reasoning field and reasoning-only completion",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"step\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: finish without DONE can be finalized",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": true,
+    "request": {
+      "model": "gpt-4o",
+      "stream": true,
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "metadata": {
+        "b": 1,
+        "a": 2
+      },
+      "reasoning": {
+        "effort": "low"
+      },
+      "store": false,
+      "temperature": 0.5
+    },
+    "responseLines": [
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"x\"},\"finish_reason\":null}]}",
+      "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}"
+    ]
+  },
+  {
+    "name": "non-stream: text, reasoning, function, namespaced, custom, apply_patch and shell calls",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "reasoning": {
+        "effort": "low"
+      },
+      "max_output_tokens": 99,
+      "tool_choice": "auto",
+      "user": "u1",
+      "metadata": {
+        "k": "v"
+      }
+    },
+    "responseBody": {
+      "id": "chatcmpl-77",
+      "object": "chat.completion",
+      "created": 1700000100,
+      "model": "gpt-4o",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hi there",
+            "reasoning_content": "because",
+            "tool_calls": [
+              {
+                "id": "call_a",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"city\":\"Paris\"}"
+                }
+              },
+              {
+                "id": "call_b",
+                "type": "function",
+                "function": {
+                  "name": "mcp__docs__search",
+                  "arguments": "{\"q\":\"<x>\"}"
+                }
+              },
+              {
+                "id": "call_c",
+                "type": "function",
+                "function": {
+                  "name": "apply_patch",
+                  "arguments": "{\"input\":\"*** Begin Patch\\n*** End Patch\"}"
+                }
+              },
+              {
+                "id": "call_d",
+                "type": "function",
+                "function": {
+                  "name": "run_script",
+                  "arguments": "{\"input\":\"ls\"}"
+                }
+              },
+              {
+                "id": "call_e",
+                "type": "function",
+                "function": {
+                  "name": "__cpa_local_shell",
+                  "arguments": "{\"commands\":[\"ls\"]}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "prompt_tokens_details": {
+          "cached_tokens": 3
+        }
+      }
+    }
+  },
+  {
+    "name": "non-stream: length finish is incomplete",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": "x"
+    },
+    "responseBody": {
+      "id": "c1",
+      "created": 5,
+      "model": "m",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "cut"
+          },
+          "finish_reason": "length"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 1,
+        "completion_tokens": 2,
+        "total_tokens": 3
+      }
+    }
+  },
+  {
+    "name": "non-stream: tool call without id synthesizes one",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": "x",
+      "tools": [
+        {
+          "type": "function",
+          "name": "f",
+          "parameters": {}
+        }
+      ]
+    },
+    "responseBody": {
+      "id": "c2",
+      "created": 5,
+      "model": "m",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "type": "function",
+                "function": {
+                  "name": "f",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: invalid apply_patch arguments are a tool input error",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "gpt-4o",
+      "instructions": "be brief",
+      "tools": [
+        {
+          "type": "function",
+          "name": "get_weather",
+          "description": "Weather",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        },
+        {
+          "type": "namespace",
+          "name": "mcp__docs__",
+          "tools": [
+            {
+              "type": "function",
+              "name": "search",
+              "description": "Search docs",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "custom",
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "format": {
+            "type": "grammar",
+            "syntax": "lark",
+            "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+          }
+        },
+        {
+          "type": "custom",
+          "name": "run_script",
+          "description": "Run a script",
+          "format": {
+            "type": "text"
+          }
+        },
+        {
+          "type": "shell",
+          "environment": {
+            "type": "local"
+          }
+        },
+        {
+          "type": "web_search"
+        }
+      ],
+      "input": "hi",
+      "reasoning": {
+        "effort": "low"
+      },
+      "max_output_tokens": 99,
+      "tool_choice": "auto",
+      "user": "u1",
+      "metadata": {
+        "k": "v"
+      }
+    },
+    "responseBody": {
+      "id": "c3",
+      "created": 5,
+      "model": "m",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "id": "c",
+                "type": "function",
+                "function": {
+                  "name": "apply_patch",
+                  "arguments": "{\"x\":1}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: unknown usage shape is passed through",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-4o",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "input": "x"
+    },
+    "responseBody": {
+      "id": "c4",
+      "created": 5,
+      "model": "m",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "ok"
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "input_tokens": 4,
+        "output_tokens": 2
+      }
+    }
+  }
+]

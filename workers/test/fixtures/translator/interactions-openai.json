@@ -1,0 +1,484 @@
+[
+ {
+  "name": "request: string input, system instruction and generation config",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "model": "gemini-2.5-pro",
+   "input": "hi",
+   "system_instruction": "Be brief.",
+   "generation_config": {
+    "temperature": 0.3,
+    "max_output_tokens": 100,
+    "top_p": 0.9,
+    "top_k": 20,
+    "candidate_count": 2,
+    "stop_sequences": [
+     "END"
+    ],
+    "thinking_level": "HIGH",
+    "tool_choice": "auto"
+   },
+   "response_modalities": [
+    "text"
+   ],
+   "response_format": {
+    "type": "json_object"
+   },
+   "service_tier": "flex",
+   "previous_interaction_id": "int_prev",
+   "environment_id": "env_1",
+   "agent_config": {
+    "type": "x"
+   },
+   "parallel_tool_calls": true,
+   "seed": 7,
+   "user": "u"
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"hmm\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" there\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+   "data: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":3,\"total_tokens\":13,\"prompt_tokens_details\":{\"cached_tokens\":2},\"completion_tokens_details\":{\"reasoning_tokens\":1}}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"system\",\"content\":\"Be brief.\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"temperature\":0.3,\"max_tokens\":100,\"top_p\":0.9,\"top_k\":20,\"n\":2,\"stop\":[\"END\"],\"tool_choice\":\"auto\",\"reasoning_effort\":\"high\",\"modalities\":[\"text\"],\"response_format\":{\"type\":\"json_object\"},\"service_tier\":\"flex\",\"previous_response_id\":\"int_prev\",\"environment_id\":\"env_1\",\"agent_config\":{\"type\":\"x\"},\"parallel_tool_calls\":true,\"seed\":7,\"user\":\"u\"}",
+  "streamOutputs": [
+   [],
+   [
+    "event: interaction.created\ndata: {\"interaction\":{\"id\":\"chatcmpl-1\",\"status\":\"in_progress\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.created\"}\n\n",
+    "event: interaction.status_update\ndata: {\"interaction_id\":\"chatcmpl-1\",\"status\":\"in_progress\",\"event_type\":\"interaction.status_update\"}\n\n",
+    "event: step.start\ndata: {\"index\":0,\"step\":{\"type\":\"thought\"},\"event_type\":\"step.start\"}\n\n",
+    "event: step.delta\ndata: {\"index\":0,\"delta\":{\"content\":{\"text\":\"hmm\",\"type\":\"text\"},\"type\":\"thought_summary\"},\"event_type\":\"step.delta\"}\n\n",
+    "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}\n\n"
+   ],
+   [
+    "event: step.start\ndata: {\"index\":1,\"step\":{\"type\":\"model_output\"},\"event_type\":\"step.start\"}\n\n",
+    "event: step.delta\ndata: {\"index\":1,\"delta\":{\"text\":\"Hello\",\"type\":\"text\"},\"event_type\":\"step.delta\"}\n\n",
+    "event: step.stop\ndata: {\"index\":1,\"event_type\":\"step.stop\"}\n\n"
+   ],
+   [
+    "event: step.start\ndata: {\"index\":2,\"step\":{\"type\":\"model_output\"},\"event_type\":\"step.start\"}\n\n",
+    "event: step.delta\ndata: {\"index\":2,\"delta\":{\"text\":\" there\",\"type\":\"text\"},\"event_type\":\"step.delta\"}\n\n",
+    "event: step.stop\ndata: {\"index\":2,\"event_type\":\"step.stop\"}\n\n"
+   ],
+   [],
+   [
+    "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"chatcmpl-1\",\"status\":\"completed\",\"usage\":{\"input_tokens\":10,\"total_input_tokens\":10,\"output_tokens\":3,\"total_output_tokens\":3,\"total_tokens\":13,\"cached_tokens\":2,\"total_cached_tokens\":2,\"reasoning_tokens\":1,\"total_thought_tokens\":1},\"created\":\"2026-10-09T13:06:52Z\",\"updated\":\"2026-10-09T13:06:52Z\",\"service_tier\":\"standard\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.completed\"}\n\n"
+   ],
+   [
+    "event: done\ndata: [DONE]\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "request: steps with media, thoughts, calls and results",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "model": "gemini-2.5-pro",
+   "stream": true,
+   "input": [
+    {
+     "type": "user_input",
+     "content": [
+      {
+       "type": "text",
+       "text": "look"
+      },
+      {
+       "type": "image",
+       "data": "iVBORw0KGgo=",
+       "mime_type": "image/png"
+      },
+      {
+       "type": "audio",
+       "data": "UklGRg==",
+       "mime_type": "audio/wav"
+      },
+      {
+       "type": "video",
+       "uri": "x",
+       "url": "https://e.com/v.mp4"
+      },
+      {
+       "type": "document",
+       "data": "JVBERi0=",
+       "mime_type": "application/pdf",
+       "filename": "a.pdf"
+      },
+      {
+       "type": "file",
+       "file_url": "https://e.com/f.txt",
+       "mime_type": "text/plain"
+      }
+     ]
+    },
+    {
+     "type": "thought",
+     "content": [
+      {
+       "type": "text",
+       "text": "considering"
+      }
+     ]
+    },
+    {
+     "type": "model_output",
+     "content": [
+      {
+       "type": "text",
+       "text": "calling"
+      }
+     ]
+    },
+    {
+     "type": "function_call",
+     "id": "fc_1",
+     "name": "get_weather",
+     "arguments": {
+      "city": "Paris"
+     }
+    },
+    {
+     "type": "function_result",
+     "call_id": "fc_1",
+     "result": {
+      "temp": 22
+     }
+    },
+    {
+     "type": "function_call",
+     "call_id": "fc_2",
+     "name": "noargs"
+    },
+    {
+     "type": "function_result",
+     "call_id": "fc_2",
+     "output": "plain"
+    },
+    "a bare string step",
+    {
+     "type": "user_input",
+     "content": "short form"
+    }
+   ],
+   "tools": [
+    {
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    {
+     "function_declarations": [
+      {
+       "name": "decl",
+       "description": "d",
+       "parametersJsonSchema": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "type": "google_search"
+    }
+   ]
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-2\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]}}]}",
+   "data: {\"id\":\"chatcmpl-2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]}}]}",
+   "data: {\"id\":\"chatcmpl-2\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"call_2\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{}\"}}]}}]}",
+   "data: {\"id\":\"chatcmpl-2\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"look\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\"}},{\"type\":\"input_audio\",\"input_audio\":{\"data\":\"UklGRg==\",\"format\":\"wav\"}},{\"type\":\"video_url\",\"video_url\":{\"url\":\"https://e.com/v.mp4\"}},{\"type\":\"file\",\"file\":{\"filename\":\"a.pdf\",\"file_data\":\"JVBERi0=\"}},{\"type\":\"file\",\"file\":{\"filename\":\"document.txt\",\"file_url\":\"https://e.com/f.txt\"}}]},{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":\"\"},{\"role\":\"assistant\",\"content\":\"calling\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"fc_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"fc_1\",\"content\":\"{\\\"temp\\\":22}\"},{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"fc_2\",\"type\":\"function\",\"function\":{\"name\":\"noargs\",\"arguments\":\"{}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"fc_2\",\"content\":\"plain\"},{\"role\":\"user\",\"content\":\"a bare string step\"},{\"role\":\"user\",\"content\":\"short form\"}],\"stream\":true,\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"description\":\"Weather\",\"parameters\":{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}}},{\"type\":\"function\",\"function\":{\"name\":\"decl\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}}}]}",
+  "streamOutputs": [
+   [
+    "event: interaction.created\ndata: {\"interaction\":{\"id\":\"chatcmpl-2\",\"status\":\"in_progress\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.created\"}\n\n",
+    "event: interaction.status_update\ndata: {\"interaction_id\":\"chatcmpl-2\",\"status\":\"in_progress\",\"event_type\":\"interaction.status_update\"}\n\n",
+    "event: step.start\ndata: {\"index\":0,\"step\":{\"type\":\"function_call\",\"id\":\"call_1\",\"name\":\"get_weather\",\"arguments\":{}},\"event_type\":\"step.start\"}\n\n"
+   ],
+   [
+    "event: step.delta\ndata: {\"index\":0,\"delta\":{\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"type\":\"arguments_delta\"},\"event_type\":\"step.delta\"}\n\n"
+   ],
+   [
+    "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}\n\n",
+    "event: step.start\ndata: {\"index\":1,\"step\":{\"type\":\"function_call\",\"id\":\"call_2\",\"name\":\"read_file\",\"arguments\":{}},\"event_type\":\"step.start\"}\n\n",
+    "event: step.delta\ndata: {\"index\":1,\"delta\":{\"arguments\":\"{}\",\"type\":\"arguments_delta\"},\"event_type\":\"step.delta\"}\n\n"
+   ],
+   [
+    "event: step.stop\ndata: {\"index\":1,\"event_type\":\"step.stop\"}\n\n"
+   ],
+   [
+    "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"chatcmpl-2\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"total_input_tokens\":1,\"output_tokens\":2,\"total_output_tokens\":2,\"total_tokens\":3},\"created\":\"2026-10-09T13:06:52Z\",\"updated\":\"2026-10-09T13:06:52Z\",\"service_tier\":\"standard\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.completed\"}\n\n",
+    "event: done\ndata: [DONE]\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "request: single object input and camelCase generation config",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-pro",
+   "input": {
+    "type": "user_input",
+    "content": {
+     "type": "text",
+     "text": "one"
+    }
+   },
+   "generationConfig": {
+    "maxOutputTokens": 5,
+    "topP": 0.5,
+    "topK": 3,
+    "candidateCount": 1,
+    "stopSequences": [
+     "x"
+    ],
+    "thinkingConfig": {
+     "thinkingLevel": "low"
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":\"one\"}],\"max_tokens\":5,\"top_p\":0.5,\"top_k\":3,\"n\":1,\"stop\":[\"x\"],\"reasoning_effort\":\"low\"}"
+ },
+ {
+  "name": "request: antigravity model renames colliding tools back",
+  "from": "interactions",
+  "to": "openai",
+  "model": "antigravity-agent",
+  "stream": false,
+  "request": {
+   "model": "antigravity-agent",
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "c",
+     "name": "external_read_file",
+     "arguments": {
+      "path": "a"
+     }
+    },
+    {
+     "type": "function_result",
+     "call_id": "c",
+     "result": "ok"
+    }
+   ],
+   "tools": [
+    {
+     "name": "external_read_file",
+     "description": "read",
+     "parameters": {
+      "type": "object"
+     }
+    },
+    {
+     "name": "search"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"antigravity-agent\",\"messages\":[{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"c\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"a\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"c\",\"content\":\"ok\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"description\":\"read\",\"parameters\":{\"type\":\"object\"}}},{\"type\":\"function\",\"function\":{\"name\":\"search\"}}]}"
+ },
+ {
+  "name": "request: system instruction object and empty input",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "system_instruction": {
+    "parts": [
+     {
+      "text": "a"
+     },
+     {
+      "text": "b"
+     }
+    ]
+   },
+   "input": []
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"system\",\"content\":\"ab\"}]}"
+ },
+ {
+  "name": "stream: incomplete status and content filter reasons",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "model": "m",
+   "stream": true,
+   "input": "x"
+  },
+  "responseLines": [
+   "data: {\"id\":\"c9\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"cut\"},\"finish_reason\":\"length\"}]}",
+   "data: {\"id\":\"c9\",\"choices\":[],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: interaction.created\ndata: {\"interaction\":{\"id\":\"c9\",\"status\":\"in_progress\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.created\"}\n\n",
+    "event: interaction.status_update\ndata: {\"interaction_id\":\"c9\",\"status\":\"in_progress\",\"event_type\":\"interaction.status_update\"}\n\n",
+    "event: step.start\ndata: {\"index\":0,\"step\":{\"type\":\"model_output\"},\"event_type\":\"step.start\"}\n\n",
+    "event: step.delta\ndata: {\"index\":0,\"delta\":{\"text\":\"cut\",\"type\":\"text\"},\"event_type\":\"step.delta\"}\n\n",
+    "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}\n\n"
+   ],
+   [
+    "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"c9\",\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"total_input_tokens\":1,\"output_tokens\":1,\"total_output_tokens\":1},\"created\":\"2026-10-09T13:06:52Z\",\"updated\":\"2026-10-09T13:06:52Z\",\"service_tier\":\"standard\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.completed\"}\n\n"
+   ],
+   [
+    "event: done\ndata: [DONE]\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: usage-only chunk completes before DONE",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": true,
+  "request": {
+   "model": "m",
+   "stream": true,
+   "input": "x"
+  },
+  "responseLines": [
+   "data: {\"id\":\"c10\",\"model\":\"m\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3}}",
+   "data: [DONE]",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":true}",
+  "streamOutputs": [
+   [
+    "event: interaction.created\ndata: {\"interaction\":{\"id\":\"c10\",\"status\":\"in_progress\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.created\"}\n\n",
+    "event: interaction.status_update\ndata: {\"interaction_id\":\"c10\",\"status\":\"in_progress\",\"event_type\":\"interaction.status_update\"}\n\n",
+    "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"c10\",\"status\":\"completed\",\"usage\":{\"input_tokens\":2,\"total_input_tokens\":2,\"output_tokens\":1,\"total_output_tokens\":1,\"total_tokens\":3},\"created\":\"2026-10-09T13:06:52Z\",\"updated\":\"2026-10-09T13:06:52Z\",\"service_tier\":\"standard\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\"},\"event_type\":\"interaction.completed\"}\n\n"
+   ],
+   [
+    "event: done\ndata: [DONE]\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "non-stream: text, reasoning, tool calls and usage",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "x"
+  },
+  "responseBody": {
+   "id": "chatcmpl-5",
+   "model": "m",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "The answer",
+      "reasoning_content": "because",
+      "tool_calls": [
+       {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+         "name": "f",
+         "arguments": "{\"a\":1}"
+        }
+       },
+       {
+        "id": "call_2",
+        "type": "custom",
+        "function": {
+         "name": "g",
+         "arguments": "{}"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 4,
+    "completion_tokens": 2,
+    "total_tokens": 6,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 1
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}]}",
+  "responseBodyText": "{\"id\":\"chatcmpl-5\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"The answer\",\"reasoning_content\":\"because\",\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\"}},{\"id\":\"call_2\",\"type\":\"custom\",\"function\":{\"name\":\"g\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":2,\"total_tokens\":6,\"prompt_tokens_details\":{\"cached_tokens\":1},\"completion_tokens_details\":{\"reasoning_tokens\":1}}}",
+  "nonStreamOutput": "{\"id\":\"chatcmpl-5\",\"status\":\"completed\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\",\"steps\":[{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"because\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"The answer\"}]},{\"type\":\"function_call\",\"name\":\"f\",\"arguments\":{\"a\":1},\"id\":\"call_1\"}],\"finish_reason\":\"tool_calls\",\"usage\":{\"input_tokens\":4,\"total_input_tokens\":4,\"output_tokens\":2,\"total_output_tokens\":2,\"total_tokens\":6,\"cached_tokens\":1,\"total_cached_tokens\":1,\"reasoning_tokens\":1,\"total_thought_tokens\":1}}"
+ },
+ {
+  "name": "non-stream: array reasoning and invalid arguments kept as string",
+  "from": "interactions",
+  "to": "openai",
+  "model": "gemini-2.5-pro",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "x"
+  },
+  "responseBody": {
+   "id": "chatcmpl-6",
+   "choices": [
+    {
+     "message": {
+      "content": "",
+      "reasoning_content": [
+       {
+        "text": "a"
+       },
+       {
+        "content": "b"
+       }
+      ],
+      "tool_calls": [
+       {
+        "id": "c",
+        "function": {
+         "name": "f",
+         "arguments": "not json"
+        }
+       }
+      ]
+     },
+     "finish_reason": "stop"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-pro\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}]}",
+  "responseBodyText": "{\"id\":\"chatcmpl-6\",\"choices\":[{\"message\":{\"content\":\"\",\"reasoning_content\":[{\"text\":\"a\"},{\"content\":\"b\"}],\"tool_calls\":[{\"id\":\"c\",\"function\":{\"name\":\"f\",\"arguments\":\"not json\"}}]},\"finish_reason\":\"stop\"}]}",
+  "nonStreamOutput": "{\"id\":\"chatcmpl-6\",\"status\":\"completed\",\"object\":\"interaction\",\"model\":\"gemini-2.5-pro\",\"steps\":[{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"a\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"b\"}]},{\"type\":\"function_call\",\"name\":\"f\",\"arguments\":\"not json\",\"id\":\"c\"}],\"finish_reason\":\"stop\"}"
+ }
+]

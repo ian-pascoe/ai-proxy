@@ -1,0 +1,2678 @@
+[
+ {
+  "name": "request: full Codex-style request (tools, namespaces, custom, shell, history, formats)",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "instructions": "You are Codex.",
+   "max_output_tokens": 2048,
+   "parallel_tool_calls": false,
+   "reasoning": {
+    "effort": " High ",
+    "summary": "auto"
+   },
+   "text": {
+    "format": {
+     "type": "json_schema",
+     "name": "out",
+     "description": "d",
+     "strict": true,
+     "schema": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "string"
+       }
+      },
+      "additionalProperties": false
+     }
+    }
+   },
+   "tool_choice": {
+    "type": "function",
+    "name": "get_weather"
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": [
+    {
+     "type": "message",
+     "role": "developer",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "dev note"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "look at this"
+      },
+      {
+       "type": "input_image",
+       "image_url": "data:image/png;base64,iVBORw0KGgo=",
+       "detail": "original"
+      },
+      {
+       "type": "input_file",
+       "file_id": "file-1",
+       "filename": "a.pdf"
+      },
+      {
+       "type": "input_file",
+       "file_data": "data:application/pdf;base64,JVBERi0=",
+       "filename": "b.pdf"
+      },
+      {
+       "type": "input_audio",
+       "input_audio": {
+        "data": "UklGRg==",
+        "format": "wav"
+       }
+      },
+      {
+       "type": "input_video",
+       "video_url": "https://example.com/v.mp4"
+      }
+     ]
+    },
+    {
+     "type": "reasoning",
+     "summary": [
+      {
+       "type": "summary_text",
+       "text": "thinking about it"
+      }
+     ],
+     "encrypted_content": "abc"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "Let me check."
+      }
+     ]
+    },
+    {
+     "type": "function_call",
+     "call_id": "call_1",
+     "name": "get_weather",
+     "arguments": "{\"city\":\"Paris\"}"
+    },
+    {
+     "type": "function_call",
+     "call_id": "call_2",
+     "namespace": "mcp__docs__",
+     "name": "search",
+     "arguments": "{\"q\":\"x\"}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "call_1",
+     "output": "22C"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "call_2",
+     "output": [
+      {
+       "type": "input_text",
+       "text": "doc one"
+      },
+      {
+       "type": "input_image",
+       "image_url": "data:image/png;base64,iVBORw0KGgo="
+      }
+     ]
+    },
+    {
+     "type": "custom_tool_call",
+     "call_id": "call_3",
+     "name": "apply_patch",
+     "input": "*** Begin Patch\n*** End Patch"
+    },
+    {
+     "type": "custom_tool_call_output",
+     "call_id": "call_3",
+     "output": "Done!"
+    },
+    {
+     "type": "shell_call",
+     "call_id": "call_4",
+     "action": {
+      "commands": [
+       "ls -la"
+      ]
+     }
+    },
+    {
+     "type": "shell_call_output",
+     "call_id": "call_4",
+     "output": [
+      {
+       "stdout": "a b",
+       "stderr": "",
+       "outcome": {
+        "type": "exit",
+        "exit_code": 0
+       }
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "thanks"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are Codex.\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"dev note\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"look at this\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\",\"detail\":\"high\"}},{\"type\":\"file\",\"file\":{\"file_id\":\"file-1\",\"filename\":\"a.pdf\"}},{\"type\":\"file\",\"file\":{\"file_data\":\"data:application/pdf;base64,JVBERi0=\",\"filename\":\"b.pdf\"}},{\"type\":\"input_audio\",\"input_audio\":{\"data\":\"UklGRg==\",\"format\":\"wav\"}},{\"type\":\"video_url\",\"video_url\":{\"url\":\"https://example.com/v.mp4\"}}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Let me check.\"}],\"reasoning_content\":\"thinking about it\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"name\":\"get_weather\"},\"id\":\"call_1\",\"type\":\"function\"},{\"function\":{\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\",\"name\":\"mcp__docs__search\"},\"id\":\"call_2\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"22C\"},{\"role\":\"tool\",\"tool_call_id\":\"call_2\",\"content\":[{\"type\":\"text\",\"text\":\"doc one\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\"}}]},{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"input\\\":\\\"*** Begin Patch\\\\n*** End Patch\\\"}\",\"name\":\"apply_patch\"},\"id\":\"call_3\",\"type\":\"function\"}],\"reasoning_content\":\"thinking about it\"},{\"role\":\"tool\",\"tool_call_id\":\"call_3\",\"content\":\"Done!\"},{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"commands\\\":[\\\"ls -la\\\"]}\",\"name\":\"__cpa_local_shell\"},\"id\":\"call_4\",\"type\":\"function\"}],\"reasoning_content\":\"thinking about it\"},{\"role\":\"tool\",\"tool_call_id\":\"call_4\",\"content\":\"{\\\"type\\\":\\\"shell_call_output\\\",\\\"call_id\\\":\\\"call_4\\\",\\\"output\\\":[{\\\"stdout\\\":\\\"a b\\\",\\\"stderr\\\":\\\"\\\",\\\"outcome\\\":{\\\"type\\\":\\\"exit\\\",\\\"exit_code\\\":0}}]}\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"thanks\"}]}],\"stream\":true,\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"out\",\"description\":\"d\",\"strict\":true,\"schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"string\"}},\"additionalProperties\":false}}},\"max_tokens\":2048,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"parallel_tool_calls\":false,\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"get_weather\"}},\"reasoning_effort\":\"high\"}"
+ },
+ {
+  "name": "request: string input",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "hello",
+   "reasoning": {
+    "effort": "low"
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"stream\":false,\"reasoning_effort\":\"low\"}"
+ },
+ {
+  "name": "request: instructions only, no input",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "instructions": "be brief"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: orphan outputs become user text and empty ones are dropped",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "function_call_output",
+     "call_id": "nope",
+     "output": "orphan result"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "empty",
+     "output": ""
+    },
+    {
+     "type": "custom_tool_call_output",
+     "call_id": "nope2",
+     "output": [
+      {
+       "type": "output_text",
+       "text": "x"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": "go"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"orphan result\"},{\"role\":\"user\",\"content\":\"x\"},{\"role\":\"user\",\"content\":\"go\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: outputs without call ids are matched by order and name",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tools": [
+    {
+     "type": "function",
+     "name": "f",
+     "parameters": {}
+    },
+    {
+     "type": "function",
+     "name": "g",
+     "parameters": {}
+    }
+   ],
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "a",
+     "name": "f",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call",
+     "call_id": "b",
+     "name": "g",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call_output",
+     "name": "g",
+     "output": "G"
+    },
+    {
+     "type": "function_call_output",
+     "name": "f",
+     "output": "F"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"f\"},\"id\":\"a\",\"type\":\"function\"},{\"function\":{\"arguments\":\"{}\",\"name\":\"g\"},\"id\":\"b\",\"type\":\"function\"}]},{\"role\":\"user\",\"content\":\"G\"},{\"role\":\"user\",\"content\":\"F\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"f\",\"parameters\":{}},\"type\":\"function\"},{\"function\":{\"description\":\"\",\"name\":\"g\",\"parameters\":{}},\"type\":\"function\"}]}"
+ },
+ {
+  "name": "request: out-of-order tool outputs are re-aligned",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "a",
+     "name": "f",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call",
+     "call_id": "b",
+     "name": "g",
+     "arguments": "{}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": "interleaved"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "b",
+     "output": "B"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "a",
+     "output": "A"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"f\"},\"id\":\"a\",\"type\":\"function\"},{\"function\":{\"arguments\":\"{}\",\"name\":\"g\"},\"id\":\"b\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"b\",\"content\":\"B\"},{\"role\":\"tool\",\"tool_call_id\":\"a\",\"content\":\"A\"},{\"role\":\"user\",\"content\":\"interleaved\"}],\"stream\":false}"
+ },
+ {
+  "name": "request: assistant message followed by function call merges tool_calls",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "reasoning": {
+    "effort": "medium"
+   },
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": "q"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "calling"
+      }
+     ]
+    },
+    {
+     "type": "function_call",
+     "call_id": "a",
+     "name": "f",
+     "arguments": "{\"x\":1}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "a",
+     "output": "{\"ok\":true}"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"q\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"calling\"}],\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"x\\\":1}\",\"name\":\"f\"},\"id\":\"a\",\"type\":\"function\"}],\"reasoning_content\":\"[reasoning unavailable]\"},{\"role\":\"tool\",\"tool_call_id\":\"a\",\"content\":\"{\\\"ok\\\":true}\"}],\"stream\":false,\"reasoning_effort\":\"medium\"}"
+ },
+ {
+  "name": "request: reasoning fallback text when only effort is configured",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "reasoning": {
+    "effort": "high"
+   },
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": "q"
+    },
+    {
+     "type": "function_call",
+     "call_id": "a",
+     "name": "f",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "a",
+     "output": "r"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"q\"},{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"f\"},\"id\":\"a\",\"type\":\"function\"}],\"reasoning_content\":\"[reasoning unavailable]\"},{\"role\":\"tool\",\"tool_call_id\":\"a\",\"content\":\"r\"}],\"stream\":false,\"reasoning_effort\":\"high\"}"
+ },
+ {
+  "name": "request: tool output with image parts is converted to content parts",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "a",
+     "name": "screenshot",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "a",
+     "output": [
+      {
+       "type": "input_text",
+       "text": "here"
+      },
+      {
+       "type": "input_image",
+       "image_url": "data:image/png;base64,iVBORw0KGgo=",
+       "detail": "low"
+      }
+     ]
+    },
+    {
+     "type": "function_call",
+     "call_id": "b",
+     "name": "screenshot",
+     "arguments": "{}"
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "b",
+     "output": "[{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://e.com/x.png\",\"detail\":\"bogus\"}}]"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"screenshot\"},\"id\":\"a\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"a\",\"content\":[{\"type\":\"text\",\"text\":\"here\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,iVBORw0KGgo=\",\"detail\":\"low\"}}]},{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"screenshot\"},\"id\":\"b\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"b\",\"content\":[{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://e.com/x.png\"}}]}],\"stream\":false}"
+ },
+ {
+  "name": "request: user turn with an unsendable file is refused",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_file",
+       "file_url": "https://example.com/a.pdf"
+      }
+     ]
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":[]}],\"stream\":false}",
+  "requestError": "unsupported content part: input_file"
+ },
+ {
+  "name": "request: tool_choice variants",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tool_choice": "required",
+   "tools": [
+    {
+     "type": "function",
+     "name": "f",
+     "parameters": {}
+    }
+   ],
+   "input": "x"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"f\",\"parameters\":{}},\"type\":\"function\"}],\"tool_choice\":\"required\"}"
+ },
+ {
+  "name": "request: tool_choice custom and namespaced",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tool_choice": {
+    "type": "custom",
+    "name": "search",
+    "namespace": "mcp__docs__"
+   },
+   "tools": [
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search"
+      }
+     ]
+    }
+   ],
+   "input": "x"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"mcp__docs__search\",\"parameters\":{}},\"type\":\"function\"}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"mcp__docs__search\"}}}"
+ },
+ {
+  "name": "request: tool_choice shell and unknown object",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tool_choice": {
+    "type": "shell"
+   },
+   "tools": [
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    }
+   ],
+   "input": "x"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\"}}}"
+ },
+ {
+  "name": "request: tool_choice allowed_tools passes through",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tool_choice": {
+    "type": "allowed_tools",
+    "mode": "auto",
+    "tools": [
+     {
+      "type": "function",
+      "name": "f"
+     }
+    ]
+   },
+   "tools": [
+    {
+     "type": "function",
+     "name": "f",
+     "parameters": {}
+    }
+   ],
+   "input": "x"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"f\",\"parameters\":{}},\"type\":\"function\"}],\"tool_choice\":{\"type\":\"allowed_tools\",\"mode\":\"auto\",\"tools\":[{\"type\":\"function\",\"name\":\"f\"}]}}"
+ },
+ {
+  "name": "request: long namespaced tool names are capped and disambiguated",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "tools": [
+    {
+     "type": "namespace",
+     "name": "mcp__a_very_long_server_name_for_testing_truncation__one",
+     "tools": [
+      {
+       "type": "function",
+       "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+       "parameters": {}
+      }
+     ]
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__a_very_long_server_name_for_testing_truncation__two",
+     "tools": [
+      {
+       "type": "function",
+       "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+       "parameters": {}
+      }
+     ]
+    }
+   ],
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "c1",
+     "namespace": "mcp__a_very_long_server_name_for_testing_truncation__two",
+     "name": "read_file_with_a_really_long_name_that_exceeds_limit",
+     "arguments": "{}"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{}\",\"name\":\"ation__two__read_file_with_a_really_long_name_that_exceeds_limit\"},\"id\":\"c1\",\"type\":\"function\"}]}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"ation__one__read_file_with_a_really_long_name_that_exceeds_limit\",\"parameters\":{}},\"type\":\"function\"},{\"function\":{\"description\":\"\",\"name\":\"ation__two__read_file_with_a_really_long_name_that_exceeds_limit\",\"parameters\":{}},\"type\":\"function\"}]}"
+ },
+ {
+  "name": "request: additional_tools input item supplies tools",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "additional_tools",
+     "tools": [
+      {
+       "type": "function",
+       "name": "extra",
+       "description": "from lite",
+       "parameters": {
+        "type": "object"
+       }
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": "hi"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"from lite\",\"name\":\"extra\",\"parameters\":{\"type\":\"object\"}},\"type\":\"function\"}]}"
+ },
+ {
+  "name": "request: text format json_object and max tokens",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "max_output_tokens": 10,
+   "text": {
+    "format": {
+     "type": "json_object"
+    }
+   },
+   "input": "x"
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"response_format\":{\"type\":\"json_object\"},\"max_tokens\":10}"
+ },
+ {
+  "name": "request: shell tool withdrawn but history replayed",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": [
+    {
+     "type": "shell_call",
+     "call_id": "s1",
+     "action": {
+      "commands": [
+       "pwd"
+      ]
+     }
+    },
+    {
+     "type": "shell_call_output",
+     "call_id": "s1",
+     "output": "ok"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": "next"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"function\":{\"arguments\":\"{\\\"commands\\\":[\\\"pwd\\\"]}\",\"name\":\"__cpa_local_shell\"},\"id\":\"s1\",\"type\":\"function\"}]},{\"role\":\"tool\",\"tool_call_id\":\"s1\",\"content\":\"{\\\"type\\\":\\\"shell_call_output\\\",\\\"call_id\\\":\\\"s1\\\",\\\"output\\\":\\\"ok\\\"}\"},{\"role\":\"user\",\"content\":\"next\"}],\"stream\":false}"
+ },
+ {
+  "name": "stream: text with reasoning, usage after finish and [DONE]",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"Let me \"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"think.\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world \u003cb\u003e\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"choices\":[],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":4,\"total_tokens\":15,\"prompt_tokens_details\":{\"cached_tokens\":2},\"completion_tokens_details\":{\"reasoning_tokens\":1}}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n"
+   ],
+   [
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"rs_chatcmpl-9_0\",\"type\":\"reasoning\",\"status\":\"in_progress\",\"summary\":[]}}\n\n",
+    "event: response.reasoning_summary_part.added\ndata: {\"type\":\"response.reasoning_summary_part.added\",\"sequence_number\":4,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}\n\n",
+    "event: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"sequence_number\":5,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"delta\":\"Let me \"}\n\n"
+   ],
+   [
+    "event: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"sequence_number\":6,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"delta\":\"think.\"}\n\n"
+   ],
+   [
+    "event: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_text.done\",\"sequence_number\":7,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"text\":\"Let me think.\"}\n\n",
+    "event: response.reasoning_summary_part.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"sequence_number\":8,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"Let me think.\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"rs_chatcmpl-9_0\",\"type\":\"reasoning\",\"encrypted_content\":\"\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Let me think.\"}]},\"output_index\":0,\"sequence_number\":9}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":10,\"output_index\":1,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"role\":\"assistant\"}}\n\n",
+    "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":11,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\n",
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":12,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":1,\"content_index\":0,\"delta\":\"Hello\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":13,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":1,\"content_index\":0,\"delta\":\" world \u003cb\u003e\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":14,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":1,\"content_index\":0,\"text\":\"Hello world \u003cb\u003e\",\"logprobs\":[]}\n\n",
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":15,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":1,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello world \u003cb\u003e\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":16,\"output_index\":1,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello world \u003cb\u003e\"}],\"role\":\"assistant\"}}\n\n"
+   ],
+   [],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":17,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"rs_chatcmpl-9_0\",\"type\":\"reasoning\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"Let me think.\"}]},{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hello world \u003cb\u003e\"}],\"role\":\"assistant\"}],\"usage\":{\"input_tokens\":11,\"input_tokens_details\":{\"cached_tokens\":2},\"output_tokens\":4,\"output_tokens_details\":{\"reasoning_tokens\":1},\"total_tokens\":15}}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: function call arguments streamed",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_abc\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"city\\\":\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"Paris\\\"}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"fc_call_abc\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_abc\",\"name\":\"get_weather\"}}\n\n"
+   ],
+   [
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":4,\"item_id\":\"fc_call_abc\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\"}\n\n"
+   ],
+   [
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":5,\"item_id\":\"fc_call_abc\",\"output_index\":0,\"delta\":\"\\\"Paris\\\"}\"}\n\n"
+   ],
+   [
+    "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":6,\"item_id\":\"fc_call_abc\",\"output_index\":0,\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":7,\"output_index\":0,\"item\":{\"id\":\"fc_call_abc\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"call_id\":\"call_abc\",\"name\":\"get_weather\"}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":8,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"fc_call_abc\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"call_id\":\"call_abc\",\"name\":\"get_weather\"}],\"usage\":{\"input_tokens\":3,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":2,\"total_tokens\":5}}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: namespaced function call is split back into namespace and name",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_ns\",\"type\":\"function\",\"function\":{\"name\":\"mcp__docs__search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"fc_call_ns\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_ns\",\"name\":\"search\",\"namespace\":\"mcp__docs__\"}}\n\n",
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":4,\"item_id\":\"fc_call_ns\",\"output_index\":0,\"delta\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\n"
+   ],
+   [
+    "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":5,\"item_id\":\"fc_call_ns\",\"output_index\":0,\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":6,\"output_index\":0,\"item\":{\"id\":\"fc_call_ns\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\",\"call_id\":\"call_ns\",\"name\":\"search\",\"namespace\":\"mcp__docs__\"}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"fc_call_ns\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\",\"call_id\":\"call_ns\",\"name\":\"search\",\"namespace\":\"mcp__docs__\"}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: apply_patch custom tool streams decoded input",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_p\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"inp\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"ut\\\":\\\"*** Begin Patch\\\\n*** Add File: a.txt\\\\n+hel\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"lo\\\\n*** End Patch\\\"}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"ctc_call_p\",\"type\":\"custom_tool_call\",\"status\":\"in_progress\",\"input\":\"\",\"call_id\":\"call_p\",\"name\":\"apply_patch\"}}\n\n"
+   ],
+   [
+    "event: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"item_id\":\"ctc_call_p\",\"call_id\":\"call_p\",\"output_index\":0,\"sequence_number\":4,\"delta\":\"*** Begin Patch\\n*** Add File: a.txt\\n+hel\"}\n\n"
+   ],
+   [
+    "event: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"item_id\":\"ctc_call_p\",\"call_id\":\"call_p\",\"output_index\":0,\"sequence_number\":5,\"delta\":\"lo\\n*** End Patch\"}\n\n"
+   ],
+   [
+    "event: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"item_id\":\"ctc_call_p\",\"call_id\":\"call_p\",\"output_index\":0,\"sequence_number\":6,\"input\":\"*** Begin Patch\\n*** Add File: a.txt\\n+hello\\n*** End Patch\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":7,\"output_index\":0,\"item\":{\"id\":\"ctc_call_p\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"*** Begin Patch\\n*** Add File: a.txt\\n+hello\\n*** End Patch\",\"call_id\":\"call_p\",\"name\":\"apply_patch\"}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":8,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"ctc_call_p\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"*** Begin Patch\\n*** Add File: a.txt\\n+hello\\n*** End Patch\",\"call_id\":\"call_p\",\"name\":\"apply_patch\"}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: invalid apply_patch arguments fail the response",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_p\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"other\\\":1}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"ctc_call_p\",\"type\":\"custom_tool_call\",\"status\":\"in_progress\",\"input\":\"\",\"call_id\":\"call_p\",\"name\":\"apply_patch\"}}\n\n",
+    "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":4,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"status\":\"failed\",\"error\":{\"type\":\"server_error\",\"code\":\"invalid_tool_arguments\",\"message\":\"Invalid apply_patch tool arguments received from upstream.\",\"param\":null}}}\n\n"
+   ],
+   [],
+   []
+  ]
+ },
+ {
+  "name": "stream: generic custom tool unwraps input",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_s\",\"type\":\"function\",\"function\":{\"name\":\"run_script\",\"arguments\":\"{\\\"input\\\":\\\"echo hi\\\"}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"ctc_call_s\",\"type\":\"custom_tool_call\",\"status\":\"in_progress\",\"input\":\"\",\"call_id\":\"call_s\",\"name\":\"run_script\"}}\n\n"
+   ],
+   [
+    "event: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":4,\"item_id\":\"ctc_call_s\",\"output_index\":0,\"input\":\"echo hi\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":5,\"output_index\":0,\"item\":{\"id\":\"ctc_call_s\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"echo hi\",\"call_id\":\"call_s\",\"name\":\"run_script\"}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":6,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"ctc_call_s\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"echo hi\",\"call_id\":\"call_s\",\"name\":\"run_script\"}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: shell call is validated and emitted as shell_call",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_sh\",\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\",\"arguments\":\"{\\\"commands\\\":[\\\"ls\\\"],\\\"timeout_ms\\\":1000}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"sh_call_sh\",\"type\":\"shell_call\",\"status\":\"in_progress\",\"call_id\":\"call_sh\",\"action\":{\"commands\":[]}}}\n\n"
+   ],
+   [
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":4,\"output_index\":0,\"item\":{\"id\":\"sh_call_sh\",\"type\":\"shell_call\",\"status\":\"completed\",\"call_id\":\"call_sh\",\"action\":{\"commands\":[\"ls\"],\"timeout_ms\":1000}}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":5,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"sh_call_sh\",\"type\":\"shell_call\",\"status\":\"completed\",\"call_id\":\"call_sh\",\"action\":{\"commands\":[\"ls\"],\"timeout_ms\":1000}}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: invalid shell action fails the response",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_sh\",\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\",\"arguments\":\"{\\\"commands\\\":[]}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"sh_call_sh\",\"type\":\"shell_call\",\"status\":\"in_progress\",\"call_id\":\"call_sh\",\"action\":{\"commands\":[]}}}\n\n"
+   ],
+   [
+    "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":4,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"status\":\"failed\",\"error\":{\"type\":\"server_error\",\"code\":\"invalid_tool_arguments\",\"message\":\"invalid shell action: expected nonempty commands strings and optional positive integer limits\",\"param\":null}}}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: text then tool call then length finish marks incomplete",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_x\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Ro\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"length\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"role\":\"assistant\"}}\n\n",
+    "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":4,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\n",
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":6,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"text\":\"partial\",\"logprobs\":[]}\n\n",
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":7,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"partial\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":8,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"partial\"}],\"role\":\"assistant\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":9,\"output_index\":1,\"item\":{\"id\":\"fc_call_x\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_x\",\"name\":\"get_weather\"}}\n\n",
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":10,\"item_id\":\"fc_call_x\",\"output_index\":1,\"delta\":\"{\\\"city\\\":\\\"Ro\"}\n\n"
+   ],
+   [
+    "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":11,\"item_id\":\"fc_call_x\",\"output_index\":1,\"arguments\":\"{\\\"city\\\":\\\"Ro\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":12,\"output_index\":1,\"item\":{\"id\":\"fc_call_x\",\"type\":\"function_call\",\"status\":\"incomplete\",\"arguments\":\"{\\\"city\\\":\\\"Ro\",\"call_id\":\"call_x\",\"name\":\"get_weather\"}}\n\n"
+   ],
+   [
+    "event: response.incomplete\ndata: {\"type\":\"response.incomplete\",\"sequence_number\":13,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"incomplete\",\"background\":false,\"error\":null,\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"incomplete\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"partial\"}],\"role\":\"assistant\"},{\"id\":\"fc_call_x\",\"type\":\"function_call\",\"status\":\"incomplete\",\"arguments\":\"{\\\"city\\\":\\\"Ro\",\"call_id\":\"call_x\",\"name\":\"get_weather\"}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: parallel tool calls and missing ids",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\"}},{\"index\":1,\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"B\\\"}\"}}]},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n"
+   ],
+   [
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"fc_call_chatcmpl-9_0_0\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_chatcmpl-9_0_0\",\"name\":\"get_weather\"}}\n\n",
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":4,\"item_id\":\"fc_call_chatcmpl-9_0_0\",\"output_index\":0,\"delta\":\"{\\\"city\\\":\\\"A\\\"}\"}\n\n",
+    "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":5,\"item_id\":\"fc_call_chatcmpl-9_0_0\",\"output_index\":0,\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":6,\"output_index\":0,\"item\":{\"id\":\"fc_call_chatcmpl-9_0_0\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\",\"call_id\":\"call_chatcmpl-9_0_0\",\"name\":\"get_weather\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":7,\"output_index\":1,\"item\":{\"id\":\"fc_call_chatcmpl-9_0_1\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_chatcmpl-9_0_1\",\"name\":\"get_weather\"}}\n\n",
+    "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":8,\"item_id\":\"fc_call_chatcmpl-9_0_1\",\"output_index\":1,\"delta\":\"{\\\"city\\\":\\\"B\\\"}\"}\n\n",
+    "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"sequence_number\":9,\"item_id\":\"fc_call_chatcmpl-9_0_1\",\"output_index\":1,\"arguments\":\"{\\\"city\\\":\\\"B\\\"}\"}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":10,\"output_index\":1,\"item\":{\"id\":\"fc_call_chatcmpl-9_0_1\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"B\\\"}\",\"call_id\":\"call_chatcmpl-9_0_1\",\"name\":\"get_weather\"}}\n\n"
+   ],
+   [
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":11,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"background\":false,\"error\":null,\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"fc_call_chatcmpl-9_0_0\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"A\\\"}\",\"call_id\":\"call_chatcmpl-9_0_0\",\"name\":\"get_weather\"},{\"id\":\"fc_call_chatcmpl-9_0_1\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"B\\\"}\",\"call_id\":\"call_chatcmpl-9_0_1\",\"name\":\"get_weather\"}]}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "stream: content_filter, non-chunk objects and empty lines are ignored",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "",
+   "event: ping",
+   "data: {\"id\":\"x\",\"object\":\"chat.completion\",\"choices\":[{\"index\":0,\"message\":{\"content\":\"ignored\"}}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"a\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"content_filter\"}]}",
+   "data: [DONE]",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [],
+   [],
+   [],
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"role\":\"assistant\"}}\n\n",
+    "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":4,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\n",
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"delta\":\"a\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":6,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"text\":\"a\",\"logprobs\":[]}\n\n",
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":7,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"a\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":8,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"incomplete\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"a\"}],\"role\":\"assistant\"}}\n\n"
+   ],
+   [
+    "event: response.incomplete\ndata: {\"type\":\"response.incomplete\",\"sequence_number\":9,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"incomplete\",\"background\":false,\"error\":null,\"incomplete_details\":{\"reason\":\"content_filter\"},\"instructions\":\"be brief\",\"model\":\"gpt-4o\",\"reasoning\":{\"effort\":\"low\"},\"store\":false,\"temperature\":0.5,\"tools\":[{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"},\"type\":\"function\"},{\"name\":\"mcp__docs__\",\"tools\":[{\"description\":\"Search docs\",\"name\":\"search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"},\"type\":\"function\"}],\"type\":\"namespace\"},{\"description\":\"Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\",\"format\":{\"definition\":\"start: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"syntax\":\"lark\",\"type\":\"grammar\"},\"name\":\"apply_patch\",\"type\":\"custom\"},{\"description\":\"Run a script\",\"format\":{\"type\":\"text\"},\"name\":\"run_script\",\"type\":\"custom\"},{\"environment\":{\"type\":\"local\"},\"type\":\"shell\"},{\"type\":\"web_search\"}],\"metadata\":{\"a\":2,\"b\":1},\"output\":[{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"incomplete\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"a\"}],\"role\":\"assistant\"}]}}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: DONE before any content produces nothing",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   []
+  ]
+ },
+ {
+  "name": "stream: reasoning field and reasoning-only completion",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"step\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+   "data: [DONE]"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"rs_chatcmpl-9_0\",\"type\":\"reasoning\",\"status\":\"in_progress\",\"summary\":[]}}\n\n",
+    "event: response.reasoning_summary_part.added\ndata: {\"type\":\"response.reasoning_summary_part.added\",\"sequence_number\":4,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}\n\n",
+    "event: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"sequence_number\":5,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"delta\":\"step\"}\n\n"
+   ],
+   [
+    "event: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_text.done\",\"sequence_number\":6,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"text\":\"step\"}\n\n",
+    "event: response.reasoning_summary_part.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"sequence_number\":7,\"item_id\":\"rs_chatcmpl-9_0\",\"output_index\":0,\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"step\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"rs_chatcmpl-9_0\",\"type\":\"reasoning\",\"encrypted_content\":\"\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"step\"}]},\"output_index\":0,\"sequence_number\":8}\n\n"
+   ],
+   []
+  ]
+ },
+ {
+  "name": "stream: finish without DONE can be finalized",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": true,
+  "request": {
+   "model": "gpt-4o",
+   "stream": true,
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "metadata": {
+    "b": 1,
+    "a": 2
+   },
+   "reasoning": {
+    "effort": "low"
+   },
+   "store": false,
+   "temperature": 0.5
+  },
+  "responseLines": [
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"x\"},\"finish_reason\":null}]}",
+   "data: {\"id\":\"chatcmpl-9\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}"
+  ],
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"reasoning_effort\":\"low\"}",
+  "streamOutputs": [
+   [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"background\":false,\"error\":null,\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":2,\"response\":{\"id\":\"chatcmpl-9\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"output\":[],\"model\":\"gpt-4o\"}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":3,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"role\":\"assistant\"}}\n\n",
+    "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":4,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"}}\n\n",
+    "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"delta\":\"x\",\"logprobs\":[]}\n\n"
+   ],
+   [
+    "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":6,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"text\":\"x\",\"logprobs\":[]}\n\n",
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":7,\"item_id\":\"msg_chatcmpl-9_0\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"x\"}}\n\n",
+    "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":8,\"output_index\":0,\"item\":{\"id\":\"msg_chatcmpl-9_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"x\"}],\"role\":\"assistant\"}}\n\n"
+   ]
+  ]
+ },
+ {
+  "name": "non-stream: text, reasoning, function, namespaced, custom, apply_patch and shell calls",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "reasoning": {
+    "effort": "low"
+   },
+   "max_output_tokens": 99,
+   "tool_choice": "auto",
+   "user": "u1",
+   "metadata": {
+    "k": "v"
+   }
+  },
+  "responseBody": {
+   "id": "chatcmpl-77",
+   "object": "chat.completion",
+   "created": 1700000100,
+   "model": "gpt-4o",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "Hi there",
+      "reasoning_content": "because",
+      "tool_calls": [
+       {
+        "id": "call_a",
+        "type": "function",
+        "function": {
+         "name": "get_weather",
+         "arguments": "{\"city\":\"Paris\"}"
+        }
+       },
+       {
+        "id": "call_b",
+        "type": "function",
+        "function": {
+         "name": "mcp__docs__search",
+         "arguments": "{\"q\":\"\u003cx\u003e\"}"
+        }
+       },
+       {
+        "id": "call_c",
+        "type": "function",
+        "function": {
+         "name": "apply_patch",
+         "arguments": "{\"input\":\"*** Begin Patch\\n*** End Patch\"}"
+        }
+       },
+       {
+        "id": "call_d",
+        "type": "function",
+        "function": {
+         "name": "run_script",
+         "arguments": "{\"input\":\"ls\"}"
+        }
+       },
+       {
+        "id": "call_e",
+        "type": "function",
+        "function": {
+         "name": "__cpa_local_shell",
+         "arguments": "{\"commands\":[\"ls\"]}"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 5,
+    "total_tokens": 15,
+    "prompt_tokens_details": {
+     "cached_tokens": 3
+    }
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"max_tokens\":99,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"tool_choice\":\"auto\",\"reasoning_effort\":\"low\"}",
+  "responseBodyText": "{\"id\":\"chatcmpl-77\",\"object\":\"chat.completion\",\"created\":1700000100,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi there\",\"reasoning_content\":\"because\",\"tool_calls\":[{\"id\":\"call_a\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}},{\"id\":\"call_b\",\"type\":\"function\",\"function\":{\"name\":\"mcp__docs__search\",\"arguments\":\"{\\\"q\\\":\\\"\u003cx\u003e\\\"}\"}},{\"id\":\"call_c\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"input\\\":\\\"*** Begin Patch\\\\n*** End Patch\\\"}\"}},{\"id\":\"call_d\",\"type\":\"function\",\"function\":{\"name\":\"run_script\",\"arguments\":\"{\\\"input\\\":\\\"ls\\\"}\"}},{\"id\":\"call_e\",\"type\":\"function\",\"function\":{\"name\":\"__cpa_local_shell\",\"arguments\":\"{\\\"commands\\\":[\\\"ls\\\"]}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15,\"prompt_tokens_details\":{\"cached_tokens\":3}}}",
+  "nonStreamOutput": "{\"id\":\"chatcmpl-77\",\"object\":\"response\",\"created_at\":1700000100,\"status\":\"completed\",\"background\":false,\"error\":null,\"incomplete_details\":null,\"max_output_tokens\":99,\"model\":\"gpt-4o\",\"tool_choice\":\"auto\",\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"output\":[{\"id\":\"rs_chatcmpl-77\",\"type\":\"reasoning\",\"encrypted_content\":\"\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"because\"}]},{\"id\":\"msg_chatcmpl-77_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"Hi there\"}],\"role\":\"assistant\"},{\"id\":\"fc_call_a\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\",\"call_id\":\"call_a\",\"name\":\"get_weather\"},{\"id\":\"fc_call_b\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"q\\\":\\\"\u003cx\u003e\\\"}\",\"call_id\":\"call_b\",\"name\":\"search\",\"namespace\":\"mcp__docs__\"},{\"id\":\"ctc_call_c\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"*** Begin Patch\\n*** End Patch\",\"call_id\":\"call_c\",\"name\":\"apply_patch\"},{\"id\":\"ctc_call_d\",\"type\":\"custom_tool_call\",\"status\":\"completed\",\"input\":\"ls\",\"call_id\":\"call_d\",\"name\":\"run_script\"},{\"id\":\"sh_call_e\",\"type\":\"shell_call\",\"status\":\"completed\",\"call_id\":\"call_e\",\"action\":{\"commands\":[\"ls\"]}}],\"usage\":{\"input_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":3},\"output_tokens\":5,\"total_tokens\":15}}"
+ },
+ {
+  "name": "non-stream: length finish is incomplete",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "x"
+  },
+  "responseBody": {
+   "id": "c1",
+   "created": 5,
+   "model": "m",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "cut"
+     },
+     "finish_reason": "length"
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 1,
+    "completion_tokens": 2,
+    "total_tokens": 3
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"c1\",\"created\":5,\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"cut\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
+  "nonStreamOutput": "{\"id\":\"c1\",\"object\":\"response\",\"created_at\":5,\"status\":\"incomplete\",\"background\":false,\"error\":null,\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"model\":\"gpt-4o\",\"output\":[{\"id\":\"msg_c1_0\",\"type\":\"message\",\"status\":\"incomplete\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"cut\"}],\"role\":\"assistant\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}"
+ },
+ {
+  "name": "non-stream: tool call without id synthesizes one",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "x",
+   "tools": [
+    {
+     "type": "function",
+     "name": "f",
+     "parameters": {}
+    }
+   ]
+  },
+  "responseBody": {
+   "id": "c2",
+   "created": 5,
+   "model": "m",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "type": "function",
+        "function": {
+         "name": "f",
+         "arguments": "{}"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false,\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"f\",\"parameters\":{}},\"type\":\"function\"}]}",
+  "responseBodyText": "{\"id\":\"c2\",\"created\":5,\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+  "nonStreamOutput": "{\"id\":\"c2\",\"object\":\"response\",\"created_at\":5,\"status\":\"completed\",\"background\":false,\"error\":null,\"incomplete_details\":null,\"model\":\"gpt-4o\",\"tools\":[{\"function\":{\"description\":\"\",\"name\":\"f\",\"parameters\":{}},\"type\":\"function\"}],\"output\":[{\"id\":\"fc_call_c2_0_0\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{}\",\"call_id\":\"call_c2_0_0\",\"name\":\"f\"}]}"
+ },
+ {
+  "name": "non-stream: invalid apply_patch arguments are a tool input error",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "gpt-4o",
+   "instructions": "be brief",
+   "tools": [
+    {
+     "type": "function",
+     "name": "get_weather",
+     "description": "Weather",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    },
+    {
+     "type": "namespace",
+     "name": "mcp__docs__",
+     "tools": [
+      {
+       "type": "function",
+       "name": "search",
+       "description": "Search docs",
+       "parameters": {
+        "type": "object",
+        "properties": {
+         "q": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "custom",
+     "name": "apply_patch",
+     "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+     "format": {
+      "type": "grammar",
+      "syntax": "lark",
+      "definition": "start: begin_patch\nbegin_patch: \"*** Begin Patch\""
+     }
+    },
+    {
+     "type": "custom",
+     "name": "run_script",
+     "description": "Run a script",
+     "format": {
+      "type": "text"
+     }
+    },
+    {
+     "type": "shell",
+     "environment": {
+      "type": "local"
+     }
+    },
+    {
+     "type": "web_search"
+    }
+   ],
+   "input": "hi",
+   "reasoning": {
+    "effort": "low"
+   },
+   "max_output_tokens": 99,
+   "tool_choice": "auto",
+   "user": "u1",
+   "metadata": {
+    "k": "v"
+   }
+  },
+  "responseBody": {
+   "id": "c3",
+   "created": 5,
+   "model": "m",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "c",
+        "type": "function",
+        "function": {
+         "name": "apply_patch",
+         "arguments": "{\"x\":1}"
+        }
+       }
+      ]
+     },
+     "finish_reason": "tool_calls"
+    }
+   ]
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"be brief\"},{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"max_tokens\":99,\"tools\":[{\"function\":{\"description\":\"Weather\",\"name\":\"get_weather\",\"parameters\":{\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Search docs\",\"name\":\"mcp__docs__search\",\"parameters\":{\"properties\":{\"q\":{\"type\":\"string\"}},\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Use the `apply_patch` tool to edit files. \\n\\nCall this function with a JSON object whose input field contains the complete patch text.\\nUse the Codex apply_patch format, not a conventional git unified diff.\\nStart with *** Begin Patch and end with *** End Patch.\\nUse *** Add File: path, *** Delete File: path, or *** Update File: path.\\nEvery added-file content line starts with +.\\nFor updates, use @@; context lines start with one space, removed lines with -, and added lines with +.\\nUse *** Move to: path for a rename and *** End of File when required by the patch grammar.\\nExample input:\\n*** Begin Patch\\n*** Update File: src/main.go\\n@@\\n-old\\n+new\\n*** End Patch\\n\\nOriginal patch grammar:\\nstart: begin_patch\\nbegin_patch: \\\"*** Begin Patch\\\"\",\"name\":\"apply_patch\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"input\":{\"description\":\"The complete apply_patch patch text.\",\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Run a script\",\"name\":\"run_script\",\"parameters\":{\"properties\":{\"input\":{\"type\":\"string\"}},\"required\":[\"input\"],\"type\":\"object\"}},\"type\":\"function\"},{\"function\":{\"description\":\"Request commands to execute in the client-provided local shell environment. Each commands entry is a complete shell command, not an argv element.\",\"name\":\"__cpa_local_shell\",\"parameters\":{\"additionalProperties\":false,\"properties\":{\"commands\":{\"items\":{\"type\":\"string\"},\"minItems\":1,\"type\":\"array\"},\"max_output_length\":{\"minimum\":1,\"type\":\"integer\"},\"timeout_ms\":{\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"commands\"],\"type\":\"object\"}},\"type\":\"function\"}],\"tool_choice\":\"auto\",\"reasoning_effort\":\"low\"}",
+  "responseBodyText": "{\"id\":\"c3\",\"created\":5,\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"c\",\"type\":\"function\",\"function\":{\"name\":\"apply_patch\",\"arguments\":\"{\\\"x\\\":1}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
+ },
+ {
+  "name": "non-stream: unknown usage shape is passed through",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-4o",
+  "stream": false,
+  "request": {
+   "model": "m",
+   "input": "x"
+  },
+  "responseBody": {
+   "id": "c4",
+   "created": 5,
+   "model": "m",
+   "choices": [
+    {
+     "index": 0,
+     "message": {
+      "role": "assistant",
+      "content": "ok"
+     },
+     "finish_reason": "stop"
+    }
+   ],
+   "usage": {
+    "input_tokens": 4,
+    "output_tokens": 2
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"x\"}],\"stream\":false}",
+  "responseBodyText": "{\"id\":\"c4\",\"created\":5,\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}",
+  "nonStreamOutput": "{\"id\":\"c4\",\"object\":\"response\",\"created_at\":5,\"status\":\"completed\",\"background\":false,\"error\":null,\"incomplete_details\":null,\"model\":\"gpt-4o\",\"output\":[{\"id\":\"msg_c4_0\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"ok\"}],\"role\":\"assistant\"}],\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}"
+ }
+]
