@@ -9,6 +9,7 @@ import { Context, Effect, Layer } from "effect"
 import { ConfigReader } from "../config/reader.ts"
 import { configCredentials, openAICompatModelIds } from "../executor/config-credentials.ts"
 import { ExecutionError } from "../executor/errors.ts"
+import type { SpawnAgentSource } from "../executor/helps/codex-multi-agent-v2.ts"
 import type { WorkerEnv } from "../platform/env.ts"
 import { ModelRegistry } from "../registry/service.ts"
 
@@ -24,6 +25,11 @@ export class ModelProviders extends Context.Service<
      * model is unknown. Optional so test doubles that only route models need not implement it.
      */
     readonly modelType?: (model: string) => Effect.Effect<string | undefined, ExecutionError, WorkerEnv>
+    /**
+     * The registry data behind the `spawn_agent` model list of Codex multi-agent v2 requests (available models, the
+     * Codex client catalog, model lookups). Optional like `modelType`.
+     */
+    readonly spawnAgentSource?: Effect.Effect<SpawnAgentSource, ExecutionError, WorkerEnv>
   }
 >()("cliproxy/handlers/ModelProviders") {
   /**
@@ -40,7 +46,16 @@ export class ModelProviders extends Context.Service<
       return ModelProviders.of({
         providersFor: (model) => Effect.map(snapshot, (current) => current.providersForModel(model)),
         firstAvailableModel: Effect.map(snapshot, (current) => current.firstAvailableModel()),
-        modelType: (model) => Effect.map(snapshot, (current) => current.lookupModelInfo(model, "")?.type)
+        modelType: (model) => Effect.map(snapshot, (current) => current.lookupModelInfo(model, "")?.type),
+        spawnAgentSource: Effect.map(snapshot, (current): SpawnAgentSource => ({
+          availableModels: current.availableModels().map((model) => ({
+            id: model.id,
+            ...(model.description === undefined ? {} : { description: model.description }),
+            ...(model.displayName === undefined ? {} : { displayName: model.displayName })
+          })),
+          catalog: current.catalogs.codexClient,
+          lookupModel: (modelId) => current.lookupModelInfo(modelId, "")
+        }))
       })
     })
   )

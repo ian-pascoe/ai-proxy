@@ -13,6 +13,8 @@
  * `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the
  * conductor (`withCredentialRefresh`), not by the executor.
  */
+import { rewriteCodexMultiAgentV2Input } from "../helps/codex-multi-agent-v2.ts"
+import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
 import { splitLines } from "../../http/sse.ts"
 import { asString, cloneJson, del, get, isJsonObject, type Json, set, tryParseJson } from "../../json/index.ts"
@@ -217,11 +219,14 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     const to = mode.to
     const original = options.originalRequest ?? request.payload
 
-    const translated = registry.translateRequest(
+    const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+    const translated = translateRequestForExecutor(
+      registry,
       from,
       to,
       { format: from, model: baseModel, stream: mode.stream, body: request.payload },
-      thinking.summary
+      thinking.summary,
+      rewrite
     )
     if (translated.error !== undefined) {
       return yield* new ExecutionError({
@@ -233,11 +238,13 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     const originalEnvelope =
       original === request.payload
         ? { body: cloneJson(translated.body) }
-        : registry.translateRequest(
+        : translateRequestForExecutor(
+            registry,
             from,
             to,
             { format: from, model: baseModel, stream: mode.stream, body: original },
-            thinking.summary
+            thinking.summary,
+            rewrite
           )
     const originalTranslated = preserveOutputControls(originalEnvelope.body, original, from)
     let body = preserveOutputControls(translated.body, request.payload, from)
@@ -260,6 +267,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     for (const field of ["previous_response_id", "prompt_cache_retention", "safety_identifier", "stream_options"]) {
       body = del(body, field)
     }
+    body = rewriteCodexMultiAgentV2Input(options.headers, body, context.config)
 
     const willInjectXSearch = context.config.upstream.xai["inject-x-search"]
     const shouldFold =

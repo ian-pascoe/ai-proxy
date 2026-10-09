@@ -6,6 +6,7 @@
  * terminal failures), then translated to the client format. `data:` payloads are forwarded as received; only the
  * terminal event is re-serialised (`response.done` renamed, `response.output` patched).
  */
+import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts"
 import { asString, get, isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
 import { Formats } from "../../translator/formats.ts"
 import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts"
@@ -54,6 +55,8 @@ export interface CodexStreamOptions {
   readonly modelLevelCooling: boolean
   readonly nowMs: () => number
   readonly replayScope: CodexReplayScope
+  /** The request was optimised for multi-agent v2: restore the collaboration namespace in every event. */
+  readonly multiAgentV2?: boolean
 }
 
 export class CodexStreamReader {
@@ -78,7 +81,7 @@ export class CodexStreamReader {
     if (this.#stopped) return { chunks: [], stop: true }
     if (!line.startsWith("data:")) return { chunks: this.#translate(line), stop: false }
     const { usage, modelLevelCooling, nowMs } = this.options
-    const payload = line.slice(5).trim()
+    const payload = restoreCodexMultiAgentV2Response(line.slice(5).trim(), this.options.multiAgentV2 === true)
     const parsed = tryParseJson(payload)
     usage.observeResponseModel(responseModelOf(parsed))
     if (!usage.ttftObserved) usage.observeTokenEvent(nowMs(), isResponsesTokenEvent(payload))

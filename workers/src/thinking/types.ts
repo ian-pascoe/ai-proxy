@@ -74,6 +74,8 @@ export interface ThinkingModelInfo {
   /** Model understands Responses `configuration_update` input items. */
   readonly supportConfigurationUpdate?: boolean | undefined
   readonly maxCompletionTokens?: number | undefined
+  /** Configured `is-compat` model: assistant thinking blocks are kept for compatibility endpoints. */
+  readonly isCompat?: boolean | undefined
 }
 
 /** Registry lookup (`registry.LookupModelInfo(modelID, provider)`); the model registry slice supplies it. */

@@ -104,6 +104,19 @@ export const noopSummaryHooks: SummaryHooks = { extract: () => undefined, apply:
 
 const key = (client: Format, provider: Format) => `${client}\u0000${provider}`
 
+const wrapRequestTransform =
+  (request: RequestTransform): RequestEnvelopeTransform =>
+  (envelope) => {
+    try {
+      return { ...envelope, body: request(envelope.model, envelope.body, envelope.stream) }
+    } catch (error) {
+      if (error instanceof TranslationError) {
+        return { ...envelope, ...(error.body !== undefined ? { body: error.body } : {}), error }
+      }
+      throw error
+    }
+  }
+
 const hasAny = (transform: ResponseTransform | undefined): boolean =>
   transform !== undefined &&
   (transform.stream !== undefined || transform.nonStream !== undefined || transform.tokenCount !== undefined)
@@ -111,22 +124,23 @@ const hasAny = (transform: ResponseTransform | undefined): boolean =>
 export class TranslatorRegistry {
   readonly #requests = new Map<string, RequestEnvelopeTransform>()
   readonly #responses = new Map<string, ResponseTransform>()
+  /** Compat-model variants of request transforms (`*WithCompat`), used when the executed model has `is-compat`. */
+  readonly #compatRequests = new Map<string, RequestEnvelopeTransform>()
 
   /** `Register(from=client, to=provider, request, response)`. */
   register(client: Format, provider: Format, request: RequestTransform | undefined, response: ResponseTransform): this {
-    if (request !== undefined) {
-      this.#requests.set(key(client, provider), (envelope) => {
-        try {
-          return { ...envelope, body: request(envelope.model, envelope.body, envelope.stream) }
-        } catch (error) {
-          if (error instanceof TranslationError) {
-            return { ...envelope, ...(error.body !== undefined ? { body: error.body } : {}), error }
-          }
-          throw error
-        }
-      })
-    }
+    if (request !== undefined) this.#requests.set(key(client, provider), wrapRequestTransform(request))
     this.#responses.set(key(client, provider), response)
+    return this
+  }
+
+  /**
+   * Registers the compat variant of a request transform (`ConvertClaudeRequestToGeminiWithCompat`, ...). Go selects
+   * these in `helps.TranslateRequestWithAPIKeyModelCompatibility` for models configured `is-compat`; responses use
+   * the normal transforms.
+   */
+  registerCompatRequest(client: Format, provider: Format, request: RequestTransform): this {
+    this.#compatRequests.set(key(client, provider), wrapRequestTransform(request))
     return this
   }
 
@@ -139,6 +153,10 @@ export class TranslatorRegistry {
     this.#requests.delete(key(client, provider))
     this.#responses.delete(key(client, provider))
     return this
+  }
+
+  hasCompatRequestTransformer(client: Format, provider: Format): boolean {
+    return this.#compatRequests.has(key(client, provider))
   }
 
   hasRequestTransformer(client: Format, provider: Format): boolean {
@@ -166,10 +184,13 @@ export class TranslatorRegistry {
     client: Format,
     provider: Format,
     envelope: RequestEnvelope,
-    hooks: SummaryHooks = noopSummaryHooks
+    hooks: SummaryHooks = noopSummaryHooks,
+    options: { readonly compat?: boolean } = {}
   ): RequestEnvelope {
     const input: RequestEnvelope = { ...envelope, body: cloneJson(envelope.body) }
-    const transform = this.#requests.get(key(client, provider))
+    const transform =
+      (options.compat === true ? this.#compatRequests.get(key(client, provider)) : undefined) ??
+      this.#requests.get(key(client, provider))
     if (transform !== undefined) {
       const summary = hooks.extract(input.body, client, provider)
       const out = transform(input)

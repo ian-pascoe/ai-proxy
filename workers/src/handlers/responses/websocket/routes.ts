@@ -17,6 +17,7 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AccessPrincipal } from "../../../access/principal.ts"
 import { invalidRequestBody } from "../../../http/errors.ts"
 import { executeStream, type ExecutionInput } from "../../execute.ts"
+import { prepareCodexResponsesRequest } from "../codex-prepare.ts"
 import { downstreamSessionKey, defaultToolCaches } from "./tool-cache.ts"
 import { type SocketIO, runResponsesSocket } from "./socket.ts"
 
@@ -75,6 +76,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
       headers,
       toolSessionKey: downstreamSessionKey(headers, identity.callerScope),
       toolCaches: defaultToolCaches,
+      prepare: (payload) => prepareCodexResponsesRequest(payload, headers, true),
       execute: (input: Omit<ExecutionInput, "request">) => executeStream({ ...input, request })
     },
     raw

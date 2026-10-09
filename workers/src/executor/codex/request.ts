@@ -77,19 +77,20 @@ const summaryIsEmpty = (summary: Json | undefined): boolean =>
   summary === undefined || summary === null || (isJsonArray(summary) && summary.length === 0)
 
 /**
- * `sanitizeOpenAIResponsesReasoningEncryptedContent` (non-compat): reasoning `content` is cleared (cleartext is
+ * `sanitizeOpenAIResponsesReasoningEncryptedContent`: reasoning `content` is cleared (cleartext is
  * promoted into an empty `summary`), invalid or foreign `encrypted_content` is dropped and, with `store` disabled,
  * orphan reasoning ids are removed so the backend does not look them up. With `keepForeign` (Meta) blobs of unknown
- * provenance are replayed as they are; only recognisably other providers' signatures are dropped.
+ * provenance are replayed as they are; only recognisably other providers' signatures are dropped. `isCompat`
+ * (`is-compat` models such as DeepSeek) keeps the reasoning `content` and the ids, which those models replay.
  */
-export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = false): Json => {
+export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = false, isCompat = false): Json => {
   const input = get(body, "input")
   if (!isJsonArray(input)) return body
   const stripOrphanIds = !asBool(get(body, "store"))
   for (const item of input) {
     if (!isJsonObject(item) || asString(item["type"]).trim() !== "reasoning") continue
     const content = item["content"]
-    if (isJsonArray(content) && content.length > 0) {
+    if (!isCompat && isJsonArray(content) && content.length > 0) {
       if (summaryIsEmpty(item["summary"])) {
         const parts: Json[] = []
         for (const part of content) {
@@ -102,7 +103,7 @@ export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = fals
       item["content"] = []
     }
     if (!("encrypted_content" in item)) {
-      if (stripOrphanIds && "id" in item) delete item["id"]
+      if (!isCompat && stripOrphanIds && "id" in item) delete item["id"]
       continue
     }
     const encrypted = item["encrypted_content"]
@@ -113,7 +114,7 @@ export const sanitizeReasoningEncryptedContent = (body: Json, keepForeign = fals
         (keepForeign && encrypted !== "" && detectSignatureProvider(encrypted) === "unknown"))
     if (valid) continue
     delete item["encrypted_content"]
-    if (stripOrphanIds && "id" in item) delete item["id"]
+    if (!isCompat && stripOrphanIds && "id" in item) delete item["id"]
   }
   return body
 }

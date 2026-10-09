@@ -1,0 +1,1738 @@
+[
+  {
+    "name": "claude -> gemini (compat): assistant thinking blocks",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "claude -> openai (compat): assistant thinking blocks",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "claude -> interactions (compat): assistant thinking blocks",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "claude -> codex (compat): assistant thinking blocks",
+    "from": "claude",
+    "to": "codex",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai -> claude (compat): reasoning content",
+    "from": "openai",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": "answer",
+          "reasoning_content": "my reasoning"
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> claude (compat): reasoning items",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "id": "rs_1",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "why"
+            }
+          ],
+          "encrypted_content": "opaque-state"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "a"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "more"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> codex (compat): the compat flag does not apply to Responses clients",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "claude -> gemini (plain): assistant thinking blocks",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "claude -> openai (plain): assistant thinking blocks",
+    "from": "claude",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "claude -> interactions (plain): assistant thinking blocks",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "claude -> codex (plain): assistant thinking blocks",
+    "from": "claude",
+    "to": "codex",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "max_tokens": 100,
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "deep thought",
+              "signature": "opaque-sig"
+            },
+            {
+              "type": "thinking",
+              "thinking": "unsigned thought",
+              "signature": ""
+            },
+            {
+              "type": "thinking",
+              "thinking": "",
+              "signature": ""
+            },
+            {
+              "type": "text",
+              "text": "answer"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "openai -> claude (plain): reasoning content",
+    "from": "openai",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hi"
+        },
+        {
+          "role": "assistant",
+          "content": "answer",
+          "reasoning_content": "my reasoning"
+        },
+        {
+          "role": "user",
+          "content": "more"
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "openai-response -> claude (plain): reasoning items",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "id": "rs_1",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "why"
+            }
+          ],
+          "encrypted_content": "opaque-state"
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "a"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "more"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "openai-response -> codex (plain): the compat flag does not apply to Responses clients",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": false
+    }
+  },
+  {
+    "name": "openai-response -> claude: agent_message input becomes user messages for official Codex clients",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      },
+      "optimizeMultiAgentV2": true
+    }
+  },
+  {
+    "name": "openai-response -> claude: agent_message input is kept without the opt-in",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      }
+    }
+  },
+  {
+    "name": "openai-response -> claude: compat models convert agent_message for any client",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> claude: orphan delegation output becomes a user message",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> claude: orphan delegation needs the subagent header",
+    "from": "openai-response",
+    "to": "claude",
+    "model": "claude-sonnet-4-5",
+    "stream": false,
+    "request": {
+      "model": "claude-sonnet-4-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> gemini: agent_message input becomes user messages for official Codex clients",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      },
+      "optimizeMultiAgentV2": true
+    }
+  },
+  {
+    "name": "openai-response -> gemini: agent_message input is kept without the opt-in",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      }
+    }
+  },
+  {
+    "name": "openai-response -> gemini: compat models convert agent_message for any client",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> gemini: orphan delegation output becomes a user message",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> gemini: orphan delegation needs the subagent header",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> openai: agent_message input becomes user messages for official Codex clients",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      },
+      "optimizeMultiAgentV2": true
+    }
+  },
+  {
+    "name": "openai-response -> openai: agent_message input is kept without the opt-in",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      }
+    }
+  },
+  {
+    "name": "openai-response -> openai: compat models convert agent_message for any client",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> openai: orphan delegation output becomes a user message",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> openai: orphan delegation needs the subagent header",
+    "from": "openai-response",
+    "to": "openai",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> interactions: agent_message input becomes user messages for official Codex clients",
+    "from": "openai-response",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      },
+      "optimizeMultiAgentV2": true
+    }
+  },
+  {
+    "name": "openai-response -> interactions: agent_message input is kept without the opt-in",
+    "from": "openai-response",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0"
+      }
+    }
+  },
+  {
+    "name": "openai-response -> interactions: compat models convert agent_message for any client",
+    "from": "openai-response",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        },
+        {
+          "type": "message",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "ok"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "compat": true
+    }
+  },
+  {
+    "name": "openai-response -> interactions: orphan delegation output becomes a user message",
+    "from": "openai-response",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> interactions: orphan delegation needs the subagent header",
+    "from": "openai-response",
+    "to": "interactions",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {
+      "model": "gemini-2.5-flash",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "orphanDelegation": true
+    }
+  },
+  {
+    "name": "openai-response -> codex: orphan delegation is rewritten, agent_message is left to the Codex executor",
+    "from": "openai-response",
+    "to": "codex",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0",
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true,
+      "optimizeMultiAgentV2": true
+    }
+  },
+  {
+    "name": "openai-response -> openai-response: orphan delegation only",
+    "from": "openai-response",
+    "to": "openai-response",
+    "model": "gpt-5",
+    "stream": false,
+    "request": {
+      "model": "gpt-5",
+      "input": [
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "hi"
+            }
+          ]
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "orphan-1",
+          "namespace": "codex_app",
+          "name": "create_thread",
+          "output": "{\"thread\":\"t1\"}"
+        },
+        {
+          "type": "message",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "go on"
+            }
+          ]
+        },
+        {
+          "type": "agent_message",
+          "author": "root",
+          "recipient": "child",
+          "internal_chat_message_metadata_passthrough": {
+            "k": 1
+          },
+          "content": [
+            {
+              "type": "encrypted_content",
+              "encrypted_content": "secret plan"
+            },
+            {
+              "type": "input_text",
+              "text": "visible"
+            }
+          ]
+        }
+      ]
+    },
+    "executor": {
+      "headers": {
+        "User-Agent": "codex-tui/0.150.0",
+        "X-Openai-Subagent": "collab_spawn"
+      },
+      "orphanDelegation": true,
+      "optimizeMultiAgentV2": true
+    }
+  }
+]

@@ -15,6 +15,7 @@
  * images, and derived prompt cache keys (session identity lives in the conductor slice; a client-supplied
  * `prompt_cache_key` is honoured).
  */
+import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
@@ -135,17 +136,22 @@ export const makeOpenAICompatExecutor = (
     }
 
     const from = options.sourceFormat
-    const original = registry.translateRequest(
+    const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+    const original = translateRequestForExecutor(
+      registry,
       from,
       to,
       { format: from, model: baseModel, stream, body: options.originalRequest ?? request.payload },
-      thinking.summary
+      thinking.summary,
+      rewrite
     )
-    const translated = registry.translateRequest(
+    const translated = translateRequestForExecutor(
+      registry,
       from,
       to,
       { format: from, model: baseModel, stream, body: request.payload },
-      thinking.summary
+      thinking.summary,
+      rewrite
     )
     if (translated.error !== undefined) {
       return yield* new ExecutionError({
@@ -394,12 +400,15 @@ export const makeOpenAICompatExecutor = (
     const baseModel = parseSuffix(request.model).modelName
     const from = options.sourceFormat
     const responseFormat = responseFormatOf(options)
+    const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
     const translate = (payload: Json) =>
-      registry.translateRequest(
+      translateRequestForExecutor(
+        registry,
         from,
         to,
         { format: from, model: baseModel, stream: false, body: payload },
-        thinking.summary
+        thinking.summary,
+        rewrite
       )
     const translated = translate(request.payload)
     if (translated.error !== undefined) {

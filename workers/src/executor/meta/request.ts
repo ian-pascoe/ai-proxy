@@ -7,6 +7,7 @@
  * reasoning sanitising -> tool sanitising -> payload rules (final barrier). The apply_patch bridge
  * (`NormalizeApplyPatchResponsesRequest` + response bridge) is not ported (see ARCHITECTURE.md, Codex follow-ups).
  */
+import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Effect } from "effect"
 import { cloneJson, del, get, isJsonArray, isJsonObject, type Json } from "../../json/index.ts"
 import { Formats } from "../../translator/formats.ts"
@@ -55,7 +56,14 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
   const from = options.sourceFormat
   const to = Formats.Codex
   const translate = (payload: Json) =>
-    registry.translateRequest(from, to, { format: from, model: baseModel, stream, body: payload }, thinking.summary)
+    translateRequestForExecutor(
+      registry,
+      from,
+      to,
+      { format: from, model: baseModel, stream, body: payload },
+      thinking.summary,
+      { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+    )
   const translated = translate(request.payload)
   if (translated.error !== undefined) {
     return yield* new ExecutionError({

@@ -2,8 +2,8 @@
  * Claude Messages request -> Codex (Responses) request.
  *
  * Go source: internal/translator/codex/claude/codex_claude_request.go (ConvertClaudeRequestToCodex and helpers).
- * Not ported: the `WithCompat` variant (thinking blocks with empty/unknown signatures for compat endpoints), which
- * Go never registers for the Codex pair. Tool `input` is re-serialised compactly (Go forwards the raw text).
+ * `convertClaudeRequestToCodexWithCompat` keeps assistant thinking blocks with empty or unknown-format signatures for
+ * `is-compat` models. Tool `input` is re-serialised compactly (Go forwards the raw text).
  */
 import { createHash } from "node:crypto"
 import { sortKeys } from "../../../http/json-text.ts"
@@ -30,7 +30,7 @@ import {
 import { isHttpUrl, UserTurnDrops } from "../../common/parts.ts"
 import { hasUnsupportedUnicodePropertyEscape, SCHEMA_MAP_KEYWORDS, SCHEMA_VALUE_KEYWORDS } from "../../common/schema.ts"
 import { isValidGrokEncryptedContent } from "../../../signature/grok.ts"
-import { compatibleSignatureForProvider } from "../../../signature/provider.ts"
+import { compatibleSignatureForProvider, detectSignatureProvider } from "../../../signature/provider.ts"
 
 const NAME_LIMIT = 64
 
@@ -253,7 +253,14 @@ const toolResultImagePart = (source: Json): JsonObject | undefined => {
 }
 
 /** `ConvertClaudeRequestToCodex`. Throws `UnsupportedPartError` when a user turn is left with nothing to send. */
-export const convertClaudeRequestToCodex = (modelName: string, request: Json, _stream: boolean): Json => {
+export const convertClaudeRequestToCodex = (modelName: string, request: Json, _stream: boolean): Json =>
+  convertClaudeRequest(modelName, request, false)
+
+/** `ConvertClaudeRequestToCodexWithCompat`: thinking blocks with empty/unknown signatures are preserved. */
+export const convertClaudeRequestToCodexWithCompat = (modelName: string, request: Json, _stream: boolean): Json =>
+  convertClaudeRequest(modelName, request, true)
+
+const convertClaudeRequest = (modelName: string, request: Json, preserveEmptyThinkingBlocks: boolean): Json => {
   const drops = new UserTurnDrops()
   let template: Json = { model: "", instructions: "", input: [] }
   const toolNameMap = buildOriginalToShortMap(request)
@@ -323,10 +330,23 @@ export const convertClaudeRequestToCodex = (modelName: string, request: Json, _s
         if (messageRole !== "assistant") return
         const rawSignature = asString(get(part, "signature"))
         let signature = compatibleSignatureForProvider("gpt", rawSignature)
-        if (signature === undefined) {
-          if (!targetAcceptsGrokSignature(modelName)) return
-          if (!isValidGrokEncryptedContent(rawSignature)) return
+        if (
+          signature === undefined &&
+          preserveEmptyThinkingBlocks &&
+          typeof get(part, "signature") === "string" &&
+          rawSignature.trim() !== "" &&
+          detectSignatureProvider(rawSignature, "claude_thinking") === "unknown"
+        ) {
           signature = rawSignature
+        }
+        if (signature === undefined) {
+          if (preserveEmptyThinkingBlocks && rawSignature.trim() === "") {
+            signature = rawSignature
+          } else {
+            if (!targetAcceptsGrokSignature(modelName)) return
+            if (!isValidGrokEncryptedContent(rawSignature)) return
+            signature = rawSignature
+          }
         }
         flushMessage()
         inputItems.push({ type: "reasoning", summary: [], content: null, encrypted_content: signature })

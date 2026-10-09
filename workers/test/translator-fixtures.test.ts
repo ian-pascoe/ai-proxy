@@ -1,11 +1,13 @@
 // Golden translator fixtures generated from the Go registry by `go run ./workers/tools/fixturegen/translator`.
 // Every file under test/fixtures/translator is picked up automatically; provider slices only add corpus files.
 import { describe, expect, it } from "vitest"
+import { translateRequestForExecutor } from "../src/executor/helps/translate.ts"
 import { summaryHooks as thinkingSummaryHooks } from "../src/executor/thinking.ts"
 import type { Json } from "../src/json/index.ts"
 import { builtinTranslators } from "../src/translator/builtin.ts"
 import { setModelInfoLookup } from "../src/translator/model-info.ts"
 import { makeTranslationState } from "../src/translator/registry.ts"
+import { configOf } from "./support/registry-sources.ts"
 import { catalogLookup } from "./support/thinking.ts"
 
 // Translators that consult the model registry (e.g. Claude adaptive thinking) use the Go static catalog.
@@ -19,6 +21,13 @@ interface FixtureCase {
   readonly stream: boolean
   readonly needs?: ReadonlyArray<string>
   readonly alt?: string
+  /** Executor-level context (compat request variants, Codex multi-agent v2 / orphan delegation rewriting). */
+  readonly executor?: {
+    readonly headers?: Record<string, string>
+    readonly compat?: boolean
+    readonly optimizeMultiAgentV2?: boolean
+    readonly orphanDelegation?: boolean
+  }
   readonly request: Json
   readonly responseLines?: ReadonlyArray<string>
   readonly responseBodyText?: string
@@ -91,17 +100,22 @@ describe("translator golden fixtures", () => {
         const missing = (c.needs ?? []).filter((need) => !SUPPORTED_NEEDS.has(need))
         const test = missing.length > 0 ? it.skip : it
         test(missing.length > 0 ? `${c.name} (needs ${missing.join(", ")})` : c.name, () => {
-          const envelope = builtinTranslators.translateRequest(
-            c.from,
-            c.to,
-            {
-              format: c.from,
-              model: c.model,
-              stream: c.stream,
-              body: structuredClone(c.request)
-            },
-            summaryHooks
-          )
+          const requestEnvelope = {
+            format: c.from,
+            model: c.model,
+            stream: c.stream,
+            body: structuredClone(c.request)
+          }
+          const envelope =
+            c.executor === undefined
+              ? builtinTranslators.translateRequest(c.from, c.to, requestEnvelope, summaryHooks)
+              : translateRequestForExecutor(builtinTranslators, c.from, c.to, requestEnvelope, summaryHooks, {
+                  headers: new Headers(c.executor.headers ?? {}),
+                  config: configOf(
+                    `client:\n  codex:\n    optimize-multi-agent-v2: ${c.executor.optimizeMultiAgentV2 === true}\nupstream:\n  codex:\n    orphan-delegation-compatibility: ${c.executor.orphanDelegation === true}\n`
+                  ),
+                  isCompat: c.executor.compat === true
+                })
           expect(envelope.error?.message).toBe(c.requestError)
           expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest))
 

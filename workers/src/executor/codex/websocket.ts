@@ -18,6 +18,7 @@
  * rewriting, stream bootstrap buffering, and non-stream execution over WebSocket (the downstream handler only streams).
  */
 import { Clock, Effect, Option, Stream } from "effect"
+import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts"
 import { asInt, asString, get, isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
 import { statusText } from "../../http/status.ts"
 import { responseModelOf } from "../../usage/record.ts"
@@ -231,7 +232,7 @@ export const makeCodexWebsocketStream =
           const page = Effect.gen(function* () {
             const text = yield* turn.read
             const nowMs = yield* Clock.currentTimeMillis
-            const event = tryParseJson(text)
+            const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
             context.usage.observeResponseModel(responseModelOf(event))
             if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
 

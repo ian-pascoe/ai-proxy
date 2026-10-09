@@ -11,6 +11,7 @@
  * Not ported: the apply_patch bridge, multi-agent-v2 rewriting, outbound proxies. The token refresh runs in the
  * ControlPlane (credentials/refresh/kimi.ts); 401 recovery is done by the conductor.
  */
+import { translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http"
 import { splitLines } from "../../http/sse.ts"
@@ -130,7 +131,14 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const from = options.sourceFormat
     const to = Formats.OpenAI
     const translate = (payload: Json) =>
-      registry.translateRequest(from, to, { format: from, model: baseModel, stream, body: payload }, thinking.summary)
+      translateRequestForExecutor(
+        registry,
+        from,
+        to,
+        { format: from, model: baseModel, stream, body: payload },
+        thinking.summary,
+        { headers: options.headers, config: context.config }
+      )
     const translated = translate(request.payload)
     if (translated.error !== undefined) {
       return yield* new ExecutionError({

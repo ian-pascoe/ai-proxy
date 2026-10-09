@@ -1,0 +1,1760 @@
+[
+ {
+  "name": "claude -\u003e gemini (compat): assistant thinking blocks",
+  "from": "claude",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"deep thought\",\"thought\":true,\"thoughtSignature\":\"skip_thought_signature_validator\"},{\"text\":\"unsigned thought\",\"thought\":true,\"thoughtSignature\":\"skip_thought_signature_validator\"},{\"text\":\"\",\"thought\":true,\"thoughtSignature\":\"skip_thought_signature_validator\"},{\"text\":\"answer\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"more\"}]}],\"model\":\"gemini-2.5-flash\",\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "claude -\u003e openai (compat): assistant thinking blocks",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}],\"reasoning_content\":\"deep thought\\n\\nunsigned thought\"},{\"role\":\"user\",\"content\":\"more\"}],\"max_tokens\":100,\"stream\":false}"
+ },
+ {
+  "name": "claude -\u003e interactions (compat): assistant thinking blocks",
+  "from": "claude",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"deep thought\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"unsigned thought\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"more\"}]}],\"generation_config\":{\"max_output_tokens\":100}}"
+ },
+ {
+  "name": "claude -\u003e codex (compat): assistant thinking blocks",
+  "from": "claude",
+  "to": "codex",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]},{\"type\":\"reasoning\",\"summary\":[],\"content\":null,\"encrypted_content\":\"opaque-sig\"},{\"type\":\"reasoning\",\"summary\":[],\"content\":null,\"encrypted_content\":\"\"},{\"type\":\"reasoning\",\"summary\":[],\"content\":null,\"encrypted_content\":\"\"},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"answer\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"more\"}]}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "openai -\u003e claude (compat): reasoning content",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": "answer",
+     "reasoning_content": "my reasoning"
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"my reasoning\",\"signature\":\"\"},{\"type\":\"text\",\"text\":\"answer\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"more\"}]}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude (compat): reasoning items",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "reasoning",
+     "id": "rs_1",
+     "summary": [
+      {
+       "type": "summary_text",
+       "text": "why"
+      }
+     ],
+     "encrypted_content": "opaque-state"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "more"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"why\",\"signature\":\"opaque-state\"},{\"type\":\"text\",\"text\":\"a\"}]},{\"role\":\"user\",\"content\":\"more\"}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e codex (compat): the compat flag does not apply to Responses clients",
+  "from": "openai-response",
+  "to": "codex",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"stream\":true,\"store\":false,\"parallel_tool_calls\":true,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "claude -\u003e gemini (plain): assistant thinking blocks",
+  "from": "claude",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]},{\"role\":\"model\",\"parts\":[{\"text\":\"answer\"}]},{\"role\":\"user\",\"parts\":[{\"text\":\"more\"}]}],\"model\":\"gemini-2.5-flash\",\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "claude -\u003e openai (plain): assistant thinking blocks",
+  "from": "claude",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}]},{\"role\":\"user\",\"content\":\"more\"}],\"max_tokens\":100,\"stream\":false}"
+ },
+ {
+  "name": "claude -\u003e interactions (plain): assistant thinking blocks",
+  "from": "claude",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"deep thought\"}]},{\"type\":\"thought\",\"content\":[{\"type\":\"text\",\"text\":\"unsigned thought\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"more\"}]}],\"generation_config\":{\"max_output_tokens\":100}}"
+ },
+ {
+  "name": "claude -\u003e codex (plain): assistant thinking blocks",
+  "from": "claude",
+  "to": "codex",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "max_tokens": 100,
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "thinking",
+       "thinking": "deep thought",
+       "signature": "opaque-sig"
+      },
+      {
+       "type": "thinking",
+       "thinking": "unsigned thought",
+       "signature": ""
+      },
+      {
+       "type": "thinking",
+       "thinking": "",
+       "signature": ""
+      },
+      {
+       "type": "text",
+       "text": "answer"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"gpt-5\",\"instructions\":\"\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]},{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"answer\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"more\"}]}],\"parallel_tool_calls\":true,\"reasoning\":{\"effort\":\"medium\"},\"stream\":true,\"store\":false,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "openai -\u003e claude (plain): reasoning content",
+  "from": "openai",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "messages": [
+    {
+     "role": "user",
+     "content": "hi"
+    },
+    {
+     "role": "assistant",
+     "content": "answer",
+     "reasoning_content": "my reasoning"
+    },
+    {
+     "role": "user",
+     "content": "more"
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"more\"}]}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude (plain): reasoning items",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "reasoning",
+     "id": "rs_1",
+     "summary": [
+      {
+       "type": "summary_text",
+       "text": "why"
+      }
+     ],
+     "encrypted_content": "opaque-state"
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "more"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"assistant\",\"content\":\"a\"},{\"role\":\"user\",\"content\":\"more\"}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e codex (plain): the compat flag does not apply to Responses clients",
+  "from": "openai-response",
+  "to": "codex",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {},
+  "translatedRequest": "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"stream\":true,\"store\":false,\"parallel_tool_calls\":true,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "openai-response -\u003e claude: agent_message input becomes user messages for official Codex clients",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   },
+   "optimizeMultiAgentV2": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"role\":\"assistant\",\"content\":\"ok\"}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude: agent_message input is kept without the opt-in",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   }
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"role\":\"assistant\",\"content\":\"ok\"}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude: compat models convert agent_message for any client",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"role\":\"assistant\",\"content\":\"ok\"}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude: orphan delegation output becomes a user message",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"text\",\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"},{\"type\":\"text\",\"text\":\"go on\"}]}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e claude: orphan delegation needs the subagent header",
+  "from": "openai-response",
+  "to": "claude",
+  "model": "claude-sonnet-4-5",
+  "stream": false,
+  "request": {
+   "model": "claude-sonnet-4-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"claude-sonnet-4-5\",\"max_tokens\":32000,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"},{\"type\":\"text\",\"text\":\"{\\\"thread\\\":\\\"t1\\\"}\"},{\"type\":\"text\",\"text\":\"go on\"}]}],\"metadata\":{\"user_id\":\"2b35ba29f7cec38e9220a584fafaa8f9eb2a8d01350e9d1c3653ae728471c5bb\"},\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e gemini: agent_message input becomes user messages for official Codex clients",
+  "from": "openai-response",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   },
+   "optimizeMultiAgentV2": true
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"},{\"text\":\"secret plan\"},{\"text\":\"visible\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "openai-response -\u003e gemini: agent_message input is kept without the opt-in",
+  "from": "openai-response",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   }
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "openai-response -\u003e gemini: compat models convert agent_message for any client",
+  "from": "openai-response",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"},{\"text\":\"secret plan\"},{\"text\":\"visible\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "openai-response -\u003e gemini: orphan delegation output becomes a user message",
+  "from": "openai-response",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"},{\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"},{\"text\":\"go on\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "openai-response -\u003e gemini: orphan delegation needs the subagent header",
+  "from": "openai-response",
+  "to": "gemini",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"},{\"text\":\"{\\\"thread\\\":\\\"t1\\\"}\"},{\"text\":\"go on\"}]}],\"safetySettings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"threshold\":\"OFF\"},{\"category\":\"HARM_CATEGORY_CIVIC_INTEGRITY\",\"threshold\":\"BLOCK_NONE\"}]}"
+ },
+ {
+  "name": "openai-response -\u003e openai: agent_message input becomes user messages for official Codex clients",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   },
+   "optimizeMultiAgentV2": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e openai: agent_message input is kept without the opt-in",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   }
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e openai: compat models convert agent_message for any client",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e openai: orphan delegation output becomes a user message",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"go on\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e openai: orphan delegation needs the subagent header",
+  "from": "openai-response",
+  "to": "openai",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"role\":\"user\",\"content\":\"{\\\"thread\\\":\\\"t1\\\"}\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"go on\"}]}],\"stream\":false}"
+ },
+ {
+  "name": "openai-response -\u003e interactions: agent_message input becomes user messages for official Codex clients",
+  "from": "openai-response",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   },
+   "optimizeMultiAgentV2": true
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}]}"
+ },
+ {
+  "name": "openai-response -\u003e interactions: agent_message input is kept without the opt-in",
+  "from": "openai-response",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0"
+   }
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"visible\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}]}"
+ },
+ {
+  "name": "openai-response -\u003e interactions: compat models convert agent_message for any client",
+  "from": "openai-response",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    },
+    {
+     "type": "message",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "ok"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "compat": true
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"secret plan\"},{\"type\":\"text\",\"text\":\"visible\"}]},{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}]}"
+ },
+ {
+  "name": "openai-response -\u003e interactions: orphan delegation output becomes a user message",
+  "from": "openai-response",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"}]},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"go on\"}]}]}"
+ },
+ {
+  "name": "openai-response -\u003e interactions: orphan delegation needs the subagent header",
+  "from": "openai-response",
+  "to": "interactions",
+  "model": "gemini-2.5-flash",
+  "stream": false,
+  "request": {
+   "model": "gemini-2.5-flash",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gemini-2.5-flash\",\"input\":[{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]},{\"type\":\"function_result\",\"name\":\"codex_app__create_thread\",\"result\":{\"thread\":\"t1\"},\"call_id\":\"orphan-1\"},{\"type\":\"user_input\",\"content\":[{\"type\":\"text\",\"text\":\"go on\"}]}]}"
+ },
+ {
+  "name": "openai-response -\u003e codex: orphan delegation is rewritten, agent_message is left to the Codex executor",
+  "from": "openai-response",
+  "to": "codex",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0",
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "optimizeMultiAgentV2": true,
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go on\"}]},{\"type\":\"agent_message\",\"author\":\"root\",\"recipient\":\"child\",\"internal_chat_message_metadata_passthrough\":{\"k\":1},\"content\":[{\"type\":\"encrypted_content\",\"encrypted_content\":\"secret plan\"},{\"type\":\"input_text\",\"text\":\"visible\"}]}],\"stream\":true,\"store\":false,\"parallel_tool_calls\":true,\"include\":[\"reasoning.encrypted_content\"]}"
+ },
+ {
+  "name": "openai-response -\u003e openai-response: orphan delegation only",
+  "from": "openai-response",
+  "to": "openai-response",
+  "model": "gpt-5",
+  "stream": false,
+  "request": {
+   "model": "gpt-5",
+   "input": [
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "hi"
+      }
+     ]
+    },
+    {
+     "type": "function_call_output",
+     "call_id": "orphan-1",
+     "namespace": "codex_app",
+     "name": "create_thread",
+     "output": "{\"thread\":\"t1\"}"
+    },
+    {
+     "type": "message",
+     "role": "user",
+     "content": [
+      {
+       "type": "input_text",
+       "text": "go on"
+      }
+     ]
+    },
+    {
+     "type": "agent_message",
+     "author": "root",
+     "recipient": "child",
+     "internal_chat_message_metadata_passthrough": {
+      "k": 1
+     },
+     "content": [
+      {
+       "type": "encrypted_content",
+       "encrypted_content": "secret plan"
+      },
+      {
+       "type": "input_text",
+       "text": "visible"
+      }
+     ]
+    }
+   ]
+  },
+  "executor": {
+   "headers": {
+    "User-Agent": "codex-tui/0.150.0",
+    "X-Openai-Subagent": "collab_spawn"
+   },
+   "optimizeMultiAgentV2": true,
+   "orphanDelegation": true
+  },
+  "translatedRequest": "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Tool output from codex_app__create_thread:\\n{\\\"thread\\\":\\\"t1\\\"}\"}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"go on\"}]},{\"type\":\"agent_message\",\"author\":\"root\",\"recipient\":\"child\",\"internal_chat_message_metadata_passthrough\":{\"k\":1},\"content\":[{\"type\":\"encrypted_content\",\"encrypted_content\":\"secret plan\"},{\"type\":\"input_text\",\"text\":\"visible\"}]}]}"
+ }
+]

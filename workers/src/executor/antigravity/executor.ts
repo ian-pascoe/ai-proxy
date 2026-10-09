@@ -11,6 +11,7 @@
  * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): the `/responses/compact` capsule is not ported, web-search grounding redirect URLs are not resolved, no per-credential
  * HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
  */
+import { translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Option, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { buildSensitiveWordMatcher } from "../claude/cloaking.ts"
@@ -293,7 +294,8 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
     const translateWith = (body: Json, streamFlag: boolean) =>
       translating(attempt, () =>
-        registry.translateRequest(
+        translateRequestForExecutor(
+          registry,
           from,
           to,
           {
@@ -303,7 +305,8 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
             body: structuredClone(body),
             ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo })
           },
-          thinking.summary
+          thinking.summary,
+          { headers: options.headers, config: context.config }
         )
       )
     const translated = translateWith(original, upstreamStream)
@@ -600,7 +603,8 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       )
     }
     const translated = translating(attempt, () =>
-      registry.translateRequest(
+      translateRequestForExecutor(
+        registry,
         from,
         to,
         {
@@ -610,7 +614,8 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
           body: structuredClone(original),
           ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo })
         },
-        thinking.summary
+        thinking.summary,
+        { headers: options.headers, config: context.config }
       )
     )
     if (translated.error !== undefined) return yield* requestError(translated)

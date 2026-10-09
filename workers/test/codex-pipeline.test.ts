@@ -489,3 +489,128 @@ describe("POST /v1/alpha/search", () => {
     expect(p.calls[0]!.headers["authorization"]).toBe("Bearer k")
   })
 })
+
+describe("Codex multi-agent v2 and orphan delegation", () => {
+  const COLLAB_YAML = `
+client:
+  codex:
+    optimize-multi-agent-v2: true
+upstream:
+  codex:
+    orphan-delegation-compatibility: true
+`
+  const spawnTool = {
+    type: "function",
+    name: "spawn_agent",
+    description: "Spawns an agent.",
+    parameters: {
+      type: "object",
+      properties: { message: { type: "string", encrypted: true } }
+    }
+  }
+  const collaboration = (name = "collaboration") => ({ type: "namespace", name, tools: [spawnTool] })
+  const callItem = {
+    id: "fc_1",
+    type: "function_call",
+    status: "completed",
+    namespace: "collaboration-optimize",
+    name: "spawn_agent",
+    call_id: "call_1",
+    arguments: '{"message":"go"}'
+  }
+  const CODEX_UA = { "User-Agent": "codex-tui/0.150.0" }
+  const toolStream = [
+    frame(created()),
+    frame({ type: "response.output_item.done", output_index: 0, item: callItem }),
+    frame(completed([callItem]))
+  ]
+
+  it("renames the collaboration namespace upstream, restores it in the answer and converts agent messages", async () => {
+    const multi = await loadConfig(COLLAB_YAML)
+    const p = pipeline(() => sseResponse(toolStream), { config: multi })
+    const response = await p.call(
+      "/v1/responses",
+      postJson(
+        {
+          model: "gpt-5.4",
+          stream: false,
+          tools: [collaboration()],
+          input: [
+            { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
+            { type: "agent_message", content: [{ type: "encrypted_content", encrypted_content: "plan" }] }
+          ]
+        },
+        CODEX_UA
+      )
+    )
+    expect(response.status).toBe(200)
+    const upstream = JSON.parse(p.calls[0]!.body) as {
+      tools: Array<{ name: string; tools: Array<{ parameters: { properties: { message: Record<string, unknown> } } }> }>
+      input: Array<Record<string, unknown>>
+    }
+    expect(upstream.tools[0]?.name).toBe("collaboration-optimize")
+    expect(upstream.tools[0]?.tools[0]?.parameters.properties.message).toEqual({ type: "string" })
+    // The Codex executor keeps agent_message items (only compat models convert them); the encrypted part is plain text.
+    expect(upstream.input[1]).toEqual({ type: "agent_message", content: [{ type: "input_text", text: "plan" }] })
+    const body = (await response.json()) as { output: Array<Record<string, unknown>> }
+    expect(body.output[0]).toMatchObject({ type: "function_call", namespace: "collaboration", name: "spawn_agent" })
+  })
+
+  it("restores the namespace in streamed events too", async () => {
+    const multi = await loadConfig(COLLAB_YAML)
+    const p = pipeline(() => sseResponse(toolStream), { config: multi })
+    const response = await p.call(
+      "/v1/responses",
+      postJson({ model: "gpt-5.4", stream: true, tools: [collaboration()], input: "go" }, CODEX_UA)
+    )
+    const text = await response.text()
+    expect(text).toContain('"namespace":"collaboration"')
+    expect(text).not.toContain("collaboration-optimize")
+  })
+
+  it("leaves other clients and an existing collaboration-optimize namespace alone", async () => {
+    const multi = await loadConfig(COLLAB_YAML)
+    const p = pipeline(() => sseResponse(TEXT_STREAM.concat([])), { config: multi })
+    await p.call("/v1/responses", postJson({ model: "gpt-5.4", stream: false, tools: [collaboration()], input: "go" }))
+    expect((JSON.parse(p.calls[0]!.body) as { tools: Array<{ name: string }> }).tools[0]?.name).toBe("collaboration")
+    await p.call(
+      "/v1/responses",
+      postJson(
+        {
+          model: "gpt-5.4",
+          stream: false,
+          tools: [collaboration(), collaboration("collaboration-optimize")],
+          input: "go"
+        },
+        CODEX_UA
+      )
+    )
+    const names = (JSON.parse(p.calls[1]!.body) as { tools: Array<{ name: string }> }).tools
+      .map((tool) => tool.name)
+      .filter((name) => name !== undefined)
+    expect(names).toEqual(["collaboration", "collaboration-optimize"])
+  })
+
+  it("downgrades orphan codex_app delegation outputs for collab_spawn subagents only", async () => {
+    const multi = await loadConfig(COLLAB_YAML)
+    const p = pipeline(() => sseResponse(TEXT_STREAM.concat([])), { config: multi })
+    const input = [
+      { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
+      { type: "function_call_output", call_id: "orphan", namespace: "codex_app", name: "create_thread", output: "T1" }
+    ]
+    await p.call(
+      "/v1/responses",
+      postJson({ model: "gpt-5.4", stream: false, input }, { "X-Openai-Subagent": "collab_spawn" })
+    )
+    const rewritten = JSON.parse(p.calls[0]!.body) as { input: Array<Record<string, unknown>> }
+    expect(rewritten.input[1]).toEqual({
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text: "Tool output from codex_app__create_thread:\nT1" }]
+    })
+    await p.call("/v1/responses", postJson({ model: "gpt-5.4", stream: false, input }))
+    expect((JSON.parse(p.calls[1]!.body) as { input: Array<Record<string, unknown>> }).input[1]?.type).toBe(
+      "function_call_output"
+    )
+  })
+})

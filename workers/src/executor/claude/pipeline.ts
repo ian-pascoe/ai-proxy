@@ -8,6 +8,7 @@
  * (the last semantic mutation) -> betas extraction / `prompt_cache_options` removal -> serialise + CCH signature.
  * Nothing after the payload rules changes business fields except the caller-betas extraction and the signature.
  */
+import { modelIsCompat as requestIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Effect } from "effect"
 import { applyPayloadRules } from "../../config/payload/index.ts"
 import type { Config } from "../../config/schema.ts"
@@ -178,8 +179,10 @@ const validateMidSystemMessageModel = (
   )
 }
 
-/** The credential's `is-compat` flag for the executed model (`APIKeyModelIsCompat`). */
-const modelIsCompat = (config: Config, credential: CredentialSnapshot, model: string): boolean => {
+/** The credential's `is-compat` flag for the executed model (`APIKeyModelIsCompat`): resolved model info, else config. */
+const modelIsCompat = (config: Config, credential: CredentialSnapshot, request: ExecutorRequest): boolean => {
+  if (requestIsCompat(request)) return true
+  const model = request.model
   const entry = resolveClaudeKeyConfig(config, credential)?.entry
   if (entry === undefined) return false
   const base = parseSuffix(model).modelName.toLowerCase()
@@ -270,7 +273,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   const from = options.sourceFormat
   const to = Formats.Claude
   const cchSigning = cchSigningEnabled(apiKey, fingerprint.profileClaudeCodeCLI, parsedUrl.toString())
-  const isCompat = modelIsCompat(config, credential, request.model)
+  const isCompat = modelIsCompat(config, credential, request)
   const replayEnabled =
     from === Formats.Claude &&
     credential.provider === "claude" &&
@@ -301,11 +304,13 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
 
   const translate = (body: Json) =>
     withModelInfoLookup(request.modelLookup, () =>
-      services.registry.translateRequest(
+      translateRequestForExecutor(
+        services.registry,
         from,
         to,
         { format: from, model: baseModel, stream: upstreamStream, body },
-        thinking.summary
+        thinking.summary,
+        { headers: options.headers, config, isCompat }
       )
     )
   const translated = translate(payload)
@@ -492,11 +497,18 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
   const { baseModel, apiKey, firstParty, fingerprint, confirmed, sessionId, originalPayload, parsedUrl } = c
   const from = options.sourceFormat
   const to = Formats.Claude
-  const isCompat = modelIsCompat(config, credential, request.model)
+  const isCompat = modelIsCompat(config, credential, request)
   const stream = from !== to
   const translate = (body: Json) =>
     withModelInfoLookup(request.modelLookup, () =>
-      services.registry.translateRequest(from, to, { format: from, model: baseModel, stream, body }, thinking.summary)
+      translateRequestForExecutor(
+        services.registry,
+        from,
+        to,
+        { format: from, model: baseModel, stream, body },
+        thinking.summary,
+        { headers: options.headers, config, isCompat }
+      )
     )
   const translated = translate(request.payload)
   if (translated.error !== undefined) return yield* requestScoped(translated.error.status, translated.error.message)
@@ -614,14 +626,16 @@ export const prepareLocalCountBody = Effect.fnUntraced(function* (input: Prepare
   const { baseModel } = c
   const from = options.sourceFormat
   const to = Formats.Claude
-  const isCompat = modelIsCompat(config, credential, request.model)
+  const isCompat = modelIsCompat(config, credential, request)
   const translate = (body: Json) =>
     withModelInfoLookup(request.modelLookup, () =>
-      services.registry.translateRequest(
+      translateRequestForExecutor(
+        services.registry,
         from,
         to,
         { format: from, model: baseModel, stream: from !== to, body },
-        thinking.summary
+        thinking.summary,
+        { headers: options.headers, config, isCompat }
       )
     )
   const translated = translate(request.payload)

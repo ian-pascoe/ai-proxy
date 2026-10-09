@@ -65,6 +65,8 @@ export interface SocketDeps<R> {
   /** Tool-cache session key (`downstreamSessionKey`); empty disables repair. */
   readonly toolSessionKey: string
   readonly toolCaches: ToolCaches
+  /** Prepares the planned request for Codex clients (multi-agent v2 tools, orphan delegations). */
+  readonly prepare?: (payload: JsonObject) => Effect.Effect<void, never, R>
   /** Runs one turn through the conductor. */
   readonly execute: (
     input: Omit<ExecutionInput, "request">
@@ -356,6 +358,10 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
         const parsed = tryParseJson(next.value)
         const payload: JsonObject = isJsonObject(parsed) ? parsed : {}
         const plan = planTurn(state, payload)
+        // Go prepares the normalised request (after the transcript was rebuilt), not the raw frame.
+        if (deps.prepare !== undefined && (plan._tag === "execute" || plan._tag === "prewarm")) {
+          yield* deps.prepare(plan.request)
+        }
         switch (plan._tag) {
           case "error":
             write(buildErrorPayload(plan.error))

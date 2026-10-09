@@ -10,6 +10,7 @@
  * Differences from Go: stream lines are always reduced to their JSON payload before translation (Go's Vertex path
  * hands raw `data:` lines to the translators), usage v2 breakdowns are not ported, and Imagen requests without a prompt answer 400.
  */
+import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { applyPayloadRules } from "../../config/payload/index.ts"
@@ -300,9 +301,17 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         })
         yield* attempt.replay.prefetch(baseModel, history)
       }
+      const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
       const translateWithReplay = (body: Json) =>
         withReplayCache(attempt.replay, () =>
-          registry.translateRequest(from, to, { format: from, model: baseModel, stream, body }, thinking.summary)
+          translateRequestForExecutor(
+            registry,
+            from,
+            to,
+            { format: from, model: baseModel, stream, body },
+            thinking.summary,
+            rewrite
+          )
         )
       original = translateWithReplay(options.originalRequest ?? request.payload).body
       const translated = translateWithReplay(request.payload)
@@ -357,7 +366,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
 
   /** Native Interactions preparation (`executeInteractions*`). */
   const prepareInteractions = Effect.fnUntraced(function* (attempt: Attempt, stream: boolean) {
-    const { request, options, target } = attempt
+    const { context, request, options, target } = attempt
     const thinking = yield* Thinking
     const targetName = parseSuffix(request.model).modelName
     const from = options.sourceFormat
@@ -366,11 +375,13 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const translate = (payload: Json): RequestEnvelope =>
       from === "" || from === Formats.Interactions
         ? { format: providerFormat, model: targetName, stream, body: structuredClone(payload) }
-        : registry.translateRequest(
+        : translateRequestForExecutor(
+            registry,
             from,
             providerFormat,
             { format: from, model: targetName, stream, body: payload },
-            thinking.summary
+            thinking.summary,
+            { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
           )
     const working = translate(request.payload)
     if (working.error !== undefined) return yield* requestError(working)

@@ -22,9 +22,14 @@ import { encodingForCodexModel, getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
 import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
+import {
+  optimizeCodexMultiAgentV2RequestForAuth,
+  restoreCodexMultiAgentV2Response
+} from "../helps/codex-multi-agent-v2.ts"
 import { normalizeCodexToolSchemas } from "../helps/codex-tool-schema.ts"
 import { sanitizeCodexInputItemIds } from "../helps/codex-input-ids.ts"
 import { finalizePayload } from "../helps/payload.ts"
+import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -123,6 +128,8 @@ export interface PreparedRequest {
   readonly cacheId: string
   /** Native Codex client: the upstream output is forwarded untouched. */
   readonly nativeOutput: boolean
+  /** The collaboration namespace was renamed for the upstream: restore it in the answer. */
+  readonly multiAgentV2: boolean
 }
 
 export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): ProviderExecutor => {
@@ -139,11 +146,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     summary: import("../../translator/registry.ts").SummaryHooks
   ) => {
     const from = options.sourceFormat
-    const translated = registry.translateRequest(
+    const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+    const translated = translateRequestForExecutor(
+      registry,
       from,
       to,
       { format: from, model: baseModel, stream, body: request.payload },
-      summary
+      summary,
+      rewrite
     )
     if (translated.error !== undefined) {
       return new ExecutionError({
@@ -156,11 +166,13 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     const sameSource = options.originalRequest === undefined || options.originalRequest === request.payload
     const original = sameSource
       ? { ...translated, body: cloneJson(translated.body) }
-      : registry.translateRequest(
+      : translateRequestForExecutor(
+          registry,
           from,
           to,
           { format: from, model: baseModel, stream, body: options.originalRequest },
-          summary
+          summary,
+          rewrite
         )
     return { translated, original }
   }
@@ -205,6 +217,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     if (pair instanceof ExecutionError) return yield* pair
     const { translated, original } = pair
     const nativeOutput = isNativeCodexRequest(request.payload, options.headers, from, responseFormat)
+    const isCompat = modelIsCompat(request)
 
     let body = yield* thinking.apply({
       body: translated.body,
@@ -246,9 +259,11 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     if (!mode.compact && context.config.multimedia["disable-image-generation"] === false) {
       body = ensureImageGenerationTool(body, baseModel, context.credential, options.headers)
     }
-    body = sanitizeReasoningEncryptedContent(body)
+    body = sanitizeReasoningEncryptedContent(body, isCompat, isCompat)
     body = normalizeParallelToolCalls(body, options.headers)
     body = normalizeCodexToolSchemas(body)
+    const multiAgent = optimizeCodexMultiAgentV2RequestForAuth(options.headers, body, context.config, isCompat)
+    body = multiAgent.payload
 
     const replayScope = mode.compact
       ? { modelName: "", sessionKey: "", requestFingerprint: "" }
@@ -309,7 +324,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       responseFormat,
       providerFormat: to,
       cacheId,
-      nativeOutput
+      nativeOutput,
+      multiAgentV2: multiAgent.optimized
     } satisfies PreparedRequest
   })
 
@@ -381,7 +397,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
     for (const line of text.split("\n")) {
       if (!line.startsWith("data:")) continue
-      const event = tryParseJson(line.slice(5).trim())
+      const event = tryParseJson(restoreCodexMultiAgentV2Response(line.slice(5).trim(), prepared.multiAgentV2))
       context.usage.observeResponseModel(responseModelOf(event))
       const eventType = asString(get(event, "type"))
       if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
@@ -473,7 +489,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       ),
       modelLevelCooling: context.config.upstream.codex["model-level-cooling"],
       nowMs: () => Date.now(),
-      replayScope: prepared.replayScope
+      replayScope: prepared.replayScope,
+      multiAgentV2: prepared.multiAgentV2
     })
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),

@@ -4,7 +4,7 @@
  *
  * Go source: sdk/api/handlers/openai/openai_responses_handlers.go (Responses, Compact, handleNonStreamingResponse,
  * handleStreamingResponse), internal/api/server_routes.go (route table). The websocket variants (`GET /v1/responses`,
- * `GET /backend-api/codex/responses`) are in websocket/. Multi-agent-v2 request rewriting is not ported.
+ * `GET /backend-api/codex/responses`) are in websocket/. Codex multi-agent-v2 tool preparation and orphan delegation rewriting run in `codex-prepare.ts`.
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -15,6 +15,7 @@ import { Formats } from "../../translator/formats.ts"
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
 import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import { prepareCodexResponsesRequest } from "./codex-prepare.ts"
 import { isCodexResponsesClient, responsesFramer } from "./framer.ts"
 import { handleResponsesSocket } from "./websocket/routes.ts"
 
@@ -36,6 +37,8 @@ const handle = (compact: boolean) =>
     let body: Json | undefined = read.success.json
     if (body === undefined) return badRequest("request body is not valid JSON")
 
+    // Official Codex clients: collaboration tools (not for compaction) and orphan delegations.
+    yield* prepareCodexResponsesRequest(body, request.headers as Record<string, string>, !compact)
     const streamField = get(body, "stream")
     if (compact) {
       if (streamField === true) {

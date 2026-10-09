@@ -14,11 +14,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/translator/builtin"
 )
@@ -44,6 +47,17 @@ type corpusCase struct {
 	// TokenCount, when set, is passed to the token-count translator with TokenCountUsage as provider JSON.
 	TokenCount      *int64          `json:"tokenCount,omitempty"`
 	TokenCountUsage json.RawMessage `json:"tokenCountUsage,omitempty"`
+	// Executor runs the request through the executor-level helper (helps.TranslateRequestReturningError: compat
+	// request variants, Codex multi-agent v2 and orphan delegation rewriting) instead of the bare registry.
+	Executor *executorSpec `json:"executor,omitempty"`
+}
+
+// executorSpec is the executor context of a case.
+type executorSpec struct {
+	Headers              map[string]string `json:"headers,omitempty"`
+	Compat               bool              `json:"compat,omitempty"`
+	OptimizeMultiAgentV2 bool              `json:"optimizeMultiAgentV2,omitempty"`
+	OrphanDelegation     bool              `json:"orphanDelegation,omitempty"`
 }
 
 type fixtureCase struct {
@@ -81,12 +95,26 @@ func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 	to := sdktranslator.FromString(c.To)
 	out := fixtureCase{corpusCase: c}
 
-	env := registry.TranslateRequestEnvelope(ctx, from, to, sdktranslator.RequestEnvelope{
-		Format: from,
-		Model:  c.Model,
-		Stream: c.Stream,
-		Body:   []byte(c.Request),
-	})
+	var env sdktranslator.RequestEnvelope
+	if c.Executor != nil {
+		cfg := &config.Config{}
+		cfg.Client.Codex.OptimizeMultiAgentV2 = c.Executor.OptimizeMultiAgentV2
+		cfg.Codex.OrphanDelegationCompatibility = c.Executor.OrphanDelegation
+		headers := http.Header{}
+		for key, value := range c.Executor.Headers {
+			headers.Set(key, value)
+		}
+		body, err := helps.TranslateRequestReturningError(ctx, headers, cfg, from, to, c.Model, []byte(c.Request), c.Stream, c.Executor.Compat)
+		env.Body = body
+		env.Err = err
+	} else {
+		env = registry.TranslateRequestEnvelope(ctx, from, to, sdktranslator.RequestEnvelope{
+			Format: from,
+			Model:  c.Model,
+			Stream: c.Stream,
+			Body:   []byte(c.Request),
+		})
+	}
 	out.TranslatedRequest = string(env.Body)
 	if env.Err != nil {
 		out.RequestError = env.Err.Error()
