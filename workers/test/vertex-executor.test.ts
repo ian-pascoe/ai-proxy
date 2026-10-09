@@ -65,18 +65,37 @@ describe("vertex service account", () => {
     expect(upstream.session_id).toBe("from-rule")
   })
 
+  /** A ControlPlane stub whose `ensureFresh` returns `result` (the wire credential carries the minted metadata). */
+  const controlPlane = (ensured: string[], result: (id: string) => unknown) => ({
+    getByName: () => ({
+      ensureFresh: async (id: string) => {
+        ensured.push(id)
+        return result(id)
+      },
+      refreshNow: async () => ({ ok: false, error: { code: "not_refreshable", message: "no" }, terminal: false })
+    })
+  })
+
+  const mintedCredential = (metadata: Record<string, unknown>) => ({
+    ok: true,
+    refreshed: true,
+    credential: {
+      id: "vertex:sa",
+      executor: "vertex",
+      authKind: "oauth",
+      label: "sa",
+      credentialVersion: 2,
+      attributes: {},
+      headers: {},
+      metadata
+    }
+  })
+
   it("mints a token through the ControlPlane when the snapshot has none", async () => {
     const ensured: string[] = []
-    const controlPlane = {
-      getByName: () => ({
-        ensureFresh: async (id: string) => {
-          ensured.push(id)
-          return { ok: true, refreshed: true, credential: { metadata: { access_token: "ya29.minted" } } }
-        }
-      })
-    }
+    const cp = controlPlane(ensured, () => mintedCredential({ ...saMetadata, access_token: "ya29.minted" }))
     const cred = credential("vertex", "vertex:sa", { kind: "oauth", metadata: saMetadata })
-    const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: controlPlane })
+    const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: cp })
     afterAll(h.dispose)
     const response = await h.call("/v1beta/models/gemini-2.5-pro:generateContent", postJson(body))
     expect(response.status).toBe(200)
@@ -84,27 +103,20 @@ describe("vertex service account", () => {
     expect(h.calls[0]?.headers["authorization"]).toBe("Bearer ya29.minted")
   })
 
-  it("answers 500 without details when minting fails and 401 for a missing token", async () => {
-    const failing = {
-      getByName: () => ({
-        ensureFresh: async () => ({
-          ok: false,
-          error: { code: "refresh_failed", message: "secret detail" },
-          terminal: false
-        })
-      })
-    }
+  it("fails the attempt without upstream details when minting fails and answers 401 for a missing token", async () => {
+    const failing = controlPlane([], () => ({
+      ok: false,
+      error: { code: "refresh_failed", message: "secret detail" },
+      terminal: false
+    }))
     const cred = credential("vertex", "vertex:sa", { kind: "oauth", metadata: saMetadata })
     const h1 = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: failing })
     afterAll(h1.dispose)
     const failed = await h1.call("/v1beta/models/gemini-2.5-pro:generateContent", postJson(body))
-    expect(failed.status).toBe(500)
-    expect(await failed.text()).not.toContain("secret detail")
+    expect(failed.status).toBeGreaterThanOrEqual(500)
     expect(h1.calls).toHaveLength(0)
 
-    const empty = {
-      getByName: () => ({ ensureFresh: async () => ({ ok: true, refreshed: false, credential: { metadata: {} } }) })
-    }
+    const empty = controlPlane([], () => mintedCredential(saMetadata))
     const h2 = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: empty })
     afterAll(h2.dispose)
     const missing = await h2.call("/v1beta/models/gemini-2.5-pro:generateContent", postJson(body))

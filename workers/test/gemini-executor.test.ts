@@ -114,7 +114,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
     )
     expect(response.status).toBe(401)
     expect(await response.text()).toContain("API key not valid")
-    expect(h.reports[0]).toMatchObject({ ok: false, status: 401, credentialScoped: true })
+    expect(h.reports[0]).toMatchObject({ success: false, httpStatus: 401, credentialScoped: true })
     expect(h.records[0]?.failed).toBe(true)
   })
 

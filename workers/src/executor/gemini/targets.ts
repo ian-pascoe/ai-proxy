@@ -8,7 +8,7 @@
 import { Effect } from "effect"
 import { Formats } from "../../translator/formats.ts"
 import { ExecutionError } from "../errors.ts"
-import { accessTokenOf, ensureFreshMetadata } from "../helps/control-plane.ts"
+
 import type { ExecutionContext } from "../types.ts"
 import type { GoogleTarget, GoogleVariant } from "./google.ts"
 
@@ -81,6 +81,8 @@ export const isNativeVertexInteractions = (context: ExecutionContext): boolean =
   return metadata["interactions"] === true || metadata["native_interactions"] === true
 }
 
+const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => metadataString(metadata, "access_token")
+
 const metadataString = (metadata: Readonly<Record<string, unknown>>, key: string): string => {
   const value = metadata[key]
   return typeof value === "string" ? value.trim() : ""
@@ -95,15 +97,13 @@ const vertexApiKey = (context: ExecutionContext): { readonly apiKey: string; rea
   return { apiKey, baseUrl: attributes["base_url"] ?? "" }
 }
 
-/** Service-account access token: the cached one on the snapshot, else minted by the ControlPlane. */
-const serviceAccountToken = (context: ExecutionContext) =>
-  Effect.gen(function* () {
-    let token = accessTokenOf(context.credential.metadata)
-    if (token === "") token = accessTokenOf(yield* ensureFreshMetadata(context.credential.id))
-    if (token === "")
-      return yield* new ExecutionError({ status: 401, message: "missing access token", credentialScoped: true })
-    return token
-  })
+/** Service-account access token: minted by the ControlPlane before the attempt (`withCredentialRefresh`). */
+const serviceAccountToken = (context: ExecutionContext) => {
+  const token = accessTokenOf(context.credential.metadata)
+  return token === ""
+    ? Effect.fail(new ExecutionError({ status: 401, message: "missing access token", credentialScoped: true }))
+    : Effect.succeed(token)
+}
 
 export const vertexVariant: GoogleVariant = {
   identifier: "vertex",

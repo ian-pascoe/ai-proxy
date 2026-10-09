@@ -26,7 +26,6 @@ import {
 } from "../../translator/registry.ts"
 import { sanitizeGeminiRequestThoughtSignatures } from "../../translator/gemini/common/signature.ts"
 import { responseModelOf } from "../../usage/record.ts"
-import type { WorkerEnv } from "../../platform/env.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
@@ -85,7 +84,7 @@ export interface GoogleVariant {
   readonly resolveTarget: (
     context: ExecutionContext,
     options: ExecutorOptions
-  ) => Effect.Effect<GoogleTarget, ExecutionError, WorkerEnv>
+  ) => Effect.Effect<GoogleTarget, ExecutionError>
   /** Whether this attempt uses the native Interactions endpoint. */
   readonly nativeInteractions: (context: ExecutionContext, options: ExecutorOptions) => boolean
   readonly translators?: TranslatorRegistry

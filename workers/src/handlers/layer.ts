@@ -41,7 +41,14 @@ export interface ProxyLayerOptions {
 }
 
 /** All proxy route layers (provider slices add theirs here). */
-export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes, ResponsesRoutes, ImagesRoutes, AlphaSearchRoutes, ClaudeRoutes, GeminiRoutes)
+export const ProxyRoutes = Layer.mergeAll(
+  OpenAIRoutes,
+  ResponsesRoutes,
+  ImagesRoutes,
+  AlphaSearchRoutes,
+  ClaudeRoutes,
+  GeminiRoutes
+)
 
 /**
  * Proxy routes with their services provided. Handlers still read `AccessPrincipal`: wrap the result with

@@ -67,9 +67,31 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     CredentialPicker.of({
       pick: (request) => {
         picks.push(request)
-        return Effect.succeed({ credential: options.credential, leaseId: `lease-${picks.length}` })
+        const leaseId = `lease-${picks.length}`
+        return Effect.succeed({
+          credential: options.credential,
+          leaseId,
+          route: {
+            requestedModel: request.model,
+            routeModel: request.model,
+            upstreamModels: [request.model],
+            originalAlias: request.model,
+            forceMapping: false,
+            stateModel: request.model,
+            pooled: false
+          },
+          lease: {
+            id: leaseId,
+            credentialId: options.credential.id,
+            credentialVersion: 1,
+            provider: options.credential.provider,
+            model: request.model,
+            issuedAt: 0
+          }
+        })
       },
-      report: (_lease, result) => Effect.sync(() => void reports.push(result))
+      report: (_lease, result) => Effect.sync(() => void reports.push(result)),
+      planRetry: () => Effect.succeed({ retry: false })
     })
   )
   const models = Layer.succeed(

@@ -9,7 +9,6 @@
 import type { Effect, Stream } from "effect"
 import type { HttpClient } from "effect/http"
 import type { Config } from "../config/schema.ts"
-import type { WorkerEnv } from "../platform/env.ts"
 import type { Json } from "../json/index.ts"
 import type { ModelInfoLookup, ThinkingModelInfo } from "../thinking/index.ts"
 import type { Format } from "../translator/formats.ts"
@@ -96,8 +95,7 @@ export interface StreamResult {
 }
 
 /** Services available to executors. */
-/** `WorkerEnv` lets executors reach the ControlPlane (e.g. Vertex token minting). */
-export type ExecutorServices = HttpClient.HttpClient | Thinking | WorkerEnv
+export type ExecutorServices = HttpClient.HttpClient | Thinking
 
 /** Go `ProviderExecutor` (Refresh lives in the credential refresh slice). */
 export interface ProviderExecutor {
