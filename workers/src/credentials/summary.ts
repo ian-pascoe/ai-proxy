@@ -3,6 +3,7 @@
  */
 import type { Schema } from "effect"
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
+import type { RecentBucket } from "./cooldown/recent-requests.ts"
 import { accessTokenExpiry } from "./expiry.ts"
 import { type Credential, type CredentialError, type CredentialState, executorKey } from "./model.ts"
 import type { CredentialSnapshot } from "./selection/types.ts"
@@ -61,6 +62,8 @@ export interface CredentialSummary {
   readonly lastError?: CredentialError
   readonly success: number
   readonly failed: number
+  /** Raw recent-requests ring (see `recentRequestsSnapshot`), when any request was reported. */
+  readonly recentRequests?: ReadonlyArray<RecentBucket>
   readonly modelStates: Readonly<
     Record<string, { readonly unavailable: boolean; readonly nextRetryAfter: number; readonly statusMessage?: string }>
   >
@@ -111,6 +114,7 @@ export const summarizeCredential = (credential: Credential, state: CredentialSta
     ...(state.lastError === undefined ? {} : { lastError: state.lastError }),
     success: state.success,
     failed: state.failed,
+    ...(state.recentRequests === undefined ? {} : { recentRequests: state.recentRequests }),
     modelStates,
     createdAt: credential.createdAt,
     updatedAt: credential.updatedAt

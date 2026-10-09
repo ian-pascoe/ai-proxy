@@ -490,13 +490,60 @@ the panel's "management key" is ignored (any text logs in).
 - **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
   60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
-- **Not here**: `/oauth/*` (OAuth slice), `/observability/usage/*` (usage slice), plugins, Home, `/v0/management`.
+- **Not here**: `/oauth/*` (OAuth slice), plugins, Home, `/v0/management`. `/observability/usage/*` lives in
+  `usage-routes.ts` (see "Usage accounting and observability").
 - **Panel asset**: `GET /management.html` serves `public/management.html` through the `ASSETS` binding
   (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
   (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
   file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
-- Deviations from Go: `recent_requests` buckets stay empty until the usage slice records history; cooldown `reason`s are
+- Deviations from Go: cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings.
+
+## Usage accounting and observability (`src/usage/`, `src/observability/`, `src/management/usage-routes.ts`)
+
+Port of `sdk/cliproxy/usage` (token accounting v2), `helps/usage_helpers.go` (parsers, `StreamUsageBuffer`, TTFT) and the
+`internal/redisqueue` export shape. One `UsageRecord` per upstream attempt (`UsageReporter` per attempt, `finish` exactly
+once; a 401 retry keeps the rejected attempt's failed record, a failed-over credential gets its own).
+
+- **Accounting v2** (`accounting.ts`): `TokenBreakdown` (`input = uncached + cacheRead + cacheWrite`, `output =
+  nonReasoning + reasoning`, `total = input + output + unclassified`, quality `complete|unclassified|inconsistent`).
+  `ensureTokenBreakdown(detail, provider, executorType)` picks the semantics: **subset** (openai, codex, xai, grok, kimi,
+  qwen, deepseek, openrouter, `openai-compatible-*`; cache inside input, reasoning inside output), **independent**
+  (claude/anthropic; cache outside `input_tokens`, thinking inside `output_tokens`), **separate-reasoning** (gemini,
+  aistudio, antigravity, vertex, interactions; `candidatesTokenCount` excludes thoughts), otherwise unclassified. Parsers
+  attach the protocol's own breakdown (`record.ts` OpenAI/Responses/Codex, `parsers.ts` Claude, Gemini, Interactions,
+  Antigravity + `mergeStreamUsageDetail`); `UsageReporter.finish` guarantees a valid breakdown on every record.
+  Executors feed the reporter with `publish` (latest wins, tier-only updates keep the token detail, an earlier response
+  tier survives) or `publishMerged` (Claude/Interactions events that complement each other). Go's int64 overflow checks
+  become safe-integer checks. Executors must use these parsers: a hand-rolled `UsageDetail` without a breakdown is
+  re-derived from the raw buckets, which is wrong for Claude (reasoning inside output).
+- **TTFT** (`ttft.ts` + reporter): `markFirstByte` (non-stream: effective TTFT), `recordFirstPacket` /
+  `observeTokenEvent(now, isToken)` (streams: first substantive token event, first packet as fallback). Codex streams use
+  `isResponsesTokenEvent`; OpenAI-compatible and Claude executors still mark the first response byte (hook the matching
+  `is*TokenEvent` into their stream loops to refine it).
+- **Persistence** (`d1.ts`, `d1-sink.ts`, `migrations/0001_usage_records.sql`): table `usage_records` (primary key =
+  attempt `request_id`, `trace_id` = inbound request id, raw token columns plus the `acct_*` breakdown columns,
+  `exported_at` for the queue). `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
+  `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
+  `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
+  attempt plumbing is unchanged). Apply the schema with `wrangler d1 migrations apply cliproxy-usage`
+  (`migrations_dir` in `wrangler.jsonc`). Failure bodies are truncated to 2 KiB.
+- **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
+  30, `0` = keep) in bounded batches. `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
+  persistence is always on when the `USAGE` binding exists.
+- **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/api-keys` (per provider,
+  `base_url|api_key` -> success/failed/`recent_requests`, from the ControlPlane counters and recent-requests ring; keys
+  use the masked API key), `.../queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
+  `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management `auth_index`) and the Workers
+  additions `.../records` (filters `since|until|provider|model|principal|auth_id|failed`, `limit`, keyset `before`) and
+  `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT).
+- **Trace and logs** (`observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
+  reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = `yyyyMMddHHmmss-<auth index>-<request id>`
+  (UTC; refreshed on every credential selection, `auth_index` = management `auth_index`) or the bare request id when no
+  credential was selected (Go omits the header then). `/healthz` is exempt. One structured log line per request
+  (`method`, pathname without query, `status`, `latencyMs`, `principal`, `provider`, `model`, `authIndex`, `attempts`,
+  `requestId`) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
+  annotations. Headers, bodies, query strings and credentials are never logged.
 
 ## Authentication (Cloudflare Access)
 

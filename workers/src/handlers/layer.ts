@@ -15,6 +15,7 @@ import { CredentialRefresher } from "../executor/helps/credential-refresh.ts"
 import { ModelRegistryLive } from "../registry/live.ts"
 import { ExecutorRegistry } from "../executor/registry.ts"
 import { Thinking } from "../executor/thinking.ts"
+import { D1UsageSink } from "../usage/d1-sink.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
 import { ClaudeRoutes } from "./claude/routes.ts"
@@ -62,7 +63,7 @@ export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
     options.modelProviders ?? ModelProviders.registryLayer.pipe(Layer.provide(ModelRegistryLive)),
     options.credentialRefresher ?? CredentialRefresher.controlPlane,
     ExecutorRegistry.layer,
-    options.usageSink ?? UsageSink.noop,
+    options.usageSink ?? D1UsageSink,
     options.httpClient ?? FetchHttpClient.layer,
     options.thinking ?? Thinking.live
   ).pipe(Layer.provideMerge(config))

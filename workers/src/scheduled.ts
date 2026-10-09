@@ -10,6 +10,7 @@ import { ConfigReader } from "./config/reader.ts"
 import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts"
 import { CatalogStore } from "./registry/catalog-store.ts"
 import { refreshCatalogs } from "./registry/refresh.ts"
+import { pruneExpiredUsage } from "./usage/retention.ts"
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
 export type ScheduledServices = HttpClient.HttpClient | ConfigReader | CatalogStore | WorkerEnv | WorkerExecutionContext
@@ -22,6 +23,8 @@ export interface ScheduledTask {
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   // internal/registry catalog updaters (3 h): general, Codex client and Devin catalogs into KV.
   { name: "model-catalog-refresh", run: refreshCatalogs },
+  // Usage history older than `USAGE_RETENTION_DAYS` is deleted from D1.
+  { name: "usage-retention", run: pruneExpiredUsage },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
   {
     name: "credential-refresh-sweep",

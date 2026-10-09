@@ -51,7 +51,8 @@ See the architecture document. Currently implemented:
 - `src/handlers/` — shared execution pipeline (`execute.ts`, retry/cooldown `conductor.ts`, `session.ts`), SSE responder
   and framers (`respond.ts`, `framing.ts`), `/v1/chat/completions` and `/v1/completions` (`openai/`), `/v1/messages` and
   `/v1/messages/count_tokens` (`claude/`), service wiring (`layer.ts`).
-- `src/usage/` — usage records, per-attempt `UsageReporter`, `UsageSink` (no-op until persistence lands).
+- `src/usage/` — usage records, token accounting v2, stream usage parsers, TTFT, per-attempt `UsageReporter`, the D1
+  `UsageSink` and retention; `migrations/` holds the D1 schema. `src/observability/` — `X-CPA-TRACE-ID` and request logs.
 - `src/management/` — `/v8/management` API (config, credentials, api-call, model definitions, server info) and the
   `/management.html` control panel route; `tools/panel-sync/` downloads the panel.
 - `tools/fixturegen/` — Go programs that emit golden fixtures from the Go implementation (run from the repo root:
@@ -99,8 +100,8 @@ refuses to install it unless its SHA-256 matches the release asset's `digest`. O
 
 Local use: put `ACCESS_DEV_BYPASS=you@example.com` in `.dev.vars`, run `pnpm panel:sync` and `pnpm dev`, open
 `http://localhost:8787/management.html`. The login form asks for a "management key": Access already authenticated you,
-so any non-empty text works. Usage pages need the usage slice and OAuth login the OAuth slice (their routes answer 404
-until then).
+so any non-empty text works. Usage pages read D1 (apply `migrations/` with `wrangler d1 migrations apply cliproxy-usage`);
+OAuth login needs the OAuth slice (its routes answer 404 until then).
 
 ## Conventions
 

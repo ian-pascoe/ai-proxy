@@ -18,6 +18,7 @@ import { builtinTranslators } from "../../translator/builtin.ts"
 import { Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
 import { parseOpenAIUsage, responseModelOf } from "../../usage/record.ts"
+import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { normalizeCodexToolSchemas } from "../helps/codex-tool-schema.ts"
 import { sanitizeCodexInputItemIds } from "../helps/codex-input-ids.ts"
@@ -298,7 +299,9 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     url: string,
     headers: Record<string, string>,
     body: Json,
-    replayScope?: CodexReplayScope
+    replayScope?: CodexReplayScope,
+    // Streams mark the effective TTFT on the first token event (usage `observeTokenEvent`), not on the headers.
+    ttft: "first-byte" | "token-event" = "first-byte"
   ) {
     const client = yield* HttpClient.HttpClient
     const httpRequest = HttpClientRequest.post(url).pipe(
@@ -308,7 +311,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(httpRequest)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
-    context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+    if (ttft === "token-event") context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
+    else context.usage.markFirstByte(yield* Clock.currentTimeMillis)
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
       if (replayScope !== undefined && isThinkingSignatureInvalid(response.status, text)) {
@@ -421,7 +425,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     options: ExecutorOptions
   ) {
     const prepared = yield* prepare(context, request, options, { stream: true, compact: false })
-    const response = yield* send(context, prepared.url, prepared.headers, prepared.body, prepared.replayScope)
+    const response = yield* send(
+      context,
+      prepared.url,
+      prepared.headers,
+      prepared.body,
+      prepared.replayScope,
+      "token-event"
+    )
     const reader = new CodexStreamReader({
       registry,
       responseFormat: prepared.responseFormat,
@@ -620,12 +631,12 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     const { endpoint } = imagePlan(context, request, options)
     if (endpoint !== "") {
       const direct = prepareDirectImage(context, request, options, endpoint, true)
-      const response = yield* send(context, direct.url, direct.headers, direct.body)
+      const response = yield* send(context, direct.url, direct.headers, direct.body, undefined, "token-event")
       const chunks = response.stream.pipe(Stream.decodeText, Stream.mapError(transportError))
       return { headers: new Headers(response.headers), chunks } satisfies StreamResult
     }
     const tool = yield* prepareToolImage(context, request, options)
-    const response = yield* send(context, tool.url, tool.headers, tool.body)
+    const response = yield* send(context, tool.url, tool.headers, tool.body, undefined, "token-event")
     const collector = new OutputItemCollector()
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
@@ -636,6 +647,9 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
             if (done || !line.startsWith("data:")) return [done, [] as string[]] as const
             const event = tryParseJson(line.slice(5).trim())
             context.usage.observeResponseModel(responseModelOf(event))
+            if (!context.usage.ttftObserved) {
+              context.usage.observeTokenEvent(yield* Clock.currentTimeMillis, isResponsesTokenEvent(line))
+            }
             switch (asString(get(event, "type"))) {
               case "response.output_item.done":
                 collector.collect(event)

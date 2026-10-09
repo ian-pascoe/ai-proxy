@@ -11,6 +11,7 @@ import { Formats } from "../../translator/formats.ts"
 import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts"
 import { responseModelOf } from "../../usage/record.ts"
 import type { UsageReporter } from "../../usage/reporter.ts"
+import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import type { ExecutionError } from "../errors.ts"
 import {
   codexClosedBeforeFirstPayloadError,
@@ -80,6 +81,7 @@ export class CodexStreamReader {
     const payload = line.slice(5).trim()
     const parsed = tryParseJson(payload)
     usage.observeResponseModel(responseModelOf(parsed))
+    if (!usage.ttftObserved) usage.observeTokenEvent(nowMs(), isResponsesTokenEvent(payload))
     const eventType = asString(get(parsed, "type"))
 
     const failure = codexTerminalFailure(parsed, { modelLevelCooling, nowMs: nowMs() })

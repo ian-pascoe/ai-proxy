@@ -38,6 +38,7 @@ import { parseSuffix } from "../executor/suffix.ts"
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest, ProviderExecutor } from "../executor/types.ts"
 import type { Json } from "../json/index.ts"
 import type { WorkerEnv } from "../platform/env.ts"
+import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts"
 import { UsageReporter } from "../usage/reporter.ts"
 import { UsageSink } from "../usage/sink.ts"
 import { ModelCapabilities } from "./model-capabilities.ts"
@@ -168,6 +169,8 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
     const executors = yield* ExecutorRegistry
     const sink = yield* UsageSink
     const capabilities = yield* ModelCapabilities
+    const trace = yield* RequestTrace
+    yield* notePrincipal(prepared.principalId)
     const settings = retrySettings(prepared.config)
     const compact = prepared.options.alt === "responses/compact"
     let upstreamAttempts = 0
@@ -178,6 +181,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         const newUsage = (now: number) =>
           new UsageReporter({
             requestId: crypto.randomUUID(),
+            ...(trace === undefined ? {} : { traceId: trace.requestId }),
             provider: credential.provider,
             executorType: executor.identifier,
             model: parseSuffix(upstreamModel).modelName,
@@ -188,12 +192,14 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
             authType: credential.kind,
             source: credential.label ?? credential.id,
             stream: prepared.stream,
+            generate: prepared.options.metadata.generate,
             serviceTier: prepared.options.metadata.serviceTier,
             ...(prepared.options.metadata.reasoningEffort !== undefined
               ? { reasoningEffort: prepared.options.metadata.reasoningEffort }
               : {}),
             requestedAt: now
           })
+        yield* noteSelection(credential.id, credential.provider, parseSuffix(upstreamModel).modelName)
         const { modelInfo, lookup } = yield* capabilities.thinking(parseSuffix(upstreamModel).modelName, credential)
         const stateModel = route.pooled ? upstreamModel : undefined
         let finished = false

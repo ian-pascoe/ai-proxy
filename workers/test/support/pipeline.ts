@@ -107,6 +107,8 @@ export interface PipelineOptions {
   readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>
   /** Defaults to the config-backed model lookup. */
   readonly modelProviders?: Layer.Layer<ModelProviders, never, ConfigReader>
+  /** Extra global layers (middleware, loggers) merged next to the routes. */
+  readonly extraLayers?: Layer.Layer<never, never, HttpRouter.HttpRouter>
 }
 
 export interface PipelineHarness {
@@ -132,7 +134,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})
   })
   const { handler, dispose } = HttpRouter.toWebHandler(
-    Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(routes)),
+    Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(routes), options.extraLayers ?? Layer.empty),
     {
       disableLogger: true
     }

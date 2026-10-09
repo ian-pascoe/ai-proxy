@@ -4,8 +4,8 @@
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
  * (`access/routes.ts`: the whole `/v8/management` prefix and `/management.html`), which replaces the Go management
  * key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, file logs (answered like Go with
- * file logging off), the deprecated `/v0/management` tree; OAuth login (`/oauth/*`) belongs to the OAuth slice and
- * usage (`/observability/usage/*`) to the usage slice.
+ * file logging off), the deprecated `/v0/management` tree; OAuth login (`/oauth/*`) belongs to the OAuth slice.
+ * Usage (`/observability/usage/*`) is in `usage-routes.ts`.
  */
 import { Effect, Layer } from "effect"
 import {
@@ -23,6 +23,7 @@ import { configRoutes } from "./config-routes.ts"
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts"
 import { modelDefinitionsHandler } from "./model-definitions.ts"
 import { panelHandler } from "./panel.ts"
+import { usageRoutes } from "./usage-routes.ts"
 import { errorLogsHandler, latestVersionHandler, logsDisabledHandler, requestLogHandler } from "./server-routes.ts"
 
 const BASE = "/v8/management"
@@ -38,6 +39,7 @@ export const ManagementRoutes = HttpRouter.addAll(
     return [
       ...configRoutes,
       ...credentialRoutes,
+      ...usageRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("GET", `${BASE}/server/latest-version`, bound(latestVersionHandler)),
       HttpRouter.route("POST", `${BASE}/requests/api-call`, bound(apiCallHandler)),

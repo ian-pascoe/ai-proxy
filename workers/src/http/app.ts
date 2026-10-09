@@ -3,6 +3,8 @@ import { HttpRouter } from "effect/http"
 import { AccessLayer, withAccess } from "../access/layer.ts"
 import { ProxyLayer } from "../handlers/layer.ts"
 import { ManagementRoutesLive } from "../management/routes.ts"
+import { WorkersLoggerLayer } from "../observability/logger.ts"
+import { TraceLayer } from "../observability/trace.ts"
 import { ModelRoutesLive } from "../registry/live.ts"
 import { RootRoutes } from "./routes.ts"
 
@@ -16,7 +18,10 @@ export const AppLayer = Layer.mergeAll(
   AccessLayer,
   ProxyLayer,
   withAccess(ModelRoutesLive),
-  withAccess(ManagementRoutesLive)
+  withAccess(ManagementRoutesLive),
+  // Request trace id header and structured request logs (src/observability).
+  TraceLayer,
+  WorkersLoggerLayer
 )
 
 /**

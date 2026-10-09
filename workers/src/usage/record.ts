@@ -3,9 +3,15 @@
  *
  * Go source: sdk/cliproxy/usage/manager.go (Record, Detail), internal/runtime/executor/helps/usage_helpers.go
  * (ParseOpenAIUsage, ParseOpenAIStreamUsage, parseOpenAIStyleUsageNode, extractResponseServiceTier). The v2 token
- * breakdown (`usage/accounting.go`) and persistence belong to the usage slice.
+ * breakdown lives in `accounting.ts`; the other protocols' parsers in `parsers.ts`.
  */
 import { get, isJsonObject, type Json, tryParseJson } from "../json/index.ts"
+import {
+  partialSubsetTokenBreakdown,
+  subsetTokenBreakdown,
+  type TokenBreakdown,
+  unclassifiedTokenBreakdown
+} from "./accounting.ts"
 
 export interface UsageDetail {
   readonly inputTokens: number
@@ -15,8 +21,21 @@ export interface UsageDetail {
   readonly cacheReadTokens: number
   readonly cacheCreationTokens: number
   readonly totalTokens: number
+  /** v2 accounting (`accounting.ts`); attached by the parsers or, at the latest, by `UsageReporter.finish`. */
+  readonly tokenBreakdown?: TokenBreakdown
   readonly responseServiceTier?: string
 }
+
+/** `hasNonZeroTokenUsage`. */
+export const hasNonZeroTokenUsage = (detail: UsageDetail): boolean =>
+  detail.inputTokens !== 0 ||
+  detail.outputTokens !== 0 ||
+  detail.reasoningTokens !== 0 ||
+  detail.cachedTokens !== 0 ||
+  detail.cacheReadTokens !== 0 ||
+  detail.cacheCreationTokens !== 0 ||
+  detail.totalTokens !== 0 ||
+  (detail.tokenBreakdown?.totalTokens ?? 0) !== 0
 
 export const emptyUsageDetail: UsageDetail = {
   inputTokens: 0,
@@ -31,6 +50,8 @@ export const emptyUsageDetail: UsageDetail = {
 export interface UsageRecord {
   /** Unique id of this attempt. */
   readonly requestId: string
+  /** Id of the inbound HTTP request (`X-CPA-TRACE-ID` carries it); shared by all attempts of a request. */
+  readonly traceId?: string
   /** Provider key of the credential (e.g. `openai-compatible-openrouter`). */
   readonly provider: string
   /** Executor identifier. */
@@ -47,6 +68,8 @@ export interface UsageRecord {
   readonly authType: string
   readonly source: string
   readonly stream: boolean
+  /** `false` only when the client sent `generate: false`. */
+  readonly generate?: boolean
   readonly requestedAt: number
   readonly latencyMs: number
   readonly ttftMs?: number
@@ -58,15 +81,20 @@ export interface UsageRecord {
   readonly serviceTier: string
 }
 
-const int = (value: Json | undefined): number => (typeof value === "number" ? Math.trunc(value) : 0)
+/** gjson `.Int()` for numeric nodes; anything else counts as 0. */
+export const tokenInt = (value: Json | undefined): number => (typeof value === "number" ? Math.trunc(value) : 0)
 
-const first = (node: Json, ...paths: ReadonlyArray<string>): Json | undefined => {
+/** `firstExistingUsageNode`: the first of `paths` that exists (`null` exists). */
+export const firstExisting = (node: Json | undefined, ...paths: ReadonlyArray<string>): Json | undefined => {
   for (const path of paths) {
     const value = get(node, path)
     if (value !== undefined) return value
   }
   return undefined
 }
+
+const int = tokenInt
+const first = firstExisting
 
 const USAGE_BUCKET_PATHS = [
   "prompt_tokens",
@@ -87,10 +115,10 @@ export const hasUsageFields = (node: Json | undefined): node is Json =>
   isJsonObject(node) &&
   (get(node, "total_tokens") !== undefined || USAGE_BUCKET_PATHS.some((path) => get(node, path) !== undefined))
 
-/** `parseOpenAIStyleUsageNode` without the v2 token breakdown. */
+/** `parseOpenAIStyleUsageNode`: subset semantics (cache inside input, reasoning inside output). */
 export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
-  const input = int(first(node, "prompt_tokens", "input_tokens"))
-  const output = int(first(node, "completion_tokens", "output_tokens"))
+  const inputNode = first(node, "prompt_tokens", "input_tokens")
+  const outputNode = first(node, "completion_tokens", "output_tokens")
   const cached = first(node, "prompt_tokens_details.cached_tokens", "input_tokens_details.cached_tokens")
   const reasoning = first(node, "completion_tokens_details.reasoning_tokens", "output_tokens_details.reasoning_tokens")
   const cacheCreation = first(
@@ -100,15 +128,37 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
     "prompt_tokens_details.cache_creation_tokens",
     "prompt_tokens_details.cache_write_tokens"
   )
-  const total = int(get(node, "total_tokens"))
+  const inputTokens = int(inputNode)
+  const outputTokens = int(outputNode)
+  const cacheRead = int(cached)
+  const cacheWrite = int(cacheCreation)
+  const reasoningTokens = int(reasoning)
+  const reportedTotal = int(get(node, "total_tokens"))
+  let tokenBreakdown: TokenBreakdown
+  if (USAGE_BUCKET_PATHS.some((path) => get(node, path) !== undefined)) {
+    tokenBreakdown =
+      inputNode !== undefined && outputNode !== undefined
+        ? subsetTokenBreakdown(inputTokens, cacheRead, cacheWrite, outputTokens, reasoningTokens, reportedTotal)
+        : partialSubsetTokenBreakdown(
+            inputTokens,
+            inputNode === undefined ? 0 : cacheRead,
+            inputNode === undefined ? 0 : cacheWrite,
+            outputTokens,
+            outputNode === undefined ? 0 : reasoningTokens,
+            reportedTotal
+          )
+  } else {
+    tokenBreakdown = unclassifiedTokenBreakdown(reportedTotal)
+  }
   return {
-    inputTokens: input,
-    outputTokens: output,
-    reasoningTokens: int(reasoning),
-    cachedTokens: int(cached),
-    cacheReadTokens: int(cached),
-    cacheCreationTokens: int(cacheCreation),
-    totalTokens: total !== 0 ? total : input + output
+    inputTokens,
+    outputTokens,
+    reasoningTokens,
+    cachedTokens: cacheRead,
+    cacheReadTokens: cacheRead,
+    cacheCreationTokens: cacheWrite,
+    totalTokens: reportedTotal !== 0 ? reportedTotal : tokenBreakdown.totalTokens,
+    tokenBreakdown
   }
 }
 
@@ -152,9 +202,19 @@ export const parseOpenAIStreamUsage = (line: string): UsageDetail | undefined =>
   return withTier(parseOpenAIUsageNode(node), tier)
 }
 
-/** Model reported by the upstream (`model`, `response.model`, `interaction.model`), bounded to 256 chars. */
+/**
+ * Model reported by the upstream (`response.model`, `interaction.model`, `model`, Claude `message.model`, Gemini
+ * `modelVersion`), bounded to 256 chars (`extractGenericResponseModelEvent` without the terminal-event tracking).
+ */
 export const responseModelOf = (payload: Json | undefined): string | undefined => {
-  for (const path of ["response.model", "interaction.model", "model"]) {
+  for (const path of [
+    "response.model",
+    "interaction.model",
+    "model",
+    "message.model",
+    "modelVersion",
+    "response.modelVersion"
+  ]) {
     const value = get(payload, path)
     if (typeof value === "string" && value.trim() !== "" && value.trim().length <= 256) return value.trim()
   }

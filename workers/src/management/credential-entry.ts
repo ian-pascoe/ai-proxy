@@ -7,17 +7,17 @@
  * `id_token` is reduced to a few claims), so the result can leave the ControlPlane Durable Object.
  *
  * Differences: only auth files are listed (Go lists config API keys as `runtime_only` only for plugin credentials);
- * `recent_requests` buckets are empty until the usage slice records request history; cooldown reasons are reduced to
+ * `recent_requests` come from the credential's recent-requests ring; cooldown reasons are reduced to
  * the quota reason or the last error class.
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
 import { decodeJwtClaims } from "../credentials/expiry.ts"
+import { type RecentBucket, RECENT_BUCKET_MS, recentRequestsSnapshot } from "../credentials/cooldown/recent-requests.ts"
 import type { Credential, CredentialState } from "../credentials/model.ts"
 import { DEFAULT_WEIGHT } from "../credentials/weight.ts"
 import { authIndexOf } from "./auth-index.ts"
 
-const RECENT_BUCKETS = 20
-const BUCKET_MS = 10 * 60 * 1000
+const BUCKET_MS = RECENT_BUCKET_MS
 
 const iso = (ms: number): string => new Date(ms).toISOString()
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "")
@@ -26,13 +26,15 @@ const pad = (value: number): string => String(value).padStart(2, "0")
 const clock = (ms: number): string => `${pad(new Date(ms).getUTCHours())}:${pad(new Date(ms).getUTCMinutes())}`
 
 /** `RecentRequestsSnapshot`: 20 ten-minute buckets, oldest first, labelled `HH:MM-HH:MM` (UTC). */
-const recentRequests = (now: number): JsonObject[] => {
-  const current = Math.floor(now / BUCKET_MS)
-  return Array.from({ length: RECENT_BUCKETS }, (_, index) => {
-    const start = (current - (RECENT_BUCKETS - 1 - index)) * BUCKET_MS
-    return { time: `${clock(start)}-${clock(start + BUCKET_MS)}`, success: 0, failed: 0 }
-  })
-}
+export const recentRequestBuckets = (
+  ring: ReadonlyArray<RecentBucket> | undefined,
+  now: number
+): Array<{ time: string; success: number; failed: number }> =>
+  recentRequestsSnapshot(ring, now).map((entry) => ({
+    time: `${clock(entry.start)}-${clock(entry.start + BUCKET_MS)}`,
+    success: entry.success,
+    failed: entry.failed
+  }))
 
 /** Codex `id_token` claims the panel shows (plan type and subscription window). */
 const codexClaims = (credential: Credential): JsonObject | undefined => {
@@ -139,7 +141,7 @@ export const buildCredentialEntry = (credential: Credential, state: CredentialSt
     size: new TextEncoder().encode(JSON.stringify(metadata)).length,
     success: state.success,
     failed: state.failed,
-    recent_requests: recentRequests(now),
+    recent_requests: recentRequestBuckets(state.recentRequests, now),
     quota: {
       ...(state.quota.observedAt === undefined ? {} : { observed_at: iso(state.quota.observedAt) }),
       signals: { ...state.quota.signals }

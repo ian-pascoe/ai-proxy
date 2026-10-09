@@ -21,7 +21,9 @@
     "ACCESS_AUD": "",
     "ACCESS_ADMIN_EMAILS": "",
     "ACCESS_ADMIN_SERVICE_TOKENS": "",
-    "ACCESS_DEV_BYPASS": ""
+    "ACCESS_DEV_BYPASS": "",
+    // Days of usage history kept in D1 by the cron retention job (src/usage/retention.ts); 0 keeps everything.
+    "USAGE_RETENTION_DAYS": "30"
   },
 
   "observability": { "enabled": true },
@@ -41,7 +43,9 @@
     {
       "binding": "USAGE",
       "database_name": "cliproxy-usage",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      // `wrangler d1 migrations apply cliproxy-usage`; the schema of the usage records is in src/usage/d1.ts.
+      "migrations_dir": "migrations"
     }
   ],
 
