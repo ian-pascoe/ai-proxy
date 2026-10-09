@@ -4,7 +4,7 @@ import { Effect, Layer } from "effect"
 import type { HttpServerRequest } from "effect/http"
 import { describe, expect, it } from "vitest"
 import { AccessPrincipal } from "../src/access/principal.ts"
-import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts"
+import { antigravityStateFor, resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts"
 import { ExecutionError } from "../src/executor/errors.ts"
 import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts"
 import { ExecutorRegistry } from "../src/executor/registry.ts"
@@ -46,10 +46,19 @@ const reply = {
 const bearer = (call: UpstreamCall): string => (call.headers["authorization"] ?? "").replace("Bearer ", "")
 const hasCredits = (call: UpstreamCall): boolean => JSON.parse(call.body).enabledCreditTypes !== undefined
 
-const run = async (yaml: string, model: string, respond: (call: UpstreamCall) => Response) => {
+const run = async (
+  yaml: string,
+  model: string,
+  respond: (call: UpstreamCall) => Response,
+  options: {
+    names?: ReadonlyArray<string>
+    seed?: (state: ReturnType<typeof antigravityStateFor>) => Promise<void>
+  } = {}
+) => {
   resetMemoryAntigravityState()
+  if (options.seed !== undefined) await options.seed(antigravityStateFor({} as Env))
   const harness = await makePool(yaml)
-  for (const name of ["a", "b"]) {
+  for (const name of options.names ?? ["a", "b"]) {
     harness.store.upsert(`antigravity-${name}.json`, "antigravity", {
       type: "antigravity",
       access_token: `tok-${name}`,
@@ -144,5 +153,31 @@ describe("antigravity credits fallback", () => {
     expect(outcome.result.failure?.status).toBe(429)
     // One credits attempt marks that credential as out of credits; the other credential is tried next, then both are skipped.
     expect(outcome.calls.filter(hasCredits).length).toBeLessThanOrEqual(2)
+  })
+
+  it("walks known-available credentials first, then unknown ones, each sorted by id; known-empty ones are skipped", async () => {
+    const record = (amount: number) => ({ creditAmount: amount, minCreditAmount: 1, paidTierId: "", updatedAt: 1 })
+    const outcome = await run(
+      "oauth:\n  providers:\n    antigravity:\n      antigravity-credits: true\n",
+      "claude-sonnet-4-5",
+      // Only the credits pass of the last credential in the order succeeds; everything else is rate limited.
+      (call) =>
+        hasCredits(call) && bearer(call) === "tok-d"
+          ? sseResponse([`data: ${JSON.stringify(reply)}\n\n`])
+          : jsonResponse(quotaExhausted, { status: 429 }),
+      {
+        names: ["a", "b", "c", "d", "e"],
+        seed: async (state) => {
+          await state.setCredits("antigravity-a.json", record(0)) // known empty: skipped
+          await state.setCredits("antigravity-e.json", record(5)) // known available
+          await state.setCredits("antigravity-c.json", record(9)) // known available
+        }
+      }
+    )
+    expect(outcome.result._tag).toBe("Success")
+    // Order of the credits pass: c, e (known, sorted), then b, d (unknown, sorted); a never runs with credits.
+    expect(outcome.calls.filter(hasCredits).map(bearer)).toEqual(["tok-c", "tok-e", "tok-b", "tok-d"])
+    // The skipped credential is not an attempt: it was only tried in the normal rotation.
+    expect(outcome.calls.filter((call) => !hasCredits(call)).filter((call) => bearer(call) === "tok-a")).toHaveLength(1)
   })
 })

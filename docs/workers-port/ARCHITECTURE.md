@@ -284,12 +284,19 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
 - **Multi-agent v2, orphan delegation, `is-compat`** (slice #26, see "Codex client rewriting and compat variants"): the executor
   optimises collaboration tools/namespace (`optimizeCodexMultiAgentV2RequestForAuth`, restored in stream, non-stream and WebSocket
   events) and compat models use the `claude -> codex` compat transform.
-- **Not ported (follow-ups)**: WebSocket transports (#18), bootstrap buffering, models.json header overrides (hook
-  `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
+- **Stream bootstrap buffering** (`upstream.codex.stream-bootstrap-buffering` / `-timeout`, `bootstrap.ts` + `stream.ts`/`websocket.ts`): frames that
+  carry nothing observable (handshake preamble, keepalives, empty `*.added` frames; a closed allow-list like Go's
+  `isCodexBootstrapBufferableEvent`) are held until the first real event, within 48 upstream lines (WebSocket: messages read), 1 MiB and the
+  optional timeout (Go duration or whole seconds, `0`/`none`/... = unlimited; the clock is the Effect clock on the WebSocket path, the reader's
+  injected `nowMs` on SSE). An overload/rate-limit/capacity rejection inside the HTTP 200 stream (or any upstream `error` frame on the WebSocket)
+  fails the attempt with a 503 before anything reaches the client, so the conductor fails over to the next credential; other terminal
+  failures flush the held handshake and are delivered in-stream; a clean EOF while holding fails the attempt without releasing. `grok-pager` /
+  `grok-shell` clients get `keepalive` events as `: keepalive` SSE comments (`TransformKeepaliveSSELine`).
+- **Not ported (follow-ups)**: models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
 
 - **WebSocket**: `executor/codex/websocket.ts` is the upstream transport (Go `CodexWebsocketsExecutor`), dispatched from
   `executeStream` like Go's `CodexAutoExecutor`; see "Responses WebSocket transports".
-- **Not ported (follow-ups)**: stream bootstrap buffering (`upstream.codex.stream-bootstrap-*`), the Go `resolveCodexModelIsCompat`
+- **Not ported (follow-ups)**: the Go `resolveCodexModelIsCompat`
   config fallback when no resolved model info is bound, models.json header overrides (hook `modelHeaderOverrides` exists),
   OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
   non-`gpt-image` models (ported but not routed).
@@ -328,13 +335,27 @@ WebSocket transports"). Reuses the Codex translators
   retrievable with the creating credential: the handler stores `{authId, routing model}` in KV (`xai/video-binding/<sha256(id)>`,
   TTL `multimedia.video-result-auth-cache-ttl`, default 3 h, KV minimum 60 s) and pins retrievals through `ExecutionInput.pinnedId`
   (`ExecutionOutput.credentialId` reports the serving credential). `/v1/audio/speech` and `/v1/tts` convert to `POST /tts`.
-- **Not ported (follow-ups)**: the Responses WebSocket transport (#18), the `apply_patch` Responses bridge
-  (`NormalizeApplyPatchResponsesRequest`/`ApplyPatchResponsesState`, incl. the folded-dispatcher expansion; custom tools keep
-  the generic `{input}` function bridge), `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+- **apply_patch bridge** (`helps/apply-patch-responses.ts`, `translator/common/apply-patch-responses.ts`; Go
+  `NormalizeApplyPatchResponsesRequest` / `ApplyPatchResponsesBridge` / `ApplyPatchResponsesState`): the winning custom `apply_patch`
+  declaration (also inside namespaces / `additional_tools`), its history items and tool choices become the strict `{"input": ...}`
+  function before the xAI tool normalisation; every upstream event passes `rememberDispatcherEvent` (pre-restoration evidence), the
+  namespace/alias/X Search pipeline and the state's `transform`, which restores `custom_tool_call` items and
+  `response.custom_tool_call_input.*` events, expands folded dispatcher envelopes (`{"name": <child>, "arguments": ...}`, folded above 200
+  tools) into the child call, validates identity (item id, call id, output index) and arguments, resequences `sequence_number` and
+  fails the turn with one local `response.failed` frame plus a sanitised 502 (`Invalid apply_patch tool arguments received from
+  upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non-stream, compact answers (bare response), SSE lines and the
+  WebSocket path (failure frame, upstream socket invalidated, EOF drop with an open patch call) use the same state. Verified against the real
+  Go state over 55 scripted scenarios (`go run ./workers/tools/fixturegen/applypatch`, `test/apply-patch-responses.test.ts`). A non-string
+  patch history input is a request-scoped 400 (Go returns a plain error).
+- **Compaction over the xAI socket**: a `compaction_trigger` on a downstream WebSocket whose credential has `websockets` compacts the socket's
+  recorded transcript over HTTP `/responses/compact` (`executeCompactionTriggerFromWebsocket`; without a transcript the request's own
+  input, else `previous_response_id`; empty context = 400, a malformed compacted answer = 502), replaces the transcript by the compacted
+  item, maps the new response id to "no upstream id" and re-emits the synthetic Responses stream. A frame that needs the upstream socket
+  answers replay-required.
+- **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
 
 - **Multi-agent v2** input rewriting (`rewriteCodexMultiAgentV2Input`, after the stream/model fields are set) and orphan delegation
-  (translation step) are shared with Codex. **Not ported (follow-ups)**: the `apply_patch` Responses bridge,
-  `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+  (translation step) are shared with Codex. **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 ## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
@@ -392,9 +413,8 @@ upgrade request like any other (default-deny prefixes); the principal is capture
 Deviations from Go / not ported: no WebSocket ping keep-alives (`streaming.keepalive-seconds` is ignored: the Workers WebSocket API
 cannot send ping frames); terminal failures close with 1011/1012/1009 instead of dropping the TCP connection; credential pinning only
 covers WebSocket-capable credentials and the decision to pass through is based on the previously pinned credential instead of the global
-credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`),
-stream bootstrap buffering, non-stream execution over WebSocket, `compaction_trigger` over the xAI socket (runs through HTTP compaction
-with the input the client sent) and the xAI apply_patch bridge. The multi-agent v2 tool preparation and orphan delegation rewrite run on
+credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`) and
+non-stream execution over WebSocket. The multi-agent v2 tool preparation and orphan delegation rewrite run on
 each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
@@ -525,7 +545,21 @@ Deviations from Go (all deliberate, documented in code headers):
   response translator (`claude/openai/responses/response.ts`) decodes it into `custom_tool_call` events
   (`ApplyPatchCallState`, identity/snapshot validation, `response.failed` + 502 on malformed input). Go's log-only invariant
   diagnostics are omitted.
-- `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
+- **Responses compaction capsules** (`helps/compaction.ts`, `claude/compaction.ts`; Go `helps/antigravity_compaction.go`,
+  `claude_executor_compaction.go`): `responses/compact` and streaming `compaction_trigger` run a non-stream summary turn (Responses payload
+  -> summary prompt appended, `tools`/`stream`/... removed; Claude keeps the tool definitions for `tool_use` history and sets
+  `tool_choice: none`, without definitions the tool blocks are flattened to text after the CCH step and before the payload rules) and seal
+  the answer into `cpa-ag-compact-v1:` + base64url(`nonce(12) || AES-256-GCM(SHA-256("CLIProxyAPI"), {"summary","model","created_at"})`)
+  with WebCrypto. The key is the fixed Go secret on purpose: capsules stay interchangeable with the Go server and between deployments (it
+  is obfuscation, not a secret). Incoming `compaction` items are expanded into developer messages before translation; Claude drops
+  foreign (non-CPA) items, an unreadable capsule is a request-scoped 400. Usage follows the Responses accounting (input = input + cache
+  creation + cache read). Verified against the real Go executors (`go run ./workers/tools/fixturegen/compaction`,
+  `test/compaction-fixtures.test.ts`: upstream request bodies, outputs, unsealed summaries, byte-identical sealing with a fixed nonce).
+  The Claude and Antigravity executors also add the `output_tokens_details`/`input_tokens_details` of Responses answers
+  (`EnsureResponsesUsageDetails`) that were missing on their non-stream/stream paths.
+- `responses/compact` stays 501 where Go answers 501: Gemini/Vertex (`gemini_executor.go`, `gemini_vertex_executor.go`), Meta and Kimi.
+  The OpenAI-compatibility executor posts the Responses-format request to `{base-url}/responses/compact` (no chat shaping, `stream`
+  removed, reasoning cleartext cleared).
 
 ## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
 
@@ -735,7 +769,8 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
 Deviations from Go: Devin's per-session turn counter is an atomic `incr` in the `SessionState` DO (TTL 24 h, per caller scope, not an
 LRU of 5000); `fetch` always sends a
 User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
-error. Not ported: the apply_patch Responses bridge for Kimi `/responses`/Meta (the translated Kimi chat path has it), Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
+error. Kimi `/responses` and Meta bridge the Codex `apply_patch` tool through the strict function (see the xAI section for the shared
+state). Not ported: the Devin executor-level apply_patch EOF guard, Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs.
 
 ## SessionState Durable Object (`src/session-state/`)
@@ -879,8 +914,10 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   again with `PickRequest.ignoreCooldown` (cooling credentials stay selectable), skips credentials whose stored balance is known to be empty and
   asks the executor for `enabledCreditTypes: ["GOOGLE_ONE_AI"]` through `ExecutorOptions.metadata.antigravityCredits`
   (`attemptOptions`). `INSUFFICIENT_G1_CREDITS_BALANCE` marks the credential out of credits (KV `ag:credits:<id>`, 30 min); the balance probe
-  (`loadCodeAssist`, prod endpoint, 10 min lock, `waitUntil`) refreshes it. Deviation: candidates are not split into known-available/unknown
-  groups (the picker order is used and known-unavailable ones are skipped).
+  (`loadCodeAssist`, prod endpoint, 10 min lock, `waitUntil`) refreshes it. The round walks every Antigravity credential once in the Go order
+  (`findAllAntigravityCreditsCandidateAuths`): known-available balances first, then unknown ones (optimistic), each group sorted by credential id;
+  known-empty credentials are skipped without an attempt (the conductor collects them with repeated `pick`s and releases the skipped leases
+  as connection-lifecycle failures).
 - **Cron** (`scheduled.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
   through a 60 s isolate cache) and `antigravity-models` probes `fetchAvailableModels` for every enabled credential (first endpoint only, global
   user agent, failures keep the last good list and back off 2-30 min with jitter) into KV `ag:models:<id>`. The registry snapshot attaches
@@ -891,8 +928,15 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
 The **reasoning-replay ledger** (Gemini-family models) and the Interactions **continuation sessions** run on the `SessionState` DO, see
 _SessionState Durable Object_.
 
-Deviations from Go / not ported: the **compaction capsule**
-(`/responses/compact` answers 501); web-search grounding **redirect URL resolution**; per-credential HTTP pools and proxies; a bare `[DONE]` line yields nothing in the
+- **Compaction**: `responses/compact` (non-stream) and `compaction_trigger` run the summary turn through the normal Gemini/Claude path and
+  seal a capsule (see the Claude section); sealed items in any Responses request are expanded first. Streaming `/responses/compact` is a 400.
+- **Grounding redirects** (`grounding.ts`): for Claude clients with typed `web_search_*` tools and Responses clients with a web search tool
+  whose translated request holds `googleSearch`, `groundingChunks[].web.uri` values of
+  `https://vertexaisearch.cloud.google.com/grounding-api-redirect/*` are resolved with `HEAD` (`redirect: "manual"`, the 3xx `Location` must be
+  https) before translation, in non-stream, aggregated and streamed payloads; any failure keeps the redirect URL. Verified by
+  `test/antigravity-grounding.test.ts` (Go `antigravity_grounding_urls_test.go` scenario plus executor wiring).
+
+Deviations from Go / not ported: per-credential HTTP pools and proxies; a bare `[DONE]` line yields nothing in the
 Interactions response translator (as in Go), so the Interactions stream ends with `interaction.completed` only; short-cooldown
 state and signature persistence are KV (eventually consistent), not the Go home KV.
 

@@ -9,10 +9,16 @@
  *
  * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
  *
- * Multi-agent v2 input rewriting is shared with Codex. Not ported (documented follow-ups): the apply_patch Responses bridge.
+ * Multi-agent v2 input rewriting is shared with Codex. The Codex `apply_patch` custom tool is bridged through the strict
+ * `{"input": ...}` function (`helps/apply-patch-responses.ts`), including the folded namespace dispatcher.
  * `CountTokens` counts the prepared Responses body locally with `o200k_base`. 401 refresh/retry is done by the
  * conductor (`withCredentialRefresh`), not by the executor.
  */
+import {
+  APPLY_PATCH_UPSTREAM_ERROR_MESSAGE,
+  ApplyPatchResponsesState,
+  normalizeApplyPatchResponses
+} from "../helps/apply-patch-responses.ts"
 import { rewriteCodexMultiAgentV2Input } from "../helps/codex-multi-agent-v2.ts"
 import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
@@ -44,7 +50,7 @@ import {
   responseFormatOf,
   type StreamResult
 } from "../types.ts"
-import { buildCompactionTriggerStreamChunks } from "./compact.ts"
+import { buildCompactionTriggerStreamChunks, compactionOutputItem, compactionResponseId } from "./compact.ts"
 import { joinUrl, XAI_PROVIDER, xaiChatBaseUrl, xaiCompactBaseUrl } from "./credentials.ts"
 import { xaiStatusError } from "./errors.ts"
 import { buildXaiChatHeaders, buildXaiHeaders } from "./headers.ts"
@@ -105,6 +111,7 @@ import {
 } from "./tools.ts"
 import { sendUpstream, transportError } from "./transport.ts"
 import { currentXaiClientVersion } from "./version.ts"
+import { XaiRequestIdMapper, xaiIdStates } from "./websocket-ids.ts"
 import { makeXaiWebsocketStream } from "./websocket.ts"
 
 export interface XaiExecutorOptions {
@@ -125,6 +132,8 @@ export interface PreparedRequest {
   readonly original: Json
   readonly originalTranslated: Json
   readonly pipeline: EventPipeline
+  /** Request-local apply_patch bridge (`xaiPreparedRequest.applyPatch`). */
+  readonly applyPatch: ApplyPatchResponsesState
   readonly sessionId: string
   readonly replayScope: XaiReplayScope
 }
@@ -173,6 +182,9 @@ const responseContext = (prepared: PreparedRequest, request: ExecutorRequest): R
 })
 
 const failedTranslation = () => new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
+
+/** The sanitised gateway error of a failed apply_patch bridge (never carries upstream JSON or patch text). */
+const applyPatchGatewayError = () => new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
 
 const finalizePrepared = (
   context: ExecutionContext,
@@ -268,11 +280,22 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       body = del(body, field)
     }
     body = rewriteCodexMultiAgentV2Input(options.headers, body, context.config)
+    const applyPatch = new ApplyPatchResponsesState(from, original, originalTranslated)
+    try {
+      body = normalizeApplyPatchResponses(body, original)
+    } catch (error) {
+      return yield* new ExecutionError({
+        status: 400,
+        message: error instanceof Error ? error.message : String(error),
+        requestScoped: true
+      })
+    }
 
     const willInjectXSearch = context.config.upstream.xai["inject-x-search"]
     const shouldFold =
       totalFlattenedToolsCount(body, willInjectXSearch, toolChoiceRequiresHostedToolOnly(body)) > XAI_MAX_TOOLS
     const namespaceTools = collectNamespaceToolRefs(body, shouldFold)
+    for (const [name, ref] of namespaceTools) if (ref.isDispatcher) applyPatch.addDispatcher(name, ref.namespace)
     // Collected before normalisation flattens the namespace wrappers so keys match the restored response shape.
     const clientDeclaredTools = collectClientDeclaredToolKeys(body)
     body = normalizeTools(body, shouldFold)
@@ -333,6 +356,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
         filterInternalXSearch: requestHasNativeXSearch(body),
         clientDeclaredTools
       }),
+      applyPatch,
       sessionId,
       replayScope
     } satisfies PreparedRequest
@@ -391,29 +415,36 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       if (!line.startsWith("data:")) continue
       const parsed = tryParseJson(line.slice("data:".length).trim())
       if (parsed === undefined) continue
-      const event = prepared.pipeline.process(normalizeReasoningSummaryEvent(parsed))
-      if (event === undefined) continue
-      context.usage.observeResponseModel(responseModelOf(event))
-      const type = asString(get(event, "type"))
-      if (type === "response.output_item.done") {
-        collector.collect(event)
-        continue
+      const normalized = normalizeReasoningSummaryEvent(parsed)
+      prepared.applyPatch.rememberDispatcherEvent(normalized)
+      const restored = prepared.pipeline.process(normalized)
+      if (restored === undefined) continue
+      const bridged = prepared.applyPatch.transform(restored)
+      if (bridged.error !== undefined) return yield* applyPatchGatewayError()
+      for (const event of bridged.events) {
+        context.usage.observeResponseModel(responseModelOf(event))
+        const type = asString(get(event, "type"))
+        if (type === "response.output_item.done") {
+          collector.collect(event)
+          continue
+        }
+        if ((type !== "response.completed" && type !== "response.incomplete") || !isJsonObject(event)) continue
+        const completed = normalizeReasoningSummaryEvent(patchCompletedOutput(event, collector))
+        if (type === "response.completed") yield* cacheReplayFromCompleted(replayStore, prepared.replayScope, completed)
+        let out = registry.translateNonStream(
+          prepared.responseFormat,
+          prepared.providerFormat,
+          responseContext(prepared, request),
+          JSON.stringify(completed)
+        )
+        if (out === undefined || out === "") return yield* failedTranslation()
+        const detail = parseCodexUsage(event)
+        if (detail !== undefined) context.usage.publish(detail)
+        if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+        return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
       }
-      if ((type !== "response.completed" && type !== "response.incomplete") || !isJsonObject(event)) continue
-      const completed = normalizeReasoningSummaryEvent(patchCompletedOutput(event, collector))
-      if (type === "response.completed") yield* cacheReplayFromCompleted(replayStore, prepared.replayScope, completed)
-      let out = registry.translateNonStream(
-        prepared.responseFormat,
-        prepared.providerFormat,
-        responseContext(prepared, request),
-        JSON.stringify(completed)
-      )
-      if (out === undefined || out === "") return yield* failedTranslation()
-      const detail = parseCodexUsage(event)
-      if (detail !== undefined) context.usage.publish(detail)
-      if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
-      return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
+    if (prepared.applyPatch.finish() !== undefined) return yield* applyPatchGatewayError()
     const error = incompleteStreamError()
     context.usage.fail(error.status, error.message)
     return yield* error
@@ -436,7 +467,8 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       providerFormat: prepared.providerFormat,
       context: responseContext(prepared, request),
       usage: context.usage,
-      pipeline: prepared.pipeline
+      pipeline: prepared.pipeline,
+      applyPatch: prepared.applyPatch
     })
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
@@ -452,7 +484,11 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
           }),
         { onHalt: (state) => [state.end()] }
       ),
-      Stream.flatMap((step) => Stream.fromIterable(step.chunks.filter((chunk) => chunk.length > 0))),
+      Stream.takeUntil((step) => step.error !== undefined),
+      Stream.flatMap((step) => {
+        const emitted = Stream.fromIterable(step.chunks.filter((chunk) => chunk.length > 0))
+        return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
+      }),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
@@ -507,11 +543,22 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
   ) {
     const { prepared, text, headers } = yield* compactRequest(context, request, options)
     const usage = parseOpenAIUsage(text)
+    // Compact answers pass through the apply_patch bridge as a bare response (`Bridge.TransformNonStream`).
+    let bridgedText = text
+    if (prepared.applyPatch.active) {
+      const parsed = tryParseJson(text)
+      const bridged = parsed === undefined ? undefined : prepared.applyPatch.bridge.transformNonStream(parsed)
+      if (bridged !== undefined && "error" in bridged) {
+        context.usage.publish(usage)
+        return yield* applyPatchGatewayError()
+      }
+      if (bridged !== undefined) bridgedText = JSON.stringify(bridged.body)
+    }
     let out = registry.translateNonStream(
       prepared.responseFormat,
       prepared.providerFormat,
       responseContext(prepared, request),
-      text
+      bridgedText
     )
     if (out === undefined || out === "") {
       context.usage.publish(usage)
@@ -536,6 +583,104 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       baseModel: prepared.baseModel,
       requestModel: asString(get(prepared.original, "model")),
       compact: tryParseJson(text) ?? {},
+      nowMs
+    })
+    const out = new Headers(headers)
+    out.set("content-type", "text/event-stream")
+    return { headers: out, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
+  })
+
+  /**
+   * `executeCompactionTriggerFromWebsocketContext`: a `compaction_trigger` on a downstream WebSocket whose credential
+   * uses the upstream socket compacts the transcript recorded for that socket over HTTP `/responses/compact` and
+   * re-emits the compacted state as a synthetic Responses stream. The transcript is replaced by the compacted item.
+   */
+  const executeCompactionTriggerFromWebsocket = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const sessionId = options.metadata.websocket?.sessionId
+    const state = sessionId === undefined ? undefined : xaiIdStates.get(sessionId)
+    if (state === undefined) {
+      return yield* new ExecutionError({
+        status: 400,
+        message: "xai websocket compaction context is unavailable",
+        requestScoped: true
+      })
+    }
+    const mapper = new XaiRequestIdMapper(state, request.payload)
+    const transcript = state.snapshotTranscriptInput()
+    const withInput = (payload: Json, input: Json[]): Json => {
+      const out = isJsonObject(payload) ? cloneJson(payload) : {}
+      return del(set(out, "input", input), "previous_response_id")
+    }
+    let compactPayload: Json
+    if (transcript.length > 0) {
+      compactPayload = withInput(request.payload, transcript)
+    } else {
+      const filtered = removeInputItemsByType(cloneJson(request.payload), "compaction_trigger")
+      const input = get(filtered, "input")
+      if (Array.isArray(input) && input.length > 0) {
+        compactPayload = withInput(filtered, input)
+      } else {
+        const previous =
+          mapper.upstreamPreviousId !== ""
+            ? mapper.upstreamPreviousId
+            : asString(get(request.payload, "previous_response_id")).trim()
+        if (previous === "") {
+          return yield* new ExecutionError({
+            status: 400,
+            message: "xai websocket compaction context is empty",
+            requestScoped: true
+          })
+        }
+        compactPayload = set(
+          removeInputItemsByType(cloneJson(request.payload), "compaction_trigger"),
+          "previous_response_id",
+          previous
+        )
+      }
+    }
+    const { prepared, text, headers } = yield* compactRequest(context, { ...request, payload: compactPayload }, options)
+    const missing = () =>
+      new ExecutionError({
+        status: 502,
+        message: "xai websocket compaction response is missing compacted state"
+      })
+    const compact = tryParseJson(text)
+    if (compact === undefined) {
+      const error = new ExecutionError({ status: 502, message: "xai websocket compaction returned invalid JSON" })
+      context.usage.fail(error.status, error.message)
+      return yield* error
+    }
+    const first = get(compact, "output.0")
+    const output = get(compact, "output")
+    const valid =
+      typeof get(compact, "id") === "string" &&
+      asString(get(compact, "id")).trim() !== "" &&
+      Array.isArray(output) &&
+      output.length > 0 &&
+      isJsonObject(first) &&
+      typeof first["type"] === "string" &&
+      first["type"].trim() === "compaction" &&
+      typeof first["encrypted_content"] === "string" &&
+      first["encrypted_content"].trim() !== ""
+    if (!valid) {
+      const error = missing()
+      context.usage.fail(error.status, error.message)
+      return yield* error
+    }
+    context.usage.publish(parseOpenAIUsage(text))
+    const nowMs = yield* Clock.currentTimeMillis
+    const responseId = compactionResponseId(compact, nowMs)
+    state.replaceTranscriptWithItems(compactionOutputItem(compact, responseId))
+    state.mapDownstreamToUpstream(responseId, "")
+    const chunks = buildCompactionTriggerStreamChunks({
+      body: prepared.body,
+      baseModel: prepared.baseModel,
+      requestModel: asString(get(prepared.original, "model")),
+      compact,
       nowMs
     })
     const out = new Headers(headers)
@@ -579,6 +724,10 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
     const websocket = options.metadata.websocket
     if (inputHasItemType(request.payload, "compaction_trigger")) {
       if (websocket?.requireUpstream === true) return Effect.fail(replayRequiredError())
+      // XAIAutoExecutor: only a credential that uses the upstream socket compacts the socket's recorded transcript.
+      if (websocket !== undefined && codexWebsocketsEnabled(context.credential)) {
+        return executeCompactionTriggerFromWebsocket(context, request, options)
+      }
       return executeCompactionTriggerStream(context, request, options)
     }
     if (websocket !== undefined) {

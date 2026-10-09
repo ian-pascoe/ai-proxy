@@ -9,7 +9,7 @@
  * The WebSocket transport (downstream WebSocket + `websockets` credential) lives in `websocket.ts` and shares `prepare`.
  *
  * Multi-agent v2 (`helps/codex-multi-agent-v2.ts`) and `is-compat` models (`helps/translate.ts`) are handled in `prepare`.
- * Not ported (documented follow-ups): bootstrap buffering and retries. `CountTokens` counts locally
+ * Stream bootstrap buffering is `stream.ts` + `bootstrap.ts`. `CountTokens` counts locally
  * (`helps/token-count.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
@@ -91,6 +91,7 @@ import {
   defaultReplayStore,
   replayScopeFromRequest
 } from "./replay.ts"
+import { bootstrapTimeoutMs, isGrokClientHeaders } from "./bootstrap.ts"
 import { CodexStreamReader } from "./stream.ts"
 import { codexWebsocketsEnabled, makeCodexWebsocketStream } from "./websocket.ts"
 
@@ -491,7 +492,11 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       modelLevelCooling: context.config.upstream.codex["model-level-cooling"],
       nowMs: () => Date.now(),
       replayScope: prepared.replayScope,
-      multiAgentV2: prepared.multiAgentV2
+      multiAgentV2: prepared.multiAgentV2,
+      ...(context.config.upstream.codex["stream-bootstrap-buffering"]
+        ? { bootstrap: { timeoutMs: bootstrapTimeoutMs(context.config.upstream.codex["stream-bootstrap-timeout"]) } }
+        : {}),
+      grokClient: isGrokClientHeaders(options.headers)
     })
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),

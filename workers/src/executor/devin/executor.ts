@@ -8,7 +8,7 @@
  * fields, the last mutation before framing) and the response frames are assembled into Interactions events, which the
  * translator registry turns into the client format.
  *
- * Not ported: the apply_patch bridge, request/response debug logs, the
+ * Not ported: the executor-level apply_patch EOF guard (the translators carry the bridge), request/response debug logs, the
  * metadata/quota refresh (`GetUserStatus`, cron follow-up) and outbound proxies. `fetch` always sends a User-Agent
  * (native devin-cli omits it); the executor sets it empty and relies on the runtime to drop it.
  */

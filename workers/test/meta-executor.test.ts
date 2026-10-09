@@ -16,6 +16,12 @@ import { sanitizeMetaWebSearchTools } from "../src/executor/meta/request.ts"
 import type { Json } from "../src/json/index.ts"
 import { collectStream, credential, execute, harness, json, options, runFail } from "./support/executor-run.ts"
 
+/** Loosely typed JSON object of an event/item/tool in the assertions below. */
+interface Item {
+  [key: string]: unknown
+  parameters?: { required?: string[] }
+}
+
 const executor = makeMetaExecutor()
 const metaKey = () =>
   credential("meta", { kind: "apikey", attributes: { api_key: "meta-key-1", base_url: "https://meta.test/v1" } })
@@ -363,5 +369,128 @@ describe("Meta executor", () => {
       response: { usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } }
     })
     expect(h.calls).toHaveLength(0)
+  })
+})
+
+describe("apply_patch bridge", () => {
+  const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+  const ARGS = JSON.stringify({ input: PATCH })
+  const call = (args: string) => ({
+    id: "fc_1",
+    type: "function_call",
+    call_id: "call_1",
+    name: "apply_patch",
+    arguments: args,
+    status: "completed"
+  })
+  const patchRequest = () =>
+    responsesRequest({
+      tools: [{ type: "custom", name: "apply_patch", description: "Patch files" }],
+      input: [
+        { type: "message", role: "user", content: [{ type: "input_text", text: "go" }] },
+        { type: "custom_tool_call", call_id: "c0", name: "apply_patch", input: PATCH },
+        { type: "custom_tool_call_output", call_id: "c0", output: "ok" }
+      ]
+    })
+
+  it("sends the strict function and restores custom_tool_call output (non-stream)", async () => {
+    const item = call(ARGS)
+    const h = await harness(metaKey(), () =>
+      sse([{ type: "response.output_item.done", output_index: 0, item }, completed([item])])
+    )
+    const response = await execute(
+      executor,
+      h,
+      { model: "muse-spark", payload: json(patchRequest()) },
+      responsesOptions()
+    )
+    const upstream = JSON.parse(h.calls[0]?.text ?? "{}") as {
+      tools: Array<Item>
+      input: Array<Item>
+    }
+    expect(upstream.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
+    expect(upstream.tools[0]?.parameters?.required).toEqual(["input"])
+    expect(upstream.input[1]).toMatchObject({ type: "function_call", arguments: ARGS })
+    expect(upstream.input[2]).toMatchObject({ type: "function_call_output" })
+    const body = JSON.parse(response.payload) as { output: Array<Item> }
+    expect(body.output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
+  })
+
+  it("restores a plain JSON response through the non-stream bridge", async () => {
+    const item = call(ARGS)
+    const h = await harness(
+      metaKey(),
+      () =>
+        new Response(JSON.stringify({ id: "resp_1", object: "response", status: "completed", output: [item] }), {
+          status: 200
+        })
+    )
+    const response = await execute(
+      executor,
+      h,
+      { model: "muse-spark", payload: json(patchRequest()) },
+      responsesOptions()
+    )
+    expect((JSON.parse(response.payload) as { output: Array<Item> }).output[0]).toMatchObject({
+      type: "custom_tool_call",
+      input: PATCH
+    })
+  })
+
+  it("streams custom tool input events and fails on malformed arguments without leaking them", async () => {
+    const good = call(ARGS)
+    const h = await harness(
+      metaKey(),
+      () =>
+        sse([
+          { type: "response.output_item.added", output_index: 0, item: { ...good, arguments: "" } },
+          { type: "response.function_call_arguments.delta", item_id: "fc_1", output_index: 0, delta: ARGS },
+          { type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 0, arguments: ARGS },
+          { type: "response.output_item.done", output_index: 0, item: good },
+          completed([good])
+        ]),
+      undefined,
+      true
+    )
+    const collected = await collectStream(
+      executor,
+      h,
+      { model: "muse-spark", payload: json(patchRequest()) },
+      responsesOptions(true)
+    )
+    const text = collected.chunks.join("")
+    expect(collected.error).toBeUndefined()
+    expect(text).toContain("response.custom_tool_call_input.delta")
+    expect(text).not.toContain("response.function_call_arguments.delta")
+
+    const bad = call('{"nope":"secret text"}')
+    const failing = await harness(
+      metaKey(),
+      () => sse([{ type: "response.output_item.done", output_index: 0, item: bad }, completed([bad])]),
+      undefined,
+      true
+    )
+    const failed = await collectStream(
+      executor,
+      failing,
+      { model: "muse-spark", payload: json(patchRequest()) },
+      responsesOptions(true)
+    )
+    expect(failed.error?.status).toBe(502)
+    expect(failed.chunks.join("")).not.toContain("secret text")
+    expect(failed.chunks.join("")).toContain("invalid_tool_arguments")
+  })
+
+  it("fails a non-stream call whose arguments are malformed with a sanitised 502", async () => {
+    const bad = call('{"nope":"secret text"}')
+    const h = await harness(metaKey(), () =>
+      sse([{ type: "response.output_item.done", output_index: 0, item: bad }, completed([bad])])
+    )
+    const error = await runFail(
+      executor.execute(h.context, { model: "muse-spark", payload: json(patchRequest()) }, responsesOptions()),
+      h.layers
+    )
+    expect(error.status).toBe(502)
+    expect(error.message).not.toContain("secret text")
   })
 })

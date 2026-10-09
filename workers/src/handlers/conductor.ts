@@ -276,11 +276,12 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         return attempt
       })
 
-    /** `tryAntigravityCreditsExecute` ordering rule: credentials with a known empty balance are skipped (unknown = optimistic). */
-    const creditsCandidateAvailable = (credentialId: string) =>
+    /** Stored balance of a credential: `undefined` = unknown, otherwise whether it can pay (`creditsAvailable`). */
+    const creditsBalance = (credentialId: string) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv
-        return creditsAvailable(yield* Effect.promise(() => antigravityStateFor(env).credits(credentialId)))
+        const record = yield* Effect.promise(() => antigravityStateFor(env).credits(credentialId))
+        return record === undefined ? undefined : creditsAvailable(record)
       })
 
     /** One retry round: pick credentials until success, a stop condition, or nothing left. */
@@ -303,20 +304,14 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         /** `preferredExecutionAttemptError`: the last error that actually reached an upstream wins. */
         const preferred = (fallback: ExecutionError): ExecutionError => upstreamError ?? fallback
 
-        while (true) {
-          if (settings.maxRetryCredentials > 0 && attempted.length >= settings.maxRetryCredentials) {
-            return failed(lastError === undefined ? authNotFound() : preferred(lastError), false)
-          }
-          if (upstreamAttempts >= MAX_UPSTREAM_ATTEMPTS) {
-            return failed(lastError === undefined ? authNotFound() : preferred(lastError), true)
-          }
-          const pick = yield* Effect.result(
+        const pickNext = (excludedIds: ReadonlyArray<string>) =>
+          Effect.result(
             picker.pick({
               providers: credits ? ["antigravity"] : prepared.providers,
               model: prepared.routeModel,
               ...(credits ? { ignoreCooldown: true } : {}),
               callerScope: prepared.callerScope,
-              excludedIds: tried,
+              excludedIds,
               retryRound: round,
               requestRetry: settings.requestRetry,
               ...(prepared.session === undefined ? {} : { session: prepared.session }),
@@ -326,6 +321,54 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               ...(prepared.selectionModel === undefined ? {} : { selectionModel: prepared.selectionModel })
             })
           )
+
+        /**
+         * `findAllAntigravityCreditsCandidateAuths`: the credits round walks every Antigravity credential once, in a
+         * fixed order: credentials whose stored balance can pay first, then those with an unknown balance (optimistic),
+         * each group sorted by id. Credentials known to be out of credits are not attempts and are never penalised.
+         */
+        let creditsQueue: Array<PickResult> | undefined
+        let creditsFailure: ExecutionError | undefined
+        const nextCreditsPick = Effect.gen(function* () {
+          if (creditsQueue === undefined) {
+            const known: Array<PickResult> = []
+            const unknown: Array<PickResult> = []
+            const excluded: string[] = []
+            while (true) {
+              const candidate = yield* pickNext(excluded)
+              if (candidate._tag === "Failure") {
+                creditsFailure = candidate.failure
+                break
+              }
+              excluded.push(candidate.success.credential.id)
+              const available = yield* creditsBalance(candidate.success.credential.id)
+              if (available === undefined) unknown.push(candidate.success)
+              else if (available) known.push(candidate.success)
+              else {
+                yield* picker.report(
+                  candidate.success.lease,
+                  failureReport(lifecycleError(), { provider: candidate.success.credential.provider })
+                )
+              }
+            }
+            const byId = (a: PickResult, b: PickResult) =>
+              a.credential.id < b.credential.id ? -1 : a.credential.id > b.credential.id ? 1 : 0
+            creditsQueue = [...known.sort(byId), ...unknown.sort(byId)]
+          }
+          const next = creditsQueue.shift()
+          return next === undefined
+            ? ({ _tag: "Failure", failure: creditsFailure ?? authNotFound() } as const)
+            : ({ _tag: "Success", success: next } as const)
+        })
+
+        while (true) {
+          if (settings.maxRetryCredentials > 0 && attempted.length >= settings.maxRetryCredentials) {
+            return failed(lastError === undefined ? authNotFound() : preferred(lastError), false)
+          }
+          if (upstreamAttempts >= MAX_UPSTREAM_ATTEMPTS) {
+            return failed(lastError === undefined ? authNotFound() : preferred(lastError), true)
+          }
+          const pick = yield* credits ? nextCreditsPick : pickNext(tried)
           if (pick._tag === "Failure") {
             // Without an earlier upstream error the selection failure itself is the answer.
             return failed(lastError === undefined ? pick.failure : preferred(lastError), false)
@@ -344,14 +387,6 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           }
           const models = picked.route.upstreamModels
           if (models.length === 0) continue
-          if (credits && !(yield* creditsCandidateAvailable(picked.credential.id))) {
-            // Known to be out of credits: not an upstream attempt, never penalised.
-            yield* picker.report(
-              picked.lease,
-              failureReport(lifecycleError(), { provider: picked.credential.provider })
-            )
-            continue
-          }
           attempted.push(picked.credential.id)
 
           let credentialError: ExecutionError | undefined

@@ -6,7 +6,8 @@
  * The upstream always streams (non-stream callers get the aggregated terminal event). The lazy DCA -> API-key mint is
  * done by the conductor through `ControlPlane.ensureFresh` before the attempt (`withCredentialRefresh`).
  *
- * `CountTokens` counts the prepared body locally with `o200k_base`. Not ported: the apply_patch bridge, outbound proxies.
+ * `CountTokens` counts the prepared body locally with `o200k_base`. The apply_patch Responses bridge wraps the event
+ * flow (`helps/apply-patch-responses.ts`). Not ported: outbound proxies.
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http"
@@ -23,6 +24,7 @@ import {
   patchCodexCompletedOutput
 } from "../codex/output.ts"
 import { ExecutionError } from "../errors.ts"
+import { APPLY_PATCH_UPSTREAM_ERROR_MESSAGE } from "../helps/apply-patch-responses.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import type { CredentialSnapshot } from "../picker.ts"
@@ -39,6 +41,11 @@ import { metaStreamEventError, wrapMetaUpstreamError } from "./errors.ts"
 import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts"
 import { getCodec } from "../../tokenizer/index.ts"
 import { type MetaPrepared, prepareMetaRequest } from "./request.ts"
+
+interface StepResult {
+  readonly chunks: ReadonlyArray<string>
+  readonly error?: ExecutionError
+}
 
 export const META_PROVIDER = "meta"
 const STREAM_STALL = "meta stream error: stream disconnected before response.completed or response.incomplete"
@@ -150,31 +157,49 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     context.usage.observeResponseModel(responseModelOf(tryParseJson(data)))
     const collector = new OutputItemCollector()
     const nowMs = yield* Clock.currentTimeMillis
+    const gatewayError = () => new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
     let completed: JsonObject | undefined
     for (const line of data.split("\n")) {
       if (!line.startsWith("data:")) continue
       const payload = line.slice(5).trim()
-      const event = tryParseJson(payload)
-      const failure = metaStreamEventError(event, payload, nowMs)
+      const parsed = tryParseJson(payload)
+      const failure = metaStreamEventError(parsed, payload, nowMs)
       if (failure !== undefined) {
         context.usage.fail(failure.status, failure.message)
         return yield* failure
       }
-      const type = asString(get(event, "type"))
-      if (type === "response.output_item.done") collector.collect(event)
-      else if ((type === "response.completed" || type === "response.incomplete") && isJsonObject(event)) {
-        completed = event
-        break
+      if (parsed === undefined) continue
+      const bridged = prepared.applyPatch.transform(parsed)
+      if (bridged.error !== undefined) return yield* gatewayError()
+      for (const event of bridged.events) {
+        const type = asString(get(event, "type"))
+        if (type === "response.output_item.done") collector.collect(event)
+        else if ((type === "response.completed" || type === "response.incomplete") && isJsonObject(event)) {
+          completed = event
+          break
+        }
       }
+      if (completed !== undefined) break
     }
-    completed ??= asCompletedEvent(data)
+    let event: JsonObject
     if (completed === undefined) {
-      const error = new ExecutionError({ status: 408, message: STREAM_STALL })
-      context.usage.fail(error.status, error.message)
-      return yield* error
+      const fallback = asCompletedEvent(data)
+      if (fallback === undefined) {
+        // `Finish`: an unvalidated apply_patch call is a gateway failure before the stall error.
+        if (prepared.applyPatch.finish() !== undefined) return yield* gatewayError()
+        const error = new ExecutionError({ status: 408, message: STREAM_STALL })
+        context.usage.fail(error.status, error.message)
+        return yield* error
+      }
+      event = cloneJson(fallback)
+      patchCodexCompletedOutput(event, collector)
+      const bridged = prepared.applyPatch.bridge.transformNonStream(event)
+      if ("error" in bridged) return yield* gatewayError()
+      event = bridged.body as JsonObject
+    } else {
+      event = cloneJson(completed)
+      if (isJsonObject(event)) patchCodexCompletedOutput(event, collector)
     }
-    const event = cloneJson(completed)
-    if (isJsonObject(event)) patchCodexCompletedOutput(event, collector)
     let out = registry.translateNonStream(
       prepared.responseFormat,
       Formats.Codex,
@@ -198,17 +223,27 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     const { response, prepared } = yield* send(context, request, options)
     const collector = new OutputItemCollector()
     const state = responseContext(prepared, request, options)
+    const gatewayError = () => new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
     const translate = (line: string): string[] => {
       const chunks = [...registry.translateStream(prepared.responseFormat, Formats.Codex, state, line)]
       return prepared.responseFormat === Formats.OpenAIResponse
         ? chunks.map((chunk) => ensureResponsesUsageDetails(chunk))
         : chunks
     }
-    const chunks = splitLines(response.stream).pipe(
+    /** `emitTranslatedLine`: the apply_patch bridge first, then the translator; a retained failure ends the stream. */
+    const emit = (line: string): StepResult => {
+      const bridged = prepared.applyPatch.stream(line)
+      const chunks = bridged.lines.flatMap(translate)
+      const failed = bridged.error !== undefined || state.state.toolInputError !== undefined
+      return { chunks, ...(failed ? { error: gatewayError() } : {}) }
+    }
+    let stopped = false
+    const lines = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.mapEffect((line) =>
         Effect.gen(function* () {
-          if (!line.startsWith("data:")) return translate(line)
+          if (stopped) return { chunks: [] } as StepResult
+          if (!line.startsWith("data:")) return emit(line)
           const payload = line.slice(5).trim()
           const event = tryParseJson(payload)
           context.usage.observeResponseModel(responseModelOf(event))
@@ -224,13 +259,36 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
               const detail = parseCodexUsage(event)
               if (detail !== undefined) context.usage.publish(detail)
               patchCodexCompletedOutput(event, collector)
-              return translate(`data: ${JSON.stringify(event)}`)
+              return emit(`data: ${JSON.stringify(event)}`)
             }
           }
-          return translate(`data: ${payload}`)
+          return emit(`data: ${payload}`)
         })
       ),
-      Stream.flattenIterable,
+      Stream.tap((step) =>
+        Effect.sync(() => {
+          if (step.error !== undefined) stopped = true
+        })
+      )
+    )
+    // `FinishStream`: EOF without a validated completion emits the local failure once.
+    const tail = Stream.suspend(() => {
+      if (stopped) return Stream.empty
+      const finished = prepared.applyPatch.finishStream()
+      const chunks = finished.lines.flatMap(translate)
+      const emitted = Stream.fromIterable(chunks)
+      return finished.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(gatewayError()))
+    })
+    const chunks = Stream.concat(
+      lines.pipe(
+        Stream.takeUntil((step) => step.error !== undefined),
+        Stream.flatMap((step) => {
+          const emitted = Stream.fromIterable(step.chunks)
+          return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
+        })
+      ),
+      tail
+    ).pipe(
       Stream.filter((chunk) => chunk.length > 0),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )

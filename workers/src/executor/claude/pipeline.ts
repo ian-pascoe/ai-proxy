@@ -69,6 +69,7 @@ import { type ClaudeUpstreamProfile, upstreamModelOf } from "./profile.ts"
 import { agentSessionUuid, applyCLIIdentity, IdentityError } from "./identity.ts"
 import { remapToolNames, DEFAULT_ALIAS_SECRET } from "./mcp-alias.ts"
 import { sanitizeForClaudeUpstream } from "./sanitize.ts"
+import { finalizeClaudeCompactionSummaryBody } from "./compaction.ts"
 import { cchSigningEnabled, ensureBillingCCHPlaceholder, CchSigningError, serializeAndSign } from "./signing.ts"
 import {
   restoreReplayContent,
@@ -97,6 +98,8 @@ export interface PrepareInput {
   readonly options: ExecutorOptions
   /** Whether the upstream request streams (`upstreamStream` in Go; always true for `executeStream`). */
   readonly upstreamStream: boolean
+  /** The request is the summary turn of a Responses compaction (`finalizeClaudeCompactionSummaryBody`). */
+  readonly compactionSummary?: boolean
 }
 
 export interface PreparedClaudeRequest {
@@ -431,6 +434,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     if (services.profile?.stripDefaultAttribution === true && !fingerprint.profileClaudeCodeCLI) {
       stripAttributionSystem(body)
     }
+    if (input.compactionSummary === true) finalizeClaudeCompactionSummaryBody(body)
 
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model

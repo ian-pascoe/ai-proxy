@@ -34,12 +34,13 @@ const wsCredential = (overrides: Partial<CredentialSnapshot> = {}) =>
 const setup = (
   credentials: ReadonlyArray<CredentialSnapshot>,
   upstream: MockUpstreamOptions = {},
-  respond: UpstreamResponder = () => sseResponse([])
+  respond: UpstreamResponder = () => sseResponse([]),
+  configOverride: Config = config
 ) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const mock = mockUpstream(upstream)
   const p = makePipeline({
-    config,
+    config: configOverride,
     respond,
     credentialPicker: xaiPicker(credentials, log),
     modelProviders: codexModels,
@@ -474,6 +475,107 @@ requests:
       // The filtered field stays filtered: nothing restores it after the rules ran.
       expect("previous_response_id" in frame).toBe(false)
     }
+    client.close()
+  })
+})
+
+describe("stream bootstrap buffering on the upstream WebSocket", () => {
+  let buffering: Config
+  beforeAll(async () => {
+    buffering = await loadConfig("upstream:\n  codex:\n    stream-bootstrap-buffering: true\n")
+  })
+  const second = wsCredential({
+    id: "codex-oauth-2",
+    metadata: { access_token: "access-token-2", account_id: "acct_2" }
+  })
+  const reply = (connection: Parameters<NonNullable<MockUpstreamOptions["onConnection"]>>[0], frames: unknown[]) => {
+    void (async () => {
+      await connection.next()
+      for (const frame of frames) connection.server.send(JSON.stringify(frame))
+    })()
+  }
+  const delta = { type: "response.output_text.delta", item_id: "m", output_index: 0, content_index: 0, delta: "Hi" }
+
+  it("fails an overload rejection over to the next credential before the client sees any frame", async () => {
+    let connections = 0
+    const s = setup(
+      [wsCredential(), second],
+      {
+        onConnection: (connection) => {
+          connections += 1
+          if (connections === 1) {
+            reply(connection, [
+              created,
+              {
+                type: "response.failed",
+                response: { id: "resp_1", error: { code: "server_is_overloaded", message: "overloaded" } }
+              }
+            ])
+          } else reply(connection, [created, delta, done()])
+        }
+      },
+      () => sseResponse([]),
+      buffering
+    )
+    const client = await s.connect()
+    client.send({
+      type: "response.create",
+      model: "gpt-5.4",
+      input: [{ type: "message", role: "user", content: "hi" }]
+    })
+    const first = await client.nextJson()
+    expect(first["type"]).toBe("response.created")
+    expect((await client.nextJson())["type"]).toBe("response.output_text.delta")
+    expect((await client.nextJson())["type"]).toBe("response.completed")
+    expect(s.mock.dials.map((dial) => dial.headers["authorization"])).toEqual([
+      "Bearer access-token-1",
+      "Bearer access-token-2"
+    ])
+    expect(s.log.reports.map((report) => report.result.success)).toEqual([false, true])
+    client.close()
+  })
+
+  it("also fails an upstream error frame over, but only while buffering", async () => {
+    let connections = 0
+    const s = setup(
+      [wsCredential(), second],
+      {
+        onConnection: (connection) => {
+          connections += 1
+          if (connections === 1) {
+            reply(connection, [
+              created,
+              { type: "error", status: 503, error: { type: "server_error", message: "busy" } }
+            ])
+          } else reply(connection, [created, done()])
+        }
+      },
+      () => sseResponse([]),
+      buffering
+    )
+    const client = await s.connect()
+    client.send({
+      type: "response.create",
+      model: "gpt-5.4",
+      input: [{ type: "message", role: "user", content: "hi" }]
+    })
+    expect((await client.until("response.completed"))["type"]).toBe("response.completed")
+    expect(s.mock.dials).toHaveLength(2)
+    client.close()
+  })
+
+  it("passes handshake frames straight through when buffering is off", async () => {
+    const s = setup([wsCredential()], {
+      onConnection: (connection) => reply(connection, [created, done()])
+    })
+    const client = await s.connect()
+    client.send({
+      type: "response.create",
+      model: "gpt-5.4",
+      input: [{ type: "message", role: "user", content: "hi" }]
+    })
+    expect((await client.nextJson())["type"]).toBe("response.created")
+    await client.until("response.completed")
     client.close()
   })
 })

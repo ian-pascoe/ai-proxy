@@ -496,6 +496,168 @@ describe("Kimi responses path", () => {
   })
 })
 
+/** Loosely typed JSON object of an event/item/tool in the assertions below. */
+interface Item {
+  [key: string]: unknown
+  parameters?: { required?: string[] }
+}
+
+describe("Kimi responses path: apply_patch bridge", () => {
+  const executor = makeKimiExecutor()
+  const responsesOptions = (stream = false) =>
+    options({
+      stream,
+      sourceFormat: "openai-response",
+      metadata: { ...options().metadata, requestPath: "/v1/responses" }
+    })
+  const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+  const ARGS = JSON.stringify({ input: PATCH })
+  const call = (args: string) => ({
+    id: "fc_1",
+    type: "function_call",
+    call_id: "call_1",
+    name: "apply_patch",
+    arguments: args,
+    status: "completed"
+  })
+  const request = () => ({
+    model: "k3",
+    tools: [{ type: "custom", name: "apply_patch", description: "Patch files" }],
+    input: [
+      { type: "message", role: "user", content: "go" },
+      { type: "custom_tool_call", call_id: "c0", name: "apply_patch", input: PATCH },
+      { type: "custom_tool_call_output", call_id: "c0", output: "ok" }
+    ]
+  })
+  const frame = (event: unknown): string =>
+    `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`
+  const done = (item: unknown) => ({ type: "response.output_item.done", output_index: 0, item })
+  const completed = (output: unknown[]) => ({
+    type: "response.completed",
+    response: {
+      id: "resp_1",
+      status: "completed",
+      output,
+      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
+    }
+  })
+
+  it("sends the strict function and restores custom_tool_call output in the non-stream body", async () => {
+    const h = await harness(
+      kimiCredential(),
+      () =>
+        new Response(JSON.stringify({ id: "resp_1", object: "response", status: "completed", output: [call(ARGS)] }))
+    )
+    const response = await execute(executor, h, { model: "k3", payload: json(request()) }, responsesOptions())
+    const body = JSON.parse(h.calls[0]?.text ?? "{}") as {
+      tools: Array<Item>
+      input: Array<Item>
+    }
+    expect(body.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
+    expect(body.input[1]).toMatchObject({ type: "function_call", arguments: ARGS })
+    expect(body.input[2]).toMatchObject({ type: "function_call_output" })
+    const out = JSON.parse(response.payload) as { output: Array<Item> }
+    expect(out.output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
+  })
+
+  it("fails a malformed non-stream answer with a sanitised 502", async () => {
+    const h = await harness(
+      kimiCredential(),
+      () => new Response(JSON.stringify({ object: "response", output: [call('{"nope":"secret text"}')] }))
+    )
+    const error = await runFail(
+      executor.execute(h.context, { model: "k3", payload: json(request()) }, responsesOptions()),
+      h.layers
+    )
+    expect(error.status).toBe(502)
+    expect(error.message).not.toContain("secret text")
+  })
+
+  it("rewrites streamed function-call events into custom tool input events", async () => {
+    const item = call(ARGS)
+    const sse = [
+      frame({ type: "response.output_item.added", output_index: 0, item: { ...item, arguments: "" } }),
+      frame({ type: "response.function_call_arguments.delta", item_id: "fc_1", output_index: 0, delta: ARGS }),
+      frame({ type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 0, arguments: ARGS }),
+      frame(done(item)),
+      frame(completed([item]))
+    ].join("")
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const collected = await collectStream(
+      executor,
+      h,
+      { model: "k3", payload: json({ ...request(), stream: true }) },
+      responsesOptions(true)
+    )
+    const text = collected.chunks.join("")
+    expect(collected.error).toBeUndefined()
+    expect(text).toContain("event: response.custom_tool_call_input.delta")
+    expect(text).toContain("event: response.custom_tool_call_input.done")
+    expect(text).not.toContain("response.function_call_arguments")
+    expect(text).toContain('"type":"custom_tool_call"')
+  })
+
+  it("fails a malformed stream with the one local failure frame and a 502", async () => {
+    const bad = call('{"nope":"secret text"}')
+    const sse = [frame(done(bad)), frame(completed([bad]))].join("")
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const collected = await collectStream(
+      executor,
+      h,
+      { model: "k3", payload: json({ ...request(), stream: true }) },
+      responsesOptions(true)
+    )
+    expect(collected.error?.status).toBe(502)
+    expect(collected.chunks.join("")).toContain("invalid_tool_arguments")
+    expect(collected.chunks.join("")).not.toContain("secret text")
+  })
+
+  it("fails a stream that ends without a validated completion once", async () => {
+    const item = call(ARGS)
+    const sse = [frame({ type: "response.output_item.added", output_index: 0, item: { ...item, arguments: "" } })].join(
+      ""
+    )
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const collected = await collectStream(
+      executor,
+      h,
+      { model: "k3", payload: json({ ...request(), stream: true }) },
+      responsesOptions(true)
+    )
+    expect(collected.error?.status).toBe(502)
+    expect(collected.chunks.join("").match(/invalid_tool_arguments/g)).toHaveLength(1)
+  })
+
+  it("leaves requests without apply_patch untouched", async () => {
+    const h = await harness(
+      kimiCredential(),
+      () =>
+        new Response(
+          JSON.stringify({
+            object: "response",
+            output: [],
+            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
+          })
+        )
+    )
+    await execute(
+      executor,
+      h,
+      {
+        model: "k3",
+        payload: json({
+          model: "k3",
+          input: "x",
+          tools: [{ type: "function", name: "f", parameters: { type: "object" } }]
+        })
+      },
+      responsesOptions()
+    )
+    const body = JSON.parse(h.calls[0]?.text ?? "{}") as { tools: Array<Item> }
+    expect(body.tools[0]).toMatchObject({ type: "function", name: "f" })
+  })
+})
+
 const anthropicMessage = (content: unknown[], model = "kimi-for-coding") => ({
   id: "msg_1",
   type: "message",

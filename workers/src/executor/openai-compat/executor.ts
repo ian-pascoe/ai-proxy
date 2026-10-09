@@ -11,17 +11,20 @@
  *
  * `CountTokens` counts locally with the model's BPE encoding (`helps/token-count.ts`).
  *
- * Not ported yet (later slices): `/responses/compact` (Responses slice), the text-only tool-result normalisation for models whose `input-modalities` exclude
+ * `/responses/compact` (non-stream) posts the Responses-format request to `{base-url}/responses/compact`.
+ *
+ * Not ported yet (later slices): the text-only tool-result normalisation for models whose `input-modalities` exclude
  * images, and derived prompt cache keys (session identity lives in the conductor slice; a client-supplied
  * `prompt_cache_key` is honoured).
  */
 import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
+import { del, get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
+import { sanitizeReasoningEncryptedContent } from "../codex/request.ts"
 import { splitLines } from "../../http/sse.ts"
 import { builtinTranslators } from "../../translator/builtin.ts"
-import { EntryOnlyFormats, Formats } from "../../translator/formats.ts"
+import { EntryOnlyFormats, type Format, Formats } from "../../translator/formats.ts"
 import { makeTranslationState, type ResponseContext, type TranslatorRegistry } from "../../translator/registry.ts"
 import { encodingForModel, getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIStreamUsage, parseOpenAIUsage, responseModelOf, ssePayloadObject } from "../../usage/record.ts"
@@ -53,6 +56,7 @@ import { OpenAICompatStreamReader, TOOL_INPUT_ERROR_MESSAGE } from "./stream.ts"
 
 const USER_AGENT = "cli-proxy-openai-compat"
 const CHAT_COMPLETIONS_PATH = "/chat/completions"
+const RESPONSES_COMPACT_PATH = "/responses/compact"
 
 interface PreparedRequest {
   readonly url: string
@@ -60,6 +64,8 @@ interface PreparedRequest {
   /** Final business payload (after payload rules). */
   readonly body: Json
   readonly baseModel: string
+  /** Upstream protocol of the request (`openai`, or `openai-response` for compaction). */
+  readonly to: Format
   /** Multipart form sent instead of `body` (image edits uploaded as multipart by the client). */
   readonly form?: FormData
 }
@@ -127,13 +133,9 @@ export const makeOpenAICompatExecutor = (
     const baseModel = parseSuffix(request.model).modelName
     const { baseURL, apiKey } = credentialEndpoint(context)
     if (baseURL === "") return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" })
-    if (options.alt === "responses/compact") {
-      return yield* new ExecutionError({
-        status: 501,
-        message: "responses/compact is not supported by the openai-compatibility executor yet",
-        requestScoped: true
-      })
-    }
+    // Go routes only the non-stream path of `responses/compact` to `/responses/compact` (the handler never streams it).
+    const compact = options.alt === "responses/compact" && !stream
+    const to = compact ? Formats.OpenAIResponse : Formats.OpenAI
 
     const from = options.sourceFormat
     const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
@@ -176,8 +178,12 @@ export const makeOpenAICompatExecutor = (
 
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
     const group = resolveCompatConfig(context.config, context.credential)
-    body = normalizeOpenAIMaxTokens(body, shouldUseMaxCompletionTokens(group, baseModel, requestedModel))
-    body = applyPromptCacheKey(context, request, options, body)
+    if (!compact) {
+      body = normalizeOpenAIMaxTokens(body, shouldUseMaxCompletionTokens(group, baseModel, requestedModel))
+      body = applyPromptCacheKey(context, request, options, body)
+    } else {
+      body = sanitizeReasoningEncryptedContent(del(body, "stream"))
+    }
     if (stream) {
       // Ask for usage in the final chunk so token statistics are captured.
       body = setBoolIfDifferent(body, "stream_options.include_usage", true)
@@ -209,8 +215,10 @@ export const makeOpenAICompatExecutor = (
       headers["accept"] = "text/event-stream"
       headers["cache-control"] = "no-cache"
     }
-    const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + CHAT_COMPLETIONS_PATH
-    return { url, headers, body, baseModel } satisfies PreparedRequest
+    const url =
+      (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) +
+      (compact ? RESPONSES_COMPACT_PATH : CHAT_COMPLETIONS_PATH)
+    return { url, headers, body, baseModel, to } satisfies PreparedRequest
   })
 
   /** Images API request (`executeImages` / `executeImagesStream` preparation). */
@@ -256,7 +264,7 @@ export const makeOpenAICompatExecutor = (
     }
     const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + endpoint
     const form = multipart ? editBodyToFormData(body as JsonObject, baseModel, stream) : undefined
-    return { url, headers, body, baseModel, ...(form === undefined ? {} : { form }) } satisfies PreparedRequest
+    return { url, headers, body, baseModel, to, ...(form === undefined ? {} : { form }) } satisfies PreparedRequest
   })
 
   /** Sends the request; non-2xx answers become `ExecutionError`s carrying the upstream body. */
@@ -329,7 +337,7 @@ export const makeOpenAICompatExecutor = (
     context.usage.observeResponseModel(responseModelOf(tryParseJson(text)))
     const out = registry.translateNonStream(
       responseFormatOf(options),
-      to,
+      prepared.to,
       responseContext(request, options, prepared.body),
       text
     )

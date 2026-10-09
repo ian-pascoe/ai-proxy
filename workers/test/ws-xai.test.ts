@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { Config } from "../src/config/schema.ts"
 import type { CredentialSnapshot } from "../src/executor/picker.ts"
-import { loadConfig, makePipeline, sseResponse } from "./support/pipeline.ts"
+import { jsonResponse, loadConfig, makePipeline, sseResponse, type UpstreamResponder } from "./support/pipeline.ts"
 import { connectClient, mockUpstream, type MockUpstreamOptions } from "./support/websocket.ts"
 import { xaiModels, xaiOauth, xaiPicker, type XaiPickerLog } from "./support/xai.ts"
 
@@ -26,6 +26,12 @@ const ITEM = { id: "msg_1", type: "message", role: "assistant", content: [{ type
 const wsCredential = (overrides: Partial<CredentialSnapshot> = {}) =>
   xaiOauth({ attributes: { auth_kind: "oauth", websockets: "true" }, ...overrides })
 
+/** Loosely typed JSON object of an event/item/tool in the assertions below. */
+interface Item {
+  [key: string]: unknown
+  parameters?: { required?: string[] }
+}
+
 let config: Config
 beforeAll(async () => {
   config = await loadConfig(`
@@ -37,12 +43,17 @@ requests:
 `)
 })
 
-const setup = (upstream: MockUpstreamOptions, credentials = [wsCredential()], cfg?: Config) => {
+const setup = (
+  upstream: MockUpstreamOptions,
+  credentials = [wsCredential()],
+  cfg?: Config,
+  respond: UpstreamResponder = () => sseResponse([])
+) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const mock = mockUpstream(upstream)
   const p = makePipeline({
     config: cfg ?? config,
-    respond: () => sseResponse([]),
+    respond,
     credentialPicker: xaiPicker(credentials, log),
     modelProviders: xaiModels,
     websocketConnector: mock.layer
@@ -218,5 +229,159 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
     expect(mock.dials).toHaveLength(0)
     expect(p.calls[0]?.url).toBe("https://cli-chat-proxy.grok.com/v1/responses")
     client.close()
+  })
+})
+
+describe("apply_patch over the xAI upstream socket", () => {
+  const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+  const ARGS = JSON.stringify({ input: PATCH })
+  const call = (args: string) => ({
+    id: "fc_1",
+    type: "function_call",
+    call_id: "call_1",
+    name: "apply_patch",
+    arguments: args,
+    status: "completed"
+  })
+  const request = {
+    type: "response.create",
+    model: "grok-4.3",
+    input: [{ type: "message", role: "user", content: "patch it" }],
+    tools: [{ type: "custom", name: "apply_patch", description: "Patch files" }]
+  }
+
+  it("declares the strict function upstream and restores custom tool events for the client", async () => {
+    const item = call(ARGS)
+    const s = setup({
+      onConnection: (connection) => {
+        void (async () => {
+          await connection.next()
+          connection.server.send(JSON.stringify(created("resp_1")))
+          connection.server.send(
+            JSON.stringify({ type: "response.output_item.added", output_index: 0, item: { ...item, arguments: "" } })
+          )
+          connection.server.send(
+            JSON.stringify({
+              type: "response.function_call_arguments.delta",
+              item_id: "fc_1",
+              output_index: 0,
+              delta: ARGS
+            })
+          )
+          connection.server.send(
+            JSON.stringify({
+              type: "response.function_call_arguments.done",
+              item_id: "fc_1",
+              output_index: 0,
+              arguments: ARGS
+            })
+          )
+          connection.server.send(JSON.stringify({ type: "response.output_item.done", output_index: 0, item }))
+          connection.server.send(JSON.stringify(completed("resp_1", [item])))
+        })()
+      }
+    })
+    const client = await s.connect()
+    client.send(request)
+    const done = await client.until("response.completed")
+    const sent = frames(s.mock)[0] as { tools: Array<Item> }
+    expect(sent.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
+    expect(sent.tools[0]?.parameters?.required).toEqual(["input"])
+    const output = (done["response"] as { output: Array<Item> }).output
+    expect(output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
+    const types = client.messages.map((message) =>
+      String((JSON.parse(String(message)) as Record<string, unknown>)["type"])
+    )
+    expect(types).toContain("response.custom_tool_call_input.delta")
+    expect(types).toContain("response.custom_tool_call_input.done")
+    expect(types).not.toContain("response.function_call_arguments.delta")
+    client.close()
+  })
+
+  it("delivers the local failure frame and ends the turn when the arguments are not a patch input", async () => {
+    const bad = call('{"nope":"secret text"}')
+    const s = setup({
+      onConnection: (connection) => {
+        void (async () => {
+          await connection.next()
+          connection.server.send(JSON.stringify(created("resp_1")))
+          connection.server.send(JSON.stringify({ type: "response.output_item.done", output_index: 0, item: bad }))
+          connection.server.send(JSON.stringify(completed("resp_1", [bad])))
+        })()
+      }
+    })
+    const client = await s.connect()
+    client.send(request)
+    const failed = await client.until("response.failed")
+    expect(JSON.stringify(failed)).toContain("invalid_tool_arguments")
+    expect(JSON.stringify(failed)).not.toContain("secret text")
+    expect(s.log.reports[0]?.result.success).toBe(false)
+    client.close()
+  })
+})
+
+describe("compaction_trigger over the xAI socket", () => {
+  const compaction = {
+    id: "cmp_resp_9",
+    object: "response.compaction",
+    created_at: 1767225600,
+    model: "grok-4.3",
+    output: [{ type: "compaction", encrypted_content: "opaque-compacted-state" }],
+    usage: { input_tokens: 7, output_tokens: 2, total_tokens: 9 }
+  }
+
+  it("compacts the transcript recorded for the socket over HTTP and replaces it with the compacted item", async () => {
+    const s = setup(
+      {
+        onConnection: (connection) => {
+          void (async () => {
+            await connection.next()
+            connection.server.send(JSON.stringify(created("resp_1")))
+            connection.server.send(JSON.stringify({ type: "response.output_item.done", output_index: 0, item: ITEM }))
+            connection.server.send(JSON.stringify(completed("resp_1", [ITEM])))
+          })()
+        }
+      },
+      [wsCredential()],
+      undefined,
+      () => jsonResponse(compaction)
+    )
+    const client = await s.connect()
+    client.send({
+      type: "response.create",
+      model: "grok-4.3",
+      input: [{ type: "message", role: "user", content: "one" }]
+    })
+    await client.until("response.completed")
+    client.send({
+      type: "response.create",
+      model: "grok-4.3",
+      input: [{ type: "message", role: "user", content: "client history" }, { type: "compaction_trigger" }]
+    })
+    const done = await client.until("response.completed")
+    const compactCall = s.calls.find((call) => call.url.endsWith("/responses/compact"))
+    expect(compactCall).toBeDefined()
+    const body = JSON.parse(compactCall?.body ?? "{}") as { input: unknown[]; previous_response_id?: string }
+    // The recorded socket transcript (request input + response output of turn one) is what gets compacted.
+    expect(body.input).toEqual([{ type: "message", role: "user", content: "one" }, ITEM])
+    expect(body.previous_response_id).toBeUndefined()
+    const output = (done["response"] as { output: Array<Record<string, unknown>> }).output
+    expect(output[0]).toMatchObject({ type: "compaction", encrypted_content: "opaque-compacted-state" })
+    // No second upstream socket request: the compaction ran over HTTP.
+    expect(frames(s.mock)).toHaveLength(1)
+    client.close()
+  })
+
+  it("rejects a malformed compaction answer with a 502", async () => {
+    const s = setup({}, [wsCredential()], undefined, () => jsonResponse({ id: "x", output: [{ type: "message" }] }))
+    const client = await s.connect()
+    client.send({
+      type: "response.create",
+      model: "grok-4.3",
+      input: [{ type: "message", role: "user", content: "history" }, { type: "compaction_trigger" }]
+    })
+    const closed = await client.closed
+    expect(closed.code).toBeGreaterThan(0)
+    expect(s.log.reports[0]?.result.success).toBe(false)
   })
 })

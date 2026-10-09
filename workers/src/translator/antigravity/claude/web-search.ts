@@ -140,7 +140,7 @@ export const buildAntigravityWebSearchRequest = (model: string, payload: Json): 
 }
 
 /** `hasAntigravityGoogleSearchTool` on a translated request. */
-const hasAntigravityGoogleSearchTool = (request: Json | undefined): boolean =>
+export const hasAntigravityGoogleSearchTool = (request: Json | undefined): boolean =>
   toolsOf(request, "request.tools").some((tool) => get(tool, "googleSearch") !== undefined)
 
 /** `shouldTranslateWebSearchGrounding`. */

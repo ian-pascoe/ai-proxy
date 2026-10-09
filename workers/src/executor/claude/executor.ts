@@ -7,11 +7,12 @@
  *
  * Not ported (documented in docs/workers-port/ARCHITECTURE.md): the uTLS/header-order fingerprint (impossible with
  * Workers `fetch`, see workers/README.md), Thread continuation alias state, the device-profile stabiliser, the
- * Responses compaction bridge (`responses/compact` answers 501), proxies and OAuth refresh (OAuth slice).
+ * proxies and OAuth refresh (OAuth slice). Responses compaction (`responses/compact` and `compaction_trigger`) runs a
+ * summary request through this executor and seals the answer into a capsule (`compaction.ts`).
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { asInt, get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
+import { asInt, asString, get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
 import { splitLines } from "../../http/sse.ts"
 import { builtinTranslators } from "../../translator/builtin.ts"
 import { Formats } from "../../translator/formats.ts"
@@ -29,6 +30,22 @@ import {
 } from "../types.ts"
 import { isObj, str } from "../../translator/common/gjson.ts"
 import { claudeCreds, isAnthropicUpstreamBase } from "./credentials.ts"
+import {
+  buildCompactionResponse,
+  buildCompactionStreamChunks,
+  extractSummaryText,
+  sealCompaction
+} from "../helps/compaction.ts"
+import { ensureResponsesUsageDetails } from "../codex/output.ts"
+import { parseSuffix } from "../suffix.ts"
+import {
+  claudeCompactionRequested,
+  claudeCompactionSourcePayload,
+  claudeCompactionUsage,
+  expandClaudeResponsesCompaction,
+  patchClaudeCompactionStreamUsage,
+  prepareClaudeCompactionSummaryPayload
+} from "./compaction.ts"
 import { type ContinuityStore, makeSessionStateContinuityStore } from "./continuity.ts"
 import { type ClaudeUpstreamProfile, restoreResponseModel } from "./profile.ts"
 import { restoreToolNamesInResponse, AliasRestoreError, restoreToolNamesInStreamLine } from "./mcp-alias.ts"
@@ -147,17 +164,6 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
   }
   const profile = executorOptions.profile
 
-  const unsupportedCompaction = (options: ExecutorOptions) =>
-    options.alt === "responses/compact"
-      ? Effect.fail(
-          new ExecutionError({
-            status: 501,
-            message: "responses/compact is not supported by the claude executor yet",
-            requestScoped: true
-          })
-        )
-      : Effect.void
-
   /** Sends a prepared request; non-2xx answers become classified `ExecutionError`s. */
   const send = Effect.fnUntraced(function* (
     context: ExecutionContext,
@@ -211,12 +217,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       ? services.continuity.commit(prepared.continuity, messageId, requestId, prepared.promptId)
       : Effect.void
 
-  const execute = Effect.fnUntraced(function* (
+  const executeMessages = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
+    compactionSummary: boolean
   ) {
-    yield* unsupportedCompaction(options)
     const responseFormat = responseFormatOf(options)
     const upstreamStream = responseFormat !== Formats.Claude
     const prepared = yield* prepareMessagesRequest({
@@ -225,7 +231,8 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       credential: context.credential,
       request,
       options,
-      upstreamStream
+      upstreamStream,
+      compactionSummary
     })
     const response = yield* send(context, prepared, prepared.fastRequest)
     let data = yield* response.text.pipe(Effect.mapError(readError))
@@ -293,7 +300,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       replayContent = get(parsed, "content")
     }
     yield* finishReplay(prepared, replayContent)
-    const out = registry.translateNonStream(
+    let out = registry.translateNonStream(
       responseFormat,
       Formats.Claude,
       responseContext(request, options, prepared),
@@ -301,7 +308,102 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     )
     if (out === undefined || out === "") return yield* gatewayError(TOOL_INPUT_ERROR_MESSAGE)
     if (usage !== undefined) context.usage.publish(usage)
+    if (responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
+  })
+
+  /** `expandClaudeResponsesCompaction`: an unreadable capsule is a request-scoped 400. */
+  const expandCompaction = (request: ExecutorRequest, options: ExecutorOptions) =>
+    Effect.tryPromise({
+      try: () => expandClaudeResponsesCompaction(request, options),
+      catch: (error) =>
+        new ExecutionError({
+          status: 400,
+          message: error instanceof Error ? error.message : String(error),
+          requestScoped: true
+        })
+    })
+
+  /**
+   * `executeClaudeCompaction`: a non-stream summary turn through the normal Messages path (tool history kept or
+   * flattened, `compactionSummary`), sealed into a capsule and returned as a `response.compaction` body.
+   */
+  const executeCompaction = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const baseModel = parseSuffix(request.model).modelName
+    const summaryRequest: ExecutorRequest = {
+      ...request,
+      payload: prepareClaudeCompactionSummaryPayload(claudeCompactionSourcePayload(request, options))
+    }
+    const summaryOptions: ExecutorOptions = {
+      ...options,
+      alt: "",
+      stream: false,
+      originalRequest: undefined,
+      sourceFormat: Formats.OpenAIResponse,
+      responseFormat: Formats.Claude
+    }
+    const summary = yield* executeMessages(context, summaryRequest, summaryOptions, true)
+    const parsed = tryParseJson(summary.payload)
+    const text = yield* Effect.try({
+      try: () => extractSummaryText(parsed as Json),
+      catch: (error) => new ExecutionError({ status: 500, message: `extract summary: ${(error as Error).message}` })
+    })
+    const capsule = yield* Effect.tryPromise({
+      try: () => sealCompaction(text, baseModel),
+      catch: (error) => new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` })
+    })
+    const usage = claudeCompactionUsage(parsed, summary.payload)
+    const body = buildCompactionResponse(baseModel, capsule, usage.input, usage.output, usage.total, Date.now())
+    set(body, "usage.input_tokens_details.cached_tokens", usage.cached)
+    return { payload: JSON.stringify(body), headers: summary.headers } satisfies ExecutorResponse
+  })
+
+  const execute = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const expanded = yield* expandCompaction(request, options)
+    if (claudeCompactionRequested(expanded.request, expanded.options)) {
+      return yield* executeCompaction(context, expanded.request, expanded.options)
+    }
+    return yield* executeMessages(context, expanded.request, expanded.options, false)
+  })
+
+  /** `executeClaudeCompactionStream`: the sealed capsule and usage re-emitted as a synthetic Responses stream. */
+  const executeCompactionStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const baseModel = parseSuffix(request.model).modelName
+    const summary = yield* executeCompaction(context, request, options)
+    const parsed = tryParseJson(summary.payload)
+    const capsule = asString(get(parsed, "output.0.encrypted_content"))
+    if (asString(get(parsed, "output.0.type")) !== "compaction" || capsule === "") {
+      return yield* new ExecutionError({ status: 500, message: "extract summary: compaction item missing" })
+    }
+    const usage = {
+      input: asInt(get(parsed, "usage.input_tokens")),
+      output: asInt(get(parsed, "usage.output_tokens")),
+      total: asInt(get(parsed, "usage.total_tokens")),
+      cached: asInt(get(parsed, "usage.input_tokens_details.cached_tokens"))
+    }
+    const chunks = buildCompactionStreamChunks(
+      baseModel,
+      capsule,
+      usage.input,
+      usage.output,
+      usage.total,
+      Date.now()
+    ).map((chunk) => patchClaudeCompactionStreamUsage(chunk, usage))
+    const headers = new Headers(summary.headers)
+    headers.set("Content-Type", "text/event-stream")
+    return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
   })
 
   const executeStream = Effect.fnUntraced(function* (
@@ -309,7 +411,18 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
-    yield* unsupportedCompaction(options)
+    const expanded = yield* expandCompaction(request, options)
+    if (claudeCompactionRequested(expanded.request, expanded.options)) {
+      return yield* executeCompactionStream(context, expanded.request, expanded.options)
+    }
+    return yield* executeMessagesStream(context, expanded.request, expanded.options)
+  })
+
+  const executeMessagesStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
     const responseFormat = responseFormatOf(options)
     const prepared = yield* prepareMessagesRequest({
       services,

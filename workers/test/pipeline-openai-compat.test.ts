@@ -161,6 +161,44 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
     expect(text).toContain("event: response.completed")
   })
 
+  it("posts /v1/responses/compact to {base-url}/responses/compact in Responses format without chat shaping", async () => {
+    const compaction = {
+      id: "resp_c",
+      object: "response.compaction",
+      output: [{ type: "compaction", id: "cmp_1", encrypted_content: "opaque" }],
+      usage: { input_tokens: 4, output_tokens: 1, total_tokens: 5 }
+    }
+    const p = pipeline(() => jsonResponse(compaction))
+    afterAll(p.dispose)
+    const response = await p.call(
+      "/v1/responses/compact",
+      postJson({
+        model: "alias-model",
+        stream: false,
+        input: [
+          { type: "message", role: "user", content: "hi" },
+          { type: "reasoning", id: "rs_1", summary: [], content: [{ type: "reasoning_text", text: "secret" }] }
+        ],
+        max_output_tokens: 9
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(p.calls[0]?.url).toBe("https://upstream.test/v1/responses/compact")
+    const upstream: unknown = JSON.parse(p.calls[0]!.body)
+    expect(at(upstream, "model")).toBe("upstream-model")
+    expect(at(upstream, "stream")).toBeUndefined()
+    expect(at(upstream, "messages")).toBeUndefined()
+    expect(at(upstream, "max_output_tokens")).toBe(9)
+    expect(at(upstream, "max_tokens")).toBeUndefined()
+    expect(at(upstream, "prompt_cache_key")).toBeUndefined()
+    // Reasoning cleartext never reaches the upstream.
+    expect(at(upstream, "input.1.content")).toEqual([])
+    const body: unknown = await response.json()
+    expect(at(body, "object")).toBe("response.compaction")
+    expect(at(body, "output.0.encrypted_content")).toBe("opaque")
+    expect(p.records[0]?.detail).toMatchObject({ inputTokens: 4, outputTokens: 1 })
+  })
+
   it("converts Responses-shaped payloads sent to /v1/chat/completions", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)

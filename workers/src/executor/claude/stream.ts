@@ -11,6 +11,7 @@ import type { Format } from "../../translator/formats.ts"
 import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts"
 import { responseModelOf, ssePayloadObject, type UsageDetail } from "../../usage/record.ts"
 import { ExecutionError } from "../errors.ts"
+import { ensureResponsesUsageDetails } from "../codex/output.ts"
 import { AliasRestoreError, restoreToolNamesInStreamLine } from "./mcp-alias.ts"
 import { ReplayStreamAccumulator } from "./thinking-replay.ts"
 import { mergeUsage, parseClaudeStreamUsage } from "./usage.ts"
@@ -98,11 +99,18 @@ export class ClaudeStreamReader {
       if (this.completed) this.#done = true
       return { chunks: [chunk], stop: this.completed }
     }
-    const chunks = registry.translateStream(responseFormat, "claude", context, restored)
+    const translated = registry.translateStream(responseFormat, "claude", context, restored)
     if (context.state.toolInputError !== undefined) {
       this.#done = true
-      return { chunks, error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }), stop: true }
+      return {
+        chunks: translated,
+        error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }),
+        stop: true
+      }
     }
+    // Go `EnsureResponsesUsageDetails` on every translated Responses chunk.
+    const chunks =
+      responseFormat === "openai-response" ? translated.map((chunk) => ensureResponsesUsageDetails(chunk)) : translated
     if (this.completed) this.#done = true
     return { chunks, stop: this.completed }
   }

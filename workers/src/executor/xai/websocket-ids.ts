@@ -27,6 +27,17 @@ export class XaiIdState {
     if (id !== "") this.downstreamToUpstream.set(id, upstreamId.trim())
   }
 
+  /** `snapshotTranscriptInput`: a copy of the recorded transcript. */
+  snapshotTranscriptInput(): Json[] {
+    return cloneJson(this.transcriptInput)
+  }
+
+  /** `replaceTranscriptWithItems`: after a compaction the transcript is the compacted state alone. */
+  replaceTranscriptWithItems(...items: Json[]): void {
+    this.transcriptInput = items.map((item) => cloneJson(item))
+    this.replayCompactedTranscriptOnReset = this.transcriptInput.length > 0
+  }
+
   /** `prependTranscriptInput`: the recorded transcript goes in front of the request's `input`. */
   prependTranscriptInput(payload: JsonObject): JsonObject {
     if (this.transcriptInput.length === 0) return payload

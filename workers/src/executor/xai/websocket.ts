@@ -13,9 +13,12 @@
  * same reasoning-summary normalisation and namespace/alias/X Search pipeline as the SSE path and are forwarded as bare
  * JSON chunks. `generate: false` warm-ups end after `response.created` with a synthesised `response.completed`.
  *
- * Not ported: `compaction_trigger` over the socket (it runs through the HTTP `/responses/compact` path with the input the
- * client sent; Go builds the compaction input from the socket transcript), the apply_patch bridge and the Claude
- * stream input-token estimate.
+ * The apply_patch bridge (`prepared.applyPatch`) sits between the restored events and the downstream: a failure delivers the
+ * local `response.failed` frame, invalidates the upstream socket and ends the turn with a sanitised 502; an upstream
+ * drop with an unvalidated patch call does the same. `compaction_trigger` over the socket compacts the recorded socket
+ * transcript over HTTP (`executor.ts` `executeCompactionTriggerFromWebsocket`, ids in `websocket-ids.ts`).
+ *
+ * Not ported: the Claude stream input-token estimate.
  */
 import { Clock, Effect, Option, Stream } from "effect"
 import {
@@ -34,6 +37,7 @@ import { responseModelOf } from "../../usage/record.ts"
 import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import { ensureResponsesUsageDetails, OutputItemCollector, parseCodexUsage } from "../codex/output.ts"
 import { ExecutionError } from "../errors.ts"
+import { APPLY_PATCH_UPSTREAM_ERROR_MESSAGE } from "../helps/apply-patch-responses.ts"
 import type { Thinking } from "../thinking.ts"
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest, StreamResult } from "../types.ts"
 import { websocketUrl } from "../websocket/connector.ts"
@@ -201,8 +205,29 @@ export const makeXaiWebsocketStream =
           let recordedTranscript = false
           const fail = (error: ExecutionError) => turn.invalidate.pipe(Effect.andThen(Effect.fail(error)))
 
+          const patchGatewayError = () =>
+            new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
+          const downstream = (value: JsonObject): string => {
+            const ensured = tryParseJson(ensureResponsesUsageDetails(JSON.stringify(value)))
+            const payload = isJsonObject(ensured) ? ensured : value
+            return JSON.stringify(mapper === undefined ? payload : mapper.downstreamResponsePayload(payload))
+          }
+          /** Delivered after the frames of the failing page: the apply_patch bridge rejected the turn. */
+          let pendingError: ExecutionError | undefined
+
           const page = Effect.gen(function* () {
-            const text = yield* turn.read
+            if (pendingError !== undefined) return yield* fail(pendingError)
+            const read = yield* Effect.result(turn.read)
+            if (read._tag === "Failure") {
+              // An upstream drop while an apply_patch call is unvalidated ends with the local failure frame.
+              const unfinished = prepared.applyPatch.finish()
+              if (unfinished === undefined) return yield* read.failure
+              const failure = prepared.applyPatch.bridge.fail(unfinished)
+              yield* turn.invalidate
+              pendingError = patchGatewayError()
+              return [failure.events.filter(isJsonObject).map(downstream), Option.some<void>(undefined)] as const
+            }
+            const text = read.success
             const nowMs = yield* Clock.currentTimeMillis
             const parsed = tryParseJson(text)
             context.usage.markFirstByte(nowMs)
@@ -212,54 +237,69 @@ export const makeXaiWebsocketStream =
 
             const out: string[] = []
             let terminal = false
+            let patchFailed = false
             for (const raw of normalizeReasoningSummaryEvents(parsed)) {
-              let event = prepared.pipeline.process(raw)
-              if (event === undefined) continue
-              const type = asString(get(event, "type"))
-              context.usage.observeResponseModel(responseModelOf(event))
-              if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
-              let warmupCompleted: JsonObject | undefined
-              switch (type) {
-                case "response.created":
-                  if (warmupRequest) {
-                    warmupCompleted = buildWarmupCompletedPayload(event)
-                    if (state !== undefined && !recordedTranscript) {
-                      state.recordTranscriptTurn(frameBody, warmupCompleted, transcriptReset)
+              prepared.applyPatch.rememberDispatcherEvent(raw)
+              const restored = prepared.pipeline.process(raw)
+              if (restored === undefined) continue
+              const bridged = prepared.applyPatch.transform(restored)
+              if (bridged.error !== undefined) {
+                // The failure frame goes downstream, then the turn ends with the sanitised gateway error.
+                for (const failure of bridged.events) if (isJsonObject(failure)) out.push(downstream(failure))
+                patchFailed = true
+                break
+              }
+              for (let event of bridged.events) {
+                const type = asString(get(event, "type"))
+                context.usage.observeResponseModel(responseModelOf(event))
+                if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
+                let warmupCompleted: JsonObject | undefined
+                switch (type) {
+                  case "response.created":
+                    if (warmupRequest) {
+                      warmupCompleted = buildWarmupCompletedPayload(event)
+                      if (state !== undefined && !recordedTranscript) {
+                        state.recordTranscriptTurn(frameBody, warmupCompleted, transcriptReset)
+                        recordedTranscript = true
+                      }
+                    }
+                    break
+                  case "response.output_item.done":
+                    collector.collect(event)
+                    break
+                  case "response.completed":
+                  case "response.done": {
+                    if (!isJsonObject(event)) break
+                    const detail = parseCodexUsage(event)
+                    if (detail !== undefined) context.usage.publish(detail)
+                    if (type === "response.completed") {
+                      event = normalizeReasoningSummaryEvent(patchCompletedOutput(event, collector))
+                      if (previousResponseId === "")
+                        yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, event)
+                    }
+                    if (!warmupRequest && state !== undefined && !recordedTranscript) {
+                      state.recordTranscriptTurn(frameBody, event, transcriptReset)
                       recordedTranscript = true
                     }
+                    terminal = true
+                    break
                   }
-                  break
-                case "response.output_item.done":
-                  collector.collect(event)
-                  break
-                case "response.completed":
-                case "response.done": {
-                  if (!isJsonObject(event)) break
-                  const detail = parseCodexUsage(event)
-                  if (detail !== undefined) context.usage.publish(detail)
-                  if (type === "response.completed") {
-                    event = normalizeReasoningSummaryEvent(patchCompletedOutput(event, collector))
-                    if (previousResponseId === "")
-                      yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, event)
-                  }
-                  if (!warmupRequest && state !== undefined && !recordedTranscript) {
-                    state.recordTranscriptTurn(frameBody, event, transcriptReset)
-                    recordedTranscript = true
-                  }
+                }
+                // With an active apply_patch bridge an incomplete/failed response also ends the turn.
+                if (prepared.applyPatch.active && (type === "response.incomplete" || type === "response.failed")) {
                   terminal = true
-                  break
+                }
+                if (isJsonObject(event)) out.push(downstream(event))
+                if (warmupCompleted !== undefined) {
+                  out.push(downstream(warmupCompleted))
+                  terminal = true
                 }
               }
-              const downstream = (value: JsonObject): string => {
-                const ensured = tryParseJson(ensureResponsesUsageDetails(JSON.stringify(value)))
-                const payload = isJsonObject(ensured) ? ensured : value
-                return JSON.stringify(mapper === undefined ? payload : mapper.downstreamResponsePayload(payload))
-              }
-              if (isJsonObject(event)) out.push(downstream(event))
-              if (warmupCompleted !== undefined) {
-                out.push(downstream(warmupCompleted))
-                terminal = true
-              }
+            }
+            if (patchFailed) {
+              yield* turn.invalidate
+              pendingError = patchGatewayError()
+              return [out, Option.some<void>(undefined)] as const
             }
             if (terminal) {
               turn.complete()

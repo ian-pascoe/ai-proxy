@@ -8,8 +8,10 @@
  * the conductor (`withCredentialRefresh`); retry rounds across credentials are the conductor's, so exactly one
  * upstream request is made per attempt.
  *
- * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): the `/responses/compact` capsule is not ported, web-search grounding redirect URLs are not resolved, no per-credential
- * HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
+ * Compaction (`responses/compact`, `compaction_trigger`) runs a non-stream summary turn and seals it into a
+ * capsule (`helps/compaction.ts`); web-search grounding redirect URLs are resolved (`grounding.ts`).
+ *
+ * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): no per-credential HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
  */
 import { translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Option, Stream } from "effect"
@@ -36,6 +38,7 @@ import { isGeminiTokenEvent } from "../../usage/ttft.ts"
 import { parseAntigravityStreamUsage, parseAntigravityUsage } from "../../usage/parsers.ts"
 import { responseModelOf } from "../../usage/record.ts"
 import { ExecutionError } from "../errors.ts"
+import { ensureResponsesUsageDetails } from "../codex/output.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { finalizePayload } from "../helps/payload.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
@@ -56,6 +59,18 @@ import {
   sanitizeGeminiRequestSignatures,
   validateRequestSignatures
 } from "./content.ts"
+import {
+  buildCompactionResponse,
+  buildCompactionStreamChunks,
+  expandCompactionCapsules,
+  extractSummaryText,
+  hasResponsesCompactionItem,
+  hasResponsesCompactionTrigger,
+  prepareCompactionSummaryPayload,
+  responsesSummaryUsage,
+  sealCompaction
+} from "../helps/compaction.ts"
+import { resolveGroundingUrlsInPayload, shouldResolveGroundingUrls } from "./grounding.ts"
 import { creditsEnabled, injectEnabledCreditTypes, probeCredits } from "./credits.ts"
 import { NO_REPLAY_SCOPE, type ReplayAccumulator, type ReplayScope } from "./replay/accumulator.ts"
 import { defaultReplayLedger, type ReplayLedger } from "./replay/ledger.ts"
@@ -78,8 +93,6 @@ export const ANTIGRAVITY_IDENTIFIER = "antigravity"
 
 const transportError = (error: HttpClientError.HttpClientError) =>
   new ExecutionError({ status: 500, message: `upstream request failed: ${error.reason._tag}`, cause: error })
-
-const notImplemented = (message: string) => new ExecutionError({ status: 501, message, requestScoped: true })
 
 const requestError = (envelope: RequestEnvelope) =>
   new ExecutionError({
@@ -441,10 +454,21 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         )
       : Effect.void
 
+  /** `resolveWebSearchGroundingURLs`: Vertex Search redirect URLs of web-search answers become their targets. */
+  const resolveGrounding = (attempt: Attempt, prepared: PreparedRequest, payload: string) =>
+    shouldResolveGroundingUrls(
+      attempt.options.sourceFormat,
+      attempt.options.originalRequest ?? attempt.request.payload,
+      prepared.translated
+    )
+      ? resolveGroundingUrlsInPayload(payload)
+      : Effect.succeed(payload)
+
   /** Non-stream translation of an aggregated or plain upstream body. */
-  const translateBody = (attempt: Attempt, prepared: PreparedRequest, text: string) =>
+  const translateBody = (attempt: Attempt, prepared: PreparedRequest, upstreamText: string) =>
     Effect.gen(function* () {
       const { context, options } = attempt
+      const text = yield* resolveGrounding(attempt, prepared, upstreamText)
       const parsed = tryParseJson(text)
       context.usage.observeResponseModel(responseModelOf(parsed))
       const responseFormat = responseFormatOf(options)
@@ -455,16 +479,14 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
       }
       context.usage.publish(parseAntigravityUsage(text))
-      return out
+      return responseFormat === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out
     })
 
-  const execute = Effect.fnUntraced(function* (
+  const executeGenerate = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
     options: ExecutorOptions
   ) {
-    if (options.alt === "responses/compact")
-      return yield* notImplemented("/responses/compact is not supported for antigravity")
     const attempt = yield* resolve(context, request, options)
     const baseModel = parseSuffix(request.model).modelName
     yield* checkShortCooldown(attempt, baseModel)
@@ -501,6 +523,89 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
+  /**
+   * Sealed compaction items of the request (and the original request, falling back to the expanded request) become
+   * developer context before anything else; an unreadable capsule is a request-scoped 400.
+   */
+  const expandCompaction = Effect.fnUntraced(function* (request: ExecutorRequest, options: ExecutorOptions) {
+    if (!hasResponsesCompactionItem(request.payload)) return { request, options }
+    const payload = yield* Effect.tryPromise({
+      try: () => expandCompactionCapsules(request.payload),
+      catch: (error) =>
+        new ExecutionError({
+          status: 400,
+          message: error instanceof Error ? error.message : String(error),
+          requestScoped: true
+        })
+    })
+    const original =
+      options.originalRequest === undefined
+        ? undefined
+        : yield* Effect.promise(() => expandCompactionCapsules(options.originalRequest as Json).catch(() => payload))
+    return {
+      request: { ...request, payload },
+      options: original === undefined ? options : { ...options, originalRequest: original }
+    }
+  })
+
+  const compactionRequested = (request: ExecutorRequest, options: ExecutorOptions, alt: boolean): boolean =>
+    (alt && options.alt === "responses/compact") ||
+    hasResponsesCompactionTrigger(request.payload) ||
+    hasResponsesCompactionTrigger(options.originalRequest)
+
+  /** `executeCompaction` (shared by the stream variant): non-stream summary turn sealed into a capsule. */
+  const executeCompaction = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const baseModel = parseSuffix(request.model).modelName
+    const source =
+      request.payload === undefined && options.originalRequest !== undefined ? options.originalRequest : request.payload
+    const summaryRequest: ExecutorRequest = { ...request, payload: prepareCompactionSummaryPayload(source) }
+    const summaryOptions: ExecutorOptions = {
+      ...options,
+      alt: "",
+      stream: false,
+      originalRequest: undefined,
+      sourceFormat: Formats.OpenAIResponse,
+      responseFormat: Formats.OpenAIResponse
+    }
+    const summary = yield* executeGenerate(context, summaryRequest, summaryOptions)
+    const parsed = tryParseJson(summary.payload)
+    const text = yield* Effect.try({
+      try: () => extractSummaryText(parsed as Json),
+      catch: (error) => new ExecutionError({ status: 500, message: `extract summary: ${(error as Error).message}` })
+    })
+    const capsule = yield* Effect.tryPromise({
+      try: () => sealCompaction(text, baseModel),
+      catch: (error) => new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` })
+    })
+    const usage = responsesSummaryUsage(parsed as Json, summary.payload)
+    return { baseModel, capsule, usage, headers: summary.headers }
+  })
+
+  const execute = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
+    const expanded = yield* expandCompaction(request, options)
+    if (compactionRequested(expanded.request, expanded.options, true)) {
+      const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+      const body = buildCompactionResponse(
+        sealed.baseModel,
+        sealed.capsule,
+        sealed.usage.input,
+        sealed.usage.output,
+        sealed.usage.total,
+        Date.now()
+      )
+      return { payload: JSON.stringify(body), headers: sealed.headers } satisfies ExecutorResponse
+    }
+    return yield* executeGenerate(context, expanded.request, expanded.options)
+  })
+
   const executeStream = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
@@ -513,6 +618,29 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         requestScoped: true
       })
     }
+    const expanded = yield* expandCompaction(request, options)
+    if (compactionRequested(expanded.request, expanded.options, false)) {
+      const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+      const chunks = buildCompactionStreamChunks(
+        sealed.baseModel,
+        sealed.capsule,
+        sealed.usage.input,
+        sealed.usage.output,
+        sealed.usage.total,
+        Date.now()
+      )
+      const headers = new Headers(sealed.headers)
+      headers.set("Content-Type", "text/event-stream")
+      return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
+    }
+    return yield* executeGenerateStream(context, expanded.request, expanded.options)
+  })
+
+  const executeGenerateStream = Effect.fnUntraced(function* (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions
+  ) {
     const attempt = yield* resolve(context, request, options)
     const baseModel = parseSuffix(request.model).modelName
     yield* checkShortCooldown(attempt, baseModel)
@@ -522,6 +650,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const response = yield* send(attempt, prepared)
     yield* finishSuccess(attempt, prepared)
 
+    const httpClient = yield* HttpClient.HttpClient
     const responseFormat = responseFormatOf(options)
     // Streams always use SSE (`ctx alt = ""`) towards the translators.
     const ctx = responseContext(attempt, prepared, "")
@@ -547,20 +676,26 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         const assembled = assembler.push(filter.filter(line))
         if (assembled.kind === "none") return Stream.empty
         if (assembled.kind === "error") return Stream.fail(assembled.error)
-        const payload = assembled.payload
-        context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
-        const chunks = translate(payload)
-        context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload))
-        // Responses clients: publish the ledger before the translated completion reaches them, so the next turn
-        // finds it (split usage/signature frames may still extend the chain until `response.completed`).
-        const commit =
-          prepared.replay?.terminal === true &&
-          !prepared.replay.committed &&
-          responseFormat === Formats.OpenAIResponse &&
-          chunks.some(isResponseCompleted)
-            ? prepared.replay.commit(ledger)
-            : Effect.void
-        return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
+        return Stream.unwrap(
+          resolveGrounding(attempt, prepared, assembled.payload).pipe(
+            Effect.provideService(HttpClient.HttpClient, httpClient),
+            Effect.map((payload) => {
+              context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
+              const chunks = translate(payload)
+              context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload))
+              // Responses clients: publish the ledger before the translated completion reaches them, so the next turn
+              // finds it (split usage/signature frames may still extend the chain until `response.completed`).
+              const commit =
+                prepared.replay?.terminal === true &&
+                !prepared.replay.committed &&
+                responseFormat === Formats.OpenAIResponse &&
+                chunks.some(isResponseCompleted)
+                  ? prepared.replay.commit(ledger)
+                  : Effect.void
+              return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
+            })
+          )
+        )
       })
     )
     // Only a clean end of stream may produce a synthetic terminal event (a read error never reports success).

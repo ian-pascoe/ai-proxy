@@ -14,7 +14,9 @@
  * WebSockets); terminal events get the same normalisation as the SSE path (`response.done` -> `response.completed`,
  * rebuilt `response.output`, usage detail objects).
  *
- * Not ported: response steering / full duplex (`codex.response-steering`, off by default), stream bootstrap buffering, and non-stream execution over WebSocket (the downstream handler only streams).
+ * Stream bootstrap buffering follows `codex_websockets_stream.go` (every message read spends the frame budget).
+ *
+ * Not ported: response steering / full duplex (`codex.response-steering`, off by default) and non-stream execution over WebSocket (the downstream handler only streams).
  */
 import { Clock, Effect, Option, Stream } from "effect"
 import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts"
@@ -46,6 +48,14 @@ import {
   parseCodexUsage,
   patchCodexCompletedOutput
 } from "./output.ts"
+import {
+  BOOTSTRAP_MAX_BUFFERED_BYTES,
+  BOOTSTRAP_MAX_BUFFERED_FRAMES,
+  bootstrapOverloadError,
+  bootstrapTimeoutMs,
+  isBootstrapBufferableEvent,
+  isOverloadBootstrapFailure
+} from "./bootstrap.ts"
 import type { CodexReplayStore } from "./replay.ts"
 import { cacheReplayFromCompleted } from "./replay.ts"
 
@@ -228,41 +238,153 @@ export const makeCodexWebsocketStream =
             )
           const clearReplay = deps.replayStore.clear(prepared.replayScope.modelName, prepared.replayScope.sessionKey)
 
+          type Outcome =
+            | {
+                readonly _tag: "failure"
+                readonly error: ExecutionError
+                /** Where the failure came from: an upstream `error` frame, a terminal failure event, an empty incomplete. */
+                readonly kind: "ws" | "terminal" | "empty"
+                readonly body: string
+                readonly overload: boolean
+              }
+            | {
+                readonly _tag: "frame"
+                readonly chunks: ReadonlyArray<string>
+                readonly terminal: boolean
+                readonly bufferable: boolean
+                readonly bytes: number
+              }
+
+          /** Observes one upstream message (usage, output items, replay cache) and classifies it. */
+          const classify = (text: string) =>
+            Effect.gen(function* () {
+              const nowMs = yield* Clock.currentTimeMillis
+              const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
+              context.usage.observeResponseModel(responseModelOf(event))
+              if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
+
+              const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs })
+              if (wsError !== undefined) {
+                return {
+                  _tag: "failure",
+                  error: wsError.error,
+                  kind: "ws",
+                  body: wsError.body,
+                  overload: false
+                } as Outcome
+              }
+              const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs })
+              if (failure !== undefined) {
+                return {
+                  _tag: "failure",
+                  error: failure.error,
+                  kind: "terminal",
+                  body: failure.body,
+                  overload: isOverloadBootstrapFailure(failure.body)
+                } as Outcome
+              }
+
+              if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
+              if (isTerminalEmptyIncomplete(event, collector.count, sawOutputDelta)) {
+                return {
+                  _tag: "failure",
+                  error: codexEmptyIncompleteStreamError(),
+                  kind: "empty",
+                  body: "",
+                  overload: false
+                } as Outcome
+              }
+              const type = asString(get(event, "type"))
+              if (type === "response.output_item.done") collector.collect(event)
+              if (
+                (type === "response.completed" || type === "response.done" || type === "response.incomplete") &&
+                isJsonObject(event)
+              ) {
+                const completed = normalizeCodexCompletion(event)
+                if (!prepared.nativeOutput) patchCodexCompletedOutput(completed, collector)
+                if (type !== "response.incomplete")
+                  yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, completed)
+                const detail = parseCodexUsage(completed)
+                if (detail !== undefined) context.usage.publish(detail)
+                const out = ensureResponsesUsageDetails(JSON.stringify(completed))
+                return {
+                  _tag: "frame",
+                  chunks: [out],
+                  terminal: true,
+                  bufferable: false,
+                  bytes: text.length + out.length
+                } as Outcome
+              }
+              const out = text.includes('"usage"') ? ensureResponsesUsageDetails(text) : text
+              return {
+                _tag: "frame",
+                chunks: [out],
+                terminal: false,
+                bufferable: isBootstrapBufferableEvent(type, text, event),
+                bytes: text.length + out.length
+              } as Outcome
+            })
+
           const page = Effect.gen(function* () {
-            const text = yield* turn.read
-            const nowMs = yield* Clock.currentTimeMillis
-            const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
-            context.usage.observeResponseModel(responseModelOf(event))
-            if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
-
-            const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs })
-            if (wsError !== undefined) return yield* fail(wsError.error)
-            const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs })
-            if (failure !== undefined) return yield* fail(failure.error)
-
-            if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
-            if (isTerminalEmptyIncomplete(event, collector.count, sawOutputDelta)) {
-              return yield* fail(codexEmptyIncompleteStreamError())
-            }
-            const type = asString(get(event, "type"))
-            if (type === "response.output_item.done") collector.collect(event)
-            if (
-              (type === "response.completed" || type === "response.done" || type === "response.incomplete") &&
-              isJsonObject(event)
-            ) {
-              const completed = normalizeCodexCompletion(event)
-              if (!prepared.nativeOutput) patchCodexCompletedOutput(completed, collector)
-              if (type !== "response.incomplete")
-                yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, completed)
-              const detail = parseCodexUsage(completed)
-              if (detail !== undefined) context.usage.publish(detail)
-              turn.complete()
-              return [[ensureResponsesUsageDetails(JSON.stringify(completed))], Option.none<void>()] as const
-            }
-            const out = text.includes('"usage"') ? ensureResponsesUsageDetails(text) : text
-            return [[out], Option.some<void>(undefined)] as const
+            const outcome = yield* classify(yield* turn.read)
+            if (outcome._tag === "failure") return yield* fail(outcome.error)
+            if (outcome.terminal) turn.complete()
+            return [outcome.chunks, outcome.terminal ? Option.none<void>() : Option.some<void>(undefined)] as const
           })
-          return Stream.paginate(undefined as void, () => page).pipe(
+          const streaming = Stream.paginate(undefined as void, () => page)
+
+          // `stream-bootstrap-buffering`: hold handshake frames until the first real event so an overload rejection
+          // can fail the attempt over to another credential before anything reaches the client.
+          const bootstrap = context.config.upstream.codex["stream-bootstrap-buffering"]
+          const timeoutMs = bootstrapTimeoutMs(context.config.upstream.codex["stream-bootstrap-timeout"])
+          const buffered = bootstrap
+            ? Effect.gen(function* () {
+                const startedAt = yield* Clock.currentTimeMillis
+                const held: string[] = []
+                let frames = 0
+                let bytes = 0
+                while (true) {
+                  const text = yield* turn.read
+                  // Every message read spends the frame budget, including the ones that are skipped.
+                  frames += 1
+                  const elapsed = (yield* Clock.currentTimeMillis) - startedAt
+                  const timeoutReached = timeoutMs > 0 && elapsed >= timeoutMs
+                  const windowOpen = frames <= BOOTSTRAP_MAX_BUFFERED_FRAMES && !timeoutReached
+                  if (text.trim() === "") {
+                    if (!windowOpen) return { held, rest: streaming }
+                    continue
+                  }
+                  const outcome = yield* classify(text)
+                  if (outcome._tag === "failure") {
+                    if (outcome.overload && !timeoutReached) {
+                      return yield* fail(bootstrapOverloadError(outcome.body, yield* Clock.currentTimeMillis))
+                    }
+                    if (outcome.kind === "ws" && !timeoutReached) return yield* fail(outcome.error)
+                    // Delivered in-stream after the held handshake.
+                    yield* turn.invalidate
+                    if (isThinkingSignatureInvalid(outcome.error.status, outcome.error.message)) yield* clearReplay
+                    return { held, rest: Stream.fail(outcome.error) }
+                  }
+                  if (
+                    windowOpen &&
+                    outcome.bufferable &&
+                    !outcome.terminal &&
+                    bytes + outcome.bytes <= BOOTSTRAP_MAX_BUFFERED_BYTES
+                  ) {
+                    bytes += outcome.bytes
+                    held.push(...outcome.chunks)
+                    continue
+                  }
+                  if (outcome.terminal) turn.complete()
+                  return {
+                    held: [...held, ...outcome.chunks],
+                    rest: outcome.terminal ? Stream.empty : streaming
+                  }
+                }
+              })
+            : Effect.succeed({ held: [] as string[], rest: streaming })
+          const { held, rest } = yield* buffered
+          return Stream.concat(Stream.fromIterable(held), rest).pipe(
             Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
           )
         })

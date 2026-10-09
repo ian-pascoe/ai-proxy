@@ -8,8 +8,8 @@
  * everything else -> `{base}/v1/chat/completions`. Order inside the Chat/Responses paths: translate -> upstream
  * model -> thinking -> shaping -> payload rules (final barrier) -> fetch.
  *
- * Multi-agent v2 / orphan delegation rewriting runs in `translateRequestForExecutor`. Not ported: the apply_patch Responses
- * bridge for `/responses` (translated chat requests have it), outbound proxies. The token refresh runs in the
+ * Multi-agent v2 / orphan delegation rewriting runs in `translateRequestForExecutor`. The `/responses` path bridges the
+ * Codex `apply_patch` custom tool through the strict function (`helps/apply-patch-responses.ts`). Not ported: outbound proxies. The token refresh runs in the
  * ControlPlane (credentials/refresh/kimi.ts); 401 recovery is done by the conductor.
  */
 import { translateRequestForExecutor } from "../helps/translate.ts"
@@ -32,6 +32,11 @@ import type { ThinkingReplayStore } from "../claude/thinking-replay.ts"
 import { ensureResponsesUsageDetails, parseCodexUsage } from "../codex/output.ts"
 import { setIfDifferent } from "../codex/request.ts"
 import { ExecutionError } from "../errors.ts"
+import {
+  APPLY_PATCH_UPSTREAM_ERROR_MESSAGE,
+  ApplyPatchResponsesState,
+  normalizeApplyPatchResponses
+} from "../helps/apply-patch-responses.ts"
 import { finalizePayload } from "../helps/payload.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -80,7 +85,24 @@ const transportError = (error: HttpClientError.HttpClientError) =>
     cause: error
   })
 
+interface StepResult {
+  readonly chunks: ReadonlyArray<string>
+  readonly error?: ExecutionError
+}
+
 const badGateway = () => new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
+
+/** `NormalizeApplyPatchResponsesRequest` failures (a non-string history input) are request faults. */
+const normalizePatchRequest = (body: Json) =>
+  Effect.try({
+    try: () => normalizeApplyPatchResponses(body),
+    catch: (error) =>
+      new ExecutionError({
+        status: 400,
+        message: error instanceof Error ? error.message : String(error),
+        requestScoped: true
+      })
+  })
 
 const usageOf = (text: string): UsageDetail | undefined => {
   const parsed = tryParseJson(text)
@@ -301,6 +323,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       modelInfo: request.modelInfo,
       lookupModelInfo: request.modelLookup
     })
+    body = yield* normalizePatchRequest(body)
     body = normalizeKimiResponsesInput(body)
     body = normalizeKimiTools(body)
     body = normalizeKimiTemperature(body)
@@ -346,13 +369,24 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const data = yield* response.text.pipe(Effect.mapError(transportError))
     context.usage.observeResponseModel(responseModelOf(tryParseJson(data)))
     const responseFormat = responseFormatOf(options)
+    // The bridge is built from the client's declarations (`NewApplyPatchResponsesState(source, original, original)`).
+    const original = options.originalRequest ?? request.payload
+    const bridge = new ApplyPatchResponsesState(options.sourceFormat, original, original)
     let out = data
+    if (bridge.active) {
+      const parsed = tryParseJson(data)
+      const bridged = parsed === undefined ? undefined : bridge.bridge.transformNonStream(parsed)
+      if (bridged === undefined || "error" in bridged) {
+        return yield* new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
+      }
+      out = JSON.stringify(bridged.body)
+    }
     if (responseFormat !== Formats.OpenAIResponse) {
       const translated = registry.translateNonStream(
         responseFormat,
         Formats.OpenAIResponse,
         responseContext(request, options, prepared.translated),
-        data
+        out
       )
       if (translated === undefined || translated === "") return yield* badGateway()
       out = translated
@@ -373,28 +407,63 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const response = yield* post(context, prepared.url, prepared.body, options, true)
     const responseFormat = responseFormatOf(options)
     const state = responseContext(request, options, prepared.translated)
-    const emit = (line: string): Stream.Stream<string, ExecutionError> => {
-      if (responseFormat === Formats.OpenAIResponse) return Stream.make(`${line}\n`)
-      const emitted = Stream.fromIterable(registry.translateStream(responseFormat, Formats.OpenAIResponse, state, line))
-      return state.state.toolInputError === undefined ? emitted : Stream.concat(emitted, Stream.fail(badGateway()))
+    const original = options.originalRequest ?? request.payload
+    const bridge = new ApplyPatchResponsesState(options.sourceFormat, original, original)
+    let stopped = false
+    /** `emitTranslatedLine`: Responses clients get the line as is, others the translated chunks. */
+    const emit = (line: string): StepResult => {
+      if (responseFormat === Formats.OpenAIResponse) return { chunks: [`${line}\n`] }
+      const chunks = [...registry.translateStream(responseFormat, Formats.OpenAIResponse, state, line)]
+      return state.state.toolInputError === undefined ? { chunks } : { chunks, error: badGateway() }
     }
-    const chunks = splitLines(response.stream).pipe(
+    const lines = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
-      Stream.tap((line) =>
-        Effect.sync(() => {
+      Stream.mapEffect((line) =>
+        Effect.sync((): StepResult => {
+          if (stopped) return { chunks: [] }
           context.usage.observeResponseModel(responseModelOf(ssePayloadObject(line)))
-          if (!line.startsWith("data:")) return
-          const payload = line.slice(5).trim()
-          const type = asString(get(tryParseJson(payload), "type"))
-          if (type === "response.completed" || type === "response.incomplete" || type === "response.done") {
-            const usage = usageOf(payload)
-            if (usage !== undefined) context.usage.publish(usage)
+          if (line.startsWith("data:")) {
+            const payload = line.slice(5).trim()
+            const type = asString(get(tryParseJson(payload), "type"))
+            if (type === "response.completed" || type === "response.incomplete" || type === "response.done") {
+              const usage = usageOf(payload)
+              if (usage !== undefined) context.usage.publish(usage)
+            }
           }
+          const bridged = bridge.stream(line)
+          const chunks: string[] = []
+          for (const converted of bridged.lines) {
+            const step = emit(converted)
+            chunks.push(...step.chunks)
+            if (step.error !== undefined) return { chunks, error: step.error }
+          }
+          return bridged.error === undefined ? { chunks } : { chunks, error: badGateway() }
         })
       ),
-      Stream.flatMap(emit),
-      Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
+      Stream.tap((step) =>
+        Effect.sync(() => {
+          if (step.error !== undefined) stopped = true
+        })
+      )
     )
+    // `FinishStream`: EOF without a validated completion emits the local failure once.
+    const tail = Stream.suspend(() => {
+      if (stopped) return Stream.empty
+      const finished = bridge.finishStream()
+      const chunks = finished.lines.flatMap((line) => emit(line).chunks)
+      const emitted = Stream.fromIterable(chunks)
+      return finished.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(badGateway()))
+    })
+    const chunks = Stream.concat(
+      lines.pipe(
+        Stream.takeUntil((step) => step.error !== undefined),
+        Stream.flatMap((step) => {
+          const emitted = Stream.fromIterable(step.chunks)
+          return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
+        })
+      ),
+      tail
+    ).pipe(Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message))))
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -454,8 +523,14 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
   }
 
   /** Anthropic `count_tokens` through the embedded Claude executor with the Messages base URL. */
-  const countTokens: ProviderExecutor["countTokens"] = (context, request, options) =>
-    claude.countTokens(claudeContext(context), request, options)
+  const countTokens: ProviderExecutor["countTokens"] = Effect.fnUntraced(function* (context, request, options) {
+    // `CountTokens`: Responses payloads are normalised through the apply_patch contract first.
+    const counted =
+      options.sourceFormat === Formats.OpenAIResponse
+        ? { ...request, payload: yield* normalizePatchRequest(request.payload) }
+        : request
+    return yield* claude.countTokens(claudeContext(context), counted, options)
+  })
 
   return { identifier: KIMI_PROVIDER, execute, executeStream, countTokens }
 }

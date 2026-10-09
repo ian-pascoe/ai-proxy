@@ -3,8 +3,8 @@
  *
  * Go source: internal/runtime/executor/xai_executor_response.go (xaiNormalizeReasoningSummary*, xaiNamespaceRestorer,
  * unwrapXAIDispatcherArguments, restoreXAIClientWebSearchName, xaiInternalXSearchResponseFilter, xaiPatchCompletedOutput).
- * Events are parsed JSON objects, mutated in place. The apply_patch response bridge is not ported (see
- * ARCHITECTURE.md, xAI section).
+ * Events are parsed JSON objects, mutated in place. The apply_patch response bridge runs after this pipeline
+ * (`helps/apply-patch-responses.ts`), fed with the pre-restoration events for folded dispatchers.
  */
 import {
   asInt,

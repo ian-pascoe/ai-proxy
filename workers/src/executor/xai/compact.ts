@@ -42,7 +42,7 @@ export const compactionItemId = (responseId: string): string => {
   return suffix !== "" && suffix !== responseId ? `cmp_${suffix}` : `cmp_${responseId}`
 }
 
-const compactionOutputItem = (compact: Json, responseId: string): JsonObject => {
+export const compactionOutputItem = (compact: Json, responseId: string): JsonObject => {
   const first = get(compact, "output.0")
   const item: JsonObject = isJsonObject(first) ? cloneJson(first) : { type: "compaction" }
   if (item["type"] === undefined) item["type"] = "compaction"
