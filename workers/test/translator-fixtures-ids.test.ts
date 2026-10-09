@@ -50,12 +50,16 @@ const canonicalJson = (text: string): string | undefined => {
 
 /**
  * Masks generated ids and timestamps: `"id":"name-<counter>"`, `"id":"name-<unix nano>-<counter>"`, `interaction_<nanos>`,
- * `step_<nanos>`, `response_<nanos>` and RFC 3339 `created`/`updated` values.
+ * `step_<nanos>`, `response_<nanos>`, Responses ids (`resp_<hex nanos>_<counter>`, `call_...` and the ids derived from
+ * them) and RFC 3339 `created`/`updated` values.
  */
 const maskIds = (text: string): string =>
   text
     .replace(/("(?:id|call_id|item_id|tool_call_id)"\s*:\s*"[^"]*?)-\d+(?:-\d+)?(")/g, "$1-N$2")
     .replace(/\b(interaction|step|response)_\d{10,}\b/g, "$1_N")
+    .replace(/(call|resp)_[0-9a-f]{10,}_\d+/g, "$1_N")
+    .replace(/(msg|rs|ws)_[0-9a-f]{12,}_\d+/g, "$1_N")
+    .replace(/("created_at"\s*:\s*)\d+/g, "$1N")
     .replace(/("(?:created|updated)"\s*:\s*")\d{4}-\d\d-\d\dT[^"]*(")/g, "$1T$2")
 
 const normalize = (text: string): string => {

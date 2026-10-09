@@ -186,6 +186,21 @@ export const decideGeminiSignature = (raw: string): GeminiSignatureDecision => {
   return { action: "replace_with_gemini_bypass", normalized: "" }
 }
 
+/** `CompatibleSignatureForProviderBlock(Gemini, raw, kind)`: the replayable signature, or `undefined`. */
+export const compatibleGeminiSignature = (raw: string): string | undefined => {
+  const decision = decideGeminiSignature(raw)
+  return decision.action === "preserve" && decision.normalized !== "" ? decision.normalized : undefined
+}
+
+/** `SignatureProviderFromModelName(model) == SignatureProviderGemini`. */
+export const isGeminiSignatureModel = (modelName: string): boolean => {
+  const lower = modelName.trim().toLowerCase()
+  return !lower.includes("claude") && lower.includes("gemini")
+}
+
+/** `sigcompat.MaxGeminiThoughtSignatureLen`. */
+export const MAX_GEMINI_SIGNATURE_LEN = MAX_GEMINI_THOUGHT_SIGNATURE_LEN
+
 /** `GeminiReplaySignatureOrBypass`. */
 export const geminiReplaySignatureOrBypass = (raw: string): string => {
   const decision = decideGeminiSignature(raw)

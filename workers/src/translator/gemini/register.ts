@@ -19,6 +19,9 @@ import {
   interactionsToGeminiResponse
 } from "./interactions/responses.ts"
 import { convertOpenAIRequestToGemini } from "./openai/chat-request.ts"
+import { convertOpenAIResponsesRequestToGemini } from "./openai/responses/request.ts"
+import { convertGeminiResponseToOpenAIResponses } from "./openai/responses/response.ts"
+import { convertGeminiResponseToOpenAIResponsesNonStream } from "./openai/responses/response-nonstream.ts"
 import { geminiToOpenAIResponse } from "./openai/chat-response.ts"
 
 export const registerGeminiTranslators = (registry: TranslatorRegistry): TranslatorRegistry =>
@@ -26,6 +29,10 @@ export const registerGeminiTranslators = (registry: TranslatorRegistry): Transla
     .register(Formats.Gemini, Formats.Gemini, convertGeminiRequestToGemini, geminiToGeminiResponse)
     .register(Formats.Claude, Formats.Gemini, convertClaudeRequestToGemini, geminiToClaudeResponse)
     .register(Formats.OpenAI, Formats.Gemini, convertOpenAIRequestToGemini, geminiToOpenAIResponse)
+    .register(Formats.OpenAIResponse, Formats.Gemini, convertOpenAIResponsesRequestToGemini, {
+      stream: convertGeminiResponseToOpenAIResponses,
+      nonStream: convertGeminiResponseToOpenAIResponsesNonStream
+    })
     .register(
       Formats.Interactions,
       Formats.Interactions,

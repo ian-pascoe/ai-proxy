@@ -1,0 +1,376 @@
+[
+  {
+    "name": "request: string input, instructions, sampling, reasoning and json schema",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"Hello","instructions":"Be brief","max_output_tokens":256,"temperature":0.2,"top_p":0.9,"stop_sequences":["END","STOP"],"reasoning":{"effort":"High"},"text":{"format":{"type":"json_schema","schema":{"type":"object","properties":{"a":{"type":"string"}}}}}}
+  },
+  {
+    "name": "request: json_object format, auto reasoning and empty stop sequences",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":"hi"}],"reasoning":{"effort":"auto"},"text":{"format":{"type":"json_object"}},"stop_sequences":[]}
+  },
+  {
+    "name": "request: tools and tool_choice absent",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}]}
+  },
+  {
+    "name": "request: tools and tool_choice \"auto\"",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":"auto"}
+  },
+  {
+    "name": "request: tools and tool_choice \"required\"",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":"required"}
+  },
+  {
+    "name": "request: tools and tool_choice \"none\"",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":"none"}
+  },
+  {
+    "name": "request: tools and tool_choice {\"type\":\"function\",\"name\":\"get_weather\"}",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":{"type":"function","name":"get_weather"}}
+  },
+  {
+    "name": "request: tools and tool_choice {\"type\":\"custom\",\"name\":\"shell\"}",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":{"type":"custom","name":"shell"}}
+  },
+  {
+    "name": "request: tools and tool_choice {\"type\":\"function\",\"name\":\"lookup\",\"namespace\":\"mcp_srv\"}",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_text","text":"Weather in Paris?"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="},{"type":"input_file","filename":"a.pdf","file_data":"data:application/pdf;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call","call_id":"call_1","name":"get_weather","arguments":"{\"city\":\"Paris\"}"},{"type":"function_call_output","call_id":"call_1","output":"21C"}],"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}},{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}},{"type":"namespace","name":"mcp_srv","tools":[{"type":"function","name":"lookup","description":"Find","parameters":{"type":"object","properties":{}}}]},{"type":"web_search","filters":{"allowed_domains":["example.com","  docs.example.org "]}}],"tool_choice":{"type":"function","name":"lookup","namespace":"mcp_srv"}}
+  },
+  {
+    "name": "request: web search tool only",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"latest news","tools":[{"type":"web_search"}]}
+  },
+  {
+    "name": "request: conversation with developer messages, parallel calls and orphan outputs",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","instructions":"sys","tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"input":[{"role":"developer","content":[{"type":"input_text","text":"dev early"}]},{"role":"user","content":"Do things"},{"role":"assistant","content":[{"type":"output_text","text":"Calling"}]},{"type":"function_call","call_id":"c1","name":"get_weather","arguments":"{\"city\":\"A\"}"},{"type":"function_call","call_id":"c2","name":"get_weather","arguments":"not json"},{"type":"custom_tool_call","call_id":"c3","name":"shell","input":"ls -la"},{"role":"developer","content":"dev mid"},{"type":"function_call_output","call_id":"c2","output":[{"type":"output_text","text":"two"},{"type":"input_image","image_url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}]},{"type":"function_call_output","call_id":"c1","output":{"ok":true,"$ref":"x"}},{"type":"function_call_output","call_id":"zzz","output":"orphan text"},{"role":"user","content":[{"type":"input_text","text":"thanks"}]},{"type":"function_call","call_id":"c9","name":"get_weather","arguments":"{}"},{"role":"user","content":"still there?"}]}
+  },
+  {
+    "name": "request: output_text parts without a role, trailing model prefill",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"type":"input_text","text":"q"},{"type":"output_text","text":"partial answer"}]}
+  },
+  {
+    "name": "request: reasoning carriers on a gemini model",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}}],"input":[{"role":"user","content":"go"},{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"plan it"}],"encrypted_content":"cpa-gemini-responses-carrier-v1:next:function:RWhnS0ZnRU1PZGJIWTJsd2FHVnlMWFJsZUhRdFlubDBaWE09"},{"type":"function_call","call_id":"c1","name":"get_weather","arguments":"{}"},{"type":"function_call_output","call_id":"c1","output":"ok"},{"type":"reasoning","id":"rs_2","summary":[],"encrypted_content":"cpa-gemini-responses-carrier-v1:next:text:RWhvS0dBRU1PZGJIYzJWamIyNWtMV05wY0dobGNpMWllWFJsY3c9PQ"},{"role":"assistant","content":[{"type":"output_text","id":"m","text":"answer"}]},{"type":"reasoning","id":"rs_d_detached_after_1","summary":[],"encrypted_content":"cpa-gemini-responses-carrier-v1:previous:text:TVRJelpUUTFOamN0WlRnNVlpMHhNbVF6TFdFME5UWXROREkyTmpFME1UYzBNREF3"},{"role":"user","content":"next"}]}
+  },
+  {
+    "name": "request: bare signature, detached carrier after a call and invalid carriers",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}}],"input":[{"role":"user","content":"go"},{"type":"function_call","call_id":"c1","name":"get_weather","arguments":"{}"},{"type":"reasoning","id":"rs_x_detached_after_2","summary":[],"encrypted_content":"cpa-gemini-responses-carrier-v1:previous:function:RWhnS0ZnRU1PZGJIWTJsd2FHVnlMWFJsZUhRdFlubDBaWE09"},{"type":"function_call_output","call_id":"c1","output":"ok"},{"type":"reasoning","id":"bad","summary":[{"type":"summary_text","text":"keep me"}],"encrypted_content":"cpa-gemini-responses-carrier-v1:next:text:!!"},{"type":"reasoning","id":"bad2","summary":[],"encrypted_content":"cpa-gemini-responses-carrier-v1:sideways:text:QUJD"},{"type":"reasoning","id":"raw","summary":[{"type":"summary_text","text":"raw sig"}],"encrypted_content":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=","_cpa_reasoning_signature":"forged"},{"role":"user","content":"end"}]}
+  },
+  {
+    "name": "request: non-gemini target model keeps reasoning as thought text",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "other-model",
+    "stream": false,
+    "request": {"model":"gpt-5","tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}}],"input":[{"role":"user","content":"go"},{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"thinking"}],"encrypted_content":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"type":"function_call","call_id":"c1","name":"get_weather","arguments":"{}"},{"type":"function_call_output","call_id":"c1","output":"ok"}]}
+  },
+  {
+    "name": "request: media blocks",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_image","image_url":"https://example.com/pic.jpg"},{"type":"input_file","file_url":"gs://bucket/doc.pdf"},{"type":"input_audio","input_audio":{"data":"QUJD","format":"mp3"}},{"type":"input_video","video_url":"https://example.com/v.webm"},{"type":"input_image","image_url":"QUJD","format":"gif"},{"type":"input_text","text":"describe"}]}]}
+  },
+  {
+    "name": "request: user turn with only an unsupported attachment is refused",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_image","file_id":"file_1"}]}]}
+  },
+  {
+    "name": "request: unsupported attachment next to text is dropped",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":[{"role":"user","content":[{"type":"input_image","file_id":"file_1"},{"type":"input_text","text":"hi"}]}]}
+  },
+  {
+    "name": "stream: text only with usage",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello \"}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"world\"}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: max tokens gives an incomplete response",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"cut\"}]},\"index\":0,\"finishReason\":\"MAX_TOKENS\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}"
+    ]
+  },
+  {
+    "name": "stream: finish without usage waits for DONE",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"a\"}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}"
+    ]
+  },
+  {
+    "name": "stream: thought, signature and text",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"think \",\"thought\":true}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"more\",\"thought\":true,\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer\",\"thoughtSignature\":\"EhoKGAEMOdbHc2Vjb25kLWNpcGhlci1ieXRlcw==\"}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: reasoning followed by a function call",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"plan\",\"thought\":true}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"},\"id\":\"up1\"},\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"shell\",\"args\":{\"input\":\"ls\"}}}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: signature-less call after text and trailing carrier",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"before\",\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{}}}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\",\"thoughtSignature\":\"EhoKGAEMOdbHc2Vjb25kLWNpcGhlci1ieXRlcw==\"}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: apply_patch custom tool call",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"patch","tools":[{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"apply_patch\",\"args\":{\"input\":\"*** Begin Patch\\n*** End Patch\"},\"id\":\"p1\"}}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: apply_patch with bad arguments fails the response",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"patch","tools":[{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"apply_patch\",\"args\":{\"other\":1},\"id\":\"p1\"}}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: repeated apply_patch snapshots are one call",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"patch","tools":[{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"apply_patch\",\"args\":{\"input\":\"x\"},\"id\":\"p1\"}}]},\"index\":0}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"apply_patch\",\"args\":{\"input\":\"x\"},\"id\":\"p1\"}}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: web search grounding",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"news?","tools":[{"type":"web_search"}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]},\"index\":0,\"groundingMetadata\":{\"webSearchQueries\":[\"gemini news\"],\"groundingChunks\":[{\"web\":{\"uri\":\"https://a.example/x\",\"title\":\"A\"}},{\"web\":{\"uri\":\"https://b.example/y\",\"title\":\"B\"}}],\"groundingSupports\":[{\"segment\":{\"startIndex\":0,\"endIndex\":5,\"text\":\"Hello\"},\"groundingChunkIndices\":[0,1]}]}}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05Z\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" there\"}]},\"index\":0,\"finishReason\":\"STOP\"}],\"responseId\":\"r1\",\"createTime\":\"2025-01-02T03:04:05.678Z\",\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: DONE before any chunk produces nothing",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: wrapped vertex response and generated ids",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseLines": [
+      "{\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"wrapped\"}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"thoughtsTokenCount\":3,\"totalTokenCount\":18,\"cachedContentTokenCount\":2}}}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: text",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]},"finishReason":"STOP","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: max tokens",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"cut"}]},"finishReason":"MAX_TOKENS","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: reasoning, text and signatures",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"why","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"text":"answer","thoughtSignature":"EhoKGAEMOdbHc2Vjb25kLWNpcGhlci1ieXRlcw=="},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},"finishReason":"STOP","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: function and custom calls",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"model":"gpt-5","input":"hi","instructions":"x","max_output_tokens":100,"reasoning":{"effort":"high"},"tools":[{"type":"function","name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"}},"required":["city"],"additionalProperties":false}},{"type":"custom","name":"shell","description":"Run a command","format":{"type":"text"}}],"tool_choice":"auto","store":false,"user":"u1"},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"t","thought":true},{"functionCall":{"name":"get_weather","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"shell","args":{"input":"ls"}}},{"text":"","thoughtSignature":"EhoKGAEMOdbHc2Vjb25kLWNpcGhlci1ieXRlcw=="}]},"finishReason":"STOP","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: apply_patch",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"model":"gpt-5","input":"patch","tools":[{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"apply_patch","args":{"input":"*** Begin Patch\n*** End Patch"},"id":"p1"}}]},"finishReason":"STOP","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: apply_patch with bad arguments is a translation failure",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"patch","tools":[{"type":"custom","name":"apply_patch","description":"Patch files","format":{"type":"grammar","definition":"start: /.+/"}}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"apply_patch","args":{"x":1},"id":"p1"}}]},"finishReason":"STOP","index":0}],"responseId":"r1","createTime":"2025-01-02T03:04:05.678Z","modelVersion":"gemini-2.5-pro","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: web search with citations",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"gpt-5","input":"news?","tools":[{"type":"web_search"}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello there"}]},"finishReason":"STOP","index":0,"groundingMetadata":{"webSearchQueries":["gemini news"],"groundingChunks":[{"web":{"uri":"https://a.example/x","title":"A"}},{"web":{"uri":"https://b.example/y","title":"B"}}],"groundingSupports":[{"segment":{"startIndex":0,"endIndex":5,"text":"Hello"},"groundingChunkIndices":[0,1]}]}}],"responseId":"r1","createTime":"2025-01-02T03:04:05Z","usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"thoughtsTokenCount":3,"totalTokenCount":18,"cachedContentTokenCount":2}}
+  },
+  {
+    "name": "non-stream: wrapped response without a request model",
+    "from": "openai-response",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"input":"x"},
+    "responseBody": {"response":{"candidates":[{"content":{"parts":[{"text":"w"}]},"finishReason":"STOP"}],"modelVersion":"gemini-x"}}
+  }
+]
