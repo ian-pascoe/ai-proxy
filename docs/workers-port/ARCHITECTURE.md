@@ -217,7 +217,11 @@ Core contracts every provider slice implements (Go references in each module hea
   registry slice) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
   stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
-  `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`.
+  `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`. Non-stream answers of Claude, OpenAI chat/completions,
+  Gemini/Interactions, images and OpenAI-shaped video retrieval go through `withNonStreamKeepAlive` (`requests.nonstream-keepalive-interval`):
+  nothing is committed before the first interval, so a timely answer keeps its real status; afterwards a blank line is written per interval and
+  the final body (errors included) follows under a committed `200 application/json`, like Go. Video content downloads and `/v1/responses` are
+  not wrapped (Go does not either).
   Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
   Request bodies (`handlers/request.ts`, `http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the decoded
   size (`http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
@@ -303,12 +307,36 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
   fails the attempt with a 503 before anything reaches the client, so the conductor fails over to the next credential; other terminal
   failures flush the held handshake and are delivered in-stream; a clean EOF while holding fails the attempt without releasing. `grok-pager` /
   `grok-shell` clients get `keepalive` events as `: keepalive` SSE comments (`TransformKeepaliveSSELine`).
+
+- **models.json header overrides** (`helps/model-headers.ts`): `config.override_header` of the executed model is read from the attempt's
+  registry snapshot (`ExecutorRequest.modelLookup(model, "")`, `ThinkingModelInfo.config.overrideHeader`) and forced onto every
+  upstream request (HTTP, images, WebSocket handshake) like `applyModelHeaderOverrides`; the `modelHeaderOverrides` executor option
+  still wins in tests.
+- **`is-compat` fallback** (`codex/compat.ts`, Go `resolveCodexModelIsCompat`): the resolved model info decides; without one the
+  credential's `api-keys.codex` entry (index, then key + base URL) is authoritative for its `models` list, then the generic
+  API-key lookup.
+- **Image tool usage** (`publishCodexImageToolUsage`): `response.tool_usage.image_gen` tokens become an extra usage record under the
+  `image_generation` tool model (`UsageReporter.publishAdditionalModel`; the conductor publishes the extra records after the main one).
+
 - **WebSocket**: `executor/codex/websocket.ts` is the upstream transport (Go `CodexWebsocketsExecutor`), dispatched from
   `executeStream` like Go's `CodexAutoExecutor`; see "Responses WebSocket transports".
-- **Not ported (follow-ups)**: the Go `resolveCodexModelIsCompat`
-  config fallback when no resolved model info is bound, models.json header overrides (hook `modelHeaderOverrides` exists),
-  OpenAI-compatible image models (xAI ones: see below), and the Responses-tool image path being reachable only for
-  non-`gpt-image` models (ported but not routed).
+- **Response steering / full duplex** (`upstream.codex.response-steering`, `codex/duplex.ts`, Go `streamCodexDuplex`): with the flag on, a
+  downstream socket on a Codex credential with `websockets` hands its single client-frame reader to the executor
+  (`WebsocketExecution.duplex`, set by `handlers/responses/websocket/socket.ts`). The executor owns the upstream socket until the
+  client goes away: a writer fiber queues explicit creates (max 16) while steering is unacknowledged, forwards `response.steer`
+  (payload rules as `codex-websockets`, `type` re-forced) and answers malformed/unsupported frames with a local 400 `error` event;
+  a reader fiber classifies per-response failures, keeps the per-response settings (replay scope, native output, collaboration-tool
+  renaming, reasoning/instructions; 16 retained) that automatic successors and `response.append` inherit, and forwards
+  `response.steer.*` events byte for byte. A failure before the first `response.created` fails the attempt (credential failover);
+  later 401/403/429 events are delivered and then end the socket; ambiguous failures end it without cooling the credential
+  (`duplexConnectionError` is request-scoped). The handler treats a duplex stream as the socket: error events after
+  `response.created` are events, the stream ending closes the socket quietly, and the upstream-disconnect callback is left to the
+  executor. Deviations: one usage record per attempt with the summed tokens of all responses (Go: a record per response);
+  `authEnabled` defaults to true (a credential disabled mid-socket is not re-checked); other providers never run duplex.
+- **Non-stream over WebSocket** (`makeCodexWebsocketExecute`, Go `CodexWebsocketsExecutor.Execute`): a non-stream execution carrying
+  `metadata.websocket` on a `websockets` credential reads the upstream events until the first terminal one and answers with the
+  translated completed response (same session/socket rules, replay-required for continuations without a live socket).
+- **Not ported (follow-ups)**: the Responses-tool image path being reachable only for non-`gpt-image` models (ported but not routed).
 
 ## xAI provider and media endpoints (`src/executor/xai/`, `src/handlers/openai/{videos,speech,xai-*}.ts`)
 
@@ -365,6 +393,16 @@ WebSocket transports"). Reuses the Codex translators
   (translation step) are shared with Codex.
 - **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
+
+- **`ForAPIKey` scoping**: done for every provider by `withApiKeyScope` in the executor registry (xAI included, also on the WebSocket path:
+  the socket runs through the conductor). Go's xAI settings live under the shared `upstream.xai`, which `ForAPIKey` keeps, so there is
+  nothing xAI-specific to scope.
+
+- **Multi-agent v2** input rewriting (`rewriteCodexMultiAgentV2Input`, after the stream/model fields are set) and orphan delegation
+  (translation step) are shared with Codex. xAI image requests ignore `mask`/`input_fidelity` exactly like Go (the xAI edit body only
+  carries prompt, images, `aspect_ratio`, `resolution`, `quality` and `n`). The Go Claude stream input-token estimate on the xAI
+  WebSocket path cannot trigger here: downstream sockets only carry Responses-format requests (`NewClaudeInputTokenState` needs a
+  Claude client), and the HTTP path gets it from `TranslatorRegistry.translateStream`.
 
 ## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
 
@@ -425,6 +463,10 @@ credential list; no request-log timelines; response steering / full duplex (`cod
 non-stream execution over WebSocket. The multi-agent v2 tool preparation and orphan delegation rewrite run on
 each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. Upgrades whose `Origin` is not the Worker's own host are refused by the Access gate (Go: `CheckOrigin` always true; the
 Access cookie makes cross-site WebSocket hijacking possible, see Authentication). CPU limits for
+
+credential list; no request-log timelines. Response steering / full duplex and non-stream execution over WebSocket are ported
+(see the Codex section). The multi-agent v2 tool preparation and orphan delegation rewrite run on
+each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 ## Model registry and `/models` endpoints (`src/registry/`)
@@ -651,8 +693,15 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
   doubles of `ModelProviders` may implement the optional `modelType`) to the OpenAI-compatible executor, converting the
   non-stream answer to `response_format` (`buildImagesApiResponse`). The handler turns multipart edits into the JSON edit
   form, so the executor rebuilds `multipart/form-data` for the upstream (file names are not kept).
+- **Executor shaping** (`openai-compat/executor.ts`): models whose `input-modalities` list text without image get their Chat tool
+  results flattened to text, relayed Claude tool-result images replaced by `[image omitted: unsupported by upstream]`
+  (`helps/openai-compat-tool-results.ts`, verified against Go by `fixturegen/compatparity`). With `support-prompt-cache-key` the
+  `prompt_cache_key` is the client's, else (Claude callers) the Claude Code agent scope, else a UUIDv5 over provider, model, source
+  format and the provider session (`ProviderSessionUUID`: the WebSocket execution session, then the derived session identity).
+  SEAM: the derived identity is read from `ExecutionMetadata.sessionId`, like Codex and Antigravity; the content-hash derivation of the
+  session slice feeds the same field.
 - **Deviations**: a patch-enabled Interactions stream that ends without its source
-  terminator is reported as a gateway error instead of a synthesised `response.failed` (`FinalizeToolInput`); malformed
+  terminator now fails through `state.finalizeToolInput` (executors call it, see Devin); malformed
   Interactions event JSON is only approximated (longest valid object prefix) because gjson reads lazily; raw JSON texts that
   Go copies byte for byte (`gjson.Raw`) are re-serialised compactly.
 - **No equivalent needed**: the Go OpenAI-compatible executor has no refresh and no reasoning replay cache (§7 of the pipeline
@@ -780,8 +829,16 @@ Deviations from Go: Devin's per-session turn counter is an atomic `incr` in the 
 LRU of 5000); `fetch` always sends a
 User-Agent (native devin-cli sends none; the executor sets it empty); missing Devin credentials answer 401 instead of a plain
 error. Kimi `/responses` and Meta bridge the Codex `apply_patch` tool through the strict function (see the xAI section for the shared
-state). Not ported: the Devin executor-level apply_patch EOF guard, Devin `GetUserStatus` quota refresh and model catalog refresh (cron follow-ups), the Kimi
-`X-Msh-Device-Name/Model` of the real host, request/response debug logs.
+state). Executor-level apply_patch guards (`helps/apply-patch-stream.ts`, Go `EndApplyPatchStream` & co): a failing non-stream request
+of a client that declares the custom `apply_patch` tool, and a non-stream call of that tool whose arguments never became valid JSON, answer
+the sanitised 502; a patch-enabled Responses stream that ends without its terminator (EOF, read error, trailer error) emits the translator's one
+`response.failed` frame (`state.finalizeToolInput` of the Interactions -> Responses translator) and fails with the same 502 instead of the
+generic abort events. `GetUserStatus` quota/profile refresh is the cron task `devin-user-status` (`credentials/devin-status.ts`,
+`ControlPlane.refreshDevinStatus`): per stored credential it writes email/user/team/plan/org into the auth file, `quota.signals`
+(`daily|weekly_quota_remaining_percent`, `*_reset_at`, `plan`, `plan_start|end`) and `last_refresh`; failures leave the credential untouched.
+The catalog refresh is the existing `model-catalog-refresh` Devin source; the executor now resolves effort variants and max tokens through
+the registry snapshot (`modelLookup`, ids `devin/<id>`) before the embedded catalog. Not ported: the Kimi
+`X-Msh-Device-Name/Model` of the real host, request/response debug logs, the developer-only `cmd/fetch_devin_models` live catalog probe.
 
 ## SessionState Durable Object (`src/session-state/`)
 

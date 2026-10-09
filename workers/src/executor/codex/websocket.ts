@@ -16,7 +16,8 @@
  *
  * Stream bootstrap buffering follows `codex_websockets_stream.go` (every message read spends the frame budget).
  *
- * Not ported: response steering / full duplex (`codex.response-steering`, off by default) and non-stream execution over WebSocket (the downstream handler only streams).
+ * Response steering / full duplex (`upstream.codex.response-steering`, off by default) is `duplex.ts`; non-stream execution over
+ * WebSocket aggregates the Responses events (`executor.ts` `execute`).
  */
 import { Clock, Effect, Option, Stream } from "effect"
 import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts"
@@ -26,9 +27,10 @@ import { responseModelOf } from "../../usage/record.ts"
 import { isResponsesTokenEvent } from "../../usage/ttft.ts"
 import { ExecutionError } from "../errors.ts"
 import type { Thinking } from "../thinking.ts"
-import type { ExecutionContext, ExecutorOptions, ExecutorRequest, StreamResult } from "../types.ts"
+import type { ExecutionContext, ExecutorOptions, ExecutorRequest, ExecutorResponse, StreamResult } from "../types.ts"
 import { websocketUrl } from "../websocket/connector.ts"
-import { codexSessionStore, openTurn, type UpstreamSessionStore } from "../websocket/session.ts"
+import { codexSessionStore, type OpenTurnInput, openTurn, type UpstreamSessionStore } from "../websocket/session.ts"
+import { startCodexDuplex } from "./duplex.ts"
 import {
   codexEmptyIncompleteStreamError,
   codexTerminalFailure,
@@ -180,52 +182,97 @@ export interface CodexWebsocketDeps {
     mode: { readonly stream: boolean; readonly compact: boolean; readonly websocket: boolean }
   ) => Effect.Effect<PreparedRequest, ExecutionError, Thinking>
   readonly replayStore: CodexReplayStore
-  readonly modelHeaderOverrides?: ((model: string) => Readonly<Record<string, string>> | undefined) | undefined
+  /** `sdktranslator.TranslateNonStream` of the completed response (`undefined` = translation failure). */
+  readonly translateNonStream?: (
+    prepared: PreparedRequest,
+    request: ExecutorRequest,
+    completed: Json
+  ) => string | undefined
+  readonly modelHeaderOverrides?:
+    ((request: ExecutorRequest, model: string) => Readonly<Record<string, string>> | undefined) | undefined
   readonly store?: UpstreamSessionStore
+}
+
+/** The upstream socket request of a prepared turn (`ensureUpstreamConn` target, handshake headers, first frame). */
+const turnInputOf = (
+  deps: CodexWebsocketDeps,
+  context: ExecutionContext,
+  request: ExecutorRequest,
+  options: ExecutorOptions,
+  prepared: PreparedRequest
+) => {
+  const websocket = options.metadata.websocket
+  const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
+  const url = websocketUrl(`${codexBaseUrl(context.credential)}/responses`)
+  const overrides = deps.modelHeaderOverrides?.(request, prepared.baseModel)
+  const headers = buildCodexWebsocketHeaders({
+    credential: context.credential,
+    config: context.config,
+    clientHeaders: options.headers,
+    cacheId: prepared.cacheId,
+    nativeRequest: prepared.nativeOutput,
+    body: prepared.body,
+    baseModel: prepared.baseModel,
+    ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
+    ...(overrides !== undefined ? { modelHeaderOverrides: overrides } : {})
+  })
+  const frame = frameCodexWebsocketBody(prepared.body)
+  return (dialedAt: number): OpenTurnInput => ({
+    store: deps.store ?? codexSessionStore,
+    sessionId: websocket?.sessionId,
+    authId: context.credential.id,
+    url,
+    headers,
+    frame: () => frame,
+    requireUpstream: websocket?.requireUpstream === true,
+    label: "codex",
+    classifyHandshake: (status, body, responseHeaders) =>
+      // A 426 means the endpoint has no WebSocket support: surfaced as is (Go falls back to HTTP only when the client is
+      // not a WebSocket, which cannot be the case here).
+      status === 426
+        ? new ExecutionError({ status, message: body })
+        : newCodexStatusError(status, body, { modelLevelCooling, nowMs: dialedAt, headers: responseHeaders })
+  })
 }
 
 /** The Go `CodexWebsocketsExecutor.ExecuteStream` path. */
 export const makeCodexWebsocketStream =
   (deps: CodexWebsocketDeps) => (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions) =>
     Effect.gen(function* () {
+      const services = yield* Effect.context<Thinking>()
       const prepared = yield* deps.prepare(context, request, options, { stream: true, compact: false, websocket: true })
       const websocket = options.metadata.websocket
       const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
-      const url = websocketUrl(`${codexBaseUrl(context.credential)}/responses`)
-      const overrides = deps.modelHeaderOverrides?.(prepared.baseModel)
-      const headers = buildCodexWebsocketHeaders({
-        credential: context.credential,
-        config: context.config,
-        clientHeaders: options.headers,
-        cacheId: prepared.cacheId,
-        nativeRequest: prepared.nativeOutput,
-        body: prepared.body,
-        baseModel: prepared.baseModel,
-        ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
-        ...(overrides !== undefined ? { modelHeaderOverrides: overrides } : {})
-      })
-      const frame = frameCodexWebsocketBody(prepared.body)
+      const turnInput = turnInputOf(deps, context, request, options, prepared)
 
       const chunks = Stream.unwrap(
         Effect.gen(function* () {
-          const dialedAt = yield* Clock.currentTimeMillis
-          const turn = yield* openTurn({
-            store: deps.store ?? codexSessionStore,
-            sessionId: websocket?.sessionId,
-            authId: context.credential.id,
-            url,
-            headers,
-            frame: () => frame,
-            requireUpstream: websocket?.requireUpstream === true,
-            label: "codex",
-            classifyHandshake: (status, body, responseHeaders) =>
-              // A 426 means the endpoint has no WebSocket support: surfaced as is (Go falls back to HTTP only when
-              // the client is not a WebSocket, which cannot be the case here).
-              status === 426
-                ? new ExecutionError({ status, message: body })
-                : newCodexStatusError(status, body, { modelLevelCooling, nowMs: dialedAt, headers: responseHeaders })
-          })
+          const turn = yield* openTurn(turnInput(yield* Clock.currentTimeMillis))
           context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
+          // `upstream.codex.response-steering`: the executor owns the socket until the downstream one goes away.
+          if (websocket?.duplex !== undefined && context.config.upstream.codex["response-steering"]) {
+            return yield* startCodexDuplex({
+              prepare: deps.prepare,
+              replayStore: deps.replayStore,
+              context,
+              request,
+              options,
+              duplex: websocket.duplex,
+              turn,
+              initial: prepared,
+              modelLevelCooling,
+              frame: frameCodexWebsocketBody,
+              parseWebsocketError: parseCodexWebsocketError
+            }).pipe(
+              // The writer fiber prepares follow-up creates, which needs the request's services.
+              Effect.provideContext(services),
+              Effect.map((chunks) =>
+                chunks.pipe(
+                  Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
+                )
+              )
+            )
+          }
           const collector = new OutputItemCollector()
           let sawOutputDelta = false
 
@@ -391,3 +438,71 @@ export const makeCodexWebsocketStream =
       )
       return { headers: new Headers(), chunks } satisfies StreamResult
     })
+
+/**
+ * The Go `CodexWebsocketsExecutor.Execute` path (non-stream request of a downstream WebSocket): the same upstream socket
+ * and session rules as the stream, reading events until the first terminal one and answering with the translated
+ * completed response.
+ */
+export const makeCodexWebsocketExecute =
+  (deps: CodexWebsocketDeps) => (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const prepared = yield* deps.prepare(context, request, options, {
+          stream: false,
+          compact: false,
+          websocket: true
+        })
+        const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
+        const turn = yield* openTurn(
+          turnInputOf(deps, context, request, options, prepared)(yield* Clock.currentTimeMillis)
+        )
+        context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
+        const clearReplay = deps.replayStore.clear(prepared.replayScope.modelName, prepared.replayScope.sessionKey)
+        const fail = (error: ExecutionError) =>
+          turn.invalidate.pipe(
+            Effect.andThen(() => (isThinkingSignatureInvalid(error.status, error.message) ? clearReplay : Effect.void)),
+            Effect.andThen(Effect.fail(error))
+          )
+        const collector = new OutputItemCollector()
+        let sawOutputDelta = false
+        while (true) {
+          const text = yield* turn.read
+          const nowMs = yield* Clock.currentTimeMillis
+          const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
+          context.usage.observeResponseModel(responseModelOf(event))
+          if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
+
+          const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs })
+          if (wsError !== undefined) return yield* fail(wsError.error)
+          const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs })
+          if (failure !== undefined) return yield* fail(failure.error)
+
+          if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
+          const type = asString(get(event, "type"))
+          if (type === "response.output_item.done") collector.collect(event)
+          if (
+            (type !== "response.completed" && type !== "response.done" && type !== "response.incomplete") ||
+            !isJsonObject(event)
+          ) {
+            continue
+          }
+          const completed = normalizeCodexCompletion(event)
+          if (isTerminalEmptyIncomplete(completed, collector.count, sawOutputDelta)) {
+            return yield* fail(codexEmptyIncompleteStreamError())
+          }
+          patchCodexCompletedOutput(completed, collector)
+          if (type !== "response.incomplete")
+            yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, completed)
+          const detail = parseCodexUsage(completed)
+          if (detail !== undefined) context.usage.publish(detail)
+          const translated = deps.translateNonStream?.(prepared, request, completed) ?? JSON.stringify(completed)
+          if (translated === "")
+            return yield* fail(new ExecutionError({ status: 502, message: "response translation failed" }))
+          turn.complete()
+          const payload =
+            prepared.responseFormat === "openai-response" ? ensureResponsesUsageDetails(translated) : translated
+          return { payload, headers: turn.headers } satisfies ExecutorResponse
+        }
+      })
+    )

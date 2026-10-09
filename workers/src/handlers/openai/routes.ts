@@ -16,7 +16,7 @@ import { Formats } from "../../translator/formats.ts"
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
 import { openAIFramer, type StreamFramer } from "../framing.ts"
 import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts"
 import { chatResponseToCompletions, chatStreamChunkToCompletions, completionsRequestToChat } from "./completions.ts"
 
 /** `shouldTreatAsResponsesFormat`: a Responses-shaped payload sent to `/v1/chat/completions`. */
@@ -65,9 +65,14 @@ const handle = (exchange: Exchange) =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
-    const result = yield* Effect.result(executeNonStream(input))
-    if (result._tag === "Failure") return onError(result.failure)
-    return jsonResponse(exchange.convertResponse(result.success.payload), result.success.headers)
+    return yield* withNonStreamKeepAlive(
+      config.requests["nonstream-keepalive-interval"],
+      Effect.gen(function* () {
+        const result = yield* Effect.result(executeNonStream(input))
+        if (result._tag === "Failure") return onError(result.failure)
+        return jsonResponse(exchange.convertResponse(result.success.payload), result.success.headers)
+      })
+    )
   })
 
 const chatCompletions = handle({

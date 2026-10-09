@@ -4,9 +4,10 @@
  *
  * Go source: sdk/api/handlers/handlers_errors.go (WriteErrorResponse, writeDirectErrorResponse),
  * sdk/api/handlers/claude/code_handlers.go (WriteErrorResponse), sdk/api/handlers/openai/openai_handlers.go
- * (handleStreamingResponse: first-chunk peek, SSE headers), sdk/api/handlers/stream_forwarder.go (ForwardStream).
+ * (handleStreamingResponse: first-chunk peek, SSE headers), sdk/api/handlers/stream_forwarder.go (ForwardStream),
+ * sdk/api/handlers/handlers.go (StartNonStreamingKeepAlive).
  */
-import { Duration, Effect, Pull, Stream } from "effect"
+import { Duration, Effect, Fiber, Pull, type Scope, Stream } from "effect"
 import { HttpServerResponse } from "effect/http"
 import type { ExecutionError } from "../executor/errors.ts"
 import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts"
@@ -141,3 +142,36 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
   )
   return HttpServerResponse.stream(body, { headers })
 })
+
+/**
+ * `StartNonStreamingKeepAlive` (`requests.nonstream-keepalive-interval`): while a non-stream execution is pending, a blank
+ * line is written every `intervalSeconds` so idle proxies keep the connection open. Like Go, nothing is committed before
+ * the first interval elapses: a response that is ready in time keeps its real status and headers. After the first blank
+ * line the answer is committed as `200 application/json` (Go has already flushed its headers): the final body, error
+ * bodies included, follows the blank lines and upstream headers are dropped. Must run inside the request scope.
+ */
+export const withNonStreamKeepAlive = <E, R>(
+  intervalSeconds: number,
+  run: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>
+): Effect.Effect<HttpServerResponse.HttpServerResponse, E, R | Scope.Scope> => {
+  if (!(intervalSeconds > 0)) return run
+  return Effect.gen(function* () {
+    const fiber = yield* Effect.forkScoped(run)
+    const interval = Duration.seconds(intervalSeconds)
+    const ready = yield* Effect.raceFirst(
+      Fiber.join(fiber).pipe(Effect.map((response) => ({ done: true as const, response }))),
+      Effect.sleep(interval).pipe(Effect.as({ done: false as const }))
+    )
+    if (ready.done) return ready.response
+    const blank = new Uint8Array([10])
+    const final = Stream.fromEffect(
+      Effect.gen(function* () {
+        const response = yield* Fiber.join(fiber)
+        // The final body is emitted as one chunk so no blank line can interleave with it.
+        return new Uint8Array(yield* Effect.promise(() => HttpServerResponse.toWeb(response).arrayBuffer()))
+      })
+    )
+    const body = Stream.merge(Stream.tick(interval).pipe(Stream.map(() => blank)), final, { haltStrategy: "right" })
+    return HttpServerResponse.stream(body, { status: 200, headers: { "content-type": "application/json" } })
+  })
+}

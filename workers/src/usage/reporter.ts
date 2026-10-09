@@ -39,6 +39,8 @@ export class UsageReporter {
   #firstPacketAt: number | undefined
   #reasoningEffort: string | undefined
   #finished = false
+  /** Usage of extra models the attempt consumed (`PublishAdditionalModel`, e.g. the Codex image tool). */
+  readonly #additional: Array<{ readonly model: string; readonly detail: UsageDetail }> = []
 
   constructor(readonly init: UsageReporterInit) {
     this.#reasoningEffort = init.reasoningEffort
@@ -86,6 +88,45 @@ export class UsageReporter {
     } else {
       this.#detail = { ...(previous ?? emptyUsageDetail), responseServiceTier: tier }
     }
+  }
+
+  /**
+   * `PublishAdditionalModel`: tokens spent on another model during this attempt (the image tool of a Responses request).
+   * Becomes its own record, with a fresh id, when the attempt finishes; nothing without token usage.
+   */
+  publishAdditionalModel(model: string, detail: UsageDetail): void {
+    const name = model.trim()
+    if (name === "") return
+    const normalized = ensureTokenBreakdown(detail, this.init.provider, this.init.executorType)
+    if (hasNonZeroTokenUsage(normalized)) this.#additional.push({ model: name, detail: normalized })
+  }
+
+  /** The records of {@link publishAdditionalModel} (successful, same attempt metadata as the main record). */
+  additionalRecords(now: number): UsageRecord[] {
+    const { init } = this
+    const ttftAt = this.#ttftAt ?? this.#firstPacketAt
+    return this.#additional.splice(0).map(({ model, detail }) => ({
+      requestId: crypto.randomUUID(),
+      ...(init.traceId !== undefined ? { traceId: init.traceId } : {}),
+      provider: init.provider,
+      executorType: init.executorType,
+      model,
+      alias: init.alias,
+      endpoint: init.endpoint,
+      principalId: init.principalId,
+      authId: init.authId,
+      authType: init.authType,
+      source: init.source,
+      stream: init.stream,
+      ...(init.generate === false ? { generate: false } : {}),
+      requestedAt: init.requestedAt,
+      latencyMs: Math.max(0, now - init.requestedAt),
+      ...(ttftAt !== undefined ? { ttftMs: Math.max(0, ttftAt - init.requestedAt) } : {}),
+      failed: false,
+      detail,
+      ...(this.#reasoningEffort !== undefined ? { reasoningEffort: this.#reasoningEffort } : {}),
+      serviceTier: init.serviceTier
+    }))
   }
 
   /** `ObserveMergedStreamUsage`: for protocols that report usage across several events (Claude, Interactions). */

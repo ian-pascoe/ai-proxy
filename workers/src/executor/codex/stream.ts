@@ -32,6 +32,7 @@ import {
   normalizeCodexCompletion,
   OutputItemCollector,
   parseCodexUsage,
+  publishCodexImageToolUsage,
   patchCodexCompletedOutput
 } from "./output.ts"
 import {
@@ -64,6 +65,8 @@ export interface CodexStreamOptions {
   readonly usage: UsageReporter
   /** Native Codex clients receive the upstream output untouched. */
   readonly preserveNativeOutput: boolean
+  /** The request body (the `image_generation` tool model of additional image-tool usage records). */
+  readonly requestBody?: Json | undefined
   readonly modelLevelCooling: boolean
   readonly nowMs: () => number
   readonly replayScope: CodexReplayScope
@@ -201,6 +204,7 @@ export class CodexStreamReader {
         const event: JsonObject = normalizeCodexCompletion(parsed)
         const detail = parseCodexUsage(event)
         if (detail !== undefined) usage.publish(detail)
+        publishCodexImageToolUsage(usage, this.options.requestBody, event)
         if (!this.options.preserveNativeOutput) patchCodexCompletedOutput(event, this.#collector)
         const completed = eventType === "response.completed" || eventType === "response.done"
         return {

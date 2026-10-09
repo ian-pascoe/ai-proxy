@@ -32,12 +32,28 @@ export interface ExecutorRequest {
   readonly modelLookup?: ModelInfoLookup | undefined
 }
 
+/**
+ * Go `WithWebsocketInput` / `WithWebsocketAuthCheck`: the single downstream reader of a Responses WebSocket, handed to a
+ * Codex executor that runs the socket full duplex (`upstream.codex.response-steering`).
+ */
+export interface WebsocketDuplex {
+  /**
+   * The next client frame; `undefined` once the downstream socket is gone. Fails with a read error. Only one consumer may
+   * wait at a time.
+   */
+  readonly next: Effect.Effect<string | undefined, ExecutionError>
+  /** Whether the credential may still carry traffic (Go: the credential exists and is not disabled). Defaults to true. */
+  readonly authEnabled?: (credentialId: string) => boolean
+}
+
 /** Go `WithDownstreamWebsocket` / `ExecutionSessionMetadataKey` / `WithRequiredUpstreamWebsocket`. */
 export interface WebsocketExecution {
   /** Id of the downstream socket: the execution session that owns the upstream sockets. */
   readonly sessionId: string
   /** The request continues a response and needs the live upstream socket (else: replay with full input). */
   readonly requireUpstream: boolean
+  /** Present when the handler lets the Codex executor own the socket (response steering). */
+  readonly duplex?: WebsocketDuplex
 }
 
 /** Typed subset of Go `Options.Metadata` (sdk/api/handlers/handlers.go requestExecutionMetadata). */

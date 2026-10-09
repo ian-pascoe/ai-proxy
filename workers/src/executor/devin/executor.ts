@@ -8,8 +8,11 @@
  * fields, the last mutation before framing) and the response frames are assembled into Interactions events, which the
  * translator registry turns into the client format.
  *
- * Not ported: the executor-level apply_patch EOF guard (the translators carry the bridge), request/response debug logs, the
- * metadata/quota refresh (`GetUserStatus`, cron follow-up) and outbound proxies. `fetch` always sends a User-Agent
+ * The executor-level apply_patch guards (`helps/apply-patch-stream.ts`) sanitise failures of apply_patch-declaring requests
+ * and fail a patch-enabled stream that ends early; the `GetUserStatus` quota refresh runs from cron
+ * (`credentials/devin-status.ts`).
+ *
+ * Not ported: request/response debug logs and outbound proxies. `fetch` always sends a User-Agent
  * (native devin-cli omits it); the executor sets it empty and relies on the runtime to drop it.
  */
 import { Clock, Effect, Stream } from "effect"
@@ -21,6 +24,12 @@ import { makeTranslationState, type ResponseContext, type TranslatorRegistry } f
 import { type UsageDetail } from "../../usage/record.ts"
 import { buildSensitiveWordMatcher } from "../claude/cloaking.ts"
 import { ExecutionError } from "../errors.ts"
+import {
+  applyPatchGatewayError,
+  applyPatchRequested,
+  endApplyPatchStream,
+  isApplyPatchUpstreamTool
+} from "../helps/apply-patch-stream.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { finalizePayload } from "../helps/payload.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
@@ -113,6 +122,17 @@ interface StreamStep {
   readonly done?: boolean
   readonly error?: ExecutionError
   readonly stop: boolean
+  /**
+   * Events that report an abnormal end (trailer error, read failure, truncation). They follow `events` and are replaced by
+   * the apply_patch failure frame when a patch-enabled stream ends early (Go `EndApplyPatchStream` precedes them).
+   */
+  readonly failureEvents?: ReadonlyArray<string>
+}
+
+/** `registry.LookupDevinModel` through the attempt's registry snapshot: catalog ids are namespaced `devin/<id>`. */
+const lookupDevinInfo = (request: ExecutorRequest, modelId: string) => {
+  const bare = modelId.trim().replace(/^devin\//i, "")
+  return request.modelLookup?.(`devin/${bare}`, DEVIN_PROVIDER) ?? request.modelLookup?.(bare, DEVIN_PROVIDER)
 }
 
 export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): ProviderExecutor => {
@@ -166,10 +186,16 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     const ids = resolveSessionIds(parsed.sessionId, parsed.cascadeId, options.metadata.sessionId)
     const baseModel = parseSuffix(request.model).modelName
     let maxTokens = parsed.maxTokens
-    const info = request.modelLookup?.(baseModel, DEVIN_PROVIDER)
+    const info = lookupDevinInfo(request, baseModel)
     const modelMax = info?.maxCompletionTokens ?? devinMaxCompletionTokens(baseModel)
     if (modelMax > 0 && (maxTokens > modelMax || maxTokens <= 0)) maxTokens = modelMax
-    const chatModelUid = resolveDevinChatModelUid(request.model, parsed.thinkingLevel, parsed.budgetTokens, levelsOf)
+    // The cron-refreshed catalog (registry snapshot) wins over the embedded one, like Go's active devin catalog.
+    const chatModelUid = resolveDevinChatModelUid(
+      request.model,
+      parsed.thinkingLevel,
+      parsed.budgetTokens,
+      executorOptions.levelsOf ?? ((id) => lookupDevinInfo(request, id)?.thinking?.levels ?? levelsOf(id))
+    )
 
     const turnIndex = yield* nextSessionTurnIndex(ids.sessionId, options.metadata.callerScope)
     const matcher = buildSensitiveWordMatcher(context.config.oauth.providers.devin["sensitive-words"])
@@ -266,43 +292,55 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
   ) {
     const prepared = yield* prepare(context, request, options, false)
     const response = yield* send(context, prepared)
-    const body = yield* response.arrayBuffer.pipe(
-      Effect.mapError((error) => readError(`devin upstream read failed: ${error.reason._tag}`))
-    )
-    const parser = new ConnectFrameParser()
+    // Go: any consume failure of an apply_patch-declaring request is the sanitised gateway error.
+    const original = options.originalRequest ?? request.payload
+    const patchRequested = applyPatchRequested(original)
+    const consumeFailure = (error: ExecutionError) => {
+      const failure = patchRequested ? applyPatchGatewayError() : error
+      context.usage.fail(failure.status, failure.message)
+      return failure
+    }
     const aggregator = new DevinAggregator()
-    let sawEos = false
-    const frames = yield* Effect.try({
-      try: () => parser.push(new Uint8Array(body)),
-      catch: (error) => readError(error instanceof ConnectFrameError ? error.message : String(error))
-    })
-    for (const frame of frames) {
-      const payload = yield* Effect.tryPromise({
-        try: () => inflateFrame(frame),
-        catch: (error) => readError(error instanceof Error ? error.message : String(error))
+    yield* Effect.gen(function* () {
+      const body = yield* response.arrayBuffer.pipe(
+        Effect.mapError((error) => readError(`devin upstream read failed: ${error.reason._tag}`))
+      )
+      const parser = new ConnectFrameParser()
+      let sawEos = false
+      const frames = yield* Effect.try({
+        try: () => parser.push(new Uint8Array(body)),
+        catch: (error) => readError(error instanceof ConnectFrameError ? error.message : String(error))
       })
-      if ((frame.flag & CONNECT_FLAG_END_STREAM) !== 0) {
-        const trailer = parseTrailerError(payload)
-        if (trailer !== undefined) {
-          context.usage.fail(trailer.status, trailer.message)
-          return yield* new ExecutionError({ status: trailer.status, message: trailer.message })
+      for (const frame of frames) {
+        const payload = yield* Effect.tryPromise({
+          try: () => inflateFrame(frame),
+          catch: (error) => readError(error instanceof Error ? error.message : String(error))
+        })
+        if ((frame.flag & CONNECT_FLAG_END_STREAM) !== 0) {
+          const trailer = parseTrailerError(payload)
+          if (trailer !== undefined) {
+            return yield* new ExecutionError({ status: trailer.status, message: trailer.message })
+          }
+          sawEos = true
+          break
         }
-        sawEos = true
-        break
+        try {
+          aggregator.push(parseDevinFrame(payload))
+        } catch {
+          // A malformed frame is skipped (Go `continue`).
+        }
       }
-      try {
-        aggregator.push(parseDevinFrame(payload))
-      } catch {
-        // A malformed frame is skipped (Go `continue`).
+      if (!sawEos) {
+        return yield* readError(
+          parser.pending > 0 ? "unexpected EOF" : "devin upstream stream terminated prematurely before EOS trailer"
+        )
       }
-    }
-    if (!sawEos) {
-      const message =
-        parser.pending > 0 ? "unexpected EOF" : "devin upstream stream terminated prematurely before EOS trailer"
-      context.usage.fail(502, message)
-      return yield* readError(message)
-    }
+    }).pipe(Effect.mapError(consumeFailure))
     const aggregate = aggregator.finish(request.model)
+    // A tool call whose arguments never became valid JSON is a corrupt patch when it is the declared apply_patch tool.
+    if (aggregate.legacyToolNames.some((name) => isApplyPatchUpstreamTool(original, name))) {
+      return yield* consumeFailure(applyPatchGatewayError())
+    }
     if (aggregate.usage?.modelName !== undefined && aggregate.usage.modelName !== "") {
       context.usage.observeResponseModel(aggregate.usage.modelName)
     }
@@ -353,9 +391,9 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
             this.stopped = true
             const trailer = parseTrailerError(payload)
             if (trailer !== undefined) {
-              events.push(...this.assembler.fail(trailer.status, trailer.message))
               return {
                 events,
+                failureEvents: this.assembler.fail(trailer.status, trailer.message),
                 error: new ExecutionError({ status: trailer.status, message: trailer.message }),
                 stop: true
               }
@@ -376,8 +414,12 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     #readFailure(events: string[], error: unknown): StreamStep {
       this.stopped = true
       const message = error instanceof Error ? error.message : String(error)
-      events.push(...this.assembler.abort("stream_read_error", message))
-      return { events, error: readError(message), stop: true }
+      return {
+        events,
+        failureEvents: this.assembler.abort("stream_read_error", message),
+        error: readError(message),
+        stop: true
+      }
     }
 
     /** Clean EOF before the EOS trailer. */
@@ -386,7 +428,8 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       this.stopped = true
       if (this.parser.pending > 0) return this.#readFailure([], new Error("unexpected EOF"))
       return {
-        events: this.assembler.abort("stream_truncated", TRUNCATED_STREAM),
+        events: [],
+        failureEvents: this.assembler.abort("stream_truncated", TRUNCATED_STREAM),
         error: readError(TRUNCATED_STREAM),
         stop: true
       }
@@ -407,28 +450,39 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       responseFormat === Formats.Interactions
         ? [`data: ${json}\n\n`]
         : [...registry.translateStream(responseFormat, Formats.Interactions, translation, json)]
+    // `InitializeApplyPatchStream`: a patch-declaring Responses client gets its translator state before the first event.
+    const original = options.originalRequest ?? request.payload
+    if (responseFormat === Formats.OpenAIResponse && applyPatchRequested(original)) {
+      registry.translateStream(responseFormat, Formats.Interactions, translation, "")
+    }
     const translate = (step: StreamStep): Stream.Stream<string, ExecutionError> => {
       const chunks: string[] = []
-      for (const json of step.events) {
-        const event = tryParseJson(json)
-        const type = asString(get(event, "event_type"))
-        if (type === "interaction.completed") {
-          const usage = state.assembler.usage
-          context.usage.publish(devinUsageDetail(usage))
-          if (usage?.modelName !== undefined && usage.modelName !== "")
-            context.usage.observeResponseModel(usage.modelName)
+      const frame = (events: ReadonlyArray<string>) => {
+        for (const json of events) {
+          const event = tryParseJson(json)
+          const type = asString(get(event, "event_type"))
+          if (type === "interaction.completed") {
+            const usage = state.assembler.usage
+            context.usage.publish(devinUsageDetail(usage))
+            if (usage?.modelName !== undefined && usage.modelName !== "")
+              context.usage.observeResponseModel(usage.modelName)
+          }
+          chunks.push(...frameInteractions(json))
         }
-        chunks.push(...frameInteractions(json))
+      }
+      frame(step.events)
+      if (step.failureEvents !== undefined && translation.state.toolInputError === undefined) {
+        // `EndApplyPatchStream`: a patch-enabled stream that ends abnormally fails with the one translated frame.
+        const ended = endApplyPatchStream(translation.state)
+        chunks.push(...ended.chunks)
+        if (!ended.failed) frame(step.failureEvents)
       }
       if (step.done === true) {
         chunks.push(...(responseFormat === Formats.Interactions ? ["data: [DONE]\n\n"] : frameInteractions("[DONE]")))
       }
       const emitted = Stream.fromIterable(chunks)
       if (translation.state.toolInputError !== undefined) {
-        return Stream.concat(
-          emitted,
-          Stream.fail(new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }))
-        )
+        return Stream.concat(emitted, Stream.fail(applyPatchGatewayError()))
       }
       return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
     }

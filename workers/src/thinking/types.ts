@@ -76,6 +76,8 @@ export interface ThinkingModelInfo {
   readonly maxCompletionTokens?: number | undefined
   /** Configured `is-compat` model: assistant thinking blocks are kept for compatibility endpoints. */
   readonly isCompat?: boolean | undefined
+  /** models.json `config.override_header`: headers forced onto upstream requests (registry entries only). */
+  readonly config?: { readonly overrideHeader?: Readonly<Record<string, string>> | undefined } | undefined
 }
 
 /** Registry lookup (`registry.LookupModelInfo(modelID, provider)`); the model registry slice supplies it. */

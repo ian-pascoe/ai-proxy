@@ -196,12 +196,13 @@ describe("devin GetUserStatus protobuf", () => {
       1
     ]
     const response = Uint8Array.from([...field(1, userStatus), ...varint(9 * 8), 5])
-    expect(parseUserStatus(response)).toEqual({
+    expect(parseUserStatus(response)).toMatchObject({
       userName: "dev",
       email: "dev@x.com",
       userId: "user-1",
       orgId: "org-9",
-      plan: "Pro Plan"
+      plan: "Pro Plan",
+      dailyQuotaRemainingPercent: 90
     })
     expect(parseUserStatus(new Uint8Array())).toBeUndefined()
     // Truncated input yields what was readable instead of throwing.

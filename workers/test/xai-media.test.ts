@@ -383,3 +383,32 @@ describe("client version task", () => {
     resetXaiClientVersionCache()
   })
 })
+
+describe("xAI image edit options (Go drops Codex-only mask / input_fidelity)", () => {
+  it("builds the xAI edit body from size/quality/n only", async () => {
+    const { buildEditRequest } = await import("../src/handlers/openai/xai-images.ts")
+    const body = buildEditRequest(
+      {
+        prompt: "p",
+        size: "1024x1792",
+        quality: "high",
+        n: 2,
+        mask: { image_url: "data:image/png;base64,AAAA" },
+        input_fidelity: "high",
+        output_format: "png"
+      },
+      "grok-imagine-image",
+      "b64_json",
+      ["data:image/png;base64,BBBB"]
+    )
+    expect(body).toEqual({
+      model: "grok-imagine-image",
+      prompt: "p",
+      response_format: "b64_json",
+      aspect_ratio: "9:16",
+      quality: "high",
+      n: 2,
+      image: { type: "image_url", url: "data:image/png;base64,BBBB" }
+    })
+  })
+})

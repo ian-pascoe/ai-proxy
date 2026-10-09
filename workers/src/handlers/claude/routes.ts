@@ -15,7 +15,7 @@ import { Formats } from "../../translator/formats.ts"
 import { executeCountTokens, executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
 import { claudeFramer } from "../framing.ts"
 import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts"
 import { resolveClaudeModelIdPrefix } from "../../registry/listings.ts"
 
 const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
@@ -71,9 +71,14 @@ const handle = (kind: "messages" | "count") =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
-    const result = yield* Effect.result(executeNonStream(input))
-    if (result._tag === "Failure") return onError(result.failure)
-    return jsonResponse(result.success.payload, result.success.headers)
+    return yield* withNonStreamKeepAlive(
+      config.requests["nonstream-keepalive-interval"],
+      Effect.gen(function* () {
+        const result = yield* Effect.result(executeNonStream(input))
+        if (result._tag === "Failure") return onError(result.failure)
+        return jsonResponse(result.success.payload, result.success.headers)
+      })
+    )
   })
 
 /** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */

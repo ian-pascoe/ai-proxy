@@ -35,6 +35,14 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   { name: "usage-retention", run: pruneExpiredUsage },
   // helps.StartXAIVersionUpdater (3 h): latest Grok CLI version from npm into KV for the chat-proxy identity headers.
   { name: "xai-client-version-refresh", run: refreshXaiClientVersion() },
+  // DevinExecutor.Refresh: GetUserStatus profile and quota signals of the (permanent) Devin session tokens.
+  {
+    name: "devin-user-status",
+    run: Effect.gen(function* () {
+      const env = yield* WorkerEnv
+      return yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").refreshDevinStatus())
+    })
+  },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
   {
     name: "credential-refresh-sweep",

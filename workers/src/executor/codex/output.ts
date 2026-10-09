@@ -112,6 +112,30 @@ export const parseCodexImageToolUsage = (event: Json | undefined): UsageDetail |
   return hasUsageFields(node) ? parseOpenAIUsageNode(node) : undefined
 }
 
+/** `codexImageGenerationToolModel`: the model of the request's `image_generation` tool (default `gpt-image-2`). */
+export const codexImageGenerationToolModel = (body: Json | undefined): string => {
+  const tools = get(body, "tools")
+  if (isJsonArray(tools)) {
+    for (const tool of tools) {
+      if (asString(get(tool, "type")) !== "image_generation") continue
+      const model = asString(get(tool, "model")).trim()
+      if (model !== "") return model
+      break
+    }
+  }
+  return "gpt-image-2"
+}
+
+/** `publishCodexImageToolUsage`: the image tool's own token usage becomes an additional usage record. */
+export const publishCodexImageToolUsage = (
+  usage: { readonly publishAdditionalModel: (model: string, detail: UsageDetail) => void },
+  body: Json | undefined,
+  completed: Json | undefined
+): void => {
+  const detail = parseCodexImageToolUsage(completed)
+  if (detail !== undefined) usage.publishAdditionalModel(codexImageGenerationToolModel(body), detail)
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Responses usage details
 // ---------------------------------------------------------------------------------------------------------------

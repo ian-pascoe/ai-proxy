@@ -17,7 +17,7 @@ import { mergeUpstreamHeaders } from "../../http/headers.ts"
 import { asString, get, isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts"
 import { executeNonStream, type ExecutionInput, type ExecutionOutput } from "../execute.ts"
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse } from "../respond.ts"
+import { errorResponse, withNonStreamKeepAlive } from "../respond.ts"
 import { loadVideoBinding, saveVideoBinding } from "./video-binding.ts"
 import {
   buildVideosCreateResponse,
@@ -88,19 +88,24 @@ const upstreamJson = (payload: string, upstream: Headers | undefined) =>
 interface Services {
   readonly passthroughHeaders: boolean
   readonly ttlMs: number
+  /** `requests.nonstream-keepalive-interval` (0 disables). */
+  readonly keepAliveSeconds: number
 }
 
 const services = Effect.gen(function* () {
   const config = yield* currentConfig
   return {
     passthroughHeaders: config.requests["passthrough-headers"],
-    ttlMs: videoResultAuthCacheTtlMs(config)
+    ttlMs: videoResultAuthCacheTtlMs(config),
+    keepAliveSeconds: config.requests["nonstream-keepalive-interval"]
   } satisfies Services
 })
 
 /** Config problems surface from the execution itself (503); the handler then only needs defaults. */
 const servicesOrDefault = services.pipe(
-  Effect.catch(() => Effect.succeed({ passthroughHeaders: false, ttlMs: 3 * 60 * 60 * 1000 } satisfies Services))
+  Effect.catch(() =>
+    Effect.succeed({ passthroughHeaders: false, ttlMs: 3 * 60 * 60 * 1000, keepAliveSeconds: 0 } satisfies Services)
+  )
 )
 
 const bind = (output: ExecutionOutput, videoId: string, model: string, ttlMs: number) =>
@@ -292,19 +297,25 @@ const soraContent = (
 
 const soraGet = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
-  const { passthroughHeaders, ttlMs } = yield* servicesOrDefault
+  const { passthroughHeaders, ttlMs, keepAliveSeconds } = yield* servicesOrDefault
   const rest = remainder(request, "/openai/v1/videos").trim()
   const wantsContent = rest.endsWith("/content")
   const videoId = (wantsContent ? rest.slice(0, -"/content".length) : rest).trim()
   if (videoId === "" || videoId.includes("/")) return HttpServerResponse.empty({ status: 404 })
   if (wantsContent) return yield* soraContent(request, videoId, passthroughHeaders, ttlMs)
-  const result = yield* Effect.result(retrieve(request, videoId))
-  if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
-  const { model, output } = result.success
-  yield* bind(output, videoId, model, ttlMs)
-  return upstreamJson(
-    buildVideosRetrieveResponse(videoId, tryParseJson(output.payload), DEFAULT_OPENAI_VIDEOS_MODEL),
-    output.headers
+  // Go keeps blank lines flowing only around the retrieval (`VideosRetrieve`); content downloads write binary bodies.
+  return yield* withNonStreamKeepAlive(
+    keepAliveSeconds,
+    Effect.gen(function* () {
+      const result = yield* Effect.result(retrieve(request, videoId))
+      if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
+      const { model, output } = result.success
+      yield* bind(output, videoId, model, ttlMs)
+      return upstreamJson(
+        buildVideosRetrieveResponse(videoId, tryParseJson(output.payload), DEFAULT_OPENAI_VIDEOS_MODEL),
+        output.headers
+      )
+    })
   )
 })
 

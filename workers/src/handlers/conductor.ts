@@ -258,7 +258,10 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
                 : failureReport(error, { ...context, action })
             )
             const record = usage.finish(yield* Clock.currentTimeMillis)
-            if (record !== undefined) yield* sink.publish(record)
+            if (record !== undefined) {
+              yield* sink.publish(record)
+              for (const extra of usage.additionalRecords(yield* Clock.currentTimeMillis)) yield* sink.publish(extra)
+            }
             return action
           }).pipe(Effect.ensuring(Effect.sync(release)))
         const attempt: Attempt = {

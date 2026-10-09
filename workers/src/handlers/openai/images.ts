@@ -22,7 +22,7 @@ import { CODEX_DEFAULT_IMAGE_TOOL_MODEL } from "../../executor/codex/images.ts"
 import { executeNonStream, executeStream, type ExecutionInput, type StreamOutput } from "../execute.ts"
 import type { StreamFramer } from "../framing.ts"
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts"
 import {
   buildEditRequest,
   buildGenerationsRequest,
@@ -226,11 +226,16 @@ const handleXai = (input: XaiImagesInput) =>
         keepAliveSeconds: input.config.requests.streaming["keepalive-seconds"]
       })
     }
-    const result = yield* Effect.result(executeNonStream(execution))
-    if (result._tag === "Failure") return onError(result.failure)
-    const out = buildXaiImagesApiResponse(result.success.payload, responseFormat, nowSeconds)
-    if (out instanceof ExecutionError) return onError(out)
-    return jsonResponse(out, result.success.headers)
+    return yield* withNonStreamKeepAlive(
+      input.config.requests["nonstream-keepalive-interval"],
+      Effect.gen(function* () {
+        const result = yield* Effect.result(executeNonStream(execution))
+        if (result._tag === "Failure") return onError(result.failure)
+        const out = buildXaiImagesApiResponse(result.success.payload, responseFormat, nowSeconds)
+        if (out instanceof ExecutionError) return onError(out)
+        return jsonResponse(out, result.success.headers)
+      })
+    )
   })
 
 const handle = (edits: boolean) =>
@@ -320,17 +325,22 @@ const handle = (edits: boolean) =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
-    const result = yield* Effect.result(executeNonStream(input))
-    if (result._tag === "Failure") return onError(result.failure)
-    if (!compat) return HttpServerResponse.text(result.success.payload, { contentType: "application/json" })
-    const responseFormat = asString(get(body, "response_format")).trim() || "b64_json"
-    const converted = buildImagesApiResponse(
-      result.success.payload,
-      responseFormat,
-      Math.floor((yield* Clock.currentTimeMillis) / 1000)
+    return yield* withNonStreamKeepAlive(
+      config.requests["nonstream-keepalive-interval"],
+      Effect.gen(function* () {
+        const result = yield* Effect.result(executeNonStream(input))
+        if (result._tag === "Failure") return onError(result.failure)
+        if (!compat) return HttpServerResponse.text(result.success.payload, { contentType: "application/json" })
+        const responseFormat = asString(get(body, "response_format")).trim() || "b64_json"
+        const converted = buildImagesApiResponse(
+          result.success.payload,
+          responseFormat,
+          Math.floor((yield* Clock.currentTimeMillis) / 1000)
+        )
+        if ("error" in converted) return onError(new ExecutionError({ status: 502, message: converted.error }))
+        return HttpServerResponse.text(converted.out, { contentType: "application/json" })
+      })
     )
-    if ("error" in converted) return onError(new ExecutionError({ status: 502, message: converted.error }))
-    return HttpServerResponse.text(converted.out, { contentType: "application/json" })
   })
 
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */

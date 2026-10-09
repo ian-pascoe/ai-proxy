@@ -13,9 +13,9 @@
  *
  * `/responses/compact` (non-stream) posts the Responses-format request to `{base-url}/responses/compact`.
  *
- * Not ported yet (later slices): the text-only tool-result normalisation for models whose `input-modalities` exclude
- * images, and derived prompt cache keys (session identity lives in the conductor slice; a client-supplied
- * `prompt_cache_key` is honoured).
+ * Text-only tool-result normalisation applies to models whose `input-modalities` exclude images
+ * (`helps/openai-compat-tool-results.ts`); prompt cache keys are client-supplied, Claude Code scoped or derived from the
+ * provider session (`applyPromptCacheKey`).
  */
 import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
 import { Clock, Effect, Stream } from "effect"
@@ -30,7 +30,10 @@ import { encodingForModel, getCodec } from "../../tokenizer/index.ts"
 import { parseOpenAIStreamUsage, parseOpenAIUsage, responseModelOf, ssePayloadObject } from "../../usage/record.ts"
 import { ExecutionError, headersRecord } from "../errors.ts"
 import { ensureResponsesUsageDetails } from "../codex/output.ts"
+import { claudeCodeExecutionScope } from "../codex/replay.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
+import { normalizeToolResultsTextOnly, shouldNormalizeToolResults } from "../helps/openai-compat-tool-results.ts"
+import { providerSessionUuid, uuidV5Oid } from "../helps/uuid.ts"
 import { finalizePayload } from "../helps/payload.ts"
 import {
   normalizeOpenAIMaxTokens,
@@ -85,11 +88,18 @@ const credentialEndpoint = (context: ExecutionContext) => ({
   apiKey: (context.credential.attributes["api_key"] ?? "").trim()
 })
 
-/** `applyPromptCacheKey` (client-supplied keys only, see module docs). */
+/**
+ * `applyPromptCacheKey`: a client-supplied `prompt_cache_key`, else (Claude callers) the Claude Code agent scope, else a
+ * stable key derived from the provider session (`ProviderSessionUUID`: the execution session, then the derived session
+ * identity). SEAM(#29 part 1): the derived content-hash identity reaches executors as `ExecutionMetadata.sessionId`; once
+ * the derivation lands, nothing changes here.
+ */
 const applyPromptCacheKey = (
+  provider: string,
   context: ExecutionContext,
   request: ExecutorRequest,
   options: ExecutorOptions,
+  baseModel: string,
   translated: Json
 ): Json => {
   const group = resolveCompatConfig(context.config, context.credential)
@@ -100,7 +110,34 @@ const applyPromptCacheKey = (
     if (key !== "")
       return get(translated, "prompt_cache_key") === key ? translated : set(translated, "prompt_cache_key", key)
   }
-  return translated
+
+  const translatedModel = get(translated, "model")
+  const modelName = (typeof translatedModel === "string" ? translatedModel.trim() : "") || baseModel
+  const from = options.sourceFormat
+  if (from.trim().toLowerCase() === "claude") {
+    const scope = claudeCodeExecutionScope(request.payload, options.headers)
+    if (modelName !== "" && scope !== undefined) {
+      const cached = uuidV5Oid(["cli-proxy-api:codex:claude-code", modelName, scope].join("\u0000"))
+      return get(translated, "prompt_cache_key") === cached ? translated : set(translated, "prompt_cache_key", cached)
+    }
+  }
+
+  const executionId = (options.metadata.websocket?.sessionId ?? "").trim()
+  const sessionId =
+    executionId !== ""
+      ? providerSessionUuid(provider, "execution-session", executionId)
+      : providerSessionUuid(provider, "derived-session", options.metadata.sessionId)
+  if (sessionId === "") return translated
+  const providerName = provider.trim() || group.name.trim()
+  const identity = [
+    "cli-proxy-api:openai-compat:prompt-cache",
+    providerName.toLowerCase(),
+    modelName.toLowerCase(),
+    from.trim().toLowerCase(),
+    sessionId
+  ].join("\u0000")
+  const key = uuidV5Oid(identity)
+  return get(translated, "prompt_cache_key") === key ? translated : set(translated, "prompt_cache_key", key)
 }
 
 const responseContext = (request: ExecutorRequest, options: ExecutorOptions, translated: Json): ResponseContext => ({
@@ -178,9 +215,10 @@ export const makeOpenAICompatExecutor = (
 
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
     const group = resolveCompatConfig(context.config, context.credential)
+    if (shouldNormalizeToolResults(group, baseModel, requestedModel)) body = normalizeToolResultsTextOnly(body)
     if (!compact) {
       body = normalizeOpenAIMaxTokens(body, shouldUseMaxCompletionTokens(group, baseModel, requestedModel))
-      body = applyPromptCacheKey(context, request, options, body)
+      body = applyPromptCacheKey(provider, context, request, options, baseModel, body)
     } else {
       body = sanitizeReasoningEncryptedContent(del(body, "stream"))
     }

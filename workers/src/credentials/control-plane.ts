@@ -25,6 +25,7 @@ import {
   type RefreshOneResult
 } from "../management/credential-ops.ts"
 import { applyFieldPatch } from "./field-patch.ts"
+import { type DevinStatusSummary, refreshDevinStatuses } from "./devin-status.ts"
 import {
   type CallbackInput,
   type CallbackResult,
@@ -246,6 +247,15 @@ export class ControlPlane extends DurableObject<Env> {
   /** Cron safety sweep: refreshes what is overdue and re-arms a lost alarm. */
   sweepRefresh(): Promise<RunSummary> {
     return this.#refresh.sweep()
+  }
+
+  /** Cron task `devin-user-status`: `GetUserStatus` profile and quota signals of every stored Devin credential. */
+  async refreshDevinStatus(): Promise<DevinStatusSummary> {
+    const summary = await Effect.runPromise(
+      refreshDevinStatuses(this.#pool).pipe(Effect.provide(FetchHttpClient.layer))
+    )
+    if (summary.refreshed > 0) await this.#rearm()
+    return summary
   }
 
   /**

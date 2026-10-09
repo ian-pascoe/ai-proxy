@@ -17,7 +17,7 @@ import { Formats } from "../../translator/formats.ts"
 import { executeCountTokens, executeNonStream, executeStream, type ExecutionInput } from "../execute.ts"
 import { geminiFramer, interactionsFramer, type StreamFramer } from "../framing.ts"
 import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts"
-import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
+import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts"
 
 const GEMINI_INTERACTIONS = "gemini-interactions"
 const INTERACTIONS_AGENT_AUTH_SELECTION_MODEL = "gemini-2.5-flash"
@@ -53,6 +53,7 @@ interface Context {
   readonly body: Json
   readonly passthroughHeaders: boolean
   readonly keepAliveSeconds: number
+  readonly nonStreamKeepAliveSeconds: number
 }
 
 /** Reads the config and the JSON body shared by every route. */
@@ -70,7 +71,8 @@ const readContext = Effect.fnUntraced(function* (request: HttpServerRequest.Http
       request,
       body: read.success.json,
       passthroughHeaders: config.requests["passthrough-headers"],
-      keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
+      keepAliveSeconds: config.requests.streaming["keepalive-seconds"],
+      nonStreamKeepAliveSeconds: config.requests["nonstream-keepalive-interval"]
     } satisfies Context
   }
 })
@@ -90,12 +92,15 @@ const run = (
       ...(options.contentType !== undefined ? { contentType: options.contentType } : {})
     })
   }
-  return Effect.gen(function* () {
-    const result = yield* Effect.result(executeNonStream(input))
-    return result._tag === "Failure"
-      ? onError(result.failure)
-      : jsonResponse(result.success.payload, result.success.headers)
-  })
+  return withNonStreamKeepAlive(
+    context.nonStreamKeepAliveSeconds,
+    Effect.gen(function* () {
+      const result = yield* Effect.result(executeNonStream(input))
+      return result._tag === "Failure"
+        ? onError(result.failure)
+        : jsonResponse(result.success.payload, result.success.headers)
+    })
+  )
 }
 
 const geminiAction = Effect.gen(function* () {

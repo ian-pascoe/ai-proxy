@@ -20,6 +20,7 @@ import { type Cause, Clock, Deferred, Effect, Option, Pull, Queue, type Scope, S
 import { ExecutionError } from "../../../executor/errors.ts"
 import { isCodexResponsesLiteRequest } from "../../../executor/codex/headers.ts"
 import { codexWebsocketsEnabled } from "../../../executor/codex/websocket.ts"
+import type { WebsocketDuplex } from "../../../executor/types.ts"
 import type { CredentialSnapshot } from "../../../executor/picker.ts"
 import { codexSessionStore, xaiSessionStore } from "../../../executor/websocket/session.ts"
 import { xaiIdStates } from "../../../executor/xai/websocket-ids.ts"
@@ -67,6 +68,13 @@ export interface SocketDeps<R> {
   readonly toolCaches: ToolCaches
   /** Prepares the planned request for Codex clients (multi-agent v2 tools, orphan delegations). */
   readonly prepare?: (payload: JsonObject) => Effect.Effect<void, never, R>
+  /**
+   * `upstream.codex.response-steering`: Codex credentials with upstream WebSockets get the client frames and run the socket
+   * full duplex (`executor/codex/duplex.ts`).
+   */
+  readonly steering?: boolean
+  /** Whether a credential may still carry traffic (Go `WithWebsocketAuthCheck`); defaults to true. */
+  readonly authEnabled?: (credentialId: string) => boolean
   /** Runs one turn through the conductor. */
   readonly execute: (
     input: Omit<ExecutionInput, "request">
@@ -83,6 +91,8 @@ interface ForwardStop {
 }
 
 interface ForwardResult {
+  /** The duplex stream ended with its socket (the downstream side is gone or closing). */
+  readonly duplexClosed?: boolean
   readonly error: ExecutionError | undefined
   readonly payload: JsonObject | undefined
   readonly completedOutput: ReadonlyArray<ReturnType<OutputCollector["completedOutput"]>[number]>
@@ -109,6 +119,15 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       let interruptSignal: Deferred.Deferred<string> | undefined
       let closed = false
       let hasTurnInFlight = false
+      // The selected credential's executor owns the socket (Codex response steering): a response ends no stream.
+      let duplexStream = false
+      const duplexInput: WebsocketDuplex | undefined =
+        deps.steering === true
+          ? {
+              next: takeOption(commands).pipe(Effect.map((next) => (Option.isSome(next) ? next.value : undefined))),
+              ...(deps.authEnabled !== undefined ? { authEnabled: deps.authEnabled } : {})
+            }
+          : undefined
 
       const write = (payload: JsonObject): void => {
         if (!closed) io.send(JSON.stringify(payload))
@@ -128,7 +147,11 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
 
       // The upstream socket of the session dropped while no request was running: close like Go does.
       const unsubscribe = [codexSessionStore, xaiSessionStore].map((store) =>
-        store.onDisconnect(sessionId, (error) => terminate(error))
+        store.onDisconnect(sessionId, (error) => {
+          // Only the selected credential's duplex stream owns closure: it drains acknowledgements and pending events in order.
+          if (store === codexSessionStore && duplexStream) return
+          terminate(error)
+        })
       )
       deps.toolCaches.retain(deps.toolSessionKey)
       yield* Effect.addFinalizer(() =>
@@ -183,6 +206,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       ) {
         const collector = new OutputCollector()
         let completed = false
+        let responseStarted = false
         let completedOutput: ForwardResult["completedOutput"] = []
         let completedResponseId = ""
 
@@ -192,6 +216,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
               for (const payload of payloadsFromChunk(chunk)) {
                 const type = asString(payload["type"])
                 if (type === "response.created") {
+                  responseStarted = true
                   collector.reset()
                   completed = false
                 }
@@ -201,11 +226,14 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
                 if (options.toolTurn !== undefined) options.toolTurn.recordResponse(payload)
                 else recordToolCallsFromPayload(deps.toolCaches, deps.toolSessionKey, payload)
                 collector.recordPending(payload)
-                if (type === "error") {
+                // In Codex duplex mode the executor owns connection termination: payload errors after response.created are
+                // recoverable events; a failing stream still arrives as an execution error and closes the socket.
+                const preserveErrorEvent = responseStarted && duplexStream
+                if (type === "error" && !preserveErrorEvent) {
                   const stop: ForwardStop = { _tag: "ForwardStop", error: errorFromPayload(payload), payload }
                   return yield* Effect.fail(stop)
                 }
-                if (isCompletionEvent(type) || type === "response.incomplete") {
+                if (type !== "error" && (isCompletionEvent(type) || type === "response.incomplete")) {
                   completed = true
                   completedOutput = collector.completedOutput(payload)
                   completedResponseId = asString(get(payload, "response.id")).trim()
@@ -244,6 +272,17 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             pendingToolCallIds: collector.pending()
           } satisfies ForwardResult
         }
+        if (outcome.success === "done" && duplexStream) {
+          // A duplex stream ends with its socket, not with an individual response.
+          return {
+            duplexClosed: true,
+            error: undefined,
+            payload: undefined,
+            completedOutput,
+            completedResponseId,
+            pendingToolCallIds: collector.pending()
+          } satisfies ForwardResult
+        }
         if (outcome.success === "done" && !completed) {
           return {
             error: new ExecutionError({ status: 408, message: "stream closed before response.completed" }),
@@ -277,6 +316,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
         const signal = yield* Deferred.make<string>()
         interruptSignal = signal
         hasTurnInFlight = true
+        duplexStream = false
 
         const replayPinnedAuthFailure = (error: ExecutionError): boolean =>
           nativePassthrough &&
@@ -292,10 +332,16 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
                 model: plan.modelName,
                 body: requestJson,
                 alt: "",
-                websocket: { sessionId, requireUpstream: plan.requiresCurrentUpstream },
+                websocket: {
+                  sessionId,
+                  requireUpstream: plan.requiresCurrentUpstream,
+                  ...(duplexInput !== undefined ? { duplex: duplexInput } : {})
+                },
                 ...(pinnedId !== "" ? { pinnedId } : {}),
                 onSelected: (credential) => {
                   selected = credential
+                  duplexStream =
+                    deps.steering === true && credential.provider === "codex" && codexWebsocketsEnabled(credential)
                   if (pinnedId !== "" && credential.id === pinnedId) pinnedAuthAttempted = true
                 }
               })
@@ -324,6 +370,10 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
           )
         )
 
+        if (result.duplexClosed === true) {
+          closeSocket(1000, "")
+          return true
+        }
         if (result.error !== undefined) {
           // A continuation cannot rotate credentials in place: the client replays the whole turn on a new socket.
           if (replayPinnedAuthFailure(result.error)) {

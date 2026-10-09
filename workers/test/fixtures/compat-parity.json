@@ -1,0 +1,216 @@
+{
+ "models": [
+  {
+   "name": "text only by name",
+   "models": [
+    {
+     "name": "m",
+     "alias": "",
+     "input-modalities": [
+      "text"
+     ]
+    }
+   ],
+   "upstream": "m",
+   "requested": "m",
+   "normalize": true
+  },
+  {
+   "name": "text and image",
+   "models": [
+    {
+     "name": "m",
+     "alias": "",
+     "input-modalities": [
+      "Text",
+      " image "
+     ]
+    }
+   ],
+   "upstream": "m",
+   "requested": "m",
+   "normalize": false
+  },
+  {
+   "name": "no modalities",
+   "models": [
+    {
+     "name": "m",
+     "alias": ""
+    }
+   ],
+   "upstream": "m",
+   "requested": "m",
+   "normalize": false
+  },
+  {
+   "name": "alias text only",
+   "models": [
+    {
+     "name": "up",
+     "alias": "al",
+     "input-modalities": [
+      "text"
+     ]
+    }
+   ],
+   "upstream": "zzz",
+   "requested": "al(high)",
+   "normalize": true
+  },
+  {
+   "name": "alias mixed",
+   "models": [
+    {
+     "name": "a",
+     "alias": "al",
+     "input-modalities": [
+      "text"
+     ]
+    },
+    {
+     "name": "b",
+     "alias": "AL",
+     "input-modalities": [
+      "Text",
+      " image "
+     ]
+    }
+   ],
+   "upstream": "zzz",
+   "requested": "al",
+   "normalize": false
+  },
+  {
+   "name": "name wins over alias",
+   "models": [
+    {
+     "name": "x",
+     "alias": "m",
+     "input-modalities": [
+      "Text",
+      " image "
+     ]
+    },
+    {
+     "name": "m",
+     "alias": "",
+     "input-modalities": [
+      "text"
+     ]
+    }
+   ],
+   "upstream": "M",
+   "requested": "x",
+   "normalize": true
+  },
+  {
+   "name": "unmatched",
+   "models": [
+    {
+     "name": "m",
+     "alias": "",
+     "input-modalities": [
+      "text"
+     ]
+    }
+   ],
+   "upstream": "other",
+   "requested": "other",
+   "normalize": false
+  },
+  {
+   "name": "suffix stripped",
+   "models": [
+    {
+     "name": "m",
+     "alias": "",
+     "input-modalities": [
+      "text"
+     ]
+    }
+   ],
+   "upstream": "m(8192)",
+   "requested": "",
+   "normalize": true
+  }
+ ],
+ "normalize": [
+  {
+   "name": "array content flattened",
+   "input": "{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":[{\"type\":\"text\",\"text\":\"a\"},{\"type\":\"text\",\"text\":\"b\"}]}]}",
+   "output": "{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"},{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"a\\n\\nb\"}]}"
+  },
+  {
+   "name": "image part marker",
+   "input": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":[{\"type\":\"text\",\"text\":\"a\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,AA\"}}]}]}",
+   "output": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"a\\n\\n[image omitted: unsupported by upstream]\"}]}"
+  },
+  {
+   "name": "object and scalar content",
+   "input": "{\"messages\":[{\"role\":\"tool\",\"content\":{\"text\":\"obj\"}},{\"role\":\"tool\",\"content\":{\"foo\":1}},{\"role\":\"tool\",\"content\":null},{\"role\":\"tool\",\"content\":7},{\"role\":\"tool\",\"content\":[\"x\",2,{\"k\":\"v\"}]}]}",
+   "output": "{\"messages\":[{\"role\":\"tool\",\"content\":\"obj\"},{\"role\":\"tool\",\"content\":\"{\\\"foo\\\":1}\"},{\"role\":\"tool\",\"content\":\"null\"},{\"role\":\"tool\",\"content\":\"7\"},{\"role\":\"tool\",\"content\":\"x\\n\\n2\\n\\n{\\\"k\\\":\\\"v\\\"}\"}]}"
+  },
+  {
+   "name": "placeholder and relay message",
+   "input": "{\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"c1\"}]},{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"[Tool returned image content; the images follow in the next user message.]\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"u\"}}]},{\"role\":\"assistant\",\"content\":\"done\"}]}",
+   "output": "{\"messages\":[{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"c1\"}]},{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"[image omitted: unsupported by upstream]\"},{\"role\":\"assistant\",\"content\":\"done\"}]}"
+  },
+  {
+   "name": "relay without placeholder appends marker",
+   "input": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"result text\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"u\"}},{\"type\":\"text\",\"text\":\"keep me\"}]}]}",
+   "output": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"result text\\n\\n[image omitted: unsupported by upstream]\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"keep me\"}]}]}"
+  },
+  {
+   "name": "relay after empty tool content",
+   "input": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"input_image\",\"image_url\":\"u\"}]}]}",
+   "output": "{\"messages\":[{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"[image omitted: unsupported by upstream]\"}]}"
+  },
+  {
+   "name": "plain user images untouched",
+   "input": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"look\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"u\"}}]}]}",
+   "output": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"look\"},{\"type\":\"image_url\",\"image_url\":{\"url\":\"u\"}}]}]}"
+  },
+  {
+   "name": "flag reset by other roles",
+   "input": "{\"messages\":[{\"role\":\"tool\",\"content\":\"[Tool returned image content; the images follow in the next user message.]\"},{\"role\":\"assistant\",\"content\":\"x\"},{\"role\":\"tool\",\"content\":\"t2\"},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Images returned by the preceding tool call(s):\"},{\"type\":\"image\",\"source\":{}}]}]}",
+   "output": "{\"messages\":[{\"role\":\"tool\",\"content\":\"[image omitted: unsupported by upstream]\"},{\"role\":\"assistant\",\"content\":\"x\"},{\"role\":\"tool\",\"content\":\"t2\\n\\n[image omitted: unsupported by upstream]\"}]}"
+  },
+  {
+   "name": "no messages",
+   "input": "{\"model\":\"m\"}",
+   "output": "{\"model\":\"m\"}"
+  }
+ ],
+ "promptCacheKeys": [
+  {
+   "provider": "openai-compatible-mock",
+   "model": "Upstream-Model",
+   "from": "openai",
+   "derived": "sess-1",
+   "key": "ccabc3f8-5e5f-5a24-bcd2-429da8409bf8"
+  },
+  {
+   "provider": "openai-compatible-mock",
+   "model": "upstream-model",
+   "from": "openai-response",
+   "derived": "sess-1",
+   "key": "ca505686-b746-53ad-9e50-c2614b7a939b"
+  },
+  {
+   "provider": "openai-compatible-other",
+   "model": "m",
+   "from": "gemini",
+   "derived": "  d-2  ",
+   "key": "690fc307-4efc-5637-8015-495bf2b6e968"
+  },
+  {
+   "provider": "openai-compatible-mock",
+   "model": "m",
+   "from": "openai",
+   "derived": "ignored",
+   "execution": "ws-1",
+   "key": "e839f2ee-d663-52eb-b86a-268041c40050"
+  }
+ ]
+}

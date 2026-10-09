@@ -17,6 +17,7 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AccessPrincipal } from "../../../access/principal.ts"
 import { invalidRequestBody } from "../../../http/errors.ts"
 import { executeStream, type ExecutionInput } from "../../execute.ts"
+import { currentConfig } from "../../request.ts"
 import { prepareCodexResponsesRequest } from "../codex-prepare.ts"
 import { downstreamSessionKey, defaultToolCaches } from "./tool-cache.ts"
 import { type SocketIO, runResponsesSocket } from "./socket.ts"
@@ -45,6 +46,9 @@ export const handleResponsesSocket = Effect.gen(function* () {
   }
   const identity = yield* AccessPrincipal
   const services = yield* Effect.context<TurnServices>()
+  // `upstream.codex.response-steering`; an unreadable config surfaces from the turn itself.
+  const config = yield* Effect.result(currentConfig)
+  const steering = config._tag === "Success" && config.success.upstream.codex["response-steering"]
 
   const pair = new WebSocketPair()
   const client = pair[0]
@@ -76,6 +80,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
       headers,
       toolSessionKey: downstreamSessionKey(headers, identity.callerScope),
       toolCaches: defaultToolCaches,
+      steering,
       prepare: (payload) => prepareCodexResponsesRequest(payload, headers, true),
       execute: (input: Omit<ExecutionInput, "request">) => executeStream({ ...input, request })
     },

@@ -183,6 +183,8 @@ export interface Turn {
   readonly headers: Headers
   /** Next non-empty text frame, trimmed, under the idle deadline. Failures invalidate the socket. */
   readonly read: Effect.Effect<string, ExecutionError>
+  /** Writes a further frame to the turn's socket (full-duplex steering). */
+  readonly send: (text: string) => Effect.Effect<void, ExecutionError>
   /** Detaches the socket so it is not reused (`invalidateUpstreamConn`). */
   readonly invalidate: Effect.Effect<void>
   /** The terminal event was delivered: the socket may be reused by the next turn. */
@@ -312,5 +314,7 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
       }
     }).pipe(Effect.tapError(() => invalidate))
 
-    return { headers, read, invalidate, complete: () => void (completed = true) } satisfies Turn
+    const send = (text: string): Effect.Effect<void, ExecutionError> =>
+      socket.send(text).pipe(Effect.mapError(() => transient(`${input.label} websocket send failed`)))
+    return { headers, read, send, invalidate, complete: () => void (completed = true) } satisfies Turn
   })

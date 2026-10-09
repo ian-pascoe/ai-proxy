@@ -13,6 +13,16 @@ export interface DevinUserStatus {
   userId: string
   orgId: string
   plan: string
+  teamId: string
+  orgName: string
+  /** Remaining quota in percent (`daily_quota_remaining_percent`, `weekly_quota_remaining_percent`). */
+  dailyQuotaRemainingPercent: number
+  weeklyQuotaRemainingPercent: number
+  /** Unix seconds; 0 = not reported. */
+  dailyQuotaResetAt: number
+  weeklyQuotaResetAt: number
+  planStart: number
+  planEnd: number
 }
 
 const encoder = new TextEncoder()
@@ -40,8 +50,11 @@ const field = (number: number, value: Uint8Array): number[] => [
 
 const text = (number: number, value: string): number[] => field(number, encoder.encode(value))
 
-/** `BuildGetUserStatusRequest` with a random device fingerprint (Go: random per request when no seed is given). */
-export const buildUserStatusRequest = (sessionToken: string): Uint8Array => {
+/**
+ * `BuildGetUserStatusRequest`. Without a fingerprint a random one is generated per request (Go: `GenerateDeviceFingerprint("")`);
+ * the refresh passes the one derived from the credential's device seed.
+ */
+export const buildUserStatusRequest = (sessionToken: string, fingerprint?: string): Uint8Array => {
   const inner = Uint8Array.from([
     ...text(1, "chisel"),
     ...text(2, "3000.10.21"),
@@ -50,7 +63,7 @@ export const buildUserStatusRequest = (sessionToken: string): Uint8Array => {
     ...text(5, "linux"),
     ...text(7, "3000.10.21"),
     ...text(12, "chisel"),
-    ...text(31, randomHex(FINGERPRINT_BYTES))
+    ...text(31, fingerprint ?? randomHex(FINGERPRINT_BYTES))
   ])
   return Uint8Array.from(field(1, inner))
 }
@@ -59,6 +72,8 @@ interface Field {
   readonly number: number
   readonly wire: number
   readonly bytes?: Uint8Array
+  /** Varint value. */
+  readonly value?: number
 }
 
 /** Reads the fields of one message; stops at the first malformed field (Go's parsers do the same). */
@@ -88,8 +103,9 @@ const fields = (data: Uint8Array): Field[] => {
       out.push({ number, wire, bytes: data.subarray(at, at + length) })
       at += length
     } else if (wire === 0) {
-      if (readVarint() === undefined) break
-      out.push({ number, wire })
+      const value = readVarint()
+      if (value === undefined) break
+      out.push({ number, wire, value })
     } else if (wire === 1 || wire === 5) {
       at += wire === 1 ? 8 : 4
       out.push({ number, wire })
@@ -102,10 +118,66 @@ const fields = (data: Uint8Array): Field[] => {
 
 const stringField = (bytes: Uint8Array | undefined): string => (bytes === undefined ? "" : decoder.decode(bytes))
 
+const EMPTY = new Uint8Array()
+
+/** `parseSecondsSubfield`: the first varint of field 1 (a protobuf `Timestamp.seconds`), 0 when absent. */
+const secondsSubfield = (data: Uint8Array): number => {
+  for (const entry of fields(data)) if (entry.wire === 0 && entry.number === 1) return entry.value ?? 0
+  return 0
+}
+
+/** `parsePlanInfo` / `parsePlanInfoOrg`. */
+const parsePlanInfo = (data: Uint8Array, status: DevinUserStatus): void => {
+  for (const info of fields(data)) {
+    if (info.wire !== 2) continue
+    if (info.number === 2) status.plan = stringField(info.bytes)
+    if (info.number === 33) {
+      for (const org of fields(info.bytes ?? EMPTY)) {
+        if (org.wire !== 2) continue
+        if (org.number === 4) status.orgId = stringField(org.bytes)
+        if (org.number === 8) status.orgName = stringField(org.bytes)
+      }
+    }
+  }
+}
+
+/** `parsePlanStatus`: plan info, plan period and the quota varints. */
+const parsePlanStatus = (data: Uint8Array, status: DevinUserStatus): void => {
+  for (const entry of fields(data)) {
+    if (entry.wire === 2) {
+      if (entry.number === 1) parsePlanInfo(entry.bytes ?? EMPTY, status)
+      else if (entry.number === 2) status.planStart = secondsSubfield(entry.bytes ?? EMPTY)
+      else if (entry.number === 3) status.planEnd = secondsSubfield(entry.bytes ?? EMPTY)
+    } else if (entry.wire === 0) {
+      const value = entry.value ?? 0
+      if (entry.number === 14) status.dailyQuotaRemainingPercent = value
+      else if (entry.number === 15) status.weeklyQuotaRemainingPercent = value
+      else if (entry.number === 17 && value > 0) status.dailyQuotaResetAt = value
+      else if (entry.number === 18 && value > 0) status.weeklyQuotaResetAt = value
+    }
+  }
+}
+
+export const emptyUserStatus = (): DevinUserStatus => ({
+  email: "",
+  userName: "",
+  userId: "",
+  orgId: "",
+  plan: "",
+  teamId: "",
+  orgName: "",
+  dailyQuotaRemainingPercent: 0,
+  weeklyQuotaRemainingPercent: 0,
+  dailyQuotaResetAt: 0,
+  weeklyQuotaResetAt: 0,
+  planStart: 0,
+  planEnd: 0
+})
+
 /** `ParseGetUserStatusResponse`. */
 export const parseUserStatus = (data: Uint8Array): DevinUserStatus | undefined => {
   if (data.length === 0) return undefined
-  const status: DevinUserStatus = { email: "", userName: "", userId: "", orgId: "", plan: "" }
+  const status = emptyUserStatus()
   for (const top of fields(data)) {
     if (top.number !== 1 || top.wire !== 2 || top.bytes === undefined) continue
     for (const entry of fields(top.bytes)) {
@@ -114,25 +186,17 @@ export const parseUserStatus = (data: Uint8Array): DevinUserStatus | undefined =
         case 3:
           status.userName = stringField(entry.bytes)
           break
+        case 5:
+          status.teamId = stringField(entry.bytes)
+          break
         case 7:
           status.email = stringField(entry.bytes)
           break
+        case 13:
+          parsePlanStatus(entry.bytes ?? EMPTY, status)
+          break
         case 36:
           status.userId = stringField(entry.bytes)
-          break
-        case 13:
-          for (const planStatus of fields(entry.bytes ?? new Uint8Array())) {
-            if (planStatus.number !== 1 || planStatus.wire !== 2) continue
-            for (const info of fields(planStatus.bytes ?? new Uint8Array())) {
-              if (info.wire !== 2) continue
-              if (info.number === 2) status.plan = stringField(info.bytes)
-              if (info.number === 33) {
-                for (const org of fields(info.bytes ?? new Uint8Array())) {
-                  if (org.number === 4 && org.wire === 2) status.orgId = stringField(org.bytes)
-                }
-              }
-            }
-          }
           break
         default:
           break

@@ -30,7 +30,7 @@ import {
 import { normalizeCodexToolSchemas } from "../helps/codex-tool-schema.ts"
 import { sanitizeCodexInputItemIds } from "../helps/codex-input-ids.ts"
 import { finalizePayload } from "../helps/payload.ts"
-import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts"
+import { translateRequestForExecutor } from "../helps/translate.ts"
 import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -73,6 +73,7 @@ import {
   isTerminalEmptyIncomplete,
   OutputItemCollector,
   parseCodexUsage,
+  publishCodexImageToolUsage,
   patchCodexCompletedOutput
 } from "./output.ts"
 import {
@@ -91,9 +92,11 @@ import {
   defaultReplayStore,
   replayScopeFromRequest
 } from "./replay.ts"
+import { modelOverrideHeaders } from "../helps/model-headers.ts"
+import { resolveCodexModelIsCompat } from "./compat.ts"
 import { bootstrapTimeoutMs, isGrokClientHeaders } from "./bootstrap.ts"
 import { CodexStreamReader } from "./stream.ts"
-import { codexWebsocketsEnabled, makeCodexWebsocketStream } from "./websocket.ts"
+import { codexWebsocketsEnabled, makeCodexWebsocketExecute, makeCodexWebsocketStream } from "./websocket.ts"
 
 export const CODEX_PROVIDER = "codex"
 
@@ -136,6 +139,9 @@ export interface PreparedRequest {
 
 export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): ProviderExecutor => {
   const registry = executorOptions.translators ?? builtinTranslators
+  /** `applyModelHeaderOverrides`: the injected hook, else models.json `override_header` from the attempt's registry snapshot. */
+  const overrides = (request: ExecutorRequest, model: string) =>
+    executorOptions.modelHeaderOverrides?.(model) ?? modelOverrideHeaders(request.modelLookup, model)
   const replayStore = executorOptions.replayStore ?? defaultReplayStore
 
   const translatePair = (
@@ -148,7 +154,11 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     summary: import("../../translator/registry.ts").SummaryHooks
   ) => {
     const from = options.sourceFormat
-    const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+    const rewrite = {
+      headers: options.headers,
+      config: context.config,
+      isCompat: resolveCodexModelIsCompat(context.config, context.credential, request, baseModel)
+    }
     const translated = translateRequestForExecutor(
       registry,
       from,
@@ -219,7 +229,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     if (pair instanceof ExecutionError) return yield* pair
     const { translated, original } = pair
     const nativeOutput = isNativeCodexRequest(request.payload, options.headers, from, responseFormat)
-    const isCompat = modelIsCompat(request)
+    const isCompat = resolveCodexModelIsCompat(context.config, context.credential, request, baseModel)
 
     let body = yield* thinking.apply({
       body: translated.body,
@@ -310,8 +320,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
             baseModel,
             ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
             routingHint: true,
-            ...(executorOptions.modelHeaderOverrides?.(baseModel) !== undefined
-              ? { modelHeaderOverrides: executorOptions.modelHeaderOverrides(baseModel) as Record<string, string> }
+            ...(overrides(request, baseModel) !== undefined
+              ? { modelHeaderOverrides: overrides(request, baseModel) as Record<string, string> }
               : {})
           })
     const url = `${codexBaseUrl(context.credential)}${mode.compact ? "/responses/compact" : "/responses"}`
@@ -331,11 +341,22 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     } satisfies PreparedRequest
   })
 
-  const websocketStream = makeCodexWebsocketStream({
+  const websocketDeps = {
     prepare,
     replayStore,
-    modelHeaderOverrides: executorOptions.modelHeaderOverrides
-  })
+    modelHeaderOverrides: overrides,
+    translateNonStream: (prepared: PreparedRequest, request: ExecutorRequest, completed: Json) => {
+      const out = registry.translateNonStream(
+        prepared.responseFormat,
+        prepared.providerFormat,
+        responseContext(prepared, request),
+        JSON.stringify(completed)
+      )
+      return out === undefined ? "" : out
+    }
+  }
+  const websocketStream = makeCodexWebsocketStream(websocketDeps)
+  const websocketExecute = makeCodexWebsocketExecute(websocketDeps)
 
   /** POSTs `body`; non-2xx answers become classified `ExecutionError`s (the replay cache is cleared when needed). */
   const send = Effect.fnUntraced(function* (
@@ -431,6 +452,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       if (out === undefined || out === "") return yield* failedTranslation()
       const detail = parseCodexUsage(event)
       if (detail !== undefined) context.usage.publish(detail)
+      publishCodexImageToolUsage(context.usage, prepared.body, event)
       if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
       return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
@@ -483,6 +505,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       providerFormat: prepared.providerFormat,
       context: responseContext(prepared, request),
       usage: context.usage,
+      requestBody: prepared.body,
       preserveNativeOutput: isNativeCodexRequest(
         request.payload,
         options.headers,
@@ -569,8 +592,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       baseModel: model,
       omitClientUserAgent: true,
       ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
-      ...(executorOptions.modelHeaderOverrides?.(model) !== undefined
-        ? { modelHeaderOverrides: executorOptions.modelHeaderOverrides(model) as Record<string, string> }
+      ...(overrides(request, model) !== undefined
+        ? { modelHeaderOverrides: overrides(request, model) as Record<string, string> }
         : {})
     })
     return { url: `${codexBaseUrl(context.credential)}${endpoint}`, headers, body, model }
@@ -626,8 +649,8 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       body,
       baseModel: mainModel,
       ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
-      ...(executorOptions.modelHeaderOverrides?.(mainModel) !== undefined
-        ? { modelHeaderOverrides: executorOptions.modelHeaderOverrides(mainModel) as Record<string, string> }
+      ...(overrides(request, mainModel) !== undefined
+        ? { modelHeaderOverrides: overrides(request, mainModel) as Record<string, string> }
         : {})
     })
     return { url: `${codexBaseUrl(context.credential)}/responses`, headers, body, image: prepared }
@@ -659,6 +682,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       else if (eventType === "response.completed" && event !== undefined) {
         const detail = parseCodexUsage(event)
         if (detail !== undefined) context.usage.publish(detail)
+        publishCodexImageToolUsage(context.usage, tool.body, event)
         const extracted = extractImageResults(event, collector, Math.floor((yield* Clock.currentTimeMillis) / 1000))
         if (extracted.results.length === 0) {
           return yield* new ExecutionError({ status: 502, message: "upstream did not return image output" })
@@ -710,6 +734,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
               case "response.completed": {
                 const detail = parseCodexUsage(event)
                 if (detail !== undefined) context.usage.publish(detail)
+                publishCodexImageToolUsage(context.usage, tool.body, event)
                 const extracted = extractImageResults(
                   event as Json,
                   collector,
@@ -742,6 +767,12 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     if (options.alt === "responses/compact") return executeCompact(context, request, options)
     if (isCodexImageRequest(options.sourceFormat, options.metadata.requestPath))
       return executeImage(context, request, options)
+    const websocket = options.metadata.websocket
+    if (websocket !== undefined) {
+      // CodexAutoExecutor: WebSocket only for a downstream WebSocket and a credential that enables it.
+      if (codexWebsocketsEnabled(context.credential)) return websocketExecute(context, request, options)
+      if (websocket.requireUpstream) return Effect.fail(replayRequiredError())
+    }
     return executeResponses(context, request, options)
   }
 

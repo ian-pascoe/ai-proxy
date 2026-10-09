@@ -6,8 +6,8 @@
  *
  * Differences from Go:
  *  - Errors are carried as messages (`string`); the retained tool-input failure is mirrored into the registry state.
- *  - A stream that ends without a source terminator is not synthesised into `response.failed` (Go
- *    `FinalizeToolInput`); `state.canFinalize` stays false so the executor reports a gateway error instead.
+ *  - `state.canFinalize` stays false (no synthetic completion on EOF); `state.finalizeToolInput` (Go `FinalizeToolInput`)
+ *    turns a patch-enabled stream that ends without its source terminator into `response.failed`.
  *  - gjson's lazy reading of malformed event JSON is approximated by recovering the longest valid prefix of the
  *    object's top-level members (truncated payloads); other malformations are ignored.
  */
@@ -1311,10 +1311,21 @@ const stateOf = (context: ResponseContext): State => {
   return st
 }
 
+/** `FinalizeToolInput`: rejects a patch-enabled stream lacking its source terminator (never fabricates success). */
+const finalizeToolInput = (context: ResponseContext, st: State): string[] => {
+  if (st.toolInputError !== undefined || st.terminal) return []
+  if (!hasPatchBridge(st)) return []
+  st.toolInputError = "upstream apply_patch stream ended before protocol completion"
+  context.state.toolInputError = st.toolInputError
+  st.terminal = true
+  return [emit("response.failed", applyPatchFailure(st.id, nextSeq(st)))]
+}
+
 /** Interactions upstream -> Responses client (registered for `(OpenAIResponse, Interactions)`). */
 export const interactionsToOpenAIResponsesResponse: ResponseTransform = {
   stream: (context, line) => {
     const st = stateOf(context)
+    context.state.finalizeToolInput ??= () => finalizeToolInput(context, st)
     const events = convertEvent(context.model, context.originalRequest, context.translatedRequest, line, st)
     if (st.toolInputError !== undefined) context.state.toolInputError = st.toolInputError
     return events
