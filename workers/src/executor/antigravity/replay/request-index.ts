@@ -9,6 +9,7 @@
  * byte-identical to Go's hashes.
  */
 import { createHash, type Hash } from "node:crypto"
+import { sha256Hex } from "../../../hash.ts"
 import { asBool, asString, del, get, isJsonArray, isJsonObject, type Json } from "../../../json/index.ts"
 import { goMarshal } from "../../../translator/common/claude-util.ts"
 
@@ -32,8 +33,6 @@ export const hasNativeThoughtSignature = (signature: string): boolean => {
   const trimmed = signature.trim()
   return trimmed !== "" && trimmed !== SKIP_VALIDATOR
 }
-
-const sha256Hex = (text: string): string => createHash("sha256").update(text).digest("hex")
 
 /** `antigravityCanonicalReplayJSON` of a parsed value. */
 export const canonicalJson = (value: Json | undefined): string => (value === undefined ? "" : goMarshal(value))

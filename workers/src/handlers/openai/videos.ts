@@ -8,6 +8,7 @@
  */
 import { Clock, Effect } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import { videoResultAuthCacheTtlMs } from "../../config/accessors.ts"
 import { type ExecutionError, ExecutionError as ExecutionErrorClass } from "../../executor/errors.ts"
 import { goMarshal } from "../../http/json-text.ts"
@@ -42,8 +43,8 @@ const openAiError = (status: number, message: string) =>
     contentType: JSON_TYPE
   })
 
-const invalid = (message: string) =>
-  HttpServerResponse.text(invalidRequestBody(message), { status: 400, contentType: JSON_TYPE })
+const invalid = (message: string, status = 400) =>
+  HttpServerResponse.text(invalidRequestBody(message), { status, contentType: JSON_TYPE })
 
 /** `writeVideosFailedError`: OpenAI-shaped routes answer validation errors with a failed video object. */
 const failedVideo = (status: number, model: string, code: string, message: string) =>
@@ -129,7 +130,7 @@ const nativePost = Effect.gen(function* () {
   const { passthroughHeaders, ttlMs } = yield* servicesOrDefault
   const onError = (error: ExecutionError) => errorResponse("openai", error, { passthroughHeaders })
   const read = yield* Effect.result(readRequestBody(request))
-  if (read._tag === "Failure") return invalid(read.failure.message)
+  if (read._tag === "Failure") return invalid(read.failure.message, read.failure.status)
   const body = read.success.json
   if (body === undefined || !isJsonObject(body)) return invalid("body must be valid JSON")
   const requested = asString(get(body, "model")).trim() || DEFAULT_XAI_VIDEOS_MODEL
@@ -310,7 +311,7 @@ const soraGet = Effect.gen(function* () {
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
 export const VideoRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const context = yield* Effect.context<ProxyServices>()
+    const context = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/videos", Effect.provide(nativePost, context))
     yield* router.add("POST", "/v1/videos/generations", Effect.provide(nativePost, context))
     yield* router.add("POST", "/v1/videos/edits", Effect.provide(nativePost, context))

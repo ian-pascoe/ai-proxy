@@ -141,7 +141,13 @@ describe("management oauth routes", () => {
       body: { status: "error", error: "missing state" }
     })
     const post = (body: unknown) => json("/v8/management/oauth/callback", jsonInit("POST", body))
-    expect(await json("/v8/management/oauth/callback", { method: "POST", body: "nope" })).toMatchObject({
+    expect(
+      await json("/v8/management/oauth/callback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "nope"
+      })
+    ).toMatchObject({
       status: 400,
       body: { status: "error", error: "invalid body" }
     })

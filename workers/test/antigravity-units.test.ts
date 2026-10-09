@@ -4,9 +4,12 @@ import { env } from "cloudflare:workers"
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import {
+  antigravityStateFor,
+  CREDITS_REFRESH_INTERVAL_MS,
   creditsAvailable,
   makeKvAntigravityState,
-  makeMemoryAntigravityState
+  makeMemoryAntigravityState,
+  sessionStateCreditsClaim
 } from "../src/executor/antigravity/state.ts"
 import { parseCreditsReply, shouldAttemptCreditsFallback } from "../src/executor/antigravity/credits.ts"
 import { ExecutionError } from "../src/executor/errors.ts"
@@ -324,6 +327,24 @@ describe("state and credits", () => {
     expect(creditsAvailable(await state.credits(id))).toBe(true)
     expect(await state.claimCreditsRefresh(id, 7)).toBe(true)
     expect(await state.claimCreditsRefresh(id, 8)).toBe(false)
+  })
+
+  it("claims the credits probe slot atomically in the SessionState Durable Object", async () => {
+    const claim = sessionStateCreditsClaim(env.SESSION_STATE)
+    const id = `lock-${crypto.randomUUID()}`
+    const now = Date.now()
+    // Concurrent claims of one credential: exactly one wins (KV get-then-put let both through).
+    const results = await Promise.all(Array.from({ length: 8 }, () => claim(id, now)))
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(await claim(id, now + CREDITS_REFRESH_INTERVAL_MS - 1)).toBe(false)
+    // The slot expires with its TTL.
+    expect(await claim(id, now + CREDITS_REFRESH_INTERVAL_MS + 1)).toBe(true)
+    expect(await claim(`other-${id}`, now)).toBe(true)
+    // The production store uses it whenever the binding exists.
+    const state = antigravityStateFor(env)
+    const second = `lock-${crypto.randomUUID()}`
+    expect(await state.claimCreditsRefresh(second, now)).toBe(true)
+    expect(await state.claimCreditsRefresh(second, now + 1)).toBe(false)
   })
 
   it("parses the loadCodeAssist credits reply", () => {

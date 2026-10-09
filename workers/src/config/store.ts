@@ -7,6 +7,7 @@
  */
 import { Effect, Schema } from "effect"
 import { decodeConfig, encodeConfig, parseConfigYaml } from "./codec.ts"
+import { notAppliedSettings } from "./not-applied.ts"
 import { Config } from "./schema.ts"
 
 /** What `getConfig` returns over RPC (plain data only). */
@@ -20,7 +21,14 @@ export interface ConfigSnapshotWire {
 }
 
 export type PutConfigResult =
-  | { readonly ok: true; readonly version: number; readonly document: string; readonly updatedAt: number }
+  | {
+      readonly ok: true
+      readonly version: number
+      readonly document: string
+      readonly updatedAt: number
+      /** Keys set in the document that have no effect on Workers (`not-applied.ts`). */
+      readonly notApplied: ReadonlyArray<string>
+    }
   | { readonly ok: false; readonly error: "invalid"; readonly message: string }
   | { readonly ok: false; readonly error: "conflict"; readonly message: string; readonly currentVersion: number }
 
@@ -91,7 +99,7 @@ export class ConfigStore {
       document,
       updatedAt
     )
-    return { ok: true, version, document, updatedAt }
+    return { ok: true, version, document, updatedAt, notApplied: notAppliedSettings(parsed.success) }
   }
 }
 

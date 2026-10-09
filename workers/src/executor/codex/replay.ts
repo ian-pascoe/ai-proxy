@@ -13,6 +13,7 @@
  * the Go 10240-entry cap is replaced by the TTL sweep) and session keys are isolated per caller scope.
  */
 import { createHash } from "node:crypto"
+import { sha256Hex } from "../../hash.ts"
 import { Effect } from "effect"
 import { asString, cloneJson, get, isJsonArray, type Json, type JsonObject, set } from "../../json/index.ts"
 import { isValidGptReasoningSignature } from "../../signature/gpt.ts"
@@ -211,8 +212,6 @@ export interface CodexReplayScope {
 
 export const replayScopeValid = (scope: CodexReplayScope): boolean =>
   scope.modelName.trim() !== "" && scope.sessionKey.trim() !== ""
-
-const sha256Hex = (text: string): string => createHash("sha256").update(text).digest("hex")
 
 const itemRaw = (item: Json): string => JSON.stringify(item)
 

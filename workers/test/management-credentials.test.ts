@@ -421,7 +421,13 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       status: 400,
       body: { error: "auth_index is required" }
     })
-    expect(await json("/v8/management/routing/cooldown/reset", { method: "POST", body: "x" })).toMatchObject({
+    expect(
+      await json("/v8/management/routing/cooldown/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "x"
+      })
+    ).toMatchObject({
       status: 400
     })
   })

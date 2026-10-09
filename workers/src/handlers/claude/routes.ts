@@ -7,6 +7,7 @@
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import type { ExecutionError } from "../../executor/errors.ts"
 import { claudeErrorBody } from "../../http/errors.ts"
 import { asString, get, type Json, set } from "../../json/index.ts"
@@ -17,9 +18,9 @@ import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../re
 import { errorResponse, jsonResponse, streamResponse } from "../respond.ts"
 import { resolveClaudeModelIdPrefix } from "../../registry/listings.ts"
 
-const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
-  HttpServerResponse.text(claudeErrorBody(400, `Invalid request: ${message}`), {
-    status: 400,
+const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
+  HttpServerResponse.text(claudeErrorBody(status, `Invalid request: ${message}`), {
+    status,
     contentType: "application/json"
   })
 
@@ -46,7 +47,7 @@ const handle = (kind: "messages" | "count") =>
       errorResponse("claude", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
-    if (read._tag === "Failure") return badRequest(read.failure.message)
+    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
     // Go forwards an unparsable body to model resolution, which answers with a model error; JSON is required here.
     if (read.success.json === undefined) return badRequest("request body is not valid JSON")
     const body = rewriteModel(read.success.json)
@@ -78,7 +79,7 @@ const handle = (kind: "messages" | "count") =>
 /** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const ClaudeRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/messages", Effect.provide(handle("messages"), services))
     yield* router.add("POST", "/v1/messages/count_tokens", Effect.provide(handle("count"), services))
   })

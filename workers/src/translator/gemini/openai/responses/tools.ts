@@ -4,7 +4,7 @@
  * Go source: internal/util/responses_tools.go (BuildGeminiFunctionDeclarations, ResponsesToolReverseIdentityMap,
  * MapResponsesToolName, ConvertResponsesToolChoiceToGemini, UnwrapResponsesCustomToolInput).
  */
-import { createHash } from "node:crypto"
+import { sha256Hex } from "../../../../hash.ts"
 import { asString, get, isJsonObject, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
 import {
@@ -16,8 +16,6 @@ import {
 } from "../../../common/responses-tools.ts"
 import { sanitizeFunctionName } from "../../util/claude.ts"
 import { cleanJsonSchemaForGeminiJsonSchema } from "../../util/json-schema.ts"
-
-const sha256Hex = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex")
 
 const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 

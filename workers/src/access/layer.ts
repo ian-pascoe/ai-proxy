@@ -1,14 +1,18 @@
 import { Layer } from "effect"
+import { ConfigReader } from "../config/reader.ts"
 import { CorsLayer } from "../http/cors.ts"
 import { AccessJwks } from "./jwks.ts"
 import { AccessGate } from "./middleware.ts"
 
 /**
  * CORS plus the Access gate, in that order: global middleware registered first is outermost, so preflights are
- * answered before authentication and 401/403 responses still carry CORS headers. `jwks` is replaceable in tests.
+ * answered before authentication and 401/403 responses still carry CORS headers. `jwks` and the config reader (for
+ * the `access.admin-*` keys) are replaceable in tests.
  */
-export const makeAccessLayer = (jwks: Layer.Layer<AccessJwks> = AccessJwks.layerLive) =>
-  AccessGate.pipe(Layer.provide(Layer.mergeAll(CorsLayer, jwks)))
+export const makeAccessLayer = (
+  jwks: Layer.Layer<AccessJwks> = AccessJwks.layerLive,
+  configReader: Layer.Layer<ConfigReader> = ConfigReader.layerControlPlane()
+) => AccessGate.pipe(Layer.provide(Layer.mergeAll(CorsLayer, jwks, configReader)))
 
 /** Builds the `withAccess` helper for a given Access layer (tests pass one with a fake JWKS). */
 export const makeWithAccess =

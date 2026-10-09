@@ -7,7 +7,8 @@
  * parseDevinUsageField, ParseDevinResponseDimensionGroups, ParseDevinTrailerError, SanitizeDevinSystemPrompt,
  * WrapConnectEnvelope). Field numbers follow docs/workers-port/research/providers-other.md §4.4.
  */
-import { createHash, randomBytes, randomUUID } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
+import { sha256Hex } from "../../hash.ts"
 import { isClaudeCodeAttributionSystemText } from "../../translator/common/claude-messages.ts"
 import type { SensitiveWordMatcher } from "../claude/cloaking.ts"
 import { fieldDouble, fieldFloat, fieldText, ProtoError, ProtoWriter, readFields, WireType } from "./protobuf.ts"
@@ -78,8 +79,6 @@ export const newDevinPrompt = (init: Partial<DevinPrompt> & { readonly source: n
 // ---------------------------------------------------------------------------------------------------------------
 // Request
 // ---------------------------------------------------------------------------------------------------------------
-
-const sha256Hex = (text: string): string => createHash("sha256").update(text).digest("hex")
 
 /** `GenerateDevinDeviceFingerprint`: 732 hex characters, random without a seed, else derived from the seed. */
 export const generateDeviceFingerprint = (seed: string): string => {

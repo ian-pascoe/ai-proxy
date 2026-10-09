@@ -9,6 +9,7 @@
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import type { ExecutionError } from "../../executor/errors.ts"
 import { invalidRequestBody } from "../../http/errors.ts"
 import { asString, get, isJsonObject, type Json, set } from "../../json/index.ts"
@@ -22,8 +23,8 @@ const GEMINI_INTERACTIONS = "gemini-interactions"
 const INTERACTIONS_AGENT_AUTH_SELECTION_MODEL = "gemini-2.5-flash"
 const MODELS_PREFIX = "/v1beta/models/"
 
-const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
-  HttpServerResponse.text(invalidRequestBody(message), { status: 400, contentType: "application/json" })
+const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
+  HttpServerResponse.text(invalidRequestBody(message), { status, contentType: "application/json" })
 
 /** `GeminiHandler` 404 for unroutable actions. */
 const notFound = (path: string): HttpServerResponse.HttpServerResponse =>
@@ -62,7 +63,7 @@ const readContext = Effect.fnUntraced(function* (request: HttpServerRequest.Http
   }
   const config = configResult.success
   const read = yield* Effect.result(readRequestBody(request))
-  if (read._tag === "Failure") return { response: badRequest(read.failure.message) }
+  if (read._tag === "Failure") return { response: badRequest(read.failure.message, read.failure.status) }
   if (read.success.json === undefined) return { response: badRequest("request body is not valid JSON") }
   return {
     context: {
@@ -179,7 +180,7 @@ const interactions = Effect.gen(function* () {
 /** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const GeminiRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1beta/models/*", Effect.provide(geminiAction, services))
     yield* router.add("POST", "/v1beta/interactions", Effect.provide(interactions, services))
   })

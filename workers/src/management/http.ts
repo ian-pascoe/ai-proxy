@@ -7,6 +7,7 @@
 import { Data, Effect } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
+import { causeSummary } from "../observability/cause.ts"
 import { WorkerEnv } from "../platform/env.ts"
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8"
@@ -86,7 +87,7 @@ export const handled = <R>(
   effect.pipe(
     Effect.catch((reply) => Effect.succeed(reply.response)),
     Effect.catchCause((cause) =>
-      Effect.logError(`management handler failed: ${String(cause).slice(0, 200)}`).pipe(
+      Effect.logError(`management handler failed: ${causeSummary(cause)}`).pipe(
         Effect.as(jsonReply(500, { error: "internal error" }))
       )
     ),

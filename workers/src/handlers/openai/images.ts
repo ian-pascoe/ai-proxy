@@ -11,6 +11,7 @@
  */
 import { Clock, Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import { ExecutionError, type ExecutionError as ExecutionErrorType } from "../../executor/errors.ts"
 import type { Config } from "../../config/schema.ts"
 import { invalidRequestBody, openAIErrorBody } from "../../http/errors.ts"
@@ -98,8 +99,8 @@ export const buildImagesApiResponse = (
   return { out: JSON.stringify(out) }
 }
 
-const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
-  HttpServerResponse.text(invalidRequestBody(message), { status: 400, contentType: "application/json" })
+const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
+  HttpServerResponse.text(invalidRequestBody(message), { status, contentType: "application/json" })
 
 const unsupportedModel = (model: string): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(
@@ -273,7 +274,7 @@ const handle = (edits: boolean) =>
       body = formResult.success
     } else if (!edits || contentType.startsWith("application/json")) {
       const read = yield* Effect.result(readRequestBody(request))
-      if (read._tag === "Failure") return badRequest(read.failure.message)
+      if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
       if (read.success.json === undefined) return badRequest("body must be valid JSON")
       body = read.success.json
     } else {
@@ -335,7 +336,7 @@ const handle = (edits: boolean) =>
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
 export const ImagesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/images/generations", Effect.provide(handle(false), services))
     yield* router.add("POST", "/v1/images/edits", Effect.provide(handle(true), services))
   })

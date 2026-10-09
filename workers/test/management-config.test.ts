@@ -50,12 +50,20 @@ describe("management config", () => {
     expect((await json("/v8/management/config", jsonInit("PUT", ["x"]))).body).toEqual({
       error: "config_must_be_object"
     })
-    const invalidJson = await json("/v8/management/config", { method: "PUT", body: "{nope" })
+    const invalidJson = await json("/v8/management/config", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: "{nope"
+    })
     expect(invalidJson).toMatchObject({ status: 400, body: { error: "invalid_json" } })
     const bad = await json("/v8/management/config", jsonInit("PUT", { routing: "not-an-object" }))
     expect(bad.status).toBe(422)
     expect(bad.body).toMatchObject({ error: "invalid_config" })
-    const badYaml = await json("/v8/management/config.yaml", { method: "PUT", body: "routing: [" })
+    const badYaml = await json("/v8/management/config.yaml", {
+      method: "PUT",
+      headers: { "content-type": "application/yaml" },
+      body: "routing: ["
+    })
     expect(badYaml.status).toBe(422)
     // A rejected write leaves the stored config untouched.
     expect((await json("/v8/management/config/routing/strategy")).body).toBe("fill-first")

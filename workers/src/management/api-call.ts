@@ -6,9 +6,15 @@
  * bounded to 60 s like Go (explicit exception to "no timeouts after connect", see AGENTS.md). Differences: Workers
  * `fetch` cannot route through a proxy (`proxy_url` is validated but ignored) and cannot override the `Host` header
  * (ignored). The token never appears in logs.
+ *
+ * Security: the route is admin-only (Access admin gate, which also refuses cross-site requests) and `$TOKEN$` is only
+ * substituted for `https:` URLs (Workers deviation). The target host is not restricted to the credential's provider
+ * (the panel probes several provider hosts and admins can download credential files anyway); it is an outbound
+ * request from the Worker to any public host, see docs/workers-port/ACCESS.md "Management API security".
  */
 import { Effect } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
+import { isValidJson } from "../http/json-text.ts"
 import { isJsonObject, type Json } from "../json/index.ts"
 import { bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.ts"
 
@@ -19,15 +25,6 @@ const text = (value: Json | undefined): string => (typeof value === "string" ? v
 
 /** JSON-escapes a token for insertion between the quotes of a JSON string. */
 const jsonEscape = (token: string): string => JSON.stringify(token).slice(1, -1)
-
-const isValidJson = (value: string): boolean => {
-  try {
-    JSON.parse(value)
-    return true
-  } catch {
-    return false
-  }
-}
 
 const validProxy = (value: string): boolean => {
   if (["direct", "none"].includes(value.toLowerCase())) return true
@@ -62,6 +59,8 @@ const apiCall = Effect.gen(function* () {
   let token: string | undefined
   const resolveToken = Effect.gen(function* () {
     if (token !== undefined) return token
+    // Workers deviation: a credential token is never sent in clear text.
+    if (url.protocol !== "https:") return yield* replyError(400, "auth token requires an https url")
     if (authIndex === "") return yield* replyError(400, "auth token not found")
     const result = yield* controlPlane("resolveApiCallToken", (stub) => stub.resolveApiCallToken(authIndex))
     if (result.ok) {

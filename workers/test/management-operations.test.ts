@@ -41,7 +41,15 @@ const apiCall = (body: unknown) => json("/v8/management/requests/api-call", json
 
 describe("api-call", () => {
   it("validates the request", async () => {
-    expect((await json("/v8/management/requests/api-call", { method: "POST", body: "x" })).body).toEqual({
+    expect(
+      (
+        await json("/v8/management/requests/api-call", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "x"
+        })
+      ).body
+    ).toEqual({
       error: "invalid body"
     })
     expect((await apiCall({ url: "https://a.example" })).body).toEqual({ error: "missing method" })
@@ -102,6 +110,19 @@ describe("api-call", () => {
       data: "raw $TOKEN$ text"
     })
     expect(JSON.parse((plain.body as { body: string }).body).body).toBe('raw tok"en\\1 text')
+  })
+
+  it("never substitutes $TOKEN$ into plain-http requests", async () => {
+    await controlPlane().importAuthFile("x.json", claudeFile())
+    const before = harness.requests.length
+    const result = await apiCall({
+      auth_index: authIndexOf("x.json"),
+      method: "GET",
+      url: "http://api.example.com/q",
+      header: { Authorization: "Bearer $TOKEN$" }
+    })
+    expect(result).toMatchObject({ status: 400, body: { error: "auth token requires an https url" } })
+    expect(harness.requests).toHaveLength(before)
   })
 
   it("uses the API key of config credentials and reports token problems", async () => {

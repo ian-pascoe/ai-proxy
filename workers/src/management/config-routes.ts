@@ -49,7 +49,16 @@ const okReply = jsonReply(200, { status: "ok", "config-version": 8 })
 const store = (text: string, expectedVersion: number | undefined) =>
   controlPlane("putConfig", (stub) => stub.putConfig(text, expectedVersion)).pipe(
     Effect.flatMap((result) => {
-      if (result.ok) return Effect.succeed("saved" as const)
+      if (result.ok) {
+        // Go config files often carry keys that do nothing on Workers; say so instead of silently ignoring them.
+        const { notApplied } = result
+        return notApplied.length === 0
+          ? Effect.succeed("saved" as const)
+          : Effect.logWarning("config keys not applied on Workers (see MIGRATION.md)").pipe(
+              Effect.annotateLogs({ keys: notApplied.join(", ") }),
+              Effect.as("saved" as const)
+            )
+      }
       if (result.error === "conflict") return Effect.succeed("conflict" as const)
       return Effect.fail(replyError(422, "invalid_config", { message: result.message }))
     })

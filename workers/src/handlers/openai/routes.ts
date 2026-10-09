@@ -7,6 +7,7 @@
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import type { ExecutionError } from "../../executor/errors.ts"
 import { invalidRequestBody } from "../../http/errors.ts"
 import { asBool, asString, get, isJsonObject, type Json } from "../../json/index.ts"
@@ -22,8 +23,8 @@ import { chatResponseToCompletions, chatStreamChunkToCompletions, completionsReq
 export const isResponsesShaped = (body: Json): boolean =>
   get(body, "messages") === undefined && (get(body, "input") !== undefined || get(body, "instructions") !== undefined)
 
-const badRequest = (message: string): HttpServerResponse.HttpServerResponse =>
-  HttpServerResponse.text(invalidRequestBody(message), { status: 400, contentType: "application/json" })
+const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
+  HttpServerResponse.text(invalidRequestBody(message), { status, contentType: "application/json" })
 
 interface Exchange {
   /** Converts the request body; `stream` is derived from the result. */
@@ -46,7 +47,7 @@ const handle = (exchange: Exchange) =>
       errorResponse("openai", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
-    if (read._tag === "Failure") return badRequest(read.failure.message)
+    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
     if (read.success.json === undefined) return badRequest("request body is not valid JSON")
     const { body, stream } = exchange.prepare(read.success.json)
 
@@ -117,7 +118,7 @@ const completions = handle({
 /** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const OpenAIRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/chat/completions", Effect.provide(chatCompletions, services))
     yield* router.add("POST", "/v1/completions", Effect.provide(completions, services))
   })

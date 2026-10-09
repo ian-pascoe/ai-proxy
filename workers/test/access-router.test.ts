@@ -68,14 +68,29 @@ describe("Access gate through the router", () => {
     ["POST", "/v1/chat/completions"],
     ["GET", "/v1beta/models"],
     ["GET", "/openai/v1/videos"],
-    ["POST", "/backend-api/codex/responses"],
-    ["GET", "/v8/management/config"]
+    ["POST", "/backend-api/codex/responses"]
   ])("rejects %s %s without a token (flat Go-style body, CORS headers kept)", async (method, path) => {
     const response = await call(path, { method })
     expect(response.status).toBe(401)
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8")
     expect(response.headers.get("access-control-allow-origin")).toBe("*")
     expect(await response.text()).toBe('{"error":"Missing API key"}')
+  })
+
+  it("rejects management routes without a token and never adds CORS headers there", async () => {
+    const response = await call("/v8/management/config")
+    expect(response.status).toBe(401)
+    expect(await response.text()).toBe('{"error":"Missing API key"}')
+    expect(response.headers.get("access-control-allow-origin")).toBeNull()
+    const admin = await call("/v8/management/config", await withToken(userClaims("admin@example.com")))
+    expect(admin.status).toBe(200)
+    expect(admin.headers.get("access-control-allow-origin")).toBeNull()
+    const preflight = await call("/v8/management/requests/api-call", {
+      method: "OPTIONS",
+      headers: { origin: "https://evil.test", "access-control-request-method": "POST" }
+    })
+    expect(preflight.headers.get("access-control-allow-origin")).toBeNull()
+    expect(preflight.headers.get("access-control-allow-headers")).toBeNull()
   })
 
   it("rejects malformed and foreign tokens with Invalid API key", async () => {
@@ -153,12 +168,39 @@ describe("Access gate through the router", () => {
   })
 
   it("dev bypass works for loopback hosts only", async () => {
-    const dev = { ...accessEnv, ACCESS_DEV_BYPASS: "true" }
+    const dev = { ...accessEnv, ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "", ACCESS_DEV_BYPASS: "true" }
     const local = await call("/v8/management/config", {}, dev, "http://localhost:8787")
     expect(local.status).toBe(200)
     expect(await local.text()).toContain('"email":"dev@localhost"')
     const remote = await call("/v8/management/config", {}, dev)
-    expect(remote.status).toBe(401)
+    expect(remote.status).toBe(500)
+  })
+
+  it("refuses the dev bypass when Access is configured (team domain or AUD set)", async () => {
+    for (const bindings of [
+      { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
+      { ...accessEnv, ACCESS_AUD: "", ACCESS_DEV_BYPASS: "true" },
+      { ...accessEnv, ACCESS_TEAM_DOMAIN: "", ACCESS_DEV_BYPASS: "true" }
+    ]) {
+      const response = await call("/v8/management/config", {}, bindings, "http://localhost:8787")
+      expect(response.status).not.toBe(200)
+      expect(await response.text()).not.toContain("dev@localhost")
+    }
+    // With full Access settings the request is authenticated normally.
+    const refused = await call(
+      "/v8/management/config",
+      {},
+      { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
+      "http://localhost:8787"
+    )
+    expect(refused.status).toBe(401)
+    const token = await call(
+      "/v8/management/config",
+      await withToken(userClaims("admin@example.com")),
+      { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
+      "http://localhost:8787"
+    )
+    expect(token.status).toBe(200)
   })
 })
 

@@ -13,23 +13,32 @@ export const MANAGEMENT_PANEL_PATH = "/management.html"
 export type AccessZone = "public" | "protected" | "management"
 
 /**
- * Classifies a request URL. Matching is deliberately a superset of what the router matches (percent-decoding,
- * duplicate slashes and case are normalised) so an unusual spelling of a protected path cannot reach a handler
- * unauthenticated; over-matching only turns a 404 into a 401.
+ * The path of a request URL, percent-decoded, with duplicate slashes collapsed and lowercased; `undefined` when the
+ * URL cannot be parsed.
  */
-export const classifyPath = (requestUrl: string): AccessZone => {
+export const normalizedPath = (requestUrl: string): string | undefined => {
   let path: string
   try {
     path = new URL(requestUrl, "http://invalid.invalid").pathname
   } catch {
-    return "protected"
+    return undefined
   }
   try {
     path = decodeURIComponent(path)
   } catch {
     // Keep the raw path when it is not valid percent-encoding.
   }
-  path = path.replace(/\/{2,}/g, "/").toLowerCase()
+  return path.replace(/\/{2,}/g, "/").toLowerCase()
+}
+
+/**
+ * Classifies a request URL. Matching is deliberately a superset of what the router matches (percent-decoding,
+ * duplicate slashes and case are normalised) so an unusual spelling of a protected path cannot reach a handler
+ * unauthenticated; over-matching only turns a 404 into a 401.
+ */
+export const classifyPath = (requestUrl: string): AccessZone => {
+  const path = normalizedPath(requestUrl)
+  if (path === undefined) return "protected"
   if (path.startsWith(MANAGEMENT_PREFIX) || path.startsWith(MANAGEMENT_PANEL_PATH)) return "management"
   return PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "protected" : "public"
 }

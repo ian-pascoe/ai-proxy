@@ -16,7 +16,7 @@
  * upstream attempts per request (each costs subrequests: pick, fetch, report) and cooldown waits of at most
  * {@link MAX_COOLDOWN_WAIT_MS}; a longer recovery is answered with the last error plus `Retry-After`.
  */
-import { Clock, Duration, Effect, Random } from "effect"
+import { Clock, Duration, Effect, Option, Random, Scope } from "effect"
 import type { Config } from "../config/schema.ts"
 import type { RetryPlan } from "../credentials/selection/retry.ts"
 import { ExecutionError, withErrorFields } from "../executor/errors.ts"
@@ -39,7 +39,7 @@ import { ExecutorRegistry } from "../executor/registry.ts"
 import { parseSuffix } from "../executor/suffix.ts"
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest, ProviderExecutor } from "../executor/types.ts"
 import type { Json } from "../json/index.ts"
-import { WorkerEnv } from "../platform/env.ts"
+import { holdInvocation, WorkerEnv } from "../platform/env.ts"
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts"
 import { UsageReporter } from "../usage/reporter.ts"
 import { UsageSink } from "../usage/sink.ts"
@@ -219,7 +219,20 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         yield* noteSelection(credential.id, credential.provider, parseSuffix(upstreamModel).modelName)
         const { modelInfo, lookup } = yield* capabilities.thinking(parseSuffix(upstreamModel).modelName, credential)
         const stateModel = route.pooled ? upstreamModel : undefined
+        // The report and the usage record of an attempt must survive a client disconnect (a cancelled streamed body
+        // is finalised asynchronously, after the response): hold the invocation open until `finish` completed. A
+        // safety net releases the hold when the request scope closes without `finish` ever starting.
+        const release = yield* holdInvocation
         let finished = false
+        const requestScope = yield* Effect.serviceOption(Scope.Scope)
+        if (Option.isSome(requestScope)) {
+          yield* Scope.addFinalizer(
+            requestScope.value,
+            Effect.sync(() => {
+              if (!finished) release()
+            })
+          )
+        }
         const finish = (error: ExecutionError | undefined, headers?: Headers) =>
           Effect.gen(function* () {
             if (finished) return undefined
@@ -247,7 +260,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
             const record = usage.finish(yield* Clock.currentTimeMillis)
             if (record !== undefined) yield* sink.publish(record)
             return action
-          })
+          }).pipe(Effect.ensuring(Effect.sync(release)))
         const attempt: Attempt = {
           picked,
           executor,

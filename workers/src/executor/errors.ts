@@ -39,6 +39,10 @@ export class ExecutionError extends Schema.TaggedError<ExecutionError>()("Execut
 /** Convenience constructor for plain status errors (Go `statusErr{code, msg}`). */
 export const statusError = (status: number, message: string): ExecutionError => new ExecutionError({ status, message })
 
+/** A request-scoped 501 for an operation the provider does not support (no cooldown, no failover). */
+export const notImplemented = (message: string): ExecutionError =>
+  new ExecutionError({ status: 501, message, requestScoped: true })
+
 /** Plain record of response headers (lower-case names). */
 export const headersRecord = (headers: Headers): Record<string, string> => {
   const out: Record<string, string> = {}

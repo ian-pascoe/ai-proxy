@@ -12,6 +12,7 @@
  *    object's top-level members (truncated payloads); other malformations are ignored.
  */
 import { asInt, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
+import { isValidJson } from "../../../../http/json-text.ts"
 import { sseEvent } from "../../../../http/sse.ts"
 import type { ResponseContext, ResponseTransform } from "../../../registry.ts"
 import { antigravityToolNameToUpstream, antigravityUpstreamToolNameToClient } from "../../common/antigravity-tools.ts"
@@ -980,7 +981,7 @@ const functionCallStop = (index: number, itemId: string, updates: string[], st: 
   const events = [...updates]
   if (call.patchCall !== undefined) {
     const args = call.hasSnapshot ? call.snapshotArguments : call.arguments
-    if (call.hasSnapshot && isValidJsonText(call.arguments)) {
+    if (call.hasSnapshot && isValidJson(call.arguments)) {
       const source = finishWhole(call.arguments)
       if ("error" in source) return patchFailure(st, source.error)
       if (source.input !== call.snapshotInput)
@@ -1047,8 +1048,6 @@ const functionCallStop = (index: number, itemId: string, updates: string[], st: 
   events.push(emit("response.output_item.done", done))
   return events
 }
-
-const isValidJsonText = (text: string): boolean => parseJson(text) !== undefined
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Stream entry

@@ -4,11 +4,12 @@
  *
  * Jobs run one after another and are isolated: a failing job is logged and does not stop the others.
  */
-import { Cause, Effect, Layer } from "effect"
+import { Effect, Layer } from "effect"
 import { FetchHttpClient, type HttpClient } from "effect/http"
 import { ConfigReader } from "./config/reader.ts"
 import { refreshAntigravityModels } from "./executor/antigravity/models.ts"
 import { refreshAntigravityVersion } from "./executor/antigravity/version.ts"
+import { causeSummary } from "./observability/cause.ts"
 import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts"
 import { CatalogStore } from "./registry/catalog-store.ts"
 import { refreshXaiClientVersion } from "./executor/xai/version.ts"
@@ -60,7 +61,8 @@ export const runScheduledTasks = (
     tasks,
     (task) =>
       task.run.pipe(
-        Effect.catchCause((cause) => Effect.logError(`scheduled task ${task.name} failed: ${Cause.pretty(cause)}`))
+        // A summary only: full causes carry stacks and upstream URLs.
+        Effect.catchCause((cause) => Effect.logError(`scheduled task ${task.name} failed: ${causeSummary(cause)}`))
       ),
     { discard: true }
   ).pipe(

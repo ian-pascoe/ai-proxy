@@ -5,9 +5,13 @@
  * `antigravityIsInShortCooldownRequired`, credits balance/hint/failure maps and their home-KV keys).
  * State lives in the `CACHE` KV namespace with the Go TTLs (KV needs at least 60 s of `expirationTtl`; deadlines are
  * checked on read) and falls back to per-isolate maps without a binding. KV failures never fail a request: unknown
- * state is optimistic (credits assumed available, no cooldown).
+ * state is optimistic (credits assumed available, no cooldown). The balance-probe slot is a lock and needs an atomic
+ * claim, which KV cannot give: it is a create-if-absent write in the `SessionState` Durable Object (per credential,
+ * TTL 10 min), with the per-isolate map as fallback.
  */
 import { createHash } from "node:crypto"
+import type { SessionState } from "../../session-state/durable-object.ts"
+import { addressName } from "../../session-state/client.ts"
 
 export const CREDITS_TTL_MS = 30 * 60_000
 export const CREDITS_REFRESH_INTERVAL_MS = 10 * 60_000
@@ -66,7 +70,8 @@ export const makeMemoryAntigravityState = (): AntigravityState => ({
     })
   },
   claimCreditsRefresh: async (authId, now) => {
-    if (now - (memoryRefresh.get(authId) ?? 0) < CREDITS_REFRESH_INTERVAL_MS) return false
+    const last = memoryRefresh.get(authId)
+    if (last !== undefined && now - last < CREDITS_REFRESH_INTERVAL_MS) return false
     memoryRefresh.set(authId, now)
     return true
   }
@@ -79,8 +84,32 @@ export const resetMemoryAntigravityState = (): void => {
   memoryRefresh.clear()
 }
 
+/** Claims the probe slot of a credential atomically; `false` when it is taken (or the claim failed). */
+export type CreditsRefreshClaim = (authId: string, now: number) => Promise<boolean>
+
+const CREDITS_LOCK_STORE = "antigravity-credits-probe"
+
+/** {@link CreditsRefreshClaim} over the `SessionState` Durable Object (`put` with `ifGeneration: 0`). */
+export const sessionStateCreditsClaim =
+  (namespace: DurableObjectNamespace<SessionState>): CreditsRefreshClaim =>
+  async (authId, now) => {
+    try {
+      const stub = namespace.getByName(addressName({ store: CREDITS_LOCK_STORE, scope: "", session: authId }))
+      const [result] = await stub.run(
+        [{ op: "put", key: "probe", value: String(now), ttlMs: CREDITS_REFRESH_INTERVAL_MS, ifGeneration: 0 }],
+        now
+      )
+      return result?.status === "ok"
+    } catch {
+      return false
+    }
+  }
+
 /** KV-backed implementation; every KV failure degrades to "no state". */
-export const makeKvAntigravityState = (kv: KVNamespace): AntigravityState => {
+export const makeKvAntigravityState = (
+  kv: KVNamespace,
+  claimRefresh: CreditsRefreshClaim = makeMemoryAntigravityState().claimCreditsRefresh
+): AntigravityState => {
   const swallow = async <T>(run: () => Promise<T>, fallback: T): Promise<T> => {
     try {
       return await run()
@@ -90,7 +119,6 @@ export const makeKvAntigravityState = (kv: KVNamespace): AntigravityState => {
   }
   const cooldownKey = (authId: string, model: string): string => `ag:sc:${authId}:${hashModel(model)}`
   const creditsKey = (authId: string): string => `ag:credits:${authId}`
-  const lockKey = (authId: string): string => `ag:credits-lock:${authId}`
   const putCredits = (authId: string, record: CreditsRecord): Promise<void> =>
     swallow(
       () => kv.put(creditsKey(authId), JSON.stringify(record), { expirationTtl: ttlSeconds(CREDITS_TTL_MS) }),
@@ -119,16 +147,19 @@ export const makeKvAntigravityState = (kv: KVNamespace): AntigravityState => {
     setCredits: putCredits,
     markCreditsExhausted: (authId, now) =>
       putCredits(authId, { creditAmount: 0, minCreditAmount: 1, paidTierId: "", updatedAt: now }),
-    claimCreditsRefresh: (authId, now) =>
-      swallow(async () => {
-        // KV has no compare-and-set: a racing second probe is harmless (the result is idempotent).
-        if ((await kv.get(lockKey(authId))) !== null) return false
-        await kv.put(lockKey(authId), String(now), { expirationTtl: ttlSeconds(CREDITS_REFRESH_INTERVAL_MS) })
-        return true
-      }, false)
+    claimCreditsRefresh: claimRefresh
   }
 }
 
-/** The state store for an invocation: KV when the binding exists. */
-export const antigravityStateFor = (env: { readonly CACHE?: KVNamespace } | undefined): AntigravityState =>
-  env?.CACHE === undefined ? makeMemoryAntigravityState() : makeKvAntigravityState(env.CACHE)
+/**
+ * The state store for an invocation: KV when the binding exists, the probe slot in the `SessionState` Durable Object
+ * when that binding exists.
+ */
+export const antigravityStateFor = (
+  env: { readonly CACHE?: KVNamespace; readonly SESSION_STATE?: DurableObjectNamespace<SessionState> } | undefined
+): AntigravityState => {
+  if (env?.CACHE === undefined) return makeMemoryAntigravityState()
+  return env.SESSION_STATE === undefined
+    ? makeKvAntigravityState(env.CACHE)
+    : makeKvAntigravityState(env.CACHE, sessionStateCreditsClaim(env.SESSION_STATE))
+}

@@ -104,7 +104,9 @@ client -> Cloudflare Access -> Worker
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
   exports YAML (defaults omitted). Added keys without a Go counterpart: `access.admin-emails` and
-  `access.admin-service-tokens` (management allow-list, see Authentication). `requests.proxy-url` is accepted but
+  `access.admin-service-tokens` (management allow-list merged with the `ACCESS_ADMIN_*` variables, see Authentication).
+  Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` (and MIGRATION.md); storing a
+  document that sets one logs a warning. `requests.proxy-url` is accepted but
   ignored. Unknown/inapplicable keys are dropped on import.
 - **Storage**: the `ControlPlane` DO (`src/credentials/control-plane.ts`) stores the canonical JSON in a SQLite table
   with a monotonically increasing version. RPC: `getConfig(sinceVersion?)` (returns `unchanged: true` when the caller
@@ -217,6 +219,9 @@ Core contracts every provider slice implements (Go references in each module hea
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
   `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`.
   Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
+  Request bodies (`handlers/request.ts`, `http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the decoded
+  size (`http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
+  cap); a larger body answers 413 (deviation: Go reads it unbounded).
 - **Conductor** (`handlers/conductor.ts`, port of `conductor_execution.go`/`conductor_stream.go`): `conduct(prepared, run)`
   runs retry rounds. A round picks credentials one after another (`excludedIds` grows, no sleeping) until one succeeds, a
   stop condition hits (request-scoped rule `stop*`, request faults 400/409/413/422 and the listed body codes,
@@ -226,6 +231,12 @@ Core contracts every provider slice implements (Go references in each module hea
   `request-retry` ages credentials out of later rounds, request-scoped rules (`continue`, `continue-and-cooldown`, `stop`,
   `stop-and-cooldown`) come from credential metadata or `oauth.request-scoped-errors`. Every attempt is reported exactly
   once (`Attempt.finish`: picker report + one usage record), including client aborts (`connection_lifecycle`, no cooldown).
+  Each attempt holds the invocation open with `ctx.waitUntil` from its start until `finish` completed (`holdInvocation`,
+  `platform/env.ts`; released by the request scope if `finish` never started), because a cancelled streamed body is finalised
+  after the response and workerd drops pending work of a disconnected client otherwise. Route layers capture their services
+  with `routeServices()` (`http/route-services.ts`), which drops the layer's `Scope`: providing `Effect.context()` of a layer to
+  a handler replaced the request scope with the isolate-lifetime layer scope, so streamed attempts were never finalised on a
+  client disconnect.
   Workers limits (deviation): at most 16 upstream attempts per request and cooldown waits capped at 30 s; a longer recovery
   returns the last error (429/503) with `Retry-After`.
   Streams are only "successful" after the first payload chunk (bootstrap read inside the request scope); earlier errors, an
@@ -292,8 +303,6 @@ edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (mult
   fails the attempt with a 503 before anything reaches the client, so the conductor fails over to the next credential; other terminal
   failures flush the held handshake and are delivered in-stream; a clean EOF while holding fails the attempt without releasing. `grok-pager` /
   `grok-shell` clients get `keepalive` events as `: keepalive` SSE comments (`TransformKeepaliveSSELine`).
-- **Not ported (follow-ups)**: models.json header overrides (hook `modelHeaderOverrides` exists), Claude/Gemini envelope probes of
-
 - **WebSocket**: `executor/codex/websocket.ts` is the upstream transport (Go `CodexWebsocketsExecutor`), dispatched from
   `executeStream` like Go's `CodexAutoExecutor`; see "Responses WebSocket transports".
 - **Not ported (follow-ups)**: the Go `resolveCodexModelIsCompat`
@@ -352,10 +361,9 @@ WebSocket transports"). Reuses the Codex translators
   input, else `previous_response_id`; empty context = 400, a malformed compacted answer = 502), replaces the transcript by the compacted
   item, maps the new response id to "no upstream id" and re-emits the synthetic Responses stream. A frame that needs the upstream socket
   answers replay-required.
-- **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
-
 - **Multi-agent v2** input rewriting (`rewriteCodexMultiAgentV2Input`, after the stream/model fields are set) and orphan delegation
-  (translation step) are shared with Codex. **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
+  (translation step) are shared with Codex.
+- **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
   for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 ## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
@@ -415,7 +423,8 @@ cannot send ping frames); terminal failures close with 1011/1012/1009 instead of
 covers WebSocket-capable credentials and the decision to pass through is based on the previously pinned credential instead of the global
 credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`) and
 non-stream execution over WebSocket. The multi-agent v2 tool preparation and orphan delegation rewrite run on
-each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
+each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. Upgrades whose `Origin` is not the Worker's own host are refused by the Access gate (Go: `CheckOrigin` always true; the
+Access cookie makes cross-site WebSocket hijacking possible, see Authentication). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 ## Model registry and `/models` endpoints (`src/registry/`)
@@ -533,7 +542,7 @@ Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translato
 
 Deviations from Go (all deliberate, documented in code headers):
 
-- No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is parsed but not enforced.
+- No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is dropped on import.
 - Device-profile stabilisation, Fable/Opus-5.5 context-management reconcilers, `rebuildMidSystem` and Kimi attribution
   are not ported; the continuity and thinking-replay stores live in the `SessionState` DO (see below): `begin` = one read (which
   slides the 1 h TTL) plus one write only when the prompt id or pinned date changed, `commit` = one compare-and-swap write using
@@ -673,10 +682,8 @@ the panel's "management key" is ignored (any text logs in).
 - **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
   60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
-- **Not here**: `/oauth/*` (OAuth slice), plugins, Home, `/v0/management`. `/observability/usage/*` lives in
-  `usage-routes.ts` (see "Usage accounting and observability").
-
-- **Not here**: `/oauth/*` (see _Provider OAuth logins_), `/observability/usage/*` (usage slice), plugins, Home, `/v0/management`.
+- **Not here**: `/oauth/*` (`oauth-routes.ts`, see _Provider OAuth logins_), `/observability/usage/*` (`usage-routes.ts`, see
+  "Usage accounting and observability"), plugins, Home, `/v0/management`.
 - **Panel asset**: `GET /management.html` serves `public/management.html` through the `ASSETS` binding
   (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
   (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
@@ -728,7 +735,10 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   credential was selected (Go omits the header then). `/healthz` is exempt. One structured log line per request
   (`method`, pathname without query, `status`, `latencyMs`, `principal`, `provider`, `model`, `authIndex`, `attempts`,
   `requestId`) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
-  annotations. Headers, bodies, query strings and credentials are never logged.
+  annotations. Headers, bodies, query strings and credentials are never logged. `principal` is the Access id (`user:<email>`),
+  i.e. personal data, documented in ACCESS.md "Logs and personal data" (not hashed so operators can attribute usage). Failure
+  logs of cron jobs and management handlers use `observability/cause.ts` (`causeSummary`: tag + message, URL queries removed,
+  no stack) instead of `Cause.pretty`.
 
 ## Kimi, Meta and Devin providers (`src/executor/{kimi,meta,devin}/`)
 
@@ -914,7 +924,8 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   again with `PickRequest.ignoreCooldown` (cooling credentials stay selectable), skips credentials whose stored balance is known to be empty and
   asks the executor for `enabledCreditTypes: ["GOOGLE_ONE_AI"]` through `ExecutorOptions.metadata.antigravityCredits`
   (`attemptOptions`). `INSUFFICIENT_G1_CREDITS_BALANCE` marks the credential out of credits (KV `ag:credits:<id>`, 30 min); the balance probe
-  (`loadCodeAssist`, prod endpoint, 10 min lock, `waitUntil`) refreshes it. The round walks every Antigravity credential once in the Go order
+  (`loadCodeAssist`, prod endpoint, `waitUntil`; one probe per credential per 10 min, claimed atomically with a create-if-absent
+  write in the `SessionState` DO, not KV) refreshes it. The round walks every Antigravity credential once in the Go order
   (`findAllAntigravityCreditsCandidateAuths`): known-available balances first, then unknown ones (optimistic), each group sorted by credential id;
   known-empty credentials are skipped without an attempt (the conductor collects them with repeated `pick`s and releases the skipped leases
   as connection-lifecycle failures).
@@ -982,13 +993,22 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
-- Management routes require the principal to match a configured admin allow-list (emails / service token ids), in
-  addition to Access policy.
+- Management routes require the principal to match an admin allow-list (emails / service token ids), in addition to Access
+  policy: the `ACCESS_ADMIN_EMAILS`/`ACCESS_ADMIN_SERVICE_TOKENS` variables (always checked first, no I/O, so an env admin can
+  always repair the config) united with the config document's `access.admin-emails`/`access.admin-service-tokens` (read through
+  a `ConfigReader` built into the gate; an unreadable config denies non-env admins).
+- Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
+  browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
+  `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
+  cross-site `Sec-Fetch-Site` that is not a navigation) too; WebSocket upgrades with a foreign `Origin`; management writes need
+  JSON (multipart for `POST /credentials`, YAML for `PUT /config.yaml`) or no body (415). The CORS middleware adds no headers in
+  the management zone (deviation from Go's `*`). `requests/api-call` substitutes `$TOKEN$` only for `https:` URLs.
 - Implementation notes (`workers/src/access/`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
-  workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `wrangler dev`).
+  workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `wrangler dev`) and is refused (warning logged once
+  per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
 - Machine clients use Access service tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access
   single-header mode via `x-api-key`, set on the Access application with `read_service_tokens_from_header`; the Worker only sees the
   resulting JWT, so no Worker code is involved). User docs: `workers/README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,

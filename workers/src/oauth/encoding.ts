@@ -2,8 +2,9 @@
  * Encoding and randomness helpers of the OAuth login flows.
  *
  * Go source: internal/misc/oauth.go (`GenerateRandomState`), internal/auth/{claude,codex,devin}/pkce.go, Go's
- * `url.Values.Encode` (sorted keys, `QueryEscape`). Everything uses WebCrypto, never `Math.random`.
+ * `url.Values.Encode` (sorted keys, `QueryEscape`). Randomness uses WebCrypto, never `Math.random`.
  */
+import { sha256Hex as sha256HexFull } from "../hash.ts"
 
 const toHex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
 
@@ -23,8 +24,8 @@ export const sha256 = async (text: string): Promise<Uint8Array> =>
 
 /** Lowercase hex of the first `bytes` bytes of SHA-256 (`hex.EncodeToString(digest[:n])`). */
 export const sha256Hex = async (text: string, bytes?: number): Promise<string> => {
-  const digest = await sha256(text)
-  return toHex(bytes === undefined ? digest : digest.subarray(0, bytes))
+  const hex = sha256HexFull(text)
+  return bytes === undefined ? hex : hex.slice(0, bytes * 2)
 }
 
 export interface PkceCodes {

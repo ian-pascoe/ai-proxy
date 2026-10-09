@@ -8,6 +8,7 @@
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import { goMarshal } from "../../http/json-text.ts"
 import { invalidRequestBody } from "../../http/errors.ts"
 import { mergeUpstreamHeaders } from "../../http/headers.ts"
@@ -145,7 +146,7 @@ const handle = Effect.gen(function* () {
   const read = yield* Effect.result(readRequestBody(request))
   if (read._tag === "Failure")
     return HttpServerResponse.text(invalidRequestBody(read.failure.message), {
-      status: 400,
+      status: read.failure.status,
       contentType: "application/json"
     })
   if (new TextEncoder().encode(read.success.text).length > MAX_SPEECH_BODY_BYTES) {
@@ -185,7 +186,7 @@ const handle = Effect.gen(function* () {
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
 export const SpeechRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/audio/speech", Effect.provide(handle, services))
     yield* router.add("POST", "/v1/tts", Effect.provide(handle, services))
   })

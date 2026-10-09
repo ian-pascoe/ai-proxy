@@ -8,6 +8,7 @@
  */
 import { Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import type { ExecutionError } from "../../executor/errors.ts"
 import { invalidRequestBody } from "../../http/errors.ts"
 import { asString, del, get, type Json } from "../../json/index.ts"
@@ -33,7 +34,7 @@ const handle = (compact: boolean) =>
       errorResponse("openai", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
-    if (read._tag === "Failure") return badRequest(read.failure.message)
+    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
     let body: Json | undefined = read.success.json
     if (body === undefined) return badRequest("request body is not valid JSON")
 
@@ -84,7 +85,7 @@ const SOCKET_ROUTES = ["/v1/responses", "/backend-api/codex/responses"] as const
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal` (see `handlers/layer.ts`). */
 export const ResponsesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     for (const [path, compact] of ROUTES) yield* router.add("POST", path, Effect.provide(handle(compact), services))
     // The Responses WebSocket (`Upgrade: websocket`), see websocket/routes.ts.
     for (const path of SOCKET_ROUTES) yield* router.add("GET", path, Effect.provide(handleResponsesSocket, services))

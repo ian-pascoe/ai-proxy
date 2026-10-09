@@ -9,10 +9,10 @@
  */
 import { Clock, Effect } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { routeServices } from "../../http/route-services.ts"
 import { AccessPrincipal } from "../../access/principal.ts"
 import { CODEX_DEFAULT_BASE_URL, codexCreds } from "../../executor/codex/headers.ts"
 import { ExecutionError } from "../../executor/errors.ts"
-import { executionModelCandidates } from "../../executor/models.ts"
 import { applyCustomHeaders } from "../../executor/helps/custom-headers.ts"
 import { failureReport, successReport } from "../../executor/classify.ts"
 import { withCredentialRefresh } from "../../executor/helps/credential-refresh.ts"
@@ -71,7 +71,7 @@ const handle = Effect.gen(function* () {
   const config = configResult.success
 
   const read = yield* Effect.result(readRequestBody(request))
-  if (read._tag === "Failure") return errorJson(400, "Failed to read search request")
+  if (read._tag === "Failure") return errorJson(read.failure.status, "Failed to read search request")
   if (read.success.text.length > MAX_BODY_BYTES) return errorJson(413, "Failed to read search request")
   const routing = read.success.json
   const sessionId = asString(get(routing, "id")).trim()
@@ -97,7 +97,7 @@ const handle = Effect.gen(function* () {
       retryAfter !== undefined ? { "retry-after": retryAfter } : {}
     )
   }
-  const { credential, lease } = picked.success
+  const { credential, lease, route } = picked.success
   const reportContext = { provider: "codex" }
   const fail = (error: ExecutionError) => picker.report(lease, failureReport(error, reportContext))
 
@@ -137,10 +137,13 @@ const handle = Effect.gen(function* () {
           })
         }
         url = `${baseUrl.replace(/\/+$/, "")}/alpha/search`
-        // API-key search reuses credential-aware model resolution so routing prefixes and aliases are not forwarded.
-        const upstreamModel = executionModelCandidates(config, target, model)[0] ?? model
+        // API-key search reuses the credential-aware model resolution of the pick (prefixes, `oauth.model-alias`,
+        // API-key aliases) so routing names are not forwarded (`ResolveExecutionModel` + rewriteCodexAlphaSearchModel).
+        const upstreamModel = (route.upstreamModels[0] ?? "").trim()
         const parsed = tryParseJson(upstreamBody)
-        if (upstreamModel !== "" && isJsonObject(parsed)) body = JSON.stringify({ ...parsed, model: upstreamModel })
+        if (upstreamModel !== "" && isJsonObject(parsed) && "model" in parsed && parsed.model !== upstreamModel) {
+          body = JSON.stringify({ ...parsed, model: upstreamModel })
+        }
       }
       const httpRequest = HttpClientRequest.post(url).pipe(
         HttpClientRequest.bodyText(body, "application/json"),
@@ -196,7 +199,7 @@ const handle = Effect.gen(function* () {
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
 export const AlphaSearchRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.context<ProxyServices>()
+    const services = yield* routeServices<ProxyServices>()
     yield* router.add("POST", "/v1/alpha/search", Effect.provide(handle, services))
     yield* router.add("POST", "/backend-api/codex/alpha/search", Effect.provide(handle, services))
   })

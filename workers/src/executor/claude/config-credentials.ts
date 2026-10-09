@@ -2,8 +2,9 @@
  * Credentials synthesised from `api-keys.claude` config entries.
  *
  * Go source: internal/watcher/synthesizer/config.go (synthesizeClaudeKeys), sdk/cliproxy/service_models.go
- * (buildClaudeConfigModels). TODO(model registry slice): keys without explicit `models` serve the static Claude
- * catalog in Go; until the registry lands only explicitly configured models are routable from config.
+ * (buildClaudeConfigModels). Only the config-only test stand-ins use it (`static-picker.ts`, `ModelProviders.configLayer`),
+ * so only explicitly configured models are listed; production routing goes through the model registry
+ * (`registry/credential-models.ts`), where keys without `models` serve the static Claude catalog like Go.
  */
 import type { ApiKeyGroup } from "../../config/schema.ts"
 import type { ConfigCredential } from "../config-credentials.ts"

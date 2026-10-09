@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { TestClock } from "effect/testing"
 import { expect } from "vitest"
 import { authenticateRequest } from "../src/access/authenticate.ts"
-import { devBypassEmail, isAdmin, loadAccessConfig } from "../src/access/config.ts"
+import { configAdminLists, devBypass, devBypassEmail, isAdmin, loadAccessConfig } from "../src/access/config.ts"
 import { JWKS_REFRESH_COOLDOWN_MS } from "../src/access/jwks.ts"
 import { callerScope, makeIdentity, principalId } from "../src/access/principal.ts"
 import { classifyPath } from "../src/access/routes.ts"
@@ -251,6 +251,45 @@ describe("authenticateRequest", () => {
     )
   )
 
+  it.effect("extends the env admins with the config document's access.admin-* keys", () =>
+    run(
+      makeFakeJwks([keyA]),
+      Effect.gen(function* () {
+        const url = "https://proxy.test/v8/management/config"
+        const lists = configAdminLists({
+          access: { "api-keys": [], "admin-emails": [" Carol@Example.com "], "admin-service-tokens": ["cfg.access"] }
+        })
+        let reads = 0
+        const extra = Effect.sync(() => {
+          reads++
+          return lists
+        })
+        const carol = { "cf-access-jwt-assertion": yield* token(keyA, { claims: userClaims("carol@example.com") }) }
+        assert.strictEqual(
+          (yield* authenticateRequest(carol, url, "management", extra)).principalId,
+          "user:carol@example.com"
+        )
+        assert.strictEqual((yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag, "ForbiddenError")
+        const svc = { "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("cfg.access") }) }
+        assert.strictEqual(
+          (yield* authenticateRequest(svc, url, "management", extra)).principalId,
+          "service:cfg.access"
+        )
+        // Env admins never need the config (an admin can always repair a broken document).
+        reads = 0
+        const admin = { "cf-access-jwt-assertion": yield* token(keyA, { claims: userClaims("admin@example.com") }) }
+        const broken = Effect.fail("control plane down")
+        assert.strictEqual((yield* authenticateRequest(admin, url, "management", broken)).principal.kind, "user")
+        // A config that cannot be read denies everyone else.
+        assert.strictEqual(
+          (yield* Effect.flip(authenticateRequest(carol, url, "management", broken)))._tag,
+          "ForbiddenError"
+        )
+        assert.strictEqual(reads, 0)
+      })
+    )
+  )
+
   it.effect("fails closed with a configuration error when Access is not configured", () =>
     withJwks(
       makeFakeJwks([keyA]),
@@ -325,6 +364,15 @@ describe("config", () => {
     expect(devBypassEmail({ ACCESS_DEV_BYPASS: "me@x.com" }, "http://127.0.0.1:8787/")).toBe("me@x.com")
     expect(devBypassEmail({ ACCESS_DEV_BYPASS: "true" }, "https://proxy.example.com/v1/models")).toBeUndefined()
     expect(devBypassEmail({ ACCESS_DEV_BYPASS: "true" }, "https://localhost.evil.com/v1/models")).toBeUndefined()
+    // Never once Access is configured.
+    const configured = { ACCESS_DEV_BYPASS: "true", ACCESS_TEAM_DOMAIN: "team", ACCESS_AUD: "" }
+    expect(devBypassEmail(configured, "http://localhost:8787/v1/models")).toBeUndefined()
+    expect(devBypass(configured, "http://localhost:8787/v1/models")).toEqual({ _tag: "Refused" })
+    expect(devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: "aud" }, "http://127.0.0.1/")).toEqual({ _tag: "Refused" })
+    expect(devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: " " }, "http://127.0.0.1/")).toEqual({
+      _tag: "Active",
+      email: "dev@localhost"
+    })
   })
 })
 

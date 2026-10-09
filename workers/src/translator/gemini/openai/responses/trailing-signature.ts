@@ -3,7 +3,7 @@
  *
  * Go source: internal/translator/gemini/openai/responses/trailing_signature.go.
  */
-import { createHash } from "node:crypto"
+import { sha256Hex } from "../../../../hash.ts"
 import { asString, get, type Json, type JsonObject, set } from "../../../../json/index.ts"
 import { parseSuffix } from "../../../../executor/suffix.ts"
 import {
@@ -16,8 +16,6 @@ import {
   isDetachedCarrier
 } from "./carrier.ts"
 import { replayCache } from "./replay-cache.ts"
-
-const sha256Hex = (text: string): string => createHash("sha256").update(text, "utf8").digest("hex")
 
 const cacheKeyOf = (messageId: string): string => `gemini-responses-text:${messageId}`
 

@@ -2,6 +2,7 @@
 // New in the Workers port (Go used `access.api-keys`); see docs/workers-port/ARCHITECTURE.md "Authentication".
 import { Effect } from "effect"
 import { ConfigurationError } from "../errors.ts"
+import type { Config } from "../config/schema.ts"
 import type { Principal } from "./principal.ts"
 
 export interface AccessConfig {
@@ -57,21 +58,40 @@ export const loadAccessConfig = (env: AccessEnv): Effect.Effect<AccessConfig, Co
   })
 }
 
-export const isAdmin = (config: Pick<AccessConfig, "adminEmails" | "adminServiceTokens">, principal: Principal) =>
+/** Admin allow-lists: lowercased emails and service token client ids. */
+export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">
+
+export const isAdmin = (lists: AdminLists, principal: Principal) =>
   principal.kind === "user"
-    ? config.adminEmails.has(principal.email.toLowerCase())
-    : config.adminServiceTokens.has(principal.commonName)
+    ? lists.adminEmails.has(principal.email.toLowerCase())
+    : lists.adminServiceTokens.has(principal.commonName)
+
+/**
+ * The `access.admin-emails` / `access.admin-service-tokens` keys of the config document. They extend the env
+ * allow-lists (`ACCESS_ADMIN_*`), which always apply so an env admin can repair a broken config.
+ */
+export const configAdminLists = (config: Pick<Config, "access">): AdminLists => ({
+  adminEmails: new Set(config.access["admin-emails"].map((email) => email.trim().toLowerCase()).filter(Boolean)),
+  adminServiceTokens: new Set(config.access["admin-service-tokens"].map((id) => id.trim()).filter(Boolean))
+})
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
 
+type DevBypassEnv = Pick<Env, "ACCESS_DEV_BYPASS"> & Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD">>
+
+/** Outcome of the dev bypass check: `undefined` when `ACCESS_DEV_BYPASS` is unset or the host is not loopback. */
+export type DevBypass = { readonly _tag: "Active"; readonly email: string } | { readonly _tag: "Refused" } | undefined
+
 /**
  * `ACCESS_DEV_BYPASS` is honoured only when the request itself targets a loopback host, which is only the case under
- * `wrangler dev`: production traffic always arrives with the Access-protected custom domain as host. The bypass
- * principal is a user and is treated as an administrator. Returns the dev email, or undefined when inactive.
+ * `wrangler dev`: production traffic always arrives with the Access-protected custom domain as host. It is refused
+ * (`Refused`, the caller logs a warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker that is wired
+ * to Access must never skip it. The bypass principal is a user and is treated as an administrator.
  */
-export const devBypassEmail = (env: Pick<Env, "ACCESS_DEV_BYPASS">, requestUrl: string): string | undefined => {
+export const devBypass = (env: DevBypassEnv, requestUrl: string): DevBypass => {
   const value = (env.ACCESS_DEV_BYPASS ?? "").trim()
   if (value === "") return undefined
+  if ((env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "") return { _tag: "Refused" }
   let hostname: string
   try {
     hostname = new URL(requestUrl).hostname
@@ -79,5 +99,11 @@ export const devBypassEmail = (env: Pick<Env, "ACCESS_DEV_BYPASS">, requestUrl: 
     return undefined
   }
   if (!LOOPBACK_HOSTS.has(hostname)) return undefined
-  return /^(1|true|yes)$/i.test(value) ? DEFAULT_DEV_EMAIL : value
+  return { _tag: "Active", email: /^(1|true|yes)$/i.test(value) ? DEFAULT_DEV_EMAIL : value }
+}
+
+/** The dev bypass email, or undefined when the bypass does not apply (see {@link devBypass}). */
+export const devBypassEmail = (env: DevBypassEnv, requestUrl: string): string | undefined => {
+  const bypass = devBypass(env, requestUrl)
+  return bypass?._tag === "Active" ? bypass.email : undefined
 }

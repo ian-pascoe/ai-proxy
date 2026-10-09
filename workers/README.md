@@ -25,15 +25,15 @@ own provider logins (OAuth) and API keys, with round-robin credential selection,
 
 ## Provider support
 
-| Provider (credential)                                      | Client protocols served                                  | Notes                                                                                   |
-| ---------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Claude (OAuth login, API key)                              | OpenAI, Responses, Claude, Gemini, Interactions          | Claude Code cloaking and body signing; no uTLS (see limitations)                        |
-| Codex / ChatGPT (OAuth browser or device, API key)         | OpenAI, Responses (HTTP + WebSocket), Claude, Gemini     | `/backend-api/codex/*` aliases; no Codex live/realtime                                  |
-| Gemini (API key), Vertex (API key, service account upload) | OpenAI, Claude, Gemini, Responses, Interactions          | Gemini-CLI OAuth files can be imported, but there is no Gemini OAuth login in the panel |
-| Antigravity (OAuth)                                        | OpenAI, Claude, Gemini, Interactions                     | Compaction and some grounding paths still answer 501 (follow-up)                        |
-| xAI (device login, API key)                                | OpenAI, Responses (HTTP + WebSocket), images, video, TTS |                                                                                         |
-| Kimi / Kimi.ai (device login), Meta, Devin                 | OpenAI, Claude, Responses                                | Devin: authorization-code login                                                         |
-| OpenAI-compatible upstreams (API key)                      | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                    |
+| Provider (credential)                                      | Client protocols served                                  | Notes                                                                                       |
+| ---------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Claude (OAuth login, API key)                              | OpenAI, Responses, Claude, Gemini, Interactions          | Claude Code cloaking and body signing; no uTLS (see limitations)                            |
+| Codex / ChatGPT (OAuth browser or device, API key)         | OpenAI, Responses (HTTP + WebSocket), Claude, Gemini     | `/backend-api/codex/*` aliases; no Codex live/realtime                                      |
+| Gemini (API key), Vertex (API key, service account upload) | OpenAI, Claude, Gemini, Responses, Interactions          | No Gemini OAuth: Gemini-CLI auth files (`type: gemini`/`gemini-cli`) are rejected on import |
+| Antigravity (OAuth)                                        | OpenAI, Claude, Gemini, Interactions                     | Compaction and some grounding paths still answer 501 (follow-up)                            |
+| xAI (device login, API key)                                | OpenAI, Responses (HTTP + WebSocket), images, video, TTS |                                                                                             |
+| Kimi / Kimi.ai (device login), Meta, Devin                 | OpenAI, Claude, Responses                                | Devin: authorization-code login                                                             |
+| OpenAI-compatible upstreams (API key)                      | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                        |
 
 The matrix is indicative: which (client protocol, provider) pairs work follows the registered translators in
 `src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error body.
@@ -58,8 +58,8 @@ view (an Access application on the whole hostname still protects them).
 - **WebSocket CPU limit.** The Responses WebSocket lives in the invocation that accepted it and is bounded by the Workers
   CPU limit (`limits.cpu_ms = 300000`, which needs the Workers Paid plan). There are no ping keep-alives
   (`streaming.keepalive-seconds` is ignored). Clients reconnect on close; prefer HTTP/SSE if you see 1011/1012 closes.
-- **Not yet ported:** `/v1/responses/compact` for Claude/Gemini/Antigravity credentials (501), stream bootstrap buffering for
-  Codex. See ARCHITECTURE.md for per-provider "not ported" lists.
+- **Not ported:** see ARCHITECTURE.md for the per-provider lists and MIGRATION.md for config keys without effect.
+  `/v1/responses/compact` answers 501 for Gemini/Vertex credentials, like Go.
 
 ## Local development
 
@@ -72,8 +72,9 @@ pnpm dev                           # http://localhost:8787
 ```
 
 `ACCESS_DEV_BYPASS` makes every request on a loopback host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** with that
-email (`true` uses `dev@localhost`). It is ignored for any other host, so it cannot weaken a deployed Worker, but keep it out of
-`wrangler.jsonc` and out of production secrets. `.dev.vars` is git-ignored; `.dev.vars.example` is committed.
+email (`true` uses `dev@localhost`). It is ignored for any other host and refused (with a logged warning) whenever
+`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, so it cannot weaken a deployed Worker, but keep it out of `wrangler.jsonc` and out
+of production secrets. `.dev.vars` is git-ignored; `.dev.vars.example` is committed.
 
 Open `http://localhost:8787/management.html` (any non-empty text works as "management key"), add a credential, then:
 
@@ -151,7 +152,9 @@ Re-run `pnpm panel:sync` before a deploy to pick up a new panel release.
 ## Cloudflare Access reference
 
 `/v1*`, `/openai/v1*`, `/backend-api/codex*` need a valid `Cf-Access-Jwt-Assertion`; `/v8/management*` and
-`/management.html` additionally need an admin. Variables: see [ACCESS.md](../docs/workers-port/ACCESS.md#worker-variables).
+`/management.html` additionally need an admin. Cross-site browser requests (and cross-origin WebSocket upgrades) are refused;
+non-browser clients are unaffected. Variables and the browser-session hardening: see
+[ACCESS.md](../docs/workers-port/ACCESS.md#3-worker-variables).
 
 ## Development
 

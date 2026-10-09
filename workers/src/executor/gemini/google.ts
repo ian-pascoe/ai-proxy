@@ -28,7 +28,7 @@ import { sanitizeGeminiRequestThoughtSignatures } from "../../translator/gemini/
 import { withReplayCache } from "../../translator/gemini/openai/responses/replay-cache.ts"
 import { textSignatureKeys } from "../../translator/gemini/openai/responses/trailing-signature.ts"
 import { responseModelOf } from "../../usage/record.ts"
-import { ExecutionError, headersRecord } from "../errors.ts"
+import { ExecutionError, headersRecord, notImplemented } from "../errors.ts"
 import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
 import { parseSuffix } from "../suffix.ts"
@@ -115,8 +115,6 @@ const toExecutionError = (status: number, text: string, headers: Headers): Execu
 
 /** `isImagenModel`. */
 export const isImagenModel = (model: string): boolean => model.toLowerCase().includes("imagen")
-
-const notImplemented = (message: string) => new ExecutionError({ status: 501, message, requestScoped: true })
 
 interface PreparedRequest {
   readonly url: string

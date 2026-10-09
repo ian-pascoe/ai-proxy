@@ -12,7 +12,7 @@ import type { CredentialRefresher } from "../executor/helps/credential-refresh.t
 import type { CredentialPicker } from "../executor/picker.ts"
 import type { ExecutorRegistry } from "../executor/registry.ts"
 import type { Thinking } from "../executor/thinking.ts"
-import { decodeRequestBody } from "../http/body.ts"
+import { decodeRequestBody, RequestBodyTooLargeError } from "../http/body.ts"
 import { type Json, tryParseJson } from "../json/index.ts"
 import type { UsageSink } from "../usage/sink.ts"
 import type { ModelCapabilities } from "./model-capabilities.ts"
@@ -30,9 +30,18 @@ export type ProxyServices =
   | HttpClient.HttpClient
   | Thinking
 
-/** A request that could not be read; answered with `400 {"error":{"message":"Invalid request: ..."}}`. */
+/**
+ * A request that could not be read; answered with `400 {"error":{"message":"Invalid request: ..."}}`, or 413 when the
+ * decompressed body is too large (`status`).
+ */
 export class InvalidRequestBody extends Error {
   override readonly name = "InvalidRequestBody"
+  constructor(
+    message: string,
+    readonly status: 400 | 413 = 400
+  ) {
+    super(message)
+  }
 }
 
 export interface RequestBody {
@@ -52,7 +61,11 @@ export const readRequestBody = (
       Effect.try({
         try: () =>
           decodeRequestBody(new Uint8Array(buffer), options.decode ? request.headers["content-encoding"] : undefined),
-        catch: (error) => new InvalidRequestBody(error instanceof Error ? error.message : String(error))
+        catch: (error) =>
+          new InvalidRequestBody(
+            error instanceof Error ? error.message : String(error),
+            error instanceof RequestBodyTooLargeError ? 413 : 400
+          )
       })
     ),
     Effect.map((text) => ({ text, json: tryParseJson(text) }))

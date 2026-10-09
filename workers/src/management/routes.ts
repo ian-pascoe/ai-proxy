@@ -15,6 +15,7 @@ import {
   type HttpServerRequest,
   type HttpServerResponse
 } from "effect/http"
+import { routeServices } from "../http/route-services.ts"
 import type { WorkerEnv } from "../platform/env.ts"
 import { ModelRegistryLive } from "../registry/live.ts"
 import type { ModelRegistry } from "../registry/service.ts"
@@ -33,7 +34,7 @@ const BASE = "/v8/management"
 export const ManagementRoutes = HttpRouter.addAll(
   Effect.gen(function* () {
     // Handlers run per request: bind the isolate-wide services once instead of leaking them into the request context.
-    const services = yield* Effect.context<ModelRegistry | HttpClient.HttpClient>()
+    const services = yield* routeServices<ModelRegistry | HttpClient.HttpClient>()
     const bound = <R extends ModelRegistry | HttpClient.HttpClient | WorkerEnv | HttpServerRequest.HttpServerRequest>(
       handler: Effect.Effect<HttpServerResponse.HttpServerResponse, never, R>
     ) => Effect.provide(handler, services)

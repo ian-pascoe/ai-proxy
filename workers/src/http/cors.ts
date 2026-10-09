@@ -1,6 +1,7 @@
 // Port of corsMiddleware (internal/api/server_middleware.go:25-143).
 import { Effect } from "effect"
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { classifyPath } from "../access/routes.ts"
 
 /** Mirrors `corsExposedResponseHeaders` in internal/api/server_middleware.go. */
 export const CORS_EXPOSED_RESPONSE_HEADERS = [
@@ -32,6 +33,10 @@ const notFound = HttpServerResponse.text("404 page not found", { status: 404 })
 /**
  * Global middleware: every response (including 404s) carries the CORS headers, and `OPTIONS` requests are
  * answered with an empty 204 before routing.
+ *
+ * Deviation from Go: the management zone (`/v8/management*`, `/management.html`) gets no CORS headers at all, so other
+ * origins can neither pass a preflight nor read a management response with an admin's Access cookie. The panel is
+ * served by the Worker itself and does not need CORS.
  */
 export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpServerError }>()(
   (app) =>
@@ -45,6 +50,7 @@ export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpSe
                 error.reason._tag === "RouteNotFound" ? Effect.succeed(notFound) : Effect.fail(error)
               )
             )
+      if (classifyPath(request.originalUrl) === "management") return response
       return HttpServerResponse.setHeaders(response, corsHeaders)
     }),
   { global: true }
