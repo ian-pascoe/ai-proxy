@@ -1,6 +1,7 @@
 # Connecting clients
 
-All examples use `https://proxy.example.com` as the Worker's hostname and an Access **service token** (see
+All examples use `https://proxy.example.com` as the Worker's hostname and an Access **service token** (created by the
+deploy from `ACCESS_SERVICE_TOKENS`; its credentials are in `workers/.alchemy/access-service-tokens.json`, see
 [ACCESS.md](ACCESS.md)). Export the token once; never commit it:
 
 ```bash

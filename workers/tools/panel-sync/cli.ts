@@ -4,7 +4,7 @@
  *   pnpm panel:sync [--repository owner/repo] [--tag vX.Y.Z] [--out path] [--allow-unverified]
  *
  * `GITHUB_TOKEN` is used for the GitHub API when set. The file is replaced atomically and only after its SHA-256
- * matched the release digest. It is large (~3 MB) and therefore git-ignored: run this before `wrangler deploy`.
+ * matched the release digest. It is large (~3 MB) and therefore git-ignored: run this before `pnpm run deploy`.
  */
 import { createHash } from "node:crypto"
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"

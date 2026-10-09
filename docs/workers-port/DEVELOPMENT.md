@@ -13,19 +13,40 @@ deviations from Go). The Go code in the repository root is the behavioural sourc
 
 Run from `workers/` (or use `pnpm -C workers <script>`):
 
-| Script               | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `pnpm install`       | Install dependencies                                                     |
-| `pnpm dev`           | `wrangler dev` (local Worker with local DO/KV/D1)                        |
-| `pnpm typecheck`     | `tsc --noEmit` (strict)                                                  |
-| `pnpm lint`          | `oxlint` + `prettier --check`                                            |
-| `pnpm format`        | `prettier --write`                                                       |
-| `pnpm test`          | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)    |
-| `pnpm build`         | `wrangler deploy --dry-run --outdir dist` (bundle + config check)        |
-| `pnpm types`         | Regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`    |
-| `pnpm panel:sync`    | Install `public/management.html` (control panel) from its GitHub release |
-| `pnpm catalog:sync`  | Regenerate the embedded model catalogs from the Go registry              |
-| `pnpm check:startup` | `wrangler check startup` (Worker startup CPU profile)                    |
+| Script              | Purpose                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`      | Install dependencies                                                                                                        |
+| `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
+| `pnpm typecheck`    | `tsc --noEmit` for the Worker (`tsconfig.json`) and the deploy code (`tsconfig.infra.json`)                                 |
+| `pnpm lint`         | `oxlint` + `prettier --check`                                                                                               |
+| `pnpm format`       | `prettier --write`                                                                                                          |
+| `pnpm test`         | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
+| `pnpm smoke`        | Boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                |
+| `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
+| `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
+| `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
+| `pnpm logs`         | `alchemy logs` (`-- --tail`)                                                                                                |
+| `pnpm panel:sync`   | Install `public/management.html` (control panel) from its GitHub release                                                    |
+| `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry                                                                 |
+
+## Infrastructure
+
+`alchemy.run.ts` is the composition root of the deployed resources (Alchemy v2, Effect-based); `infra/settings.ts` reads
+the deploy settings (`.env`), `infra/access.ts` provisions Cloudflare Access. There is no Wrangler configuration. When you
+add a binding or variable, change three places together: the Worker's `env` in `alchemy.run.ts`, the `Env` interface in
+`src/env.d.ts`, and the test bindings in `vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility
+settings, Durable Objects, `*.bin` Data modules).
+
+`worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in `alchemy.run.ts`.
+Regenerate it when those change (Wrangler is used only as a type generator here):
+
+```bash
+printf '{"name":"t","main":"src/index.ts","compatibility_date":"2026-08-01","compatibility_flags":["nodejs_compat"]}' > /tmp/rt.json
+pnpm dlx wrangler@4 types --include-env=false -c /tmp/rt.json worker-configuration.d.ts
+```
+
+then restore the three-line header comment. Durable Object classes are SQLite-backed; Alchemy derives their class migrations from the
+`DurableObject` bindings (renaming a class needs `className`/`transferredFrom`, see the Alchemy docs).
 
 ## Layout
 
@@ -47,11 +68,11 @@ and `tools/fixturegen` (Go programs that emit golden fixtures; run from the repo
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
 - Tests live in `test/*.test.ts` and run in workerd. Use `@effect/vitest` (`it.effect`) for Effect code and
   `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
-- `wrangler.jsonc` uses placeholder KV/D1 ids; set real ids when deploying. `workers_dev` and `preview_urls` stay
-  disabled so Cloudflare Access cannot be bypassed.
+- `alchemy.run.ts` keeps `workersDev: false` (no `workers.dev` or preview URLs) so Cloudflare Access cannot be bypassed.
 
 ## Dependency notes
 
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
   which `@effect/vitest@4` requires.
-- `wrangler` is pinned to the version used by the vitest plugin so a single `workerd` is installed.
+- `alchemy` (2.0.0 beta, pinned) needs `@effect/platform-node` for its CLI; `@distilled.cloud/cloudflare` is pinned to
+  the version Alchemy uses (the Access settings step calls the Cloudflare API with Alchemy's credentials).

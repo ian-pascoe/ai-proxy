@@ -5,8 +5,10 @@ The Workers port reads the Go `config.yaml` and the Go auth files (`*.json`), so
 
 ## 0. Management access from a terminal
 
-The management API needs an Access **admin**. For scripts, create a service token (see [ACCESS.md](ACCESS.md)) and add its Client ID
-to `ACCESS_ADMIN_SERVICE_TOKENS` (or to `access.admin-service-tokens` in the config once an env admin has set it up), then:
+The management API needs an Access **admin**. For scripts, add a service token name to `ACCESS_SERVICE_TOKENS` and to
+`ACCESS_ADMIN_SERVICE_TOKENS` in `workers/.env` and deploy (see [ACCESS.md](ACCESS.md); its credentials land in
+`workers/.alchemy/access-service-tokens.json`), or add a Client ID to `access.admin-service-tokens` in the config once an env
+admin has set it up, then:
 
 ```bash
 M=https://proxy.example.com/v8/management
@@ -39,20 +41,21 @@ curl "${H[@]}" "$M/config.yaml"                                       # sparse e
 These keys are accepted and kept in the stored document (so a round trip through the panel does not lose them) but have no
 effect. Storing a config that sets any of them logs a warning naming the keys (`config keys not applied on Workers`):
 
-| Key                                                         | Why                                                                                 |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `access.api-keys` (legacy top-level `api-keys`)             | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)            |
-| `requests.proxy-url`, per-group/per-key `proxy-url`         | Workers `fetch` cannot use outbound proxies                                          |
-| `requests.nonstream-keepalive-interval`                     | Non-stream keep-alive bytes are not ported                                           |
-| `upstream.codex.response-steering`                          | Response steering / full-duplex WebSocket is not ported                              |
-| `upstream.claude.header-defaults.stabilize-device-profile`  | Device-profile stabilisation is not ported                                           |
-| `api-keys.claude[].keys[].experimental-cch-signing`         | Kept for compatibility (also in Go); signing follows the credential type             |
-| `api-keys.claude[].keys[].rebuild-mid-system-message`       | Mid-conversation system message rebuild is not ported                                |
-| `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request     |
-| `observability.usage.usage-statistics-enabled`              | Usage persistence is always on when the `USAGE` D1 binding exists                    |
-| `observability.usage.redis-usage-queue-retention-seconds`   | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS` |
+| Key                                                          | Why                                                                                       |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `access.api-keys` (legacy top-level `api-keys`)              | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)                 |
+| `requests.proxy-url`, per-group/per-key `proxy-url`          | Workers `fetch` cannot use outbound proxies                                               |
+| `requests.nonstream-keepalive-interval`                      | Non-stream keep-alive bytes are not ported                                                |
+| `upstream.codex.response-steering`                           | Response steering / full-duplex WebSocket is not ported                                   |
+| `upstream.claude.header-defaults.stabilize-device-profile`   | Device-profile stabilisation is not ported                                                |
+| `api-keys.claude[].keys[].experimental-cch-signing`          | Kept for compatibility (also in Go); signing follows the credential type                  |
+| `api-keys.claude[].keys[].rebuild-mid-system-message`        | Mid-conversation system message rebuild is not ported                                     |
+| `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request            |
+| `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                         |
+| `observability.usage.redis-usage-queue-retention-seconds`    | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS` |
 
 `requests.streaming.keepalive-seconds` applies to SSE responses but not to the Responses WebSocket (no ping frames).
+
 - The client `api-keys:` list is **not enforced**: every client must now present an Access identity ([CLIENTS.md](CLIENTS.md)).
   Give each client its own service token instead of a shared key.
 - `PATCH $M/config` and `/config/<path>` allow incremental edits; the panel's config editor uses them.

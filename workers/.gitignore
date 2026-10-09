@@ -1,9 +1,11 @@
 node_modules
 dist
-.wrangler
-.dev.vars
-.dev.vars.*
+# Alchemy: local state (ALCHEMY_STATE=local), dev emulators, bundles, logs and the service token credentials file
+.alchemy
+# Deploy settings (copy .env.example)
+.env
+.env.*
+!.env.example
 # Control panel installed by `pnpm panel:sync` (large; fetched at deploy time)
 public/management.html
 public/management.html.tmp
-!.dev.vars.example

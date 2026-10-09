@@ -57,7 +57,7 @@ export const authenticateRequest = (
     const env = yield* WorkerEnv
     const bypass = devBypass(env, requestUrl)
     if (bypass?._tag === "Active") {
-      // Local `wrangler dev` only; the bypass principal is an administrator.
+      // Local `alchemy dev` only; the bypass principal is an administrator.
       return yield* makeIdentity({ kind: "user", email: bypass.email, sub: "dev-bypass" })
     }
     if (bypass?._tag === "Refused") yield* warnDevBypassRefused

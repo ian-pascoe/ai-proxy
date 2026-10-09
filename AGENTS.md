@@ -64,7 +64,8 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 
 ## workers/ (TypeScript port)
 - `workers/` is a pnpm package: TypeScript strict + Effect v4 (`effect@4.0.2`) on plain Cloudflare Workers. Design: `docs/workers-port/ARCHITECTURE.md`; Go code remains the behavioural source of truth. Read `workers/node_modules/effect/AGENTS.md` and the effect source (APIs differ from Effect 3).
-- Commands (run before finishing): `pnpm -C workers typecheck && pnpm -C workers lint && pnpm -C workers test && pnpm -C workers build`; `pnpm -C workers format` to format; `pnpm -C workers types` after editing `wrangler.jsonc`.
+- Commands (run before finishing): `pnpm -C workers typecheck && pnpm -C workers lint && pnpm -C workers test && pnpm -C workers smoke`; `pnpm -C workers format` to format.
+- Infrastructure is deployed with Alchemy v2 (`workers/alchemy.run.ts`, `workers/infra/`); there is no Wrangler config. A new binding/variable goes in the Worker `env` in `alchemy.run.ts`, `workers/src/env.d.ts` and `workers/vitest.config.ts` together. Never run `alchemy deploy`/`destroy` against a real account unless asked.
 - Code under `workers/src/`; tests under `workers/test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
 - Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); never capture them in layers.
 - Translators/thinking/payload rules are pure sync functions over parsed JSON; cite the Go source path at the top of each ported module. Payload rules stay the final mutation before upstream requests.

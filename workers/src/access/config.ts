@@ -84,7 +84,7 @@ export type DevBypass = { readonly _tag: "Active"; readonly email: string } | { 
 
 /**
  * `ACCESS_DEV_BYPASS` is honoured only when the request itself targets a loopback host, which is only the case under
- * `wrangler dev`: production traffic always arrives with the Access-protected custom domain as host. It is refused
+ * `alchemy dev`: production traffic always arrives with the Access-protected custom domain as host. It is refused
  * (`Refused`, the caller logs a warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker that is wired
  * to Access must never skip it. The bypass principal is a user and is treated as an administrator.
  */

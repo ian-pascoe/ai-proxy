@@ -1,5 +1,5 @@
 /**
- * Cron dispatch (`scheduled` handler). The Worker has a single three-hourly trigger (wrangler.jsonc); every
+ * Cron dispatch (`scheduled` handler). The Worker has a single three-hourly trigger (`CRONS` in alchemy.run.ts); every
  * maintenance job registers itself in `scheduledTasks` so slices add a line instead of editing `index.ts`.
  *
  * Jobs run one after another and are isolated: a failing job is logged and does not stop the others.

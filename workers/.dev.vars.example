@@ -1,3 +1,0 @@
-# Copy to .dev.vars for `wrangler dev` (never commit .dev.vars).
-# Treats every request on localhost/127.0.0.1/[::1] as an Access admin with this email; ignored for other hosts.
-ACCESS_DEV_BYPASS=you@example.com

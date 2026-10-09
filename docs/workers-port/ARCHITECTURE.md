@@ -21,8 +21,9 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 ## Layout
 
 ```
-workers/                      pnpm package, deployed with wrangler
-  wrangler.jsonc
+workers/                      pnpm package, deployed with Alchemy (no Wrangler config)
+  alchemy.run.ts              infrastructure: Worker, DOs, KV, D1 (+ migrations), assets, cron, Access
+  infra/                      deploy settings (.env) and Cloudflare Access provisioning
   src/
     index.ts                  Worker entry: fetch, scheduled, DO class exports
     platform/                 Cloudflare bindings as Effect services (Env, ExecutionContext, KV, D1, DO stubs)
@@ -398,7 +399,7 @@ WebSocket transports"). Reuses the Codex translators
   `response.custom_tool_call_input.*` events, expands folded dispatcher envelopes (`{"name": <child>, "arguments": ...}`, folded above 200
   tools) into the child call, validates identity (item id, call id, output index) and arguments, resequences `sequence_number` and
   fails the turn with one local `response.failed` frame plus a sanitised 502 (`Invalid apply_patch tool arguments received from
-  upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non-stream, compact answers (bare response), SSE lines and the
+upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non-stream, compact answers (bare response), SSE lines and the
   WebSocket path (failure frame, upstream socket invalidated, EOF drop with an open patch call) use the same state. Verified against the real
   Go state over 55 scripted scenarios (`go run ./workers/tools/fixturegen/applypatch`, `test/apply-patch-responses.test.ts`). A non-string
   patch history input is a request-scoped 400 (Go returns a plain error).
@@ -753,7 +754,7 @@ the panel's "management key" is ignored (any text logs in).
 - **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
   `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),
   `/config.yaml` the sparse YAML export. Writes are read-modify-write over the JSON document with `putConfig(text,
-  expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
+expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
   (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
   injected into `api-keys` entries on read and stripped on write. The Go read-only Home revision paths and TURN secret
   handling do not exist in the Workers schema.
@@ -783,7 +784,7 @@ Port of `sdk/cliproxy/usage` (token accounting v2), `helps/usage_helpers.go` (pa
 once; a 401 retry keeps the rejected attempt's failed record, a failed-over credential gets its own).
 
 - **Accounting v2** (`accounting.ts`): `TokenBreakdown` (`input = uncached + cacheRead + cacheWrite`, `output =
-  nonReasoning + reasoning`, `total = input + output + unclassified`, quality `complete|unclassified|inconsistent`).
+nonReasoning + reasoning`, `total = input + output + unclassified`, quality `complete|unclassified|inconsistent`).
   `ensureTokenBreakdown(detail, provider, executorType)` picks the semantics: **subset** (openai, codex, xai, grok, kimi,
   qwen, deepseek, openrouter, `openai-compatible-*`; cache inside input, reasoning inside output), **independent**
   (claude/anthropic; cache outside `input_tokens`, thinking inside `output_tokens`), **separate-reasoning** (gemini,
@@ -806,8 +807,8 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
-  attempt plumbing is unchanged). Apply the schema with `wrangler d1 migrations apply cliproxy-usage`
-  (`migrations_dir` in `wrangler.jsonc`). Failure bodies are truncated to 2 KiB.
+  attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
+  (`D1.Database` `migrations` in `alchemy.run.ts`). Failure bodies are truncated to 2 KiB.
 - **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
   30, `0` = keep) in bounded batches. `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
@@ -890,7 +891,7 @@ Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing 
   `maxEntries`), `delete` (`ifGeneration`) and `incr` (atomic counter), executed in order in one `transactionSync`; results are
   `ok {generation, value?}`, `conflict {generation, value?}` (the current state, so a retry needs no read) or `rejected`. Generation
   `0` is "absent"; generations are `max(last + 1, now)`, so they are never reused, not even after an empty instance deleted
-  itself (no ABA on stale tokens). The clock is the *caller's* Effect `Clock`, which is what makes TTL tests deterministic
+  itself (no ABA on stale tokens). The clock is the _caller's_ Effect `Clock`, which is what makes TTL tests deterministic
   (`TestClock`; start it at the real time so the alarm of the Durable Object is not armed in the past).
 - **Engine** (`engine.ts`) is synchronous over a `StateTable`: `SqliteStateTable` in the DO (values chunked into 256 Ki-unit rows
   because a SQLite row is limited to 2 MiB while the Go caches allow 16 MiB per entry) and `MemoryStateTable` for the in-process
@@ -899,7 +900,7 @@ Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing 
   clamp 1 s .. 24 h, value <= 20 Mi units, `maxEntries` per instance (oldest writes evicted, expired purged first).
 - **Client** (`client.ts`): `SessionStateBackend.run(address, ops)`; `durableObjectBackend` (per-request stubs from `WorkerEnv`,
   never captured), `makeMemoryBackend(now?)` (bounded to 10240 instances) and `resolveBackend()` = the DO when `WorkerEnv`
-  binds `SESSION_STATE`, else the per-isolate memory backend (unit tests, `wrangler dev` without the binding).
+  binds `SESSION_STATE`, else the per-isolate memory backend (unit tests, local runs without the binding).
   `updateEntry` is the compare-and-swap read-modify-write loop (`known`/`slideTtl` options save the initial read).
   Every store treats a backend failure as a cache miss (`bestEffort`, logged): a request never fails because of replay state.
 - **Stores** keep their interfaces; `makeInMemory*`/`makeMemory*` constructors are the same code over a memory backend (so tests
@@ -915,7 +916,7 @@ Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing 
   context / occurrence, restoring native calls and signatures, inserting missing model calls), `provenance.ts` (degrading unresolved
   reserved ids to `call_<hash>`, signing first calls, `ValidateGeminiFunctionCallPairing`), `accumulator.ts` (turns the response
   into items; committed only after a finish reason, before `response.completed` for Responses clients, otherwise before the EOF
-  completion), `ledger.ts` (normalisation, 1 h sliding TTL, snapshot-guarded replace/delete with *tombstones*, so a writer that read
+  completion), `ledger.ts` (normalisation, 1 h sliding TTL, snapshot-guarded replace/delete with _tombstones_, so a writer that read
   an older state cannot publish over a delete), `prepare.ts` (`prepareAntigravityGeminiReasoningReplayPayload`: replay, role
   normalisation, degrade, repair, pairing check; a replay that breaks pairing is dropped and the entry invalidated; an upstream 400
   mentioning a signature clears the entry). Only Gemini-family models use it; the replay runs after the credits flag and before the
@@ -947,17 +948,17 @@ Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_ex
   `encodingForModel` (`TokenizerForModel`: empty/gpt-4/gpt-3 -> cl100k, everything else o200k) and `encodingForCodexModel`
   (gpt-5/4.1/4o -> o200k, otherwise cl100k).
 - **Ranks** are `src/tokenizer/ranks/{o200k_base,cl100k_base}.bin` (`count:u32le`, then `len:u8,bytes` per token in rank order,
-  1.6 MB + 0.7 MB), generated from the Go vocabularies by `go run ./workers/tools/fixturegen/tokens`. They are wrangler `Data`
-  modules (default rule for `*.bin`; vitest handles the import too), i.e. raw bytes without JavaScript to parse. The `Map` is
+  1.6 MB + 0.7 MB), generated from the Go vocabularies by `go run ./workers/tools/fixturegen/tokens`. They are Workers `Data`
+  modules (Alchemy's bundler rule for `*.bin`; `modulesRules` in `vitest.config.ts`), i.e. raw bytes without JavaScript to parse. The `Map` is
   built lazily on the first `count` of an encoding (o200k ~190 ms, cl100k ~80 ms once per isolate, in workerd), so module
-  load stays cheap: `wrangler check startup` (`pnpm check:startup`) reports ~105-120 ms active startup before and after the
+  load stays cheap: `wrangler check startup` reported ~105-120 ms active startup before and after the
   slice (the 1 s limit is not at risk). Bundle size grows from 946 KiB to 2419 KiB gzipped (free plan limit 3 MiB, paid 10 MiB):
   dropping `cl100k_base` would save ~0.4 MiB if the limit becomes tight.
 - **Regex fidelity**: Go's `regexp2` generated matchers differ from the textbook patterns, and parity is defined by Go:
   U+007F (DEL) is never matched (dropped), `\s*[\r\n]+` ends at the first newline run (`" \n \n"` is two pieces), and `\s` is
   `unicode.IsSpace` (U+0085 yes, U+FEFF no). `encodings.ts` encodes these quirks; `strings.TrimSpace` is `goTrimSpace`.
 - **Counters** (`helps/token-count.ts`): `countOpenAIChatTokens`, `countCodexInputTokens`, `countXaiInputTokens` collect segments
-  of the *final* upstream body (after payload rules) exactly like the Go collectors. Executors: Codex shapes the body like Go's
+  of the _final_ upstream body (after payload rules) exactly like the Go collectors. Executors: Codex shapes the body like Go's
   `CountTokens` (translate with `stream=false`, thinking, model, field deletions, instructions, payload rules; no replay, cache
   key or tool-schema normalisation), OpenAI-compatibility skips max-token/cache-key shaping, xAI reuses `prepare` + payload
   rules, Meta reuses `prepareMetaRequest(..., stream=false)` after the token check. Responses are produced by the registry's
@@ -985,11 +986,11 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
 `internal/misc/antigravity_version.go` and `sdk/cliproxy/antigravity_models.go`.
 
 - **Translators** (`translator/antigravity/{gemini,openai,claude,interactions}/`, registered by `antigravity/register.ts`): gemini, openai,
-  openai-response (a request *envelope* transform: native web search depends on the resolved model info), claude and interactions -> antigravity,
+  openai-response (a request _envelope_ transform: native web search depends on the resolved model info), claude and interactions -> antigravity,
   each with request, stream, non-stream (and token count) transforms, all golden-tested against Go (`corpus/antigravity-*.json`,
   `test/translator-fixtures{,-ids}.test.ts`). `ResponseContext.alt` carries the Gemini `alt` option the Go handlers put in the context
   (the Gemini response translator emits nothing without it; streams always use `""`). Claude clients get Gemini signatures as
-  *carrier* thinking blocks (`cpa-gemini-carrier-v1:<direction>:<kind>:<b64>`, `claude/carrier.ts`), Claude models keep R/Q-form
+  _carrier_ thinking blocks (`cpa-gemini-carrier-v1:<direction>:<kind>:<b64>`, `claude/carrier.ts`), Claude models keep R/Q-form
   signatures, and `web_search_*` tools map to native Google Search (`claude/web-search.ts`, request building and grounding -> `web_search_tool_result`
   blocks; the capability comes from the registry record, `supportsWebSearch`).
 - **Signatures** (`src/signature/`): `claude.ts` ports the E/R/Q/CAIS validation including the strict protobuf-tree mode
@@ -999,13 +1000,13 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
 - **Signature cache** (`cache.ts`, `store.ts`): translators are synchronous, so the cache they read is a bounded per-isolate map with the Go
   semantics (3 h sliding TTL, 50 char minimum, gpt/claude/gemini buckets, Gemini sentinel on a miss). It is installed around the synchronous
   translator calls with `withSignatureContext` (like `withModelInfoLookup`); persistence is the `CACHE` KV namespace behind the
-  `SignatureStore` interface (`sig:<group>:<sha256(text)[:16]>`, `expirationTtl` 3 h): the executor *prefetches* the signatures a Claude request
-  needs (thinking blocks without a usable signature) before translating and *flushes* the writes recorded by the response translator through
+  `SignatureStore` interface (`sig:<group>:<sha256(text)[:16]>`, `expirationTtl` 3 h): the executor _prefetches_ the signatures a Claude request
+  needs (thinking blocks without a usable signature) before translating and _flushes_ the writes recorded by the response translator through
   `waitUntil`. Every store failure is swallowed. `antigravity.signature-cache-enabled` / `signature-bypass-strict` switch cache and bypass mode.
 - **Executor** (`executor/executor.ts`): per attempt `validate Claude signatures -> prefetch -> translate -> thinking -> sensitive words ->
-  Gemini signature sanitising (+ function-response role normalisation) -> credits flag -> boundary user turns -> envelope (project, requestType,
-  requestId, sessionId) -> model shaping (maxOutputTokens cap/removal, schema cleaning at schema locations only, Claude `VALIDATED`) ->
-  payload rules (root `request`, always last) -> fetch`. Daily endpoint unless `base_url` is set (no cross-tier fallback), header whitelist
+Gemini signature sanitising (+ function-response role normalisation) -> credits flag -> boundary user turns -> envelope (project, requestType,
+requestId, sessionId) -> model shaping (maxOutputTokens cap/removal, schema cleaning at schema locations only, Claude `VALIDATED`) ->
+payload rules (root `request`, always last) -> fetch`. Daily endpoint unless `base_url` is set (no cross-tier fallback), header whitelist
   (`Content-Type`, `Authorization`, short `User-Agent`, `header:*` attributes). Claude, `gemini-3-pro` and `gemini-3.1-flash-image` models
   stream upstream and the SSE is merged for non-stream callers (`stream.ts`); streams filter usage (non-terminal usage becomes
   `cpaUsageMetadata`, the stop-chunk bookkeeping is per stream), join JSON split over several lines, map in-stream `error` objects to status
@@ -1015,7 +1016,7 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
 - **429 handling** (`errors.ts`, `state.ts`): the Go decision table (`decideAntigravity429`) and `ParseRetryDelay`; a rate limit with a delay
   under 5 min records a per-(credential, model) short cooldown (KV `ag:sc:*`, memory without a binding) and later calls answer
   `429 auth in short cooldown` without an upstream request; `retryAfterMs` of every 429 reaches the ControlPlane cooldown bookkeeping.
-- **Credits** (`credits.ts`, `handlers/conductor.ts`): `quota-exceeded.antigravity-credits` enables one extra *credits round* after the normal
+- **Credits** (`credits.ts`, `handlers/conductor.ts`): `quota-exceeded.antigravity-credits` enables one extra _credits round_ after the normal
   rotation failed with 429/503/`auth_not_found|auth_unavailable|model_cooldown` for Claude models: the conductor picks Antigravity credentials
   again with `PickRequest.ignoreCooldown` (cooling credentials stay selectable), skips credentials whose stored balance is known to be empty and
   asks the executor for `enabledCreditTypes: ["GOOGLE_ONE_AI"]` through `ExecutorOptions.metadata.antigravityCredits`
@@ -1083,8 +1084,9 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
 
 ## Authentication (Cloudflare Access)
 
-- Access application on the Worker's custom domain; `workers_dev = false` and preview URLs disabled so Access cannot
-  be bypassed.
+- Access application on the Worker's custom domain, provisioned with the Worker by `alchemy.run.ts`/`infra/access.ts`
+  (Allow policy for people, Service Auth policy for the stack's service tokens, SameSite=Lax cookie; its AUD tag feeds
+  `ACCESS_AUD`); `workersDev: false` so there are no `workers.dev`/preview URLs and Access cannot be bypassed.
 - The Worker verifies `Cf-Access-Jwt-Assertion` (RS256, JWKS from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`,
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the
@@ -1103,7 +1105,7 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
-  workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `wrangler dev`) and is refused (warning logged once
+  workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
   per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
 - Machine clients use Access service tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access
   single-header mode via `x-api-key`, set on the Access application with `read_service_tokens_from_header`; the Worker only sees the
@@ -1125,7 +1127,7 @@ Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_fil
 - **Authorization-code logins** (Claude, Codex, Antigravity, Devin): provider client IDs only allow `localhost`/`127.0.0.1`
   redirect URIs, so the user pastes the redirected URL (`POST /oauth/callback`). The request performs the token exchange itself
   (no waiter goroutine/file hand-off); like Go it answers `{"status":"ok"}` once the callback is accepted and failures show up in
-  `/oauth/status` (messages are Go's: `State code error` cannot occur because the state *is* the session key; `Bad request`,
+  `/oauth/status` (messages are Go's: `State code error` cannot occur because the state _is_ the session key; `Bad request`,
   `Failed to exchange authorization code for tokens[: cause]`, `Timeout waiting for OAuth callback`, ...). The callback window is
   5 minutes. PKCE (S256, 96 bytes; Devin 64) and states use WebCrypto; authorization URLs use Go's `url.Values.Encode` ordering.
 - **Device logins** (Codex `?provider=codex&flow=device`, xAI, Meta, Kimi/Kimi.ai): `auth-url` requests the device code, the panel
@@ -1138,7 +1140,7 @@ Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_fil
   legacy email/account-named file, then the file is stored through the pool (`importAuthFile` semantics) and is selectable at once.
 - **Public browser callbacks** (`/anthropic/callback`, `/codex/callback`, `/antigravity/callback`, `/callback`, `/devin/callback`;
   `public-routes.ts`) exist for users that rewrite the localhost host to the Worker. They are outside the Access admin gate, so
-  they only act on the `state` of a pending *callback* login of the route's provider and answer with a static page (no-store,
+  they only act on the `state` of a pending _callback_ login of the route's provider and answer with a static page (no-store,
   never containing code/state/tokens/errors); everything else is a neutral 400.
 
 Deviations from Go: the Antigravity login uses the Go fallback client version `2.9.1` (the executor reads the polled Hub version, see

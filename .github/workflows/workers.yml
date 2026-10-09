@@ -26,8 +26,6 @@ jobs:
     defaults:
       run:
         working-directory: workers
-    env:
-      WRANGLER_SEND_METRICS: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,5 +47,5 @@ jobs:
         run: pnpm lint
       - name: Test
         run: pnpm test
-      - name: Build (wrangler dry run)
-        run: pnpm build
+      - name: Smoke test (alchemy dev, local emulators)
+        run: pnpm smoke

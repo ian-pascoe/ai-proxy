@@ -3,7 +3,7 @@
  *
  * Stores (the replay modules under `executor/`) talk to a {@link SessionStateBackend}: the Durable Object one in production
  * (resolved per request from `WorkerEnv`, never captured in a layer), a per-isolate in-memory one when the binding is
- * absent (unit tests, `wrangler dev` without the binding) and explicit in-memory ones in tests. Both run the same
+ * absent (unit tests, local runs without the binding) and explicit in-memory ones in tests. Both run the same
  * {@link StateEngine}, so the semantics (TTL, compare-and-swap, bounds) are identical.
  */
 import { createHash } from "node:crypto"

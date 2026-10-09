@@ -22,7 +22,7 @@ import {
   validateCatalogText
 } from "./catalog-store.ts"
 
-/** `ModelsRefreshInterval`; the three-hourly cron trigger in wrangler.jsonc implements it. */
+/** `ModelsRefreshInterval`; the three-hourly cron trigger (`CRONS` in alchemy.run.ts) implements it. */
 export const MODELS_REFRESH_INTERVAL_HOURS = 3
 
 /** `readCatalogSource` size limit (`maxCodexClientModelsSize`). */

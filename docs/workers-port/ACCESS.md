@@ -4,40 +4,56 @@ Access is the only client authentication of the Workers port. The Worker never s
 authenticates the caller (identity provider login or a service token), then forwards the request with a signed
 `Cf-Access-Jwt-Assertion` header that the Worker verifies.
 
-## 1. Create the application
+## 1. What the deploy creates
 
-Zero Trust dashboard → **Access controls → Applications → Add an application → Self-hosted** (menu names move around; the
-object you need is a _self-hosted application_).
+`pnpm run deploy` (`workers/alchemy.run.ts`, `workers/infra/access.ts`) provisions Access together with the Worker, from the
+settings in `workers/.env` (template: `.env.example`):
 
-- **Application domain**: the Worker's custom domain, e.g. `proxy.example.com`, with an empty path so the whole hostname is covered
-  (the proxy, `/management.html`, `/v8/management` and the OAuth browser callbacks all live on it).
-- **Session duration**: any; browsers use it for the panel. CLI tools use service tokens.
-- **Cookie settings** (application → _Settings_ / _Advanced settings_ → Cookie settings): set **SameSite** to **Lax**
-  (recommended; **Strict** also works but makes links from other sites go through the login redirect) and keep **HTTP Only** on. The `CF_Authorization` session cookie then is not sent with cross-site subrequests,
-  which is the first line of defence against cross-site request forgery on the panel (see "Browser sessions" below). The
-  panel is served from the same hostname, so it keeps working with either value. Leave _Binding cookie_ off unless you
-  also want to pin the session to the browser.
-- Do **not** attach Access to `*.workers.dev`; the Worker has `workers_dev` and `preview_urls` disabled so those URLs do not exist.
+| Setting                                              | Creates / sets                                                                                                  |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `CLIPROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
+| `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`  | A reusable **Allow** policy (interactive login with your identity providers)                                    |
+| `ACCESS_SERVICE_TOKENS` (names)                      | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
+| `ACCESS_SESSION_DURATION`                            | Session duration of the application (default `24h`)                                                             |
+| `ACCESS_SERVICE_TOKEN_HEADER`                        | Optional single-header service tokens (section 5)                                                               |
+| `ACCESS_TEAM_DOMAIN`                                 | Worker variable (issuer and JWKS host); your Zero Trust team name                                               |
+| `ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS` | Worker variables: management admins (token names from `ACCESS_SERVICE_TOKENS` are replaced by their Client IDs) |
 
-After saving, copy the **Application Audience (AUD) Tag** from the application's overview/basic information. Your **team name**
-is in Zero Trust → Settings → Custom pages (`<team>.cloudflareaccess.com`).
+The application's **AUD tag** is passed to the Worker as `ACCESS_AUD` automatically. The deploy also sets the application's
+cookie to **SameSite=Lax** and **HTTP Only**, so the `CF_Authorization` session cookie is not sent with cross-site
+subrequests (the first line of defence against cross-site request forgery on the panel; see "Browser sessions" below). The
+Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
+after every change of the application: do not edit them in the dashboard.
+
+The Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Service token credentials:
+
+- The Client IDs are printed in the deploy outputs (`serviceTokens`).
+- The Client Secrets are returned by Cloudflare only on creation; the deploy writes them to
+  `workers/.alchemy/access-service-tokens.json` (mode 0600, git-ignored) as ready-to-use header pairs on the deploying
+  machine. They are also kept in the Alchemy state (encrypted at rest in the Cloudflare state store; plain JSON under
+  `.alchemy/state` with `ALCHEMY_STATE=local`). Copy them into your clients, then delete the file if you like.
+- Tokens are valid for one year. Rotate one by deleting its name from `ACCESS_SERVICE_TOKENS`, deploying, and adding it back
+  (or add a new name first for a seamless switch). Use one token per client/machine so usage records (`principal`) and
+  revocation are per client.
+
+**Bring your own application.** Set `ACCESS_AUD` to the AUD tag(s) of an Access application you manage yourself (dashboard
+or other tooling) and the deploy creates no Access resources; `ACCESS_ALLOW_*`/`ACCESS_SERVICE_TOKENS` must then be empty.
+The application must cover the Worker's whole hostname, with an Allow policy for people and a Service Auth policy for tokens
+(an Allow policy does not match service tokens). Set SameSite=Lax on its cookie yourself.
 
 ## 2. Policies
 
-Access evaluates policies per application. Create at least:
+| Who                                  | Policy action    | Selector                   | Notes                                                  |
+| ------------------------------------ | ---------------- | -------------------------- | ------------------------------------------------------ |
+| People using the panel / browsers    | **Allow**        | Emails, email domain       | Interactive login                                      |
+| Tools (Claude Code, Codex, SDKs, CI) | **Service Auth** | The stack's service tokens | Non-interactive; an Allow policy does not match tokens |
 
-| Who                                  | Policy action    | Selector                                | Notes                                                  |
-| ------------------------------------ | ---------------- | --------------------------------------- | ------------------------------------------------------ |
-| People using the panel / browsers    | **Allow**        | Emails, email domain, IdP group         | Interactive login                                      |
-| Tools (Claude Code, Codex, SDKs, CI) | **Service Auth** | Service Token → the token(s) you create | Non-interactive; an Allow policy does not match tokens |
-
-Create a service token under Access controls → Service credentials → **Service Tokens** → _Create_. Copy the **Client ID**
-(`<hex>.access`) and **Client Secret** once; the secret is shown only at creation. Tokens expire (default one year): rotate them
-before then. Use one token per client/machine so usage records (`principal`) and revocation are per client.
+Need IdP groups, device posture or other rules? Extend the policies in `workers/infra/access.ts` (Alchemy's
+`Cloudflare.Access.Policy` accepts every Cloudflare rule shape).
 
 ## 3. Worker variables
 
-Set in `workers/wrangler.jsonc` → `vars` (or the dashboard / `wrangler secret put`), then redeploy.
+Set by the deploy from the settings above (Alchemy binds them as plain-text variables):
 
 | Variable                      | Meaning                                                                                               |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -45,7 +61,7 @@ Set in `workers/wrangler.jsonc` → `vars` (or the dashboard / `wrangler secret 
 | `ACCESS_AUD`                  | AUD tag(s) of the application(s), comma separated                                                     |
 | `ACCESS_ADMIN_EMAILS`         | Admins for `/v8/management*` and `/management.html` (comma/space separated, case-insensitive)         |
 | `ACCESS_ADMIN_SERVICE_TOKENS` | Service token **Client IDs** allowed to administer (the full `….access` id)                           |
-| `ACCESS_DEV_BYPASS`           | Local `wrangler dev` only (`.dev.vars`); never set in a deployed environment                          |
+| `ACCESS_DEV_BYPASS`           | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
 
 Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. An authenticated principal that is not on an
 admin list gets 403 on management routes but can still use the proxy endpoints.
@@ -72,7 +88,7 @@ warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to
 4. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
    show familiar errors).
 
-Because the Worker trusts only the signed JWT, requests that skip Access (e.g. a stray `workers.dev` route) are rejected.
+Because the Worker trusts only the signed JWT, requests that skip Access (e.g. a `workers.dev` URL enabled by hand) are rejected.
 
 ### Browser sessions (CSRF and WebSocket hijacking)
 
@@ -117,15 +133,8 @@ logged; scheduled-job failures are logged as a one-line summary with URL queries
 ## 5. Optional: single-header service token
 
 Some tools can only send one custom header. Access can read the service token from a header of your choice, as a JSON value.
-Configure it per application with the API (it is an API setting; see the Cloudflare service tokens docs):
-
-```bash
-curl "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/access/apps/$APP_ID" \
-  --request PUT --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  --json '{ "domain": "proxy.example.com", "type": "self_hosted", "read_service_tokens_from_header": "x-api-key" }'
-```
-
-(`PUT` replaces the application: send the fields of a prior `GET` too, as the Cloudflare docs advise.) Clients then send:
+Set `ACCESS_SERVICE_TOKEN_HEADER` (e.g. `x-api-key`) and deploy; the deploy sets the application's
+`read_service_tokens_from_header`. Clients then send:
 
 ```
 x-api-key: {"cf-access-client-id": "<CLIENT_ID>", "cf-access-client-secret": "<CLIENT_SECRET>"}
@@ -134,7 +143,8 @@ x-api-key: {"cf-access-client-id": "<CLIENT_ID>", "cf-access-client-secret": "<C
 This is handled entirely by Access; the Worker still only sees the resulting JWT. The header name is your choice
 (`Authorization` is the Cloudflare docs' example, but then the client's own bearer token cannot carry anything else); `x-api-key`
 suits the Anthropic SDK, where the API key is that header. The two-header form keeps working alongside it. If your organisation
-enables _strict service token authentication_, only Service Auth policies authorise token requests.
+enables _strict service token authentication_, only Service Auth policies authorise token requests. With a bring-your-own
+application (`ACCESS_AUD`), configure the setting on that application with the Cloudflare API.
 
 ## 6. WARP note
 
@@ -144,13 +154,13 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 
 ## Troubleshooting
 
-| Symptom                                | Cause                                                                        |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token |
-| 403 from Access (before the Worker)    | Token not in a Service Auth policy of this application                       |
-| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` empty or invalid                         |
-| 401 `Missing API key`                  | Request reached the Worker without Access (wrong hostname) or no JWT header  |
-| 401 `Invalid API key`                  | AUD/issuer mismatch, expired JWT                                             |
-| 403 `Forbidden` on the panel           | Principal not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`       |
-| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)         |
-| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart) |
+| Symptom                                | Cause                                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token     |
+| 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`) |
+| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty           |
+| 401 `Missing API key`                  | Request reached the Worker without Access (wrong hostname) or no JWT header      |
+| 401 `Invalid API key`                  | AUD/issuer mismatch, expired JWT                                                 |
+| 403 `Forbidden` on the panel           | Principal not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`           |
+| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)             |
+| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)    |

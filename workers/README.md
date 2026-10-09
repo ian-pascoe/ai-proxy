@@ -5,13 +5,13 @@ runs on plain Cloudflare Workers behind Cloudflare Zero Trust **Access**. It exp
 Responses incl. WebSocket), Anthropic (`/v1/messages`), Gemini (`/v1beta`) and Interactions compatible APIs, backed by your
 own provider logins (OAuth) and API keys, with round-robin credential selection, cooldowns and automatic token refresh.
 
-| Guide                                                   | Contents                                                |
-| ------------------------------------------------------- | ------------------------------------------------------- |
-| [ACCESS.md](../docs/workers-port/ACCESS.md)             | Create the Access application, policies, service tokens |
-| [CLIENTS.md](../docs/workers-port/CLIENTS.md)           | Claude Code, Codex CLI, SDKs, curl                      |
-| [MIGRATION.md](../docs/workers-port/MIGRATION.md)       | Moving from the Go server                               |
-| [DEVELOPMENT.md](../docs/workers-port/DEVELOPMENT.md)   | Scripts, module layout, conventions                     |
-| [ARCHITECTURE.md](../docs/workers-port/ARCHITECTURE.md) | Binding design decisions                                |
+| Guide                                                   | Contents                                     |
+| ------------------------------------------------------- | -------------------------------------------- |
+| [ACCESS.md](../docs/workers-port/ACCESS.md)             | Access application, policies, service tokens |
+| [CLIENTS.md](../docs/workers-port/CLIENTS.md)           | Claude Code, Codex CLI, SDKs, curl           |
+| [MIGRATION.md](../docs/workers-port/MIGRATION.md)       | Moving from the Go server                    |
+| [DEVELOPMENT.md](../docs/workers-port/DEVELOPMENT.md)   | Scripts, module layout, conventions          |
+| [ARCHITECTURE.md](../docs/workers-port/ARCHITECTURE.md) | Binding design decisions                     |
 
 ## How it works
 
@@ -30,7 +30,7 @@ own provider logins (OAuth) and API keys, with round-robin credential selection,
 | Claude (OAuth login, API key)                              | OpenAI, Responses, Claude, Gemini, Interactions          | Claude Code cloaking and body signing; no uTLS (see limitations)                            |
 | Codex / ChatGPT (OAuth browser or device, API key)         | OpenAI, Responses (HTTP + WebSocket), Claude, Gemini     | `/backend-api/codex/*` aliases; no Codex live/realtime                                      |
 | Gemini (API key), Vertex (API key, service account upload) | OpenAI, Claude, Gemini, Responses, Interactions          | No Gemini OAuth: Gemini-CLI auth files (`type: gemini`/`gemini-cli`) are rejected on import |
-| Antigravity (OAuth)                                        | OpenAI, Claude, Gemini, Interactions                     | Compaction and some grounding paths still answer 501 (follow-up)                            |
+| Antigravity (OAuth)                                        | OpenAI, Claude, Gemini, Interactions                     |                                                                                             |
 | xAI (device login, API key)                                | OpenAI, Responses (HTTP + WebSocket), images, video, TTS |                                                                                             |
 | Kimi / Kimi.ai (device login), Meta, Devin                 | OpenAI, Claude, Responses                                | Devin: authorization-code login                                                             |
 | OpenAI-compatible upstreams (API key)                      | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                        |
@@ -56,7 +56,7 @@ view (an Access application on the whole hostname still protects them).
   request-log files, Codex live/realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, `/v0/management`, legacy proxy API keys
   (`api-keys` client list: imported into `access.api-keys` but not enforced).
 - **WebSocket CPU limit.** The Responses WebSocket lives in the invocation that accepted it and is bounded by the Workers
-  CPU limit (`limits.cpu_ms = 300000`, which needs the Workers Paid plan). There are no ping keep-alives
+  CPU limit (300 s by default, `CLIPROXY_CPU_MS`, which needs the Workers Paid plan). There are no ping keep-alives
   (`streaming.keepalive-seconds` is ignored). Clients reconnect on close; prefer HTTP/SSE if you see 1011/1012 closes.
 - **Not ported:** see ARCHITECTURE.md for the per-provider lists and MIGRATION.md for config keys without effect.
   `/v1/responses/compact` answers 501 for Gemini/Vertex credentials, like Go.
@@ -66,85 +66,86 @@ view (an Access application on the whole hostname still protects them).
 ```bash
 cd workers
 pnpm install
-cp .dev.vars.example .dev.vars     # contains ACCESS_DEV_BYPASS=you@example.com
 pnpm panel:sync                    # downloads the control panel into public/ (optional locally)
-pnpm dev                           # http://localhost:8787
+ALCHEMY_STATE=local pnpm dev       # alchemy dev: http://localhost:1337, hot reload
 ```
 
-`ACCESS_DEV_BYPASS` makes every request on a loopback host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** with that
-email (`true` uses `dev@localhost`). It is ignored for any other host and refused (with a logged warning) whenever
-`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, so it cannot weaken a deployed Worker, but keep it out of `wrangler.jsonc` and out
-of production secrets. `.dev.vars` is git-ignored; `.dev.vars.example` is committed.
+`alchemy dev` runs the Worker in local workerd with emulated KV, D1 (migrations applied) and Durable Objects; no
+Cloudflare resources are created and, with `ALCHEMY_STATE=local`, no Cloudflare login is needed (state stays in
+`.alchemy/`). Access is not provisioned in dev: the Worker gets `ACCESS_DEV_BYPASS`, which makes every request on a loopback
+host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** (`dev@example.com`, override with `ACCESS_DEV_BYPASS` in
+`.env`). The bypass is ignored for any other host and refused whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, and
+deployed Workers never get it.
 
-Open `http://localhost:8787/management.html` (any non-empty text works as "management key"), add a credential, then:
+Open `http://localhost:1337/management.html` (any non-empty text works as "management key"), add a credential, then:
 
 ```bash
-curl localhost:8787/v1/models
-curl localhost:8787/v1/chat/completions -H 'content-type: application/json' \
+curl localhost:1337/v1/models
+curl localhost:1337/v1/chat/completions -H 'content-type: application/json' \
   -d '{"model":"<model id from /v1/models>","messages":[{"role":"user","content":"hi"}]}'
+curl 'localhost:1337/cdn-cgi/handler/scheduled?cron=0+*/3+*+*+*'   # run the cron jobs
 ```
 
-Local Durable Object, KV and D1 state lives in `.wrangler/state`. For local usage records run
-`pnpm exec wrangler d1 migrations apply cliproxy-usage --local` once.
+`pnpm smoke` boots the same dev stack, checks a few routes and stops it (CI runs it).
 
 ## Deploy
 
-Prerequisites: a Cloudflare account on the **Workers Paid** plan (the CPU limit in `wrangler.jsonc`), a domain in that
-account, Zero Trust enabled, Node 22+ and `pnpm exec wrangler login` (all commands below run in `workers/`).
+All infrastructure is declared in [`alchemy.run.ts`](alchemy.run.ts) and deployed with
+[Alchemy](https://alchemy.run) (v2, Effect-based): the Worker (Durable Objects `ControlPlane`/`SessionState`, static assets,
+cron trigger, custom domain, no `workers.dev`/preview URLs), the KV namespace, the D1 usage database with its migrations, and
+the Cloudflare Access application, policies and service tokens. There is no Wrangler configuration.
 
-1. **Create the resources** and paste the printed ids into `wrangler.jsonc`:
+Prerequisites: a Cloudflare account on the **Workers Paid** plan (the default 300 s CPU limit; see `CLIPROXY_CPU_MS`), a
+domain (zone) in that account, Zero Trust enabled (note your team name), Node 22+. All commands run in `workers/`.
 
-   ```bash
-   pnpm exec wrangler kv namespace create CACHE      # -> kv_namespaces[0].id
-   pnpm exec wrangler d1 create cliproxy-usage       # -> d1_databases[0].database_id
-   ```
-
-   The Durable Objects (`ControlPlane`, `SessionState`) are created by the `migrations` entry in `wrangler.jsonc` during
-   deploy. The Worker is named `cliproxy-workers`; change `name` if you like.
-
-2. **Attach a custom domain.** Add to `wrangler.jsonc` (the zone must be in your account):
-
-   ```jsonc
-   "routes": [{ "pattern": "proxy.example.com", "custom_domain": true }]
-   ```
-
-   `workers_dev` and `preview_urls` are already `false`: leave them. Access can only protect the custom domain, so a
-   `workers.dev` or preview URL would bypass authentication.
-
-3. **Create the Access application** for that hostname and note its AUD tag: see [ACCESS.md](../docs/workers-port/ACCESS.md).
-
-4. **Set the Access variables** in `wrangler.jsonc` `vars` (they are identifiers, not secrets):
-   `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, and the admin lists `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`.
-   Optionally set `USAGE_RETENTION_DAYS` (default `30`, `0` keeps everything). With the defaults empty, every protected route
-   answers 500 `Authentication service error` (fail closed). Do not set `ACCESS_DEV_BYPASS` here.
-
-   The Worker reads **no other secrets**: provider tokens and API keys are stored in the `ControlPlane` Durable Object through
-   the management API/panel. If you prefer secrets over `vars` for the Access values, use `pnpm exec wrangler secret put NAME` and remove the matching
-   key from `vars` so the two do not conflict.
-
-5. **Apply the D1 migrations** to the remote database:
+1. **Log in once** (OAuth in the browser or an API token; stored in `~/.alchemy/profiles.json`):
 
    ```bash
-   pnpm exec wrangler d1 migrations apply cliproxy-usage --remote
+   pnpm exec alchemy profile edit --add Cloudflare
    ```
 
-6. **Install the control panel** (not committed; ~3 MB, SHA-256 verified against the GitHub release):
+2. **Configure the deploy** (`.env` is git-ignored; shell variables override it):
+
+   ```bash
+   cp .env.example .env     # CLIPROXY_DOMAIN, ACCESS_TEAM_DOMAIN, ACCESS_ALLOW_*, ACCESS_SERVICE_TOKENS, ACCESS_ADMIN_*
+   ```
+
+   See [ACCESS.md](../docs/workers-port/ACCESS.md) for what each Access setting creates. The Worker reads **no other
+   secrets**: provider tokens and API keys are stored in the `ControlPlane` Durable Object through the management API/panel.
+
+3. **Install the control panel** (not committed; ~3 MB, SHA-256 verified against the GitHub release):
 
    ```bash
    pnpm panel:sync          # GITHUB_TOKEN raises the API rate limit; --tag vX.Y.Z pins a release
    ```
 
-7. **Deploy and verify:**
+4. **Deploy** (shows the plan and asks for confirmation; `pnpm plan` only previews):
 
    ```bash
-   pnpm build               # dry run: bundles and validates the config
-   pnpm exec wrangler deploy
-   curl https://proxy.example.com/healthz      # {"status":"ok"} once Access lets you through
+   pnpm run deploy -- --stage prod
    ```
 
-8. **Add credentials.** Open `https://proxy.example.com/management.html` (sign in through Access as an admin; type any text
-   as the management key), then use _OAuth login_ for Claude/Codex/…, upload auth files, or add API keys in the config. Then
-   connect your tools: [CLIENTS.md](../docs/workers-port/CLIENTS.md). Coming from the Go server: [MIGRATION.md](../docs/workers-port/MIGRATION.md).
+   Use the same `--stage` for every later deploy: resources are named and tracked per stage (the default stage is
+   `live_$USER`). The first run asks to bootstrap Alchemy's state store (a small Worker + Secrets Store in your account that
+   keeps the deploy state; set `ALCHEMY_STATE=local` to keep it in `.alchemy/` instead). D1 migrations from `migrations/` are
+   applied on every deploy. The outputs print the URL, the Access AUD tag and each service token's Client ID; the Client
+   Secrets are written to `.alchemy/access-service-tokens.json` (mode 0600) on the deploying machine.
+
+5. **Verify and add credentials:**
+
+   ```bash
+   curl https://proxy.example.com/healthz \
+     -H "CF-Access-Client-Id: $ID" -H "CF-Access-Client-Secret: $SECRET"     # {"status":"ok"}
+   ```
+
+   Open `https://proxy.example.com/management.html` (sign in through Access as an admin; type any text as the management
+   key), then use _OAuth login_ for Claude/Codex/…, upload auth files, or add API keys in the config. Then connect your
+   tools: [CLIENTS.md](../docs/workers-port/CLIENTS.md). Coming from the Go server:
+   [MIGRATION.md](../docs/workers-port/MIGRATION.md).
+
+Other commands: `pnpm logs -- --stage prod --tail` (Workers logs), `pnpm destroy -- --stage prod` (deletes everything,
+including the D1 usage history and the Durable Objects holding credentials). In CI set `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN` instead of a profile (see the Alchemy CI guide).
 
 The cron trigger (`0 */3 * * *`) refreshes model catalogs, prunes old usage rows and re-arms credential refresh alarms.
 Re-run `pnpm panel:sync` before a deploy to pick up a new panel release.
@@ -158,5 +159,5 @@ non-browser clients are unaffected. Variables and the browser-session hardening:
 
 ## Development
 
-Scripts (`typecheck`, `lint`, `test`, `build`, …), module layout and conventions are in
+Scripts (`typecheck`, `lint`, `test`, `smoke`, …), module layout and conventions are in
 [DEVELOPMENT.md](../docs/workers-port/DEVELOPMENT.md).

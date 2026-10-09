@@ -7,5 +7,5 @@
     "no-console": "error",
     "no-underscore-dangle": "off"
   },
-  "ignorePatterns": ["node_modules", "dist", ".wrangler", "worker-configuration.d.ts", "test/fixtures"]
+  "ignorePatterns": ["node_modules", "dist", ".alchemy", "worker-configuration.d.ts", "test/fixtures"]
 }

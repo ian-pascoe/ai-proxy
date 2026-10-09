@@ -3,7 +3,7 @@
  *
  * Go source: internal/api/handlers/management/config_basic.go (`GetLatestVersion`), logs.go (`GetLogs`,
  * `GetRequestErrorLogs`: file based, answers `logging to file disabled` when file logging is off). Workers have no
- * log files (use `wrangler tail` / Workers Logs), so the log routes behave like Go with file logging disabled.
+ * log files (use `alchemy logs --tail` / Workers Logs), so the log routes behave like Go with file logging disabled.
  */
 import { Effect } from "effect"
 import { HttpClient, HttpClientRequest, HttpServerRequest } from "effect/http"

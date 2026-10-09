@@ -1,5 +1,5 @@
 // The management routes mounted in the real application layer (`makeWebHandler`), reached through the local Access
-// dev bypass: what `wrangler dev` does for the panel.
+// dev bypass: what `alchemy dev` does for the panel.
 import { env } from "cloudflare:workers"
 import { afterAll, describe, expect, it } from "vitest"
 import { makeWebHandler } from "../src/http/app.ts"
