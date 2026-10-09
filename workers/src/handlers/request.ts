@@ -8,17 +8,27 @@ import type { HttpClient, HttpServerRequest } from "effect/http"
 import { ConfigReader } from "../config/reader.ts"
 import type { Config } from "../config/schema.ts"
 import { ExecutionError } from "../executor/errors.ts"
+import type { CredentialRefresher } from "../executor/helps/credential-refresh.ts"
 import type { CredentialPicker } from "../executor/picker.ts"
 import type { ExecutorRegistry } from "../executor/registry.ts"
 import type { Thinking } from "../executor/thinking.ts"
 import { decodeRequestBody } from "../http/body.ts"
 import { type Json, tryParseJson } from "../json/index.ts"
 import type { UsageSink } from "../usage/sink.ts"
+import type { ModelCapabilities } from "./model-capabilities.ts"
 import type { ModelProviders } from "./model-providers.ts"
 
 /** Services the proxy routes close over (provided once per isolate by `handlers/layer.ts`). */
 export type ProxyServices =
-  ConfigReader | CredentialPicker | ExecutorRegistry | ModelProviders | UsageSink | HttpClient.HttpClient | Thinking
+  | ConfigReader
+  | CredentialPicker
+  | CredentialRefresher
+  | ExecutorRegistry
+  | ModelCapabilities
+  | ModelProviders
+  | UsageSink
+  | HttpClient.HttpClient
+  | Thinking
 
 /** A request that could not be read; answered with `400 {"error":{"message":"Invalid request: ..."}}`. */
 export class InvalidRequestBody extends Error {

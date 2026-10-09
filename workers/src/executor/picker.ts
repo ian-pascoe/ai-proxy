@@ -2,21 +2,24 @@
  * Credential selection contract between the request pipeline and the credential store.
  *
  * Go source: sdk/cliproxy/auth/conductor_execution.go (pickNextMixed, MarkResult), sdk/cliproxy/auth/types.go (Auth).
- * The production implementation lives in the ControlPlane Durable Object (single writer for cursors, cooldowns,
- * quota state and session affinity) and is reached over JS RPC; `static-picker.ts` is a config-only stand-in.
+ * The production implementation (`control-plane-picker.ts`) is a thin adapter over the ControlPlane Durable Object
+ * RPC (`pick`, `report`, `planRetry`): the DO is the single writer for cursors, cooldowns, quota state and session
+ * affinity. `static-picker.ts` is a config-only stand-in used by tests.
  *
  * Contract:
  *  - `pick` chooses one credential able to serve `model` for one of `providers` (in preference order), honouring
- *    `excludedIds` (credentials already tried in this request), `pinnedId`, session affinity (`sessionKey` within
- *    `callerScope`), priorities/weights and cooldowns. It returns an immutable snapshot plus a lease id. It fails
- *    with an `ExecutionError` whose `code` is `provider_not_found` (empty providers), `auth_not_found` (no credential
- *    serves the model) or `auth_unavailable` (all cooling down; `retryAfterMs` set when known), status 503 unless
- *    the code says otherwise.
- *  - `report` must be called exactly once per lease with the attempt outcome so cooldown/quota bookkeeping and
- *    round-robin state stay consistent. It never fails (bookkeeping errors are logged by the implementation).
+ *    `excludedIds` (credentials already tried in this round), `retryRound` (credentials age out of later rounds),
+ *    `pinnedId`, session affinity (`session` within `callerScope`), priorities/weights and cooldowns. It returns an
+ *    immutable snapshot, the per-credential model route and a lease. It fails with an `ExecutionError` whose `code`
+ *    is `provider_not_found`, `auth_not_found`, `auth_unavailable` or `model_cooldown` (429 with `Retry-After`).
+ *  - `report` must be called exactly once per attempt with the lease so cooldown/quota bookkeeping and affinity stay
+ *    consistent. It never fails (bookkeeping errors are logged by the implementation).
+ *  - `planRetry` answers whether another retry round is worthwhile and how long to wait first.
  *  - Snapshots must be treated as read-only; secrets in `attributes`/`metadata` must never be logged.
  */
 import { Context, type Effect } from "effect"
+import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts"
+import type { Lease, ReportResult } from "../credentials/selection/types.ts"
 import type { WorkerEnv } from "../platform/env.ts"
 import type { ExecutionError } from "./errors.ts"
 
@@ -32,6 +35,8 @@ export interface CredentialSnapshot {
   readonly label?: string
   /** Model namespace prefix (`team-a` in `team-a/gpt-5`); stripped before execution. */
   readonly prefix?: string
+  /** Bumped when token/key material changes (a refresh); results are reported against it. */
+  readonly credentialVersion?: number
   /**
    * String attributes as in Go: `base_url`, `api_key`, `compat_name`, `provider_key`, `config_index`, `priority`,
    * `weight`, `header:<Name>` (custom upstream headers), ...
@@ -41,6 +46,13 @@ export interface CredentialSnapshot {
   readonly metadata: Readonly<Record<string, unknown>>
 }
 
+/** Session identity extracted by the handler (see `handlers/session.ts`). */
+export interface PickSession {
+  readonly id: string
+  readonly parentId?: string
+  readonly isFork?: boolean
+}
+
 export interface PickRequest {
   /** Candidate providers in preference order (from model resolution). */
   readonly providers: ReadonlyArray<string>
@@ -48,53 +60,57 @@ export interface PickRequest {
   readonly model: string
   /** Caller isolation scope (`AccessPrincipal.callerScope`). */
   readonly callerScope: string
-  /** Session key for affinity/stickiness, when the request carries one. */
-  readonly sessionKey?: string
-  /** Credentials already tried for this request. */
+  /** Session identity for affinity/stickiness, when the request carries one. */
+  readonly session?: PickSession
+  /** Credentials already tried in this retry round. */
   readonly excludedIds?: ReadonlyArray<string>
+  /** Zero-based retry round (credentials whose own `request-retry` is below it are skipped). */
+  readonly retryRound?: number
+  /** `routing.retry.request-retry`; per-credential `request_retry` overrides it. */
+  readonly requestRetry?: number
   /** Require this credential (e.g. video retrieval bound to the creating credential). */
   readonly pinnedId?: string
   /** Select as if for this model while executing `model` (Interactions agents, Go `auth_selection_model`). */
   readonly selectionModel?: string
   /** Exclude free-plan credentials (Codex image tools). */
   readonly disallowFreeAuth?: boolean
+  /** Downstream WebSocket request: prefer Codex credentials with `websockets=true`. */
+  readonly preferWebsockets?: boolean
+}
+
+/** Routing of the requested model through the picked credential. */
+export interface PickedRoute {
+  readonly requestedModel: string
+  /** The model without this credential's prefix. */
+  readonly routeModel: string
+  /** Upstream models to try in order (alias pools are rotated and exclude cooling models); never empty. */
+  readonly upstreamModels: ReadonlyArray<string>
+  /** Model name clients should see in responses (the request, or the configured alias with `force-mapping`). */
+  readonly originalAlias: string
+  readonly forceMapping: boolean
+  /** Key under which cooldown state for the selection is tracked. */
+  readonly stateModel: string
+  /** Several upstream models share the alias: each attempt is reported under its upstream model. */
+  readonly pooled: boolean
 }
 
 export interface PickResult {
   readonly credential: CredentialSnapshot
+  readonly route: PickedRoute
   /** Opaque lease to pass back to `report`. */
+  readonly lease: Lease
+  /** Lease id for logs. */
   readonly leaseId: string
 }
 
-/** Outcome of one upstream attempt. `model` is the route model the lease was picked for. */
-export type AttemptResult =
-  | { readonly ok: true; readonly model: string }
-  | {
-      readonly ok: false
-      readonly model: string
-      readonly status: number
-      readonly retryAfterMs?: number
-      readonly credentialScoped?: boolean
-      readonly requestScoped?: boolean
-      /** Short, secret-free error summary for diagnostics. */
-      readonly message?: string
-    }
+/** Outcome of one upstream attempt (the wire type of `ControlPlane.report`). */
+export type AttemptResult = ReportResult
 
 export class CredentialPicker extends Context.Service<
   CredentialPicker,
   {
     readonly pick: (request: PickRequest) => Effect.Effect<PickResult, ExecutionError, WorkerEnv>
-    readonly report: (leaseId: string, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>
+    readonly report: (lease: Lease, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>
+    readonly planRetry: (query: RetryQuery) => Effect.Effect<RetryPlan, never, WorkerEnv>
   }
 >()("cliproxy/executor/CredentialPicker") {}
-
-/** Builds the `AttemptResult` for a failed attempt from an executor error. */
-export const failedAttempt = (model: string, error: ExecutionError): AttemptResult => ({
-  ok: false,
-  model,
-  status: error.status,
-  ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
-  ...(error.credentialScoped !== undefined ? { credentialScoped: error.credentialScoped } : {}),
-  ...(error.requestScoped !== undefined ? { requestScoped: error.requestScoped } : {}),
-  message: error.message.slice(0, 256)
-})

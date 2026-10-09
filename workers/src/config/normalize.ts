@@ -6,9 +6,11 @@
  */
 import { tryParseJson } from "../json/index.ts"
 import type {
+  ApiKeyEntry,
   ApiKeyFamily,
   ApiKeyGroup,
   Config,
+  ModelEntry,
   OAuthModelAlias,
   OAuthModelSetting,
   OpenAICompatGroup,
@@ -108,6 +110,53 @@ const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
   } as ApiKeyGroup
 }
 
+/** `FormatSortedHeaders`: order-independent header identity (key/value pairs, NUL separated). */
+const sortedHeadersId = (headers: Readonly<Record<string, string>> | undefined): string =>
+  Object.keys(headers ?? {})
+    .toSorted()
+    .map((name) => `${name}\0${(headers as Record<string, string>)[name]}\0`)
+    .join("")
+
+/** Vertex models need both a name and an alias (`SanitizeVertexCompatKeys`). */
+const modelsWithAliasAndName = (models: readonly ModelEntry[] | undefined): { models?: ModelEntry[] } =>
+  models === undefined
+    ? {}
+    : { models: models.filter((model) => model.name.trim() !== "" && (model.alias ?? "").trim() !== "") }
+
+const withVertexModels = (key: ApiKeyEntry): ApiKeyEntry => ({ ...key, ...modelsWithAliasAndName(key.models) })
+
+/**
+ * Removes duplicate keys across the whole flattened family (Go sanitises the flat list): `identity` maps a key and its
+ * group to the Go uniqueness id; the first occurrence wins and groups left without keys are dropped.
+ */
+const dedupeAcrossGroups = (
+  groups: readonly ApiKeyGroup[],
+  identity: (group: ApiKeyGroup, key: ApiKeyEntry) => string
+): ApiKeyGroup[] => {
+  const seen = new Set<string>()
+  const out: ApiKeyGroup[] = []
+  for (const group of groups) {
+    const keys = group.keys.filter((key) => {
+      const id = identity(group, key)
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+    if (keys.length > 0) out.push({ ...group, keys })
+  }
+  return out
+}
+
+/** `formatGeminiKeyDedupID`: key, base URL, proxy, prefix and sorted headers (entry values override the group's). */
+const geminiIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
+  [
+    key["api-key"],
+    group["base-url"] ?? "",
+    (key["proxy-url"] ?? group["proxy-url"] ?? "").trim(),
+    key.prefix ?? group.prefix ?? "",
+    sortedHeadersId(key.headers ?? group.headers)
+  ].join("\0")
+
 /** Applies the per-family rules of config_normalization.go to the grouped layout. */
 const normalizeFamily = (
   family: Exclude<ApiKeyFamily, "openai-compatibility">,
@@ -132,15 +181,14 @@ const normalizeFamily = (
     if (family === "gemini" || family === "interactions") {
       // Keys without credentials are meaningful only together with a base URL.
       const keys = group.keys.filter((key) => key["api-key"] !== "" || group["base-url"] !== undefined)
-      const seen = new Set<string>()
-      const deduped = keys.filter((key) => {
-        const id = JSON.stringify([key["api-key"], key["proxy-url"] ?? "", key.prefix ?? "", key.headers ?? {}])
-        if (seen.has(id)) return false
-        seen.add(id)
-        return true
-      })
-      if (deduped.length === 0) continue
-      out.push({ ...group, keys: deduped })
+      if (keys.length === 0) continue
+      out.push({ ...group, keys })
+      continue
+    }
+    if (family === "vertex") {
+      const keys = group.keys.filter((key) => key["api-key"] !== "")
+      if (keys.length === 0) continue
+      out.push({ ...group, ...modelsWithAliasAndName(group.models), keys: keys.map(withVertexModels) })
       continue
     }
     out.push(group)
@@ -306,9 +354,12 @@ export const normalizeConfig = (config: Config): Config => {
       }
     },
     "api-keys": {
-      gemini: normalizeFamily("gemini", apiKeys.gemini),
-      interactions: normalizeFamily("interactions", apiKeys.interactions),
-      vertex: normalizeFamily("vertex", apiKeys.vertex),
+      gemini: dedupeAcrossGroups(normalizeFamily("gemini", apiKeys.gemini), geminiIdentity),
+      interactions: dedupeAcrossGroups(normalizeFamily("interactions", apiKeys.interactions), geminiIdentity),
+      vertex: dedupeAcrossGroups(
+        normalizeFamily("vertex", apiKeys.vertex),
+        (group, key) => `${key["api-key"]}|${group["base-url"] ?? ""}`
+      ),
       codex: normalizeFamily("codex", apiKeys.codex),
       claude: normalizeFamily("claude", apiKeys.claude),
       xai: normalizeFamily("xai", apiKeys.xai),

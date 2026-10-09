@@ -15,6 +15,7 @@ import { affinityKey, isSubagentSession, type SessionCache } from "./affinity.ts
 import { isBlockedForModel } from "./availability.ts"
 import { authNotFound, authUnavailable, modelCooldown, providerNotFound } from "./failures.ts"
 import { canonicalModelKey } from "./model-name.ts"
+import { effectiveRequestRetry } from "./retry.ts"
 import { resolveModelRoute, type ModelRoute, type RoutingContext } from "./routing.ts"
 import type { RotationState } from "./strategies.ts"
 import type { PickFailure, PickRequest } from "./types.ts"
@@ -105,6 +106,8 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const routing: RoutingContext = { ...settings, knownPrefixes: knownPrefixes(input.credentials) }
   const tried = new Set(request.tried ?? [])
   const pinned = request.pinnedAuthId?.trim() ?? ""
+  const round = request.retryRound ?? 0
+  let poolCooldownUntil = 0
 
   // 1. Candidate set.
   const all: Candidate[] = []
@@ -122,12 +125,35 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     }
     if (!providers.has(executorKey(credential))) continue
     if (tried.has(credential.id)) continue
-    const route = resolveModelRoute(credential, request.model, routing)
+    // Credentials age out of later retry rounds once their own `request-retry` budget is spent.
+    if (round > 0 && effectiveRequestRetry(credential, request.requestRetry ?? 0) < round) continue
+    let route = resolveModelRoute(credential, request.model, routing)
     if (route === undefined) continue
+    if (route.upstreamModels.length > 1) {
+      // Alias pools skip upstream models that are cooling (`filterExecutionModels`); a credential without any usable
+      // upstream model is not a candidate.
+      let poolNext = 0
+      const usable = route.upstreamModels.filter((upstream) => {
+        const block = isBlockedForModel(credential, entry.state, upstream, now)
+        if (block.blocked && block.next > now && (poolNext === 0 || block.next < poolNext)) poolNext = block.next
+        return !block.blocked
+      })
+      if (usable.length === 0) {
+        if (poolNext !== 0 && (poolCooldownUntil === 0 || poolNext < poolCooldownUntil)) poolCooldownUntil = poolNext
+        continue
+      }
+      route = { ...route, pooled: true, upstreamModel: usable[0] as string, upstreamModels: usable }
+    }
     all.push({ entry, route, id: credential.id, weight: credential.weight, priority: credential.priority })
   }
   all.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  if (all.length === 0) return { ok: false, failure: authNotFound() }
+  if (all.length === 0) {
+    if (poolCooldownUntil !== 0) {
+      const provider = providers.size === 1 ? [...providers][0] : ""
+      return { ok: false, failure: modelCooldown(request.model, provider ?? "", poolCooldownUntil - now) }
+    }
+    return { ok: false, failure: authNotFound() }
+  }
 
   // Weighted round-robin ignores credentials with a non-positive weight before availability is evaluated.
   const weighted = settings.strategy === "weighted-round-robin"

@@ -11,12 +11,15 @@ import { sessionAffinityTtlMs } from "../config/accessors.ts"
 import type { JsonObject } from "../json/index.ts"
 import { type StoredCredential, deriveFileCredential, sanitizeAliases } from "./derive.ts"
 import { parseAuthFile, type ImportFailureReason } from "./import.ts"
-import { type Credential, type CredentialState, emptyState } from "./model.ts"
-import { redactSecrets } from "./redact.ts"
+import { type CooldownSettings, coolingDisabledFor, markResult } from "./cooldown/mark-result.ts"
+import { shouldSkipCredentialCooldown } from "./cooldown/classify.ts"
+import { type Credential, type CredentialState, emptyQuota, emptyState } from "./model.ts"
+import { hasUnauthorizedFailure } from "./selection/availability.ts"
 import { SessionCache } from "./selection/affinity.ts"
 import { canonicalModelKey } from "./selection/model-name.ts"
 import { rotateRoute } from "./selection/routing.ts"
-import { selectCredential, type CredentialEntry, type SelectionSettings } from "./selection/pick.ts"
+import { knownPrefixes, selectCredential, type CredentialEntry, type SelectionSettings } from "./selection/pick.ts"
+import { planRetry, type RetryPlan, type RetryQuery } from "./selection/retry.ts"
 import { RotationState } from "./selection/strategies.ts"
 import type { Lease, PickRequest, PickResult, ReportOutcome, ReportResult } from "./selection/types.ts"
 import type { UpsertOptions, UpsertOutcome } from "./store.ts"
@@ -78,6 +81,9 @@ export type UpsertResult =
 interface View {
   readonly configVersion: number
   readonly settings: SelectionSettings
+  readonly cooldown: CooldownSettings
+  /** `routing.cooldown.save-cooldown-status`: cooldown state survives Durable Object restarts. */
+  readonly saveCooldown: boolean
   readonly credentials: ReadonlyMap<string, Credential>
 }
 
@@ -139,7 +145,12 @@ export class CredentialPool {
         sessionAffinitySubagents: config.routing["session-affinity-subagents"],
         forceModelPrefix: config.routing["force-model-prefix"],
         oauthModelAlias
-      }
+      },
+      cooldown: {
+        disableCooling: config.routing.cooldown["disable-cooling"],
+        transientErrorCooldownSeconds: config.routing.cooldown["transient-error-cooldown-seconds"]
+      },
+      saveCooldown: config.routing.cooldown["save-cooldown-status"]
     }
     return this.#view
   }
@@ -202,45 +213,40 @@ export class CredentialPool {
         upstreamModels: route.upstreamModels,
         originalAlias: route.originalAlias,
         forceMapping: route.forceMapping,
-        stateModel
+        stateModel,
+        pooled: route.pooled === true
       },
       lease
     }
   }
 
   /**
-   * Records the outcome of an attempt. Only counters, the last error and session-affinity effects are applied here;
-   * cooldown/quota transitions are added by the retry/cooldown slice on top of this entry point.
+   * Records the outcome of an attempt: counters, last error, the cooldown/quota state machine (`markResult`) and
+   * session-affinity effects.
    */
   report(lease: Lease, result: ReportResult): ReportOutcome {
-    const credential = this.#current().credentials.get(lease.credentialId)
+    const view = this.#current()
+    const credential = view.credentials.get(lease.credentialId)
     if (credential === undefined) return { ok: false, error: "unknown_credential" }
     // A result for credentials that changed in the meantime says nothing about the new material.
     if (lease.credentialVersion < credential.credentialVersion) return { ok: true, applied: false }
 
     const now = this.#now()
     const previous = this.#state(credential.id)
-    if (result.success) {
-      this.#states.set(credential.id, { ...previous, success: previous.success + 1, updatedAt: now })
-      for (const key of lease.affinityKeys ?? []) this.#affinity.touch(key, credential.id, now)
-      return { ok: true, applied: true }
-    }
-
-    const error = result.error
-    const lastError = {
-      message: redactSecrets(
-        error?.message ?? (result.httpStatus === undefined ? "request failed" : `HTTP ${result.httpStatus}`)
-      ),
-      retryable: error?.retryable ?? false,
-      ...(error?.code === undefined ? {} : { code: error.code }),
-      ...((error?.httpStatus ?? result.httpStatus) === undefined
-        ? {}
-        : { httpStatus: (error?.httpStatus ?? result.httpStatus) as number })
-    }
-    const next: CredentialState = { ...previous, failed: previous.failed + 1, lastError, updatedAt: now }
+    const next = markResult({
+      credential,
+      state: previous,
+      now,
+      model: result.model ?? lease.model,
+      result,
+      settings: view.cooldown
+    })
     this.#states.set(credential.id, next)
-    this.#store.saveState(credential.id, next)
-    if (result.requestScoped !== true) {
+    this.#persistState(credential.id, next, view.saveCooldown)
+
+    if (result.success) {
+      for (const key of lease.affinityKeys ?? []) this.#affinity.touch(key, credential.id, now)
+    } else if (next.lastError !== undefined && !shouldSkipCredentialCooldown(this.#affinityError(result, next))) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.compareAndDelete(key, credential.id)
     }
     return { ok: true, applied: true }
@@ -276,6 +282,48 @@ export class CredentialPool {
       this.#store.saveState(id, change.state)
     }
     return this.refreshTarget(id)
+  }
+
+  /** The error as the affinity selector sees it: request-scoped and transport failures keep bindings. */
+  #affinityError(result: ReportResult, state: CredentialState) {
+    const error = state.lastError
+    return {
+      status: result.error?.httpStatus ?? result.httpStatus ?? 0,
+      message: error?.message ?? "",
+      code: result.requestScoped === true ? "request_scoped" : result.error?.code
+    }
+  }
+
+  /**
+   * Persists runtime state. Counters and the last error always survive restarts; cooldown fields only with
+   * `save-cooldown-status` (credentials.md §8.7) or for a terminal 401, which must stay blocked.
+   */
+  #persistState(id: string, state: CredentialState, saveCooldown: boolean): void {
+    if (saveCooldown || hasUnauthorizedFailure(state)) {
+      this.#store.saveState(id, state)
+      return
+    }
+    this.#store.saveState(id, {
+      ...state,
+      unavailable: false,
+      nextRetryAfter: 0,
+      quota: { ...emptyQuota(), ...(state.quota.signals === undefined ? {} : { signals: state.quota.signals }) },
+      modelStates: {}
+    })
+  }
+
+  /** Should another retry round start, and after how long? (credentials.md §7.1 steps 3-5). */
+  planRetry(query: RetryQuery): RetryPlan {
+    const view = this.#current()
+    const entries: CredentialEntry[] = []
+    for (const credential of view.credentials.values()) entries.push({ credential, state: this.#state(credential.id) })
+    return planRetry({
+      credentials: entries,
+      query,
+      routing: { ...view.settings, knownPrefixes: knownPrefixes(entries) },
+      coolingDisabled: (credential) => coolingDisabledFor(credential, view.cooldown),
+      now: this.#now()
+    })
   }
 
   list(): CredentialSummary[] {

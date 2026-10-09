@@ -285,7 +285,8 @@ api-keys:
         assert.strictEqual(none.status, 503)
         const empty = yield* Effect.flip(picker.pick({ providers: [], model: "m", callerScope: "s" }))
         assert.strictEqual(empty.code, "provider_not_found")
-        yield* picker.report("lease", { ok: false, model: "m", status: 500 })
+        const lease = (yield* picker.pick({ providers, model: "m", callerScope: "s" })).lease
+        yield* picker.report(lease, { success: false, httpStatus: 500 })
       })
     )
   )

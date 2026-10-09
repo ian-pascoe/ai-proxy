@@ -12,6 +12,7 @@
  */
 import { Schema } from "effect"
 import { ModelEntry, OAuthModelAlias } from "../config/schema.ts"
+import { RecentBucket } from "./cooldown/recent-requests.ts"
 
 const optional = Schema.optionalKey
 const StringMap = Schema.Record(Schema.String, Schema.String)
@@ -109,6 +110,8 @@ export const CredentialState = Schema.Struct({
   rejectedAccessToken: optional(Schema.String),
   success: Schema.Int,
   failed: Schema.Int,
+  /** Recent-requests ring (20 x 10 min), see `cooldown/recent-requests.ts`. */
+  recentRequests: optional(Schema.Array(RecentBucket)),
   updatedAt: Schema.Number
 })
 export type CredentialState = typeof CredentialState.Type

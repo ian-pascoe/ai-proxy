@@ -10,17 +10,26 @@ import { FetchHttpClient, type HttpClient } from "effect/http"
 import { withAccess } from "../access/layer.ts"
 import { ConfigReader } from "../config/reader.ts"
 import type { CredentialPicker } from "../executor/picker.ts"
+import { ControlPlanePickerLayer } from "../executor/control-plane-picker.ts"
+import { CredentialRefresher } from "../executor/helps/credential-refresh.ts"
+import { ModelRegistryLive } from "../registry/live.ts"
 import { ExecutorRegistry } from "../executor/registry.ts"
-import { StaticCredentialPickerLayer } from "../executor/static-picker.ts"
 import { Thinking } from "../executor/thinking.ts"
 import { UsageSink } from "../usage/sink.ts"
+import { ModelCapabilities } from "./model-capabilities.ts"
 import { ModelProviders } from "./model-providers.ts"
 import { OpenAIRoutes } from "./openai/routes.ts"
 
 export interface ProxyLayerOptions {
   readonly configReader?: Layer.Layer<ConfigReader>
-  /** Defaults to the config-only static picker (until the ControlPlane picker lands). */
+  /** Defaults to the ControlPlane Durable Object picker (`StaticCredentialPickerLayer` is for tests). */
   readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>
+  /** Defaults to the model registry (`ModelProviders.configLayer` serves tests without one). */
+  readonly modelProviders?: Layer.Layer<ModelProviders, never, ConfigReader>
+  /** Defaults to the model registry snapshot (`ModelCapabilities.configLayer` serves tests without one). */
+  readonly modelCapabilities?: Layer.Layer<ModelCapabilities, never, ConfigReader>
+  /** Defaults to the ControlPlane (`CredentialRefresher.none` for tests with API keys only). */
+  readonly credentialRefresher?: Layer.Layer<CredentialRefresher>
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>
   readonly usageSink?: Layer.Layer<UsageSink>
   readonly thinking?: Layer.Layer<Thinking>
@@ -36,12 +45,14 @@ export const ProxyRoutes = Layer.mergeAll(OpenAIRoutes)
 export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
   const config = options.configReader ?? ConfigReader.layerControlPlane()
   const services = Layer.mergeAll(
-    options.credentialPicker ?? StaticCredentialPickerLayer,
-    ModelProviders.configLayer,
+    options.credentialPicker ?? ControlPlanePickerLayer,
+    options.modelCapabilities ?? ModelCapabilities.registryLayer.pipe(Layer.provide(ModelRegistryLive)),
+    options.modelProviders ?? ModelProviders.registryLayer.pipe(Layer.provide(ModelRegistryLive)),
+    options.credentialRefresher ?? CredentialRefresher.controlPlane,
     ExecutorRegistry.layer,
     options.usageSink ?? UsageSink.noop,
     options.httpClient ?? FetchHttpClient.layer,
-    options.thinking ?? Thinking.noop
+    options.thinking ?? Thinking.live
   ).pipe(Layer.provideMerge(config))
   return ProxyRoutes.pipe(Layer.provide(services))
 }

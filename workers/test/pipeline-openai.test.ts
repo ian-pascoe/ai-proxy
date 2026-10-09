@@ -341,15 +341,16 @@ describe("POST /v1/chat/completions (stream)", () => {
     )
   })
 
-  it("answers an empty upstream stream with [DONE]", async () => {
+  it("treats an upstream stream without any payload as a failed attempt (empty_stream)", async () => {
+    // conductor_stream.go readStreamBootstrap: a stream that closes before the first payload fails over.
     const p = pipeline(() => sseResponse(["data: [DONE]\n\n"]))
     afterAll(p.dispose)
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
-    expect(response.status).toBe(200)
-    expect(await response.text()).toBe("data: [DONE]\n\n")
+    expect(response.status).toBe(500)
+    expect(await response.text()).toContain("upstream stream closed before first payload")
   })
 
   it("rejects a bare JSON document inside a 200 stream", async () => {

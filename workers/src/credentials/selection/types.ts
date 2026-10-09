@@ -25,6 +25,13 @@ export const PickRequest = Schema.Struct({
   model: Schema.String,
   /** Credential ids already tried in this round. */
   tried: optional(Schema.Array(Schema.String)),
+  /**
+   * Zero-based retry round. Credentials whose effective `request-retry` is below the round age out of it
+   * (`requestRetryRoundExclusions`).
+   */
+  retryRound: optional(Schema.Int),
+  /** `routing.retry.request-retry` as seen by the caller (per-credential `request_retry` overrides it). */
+  requestRetry: optional(Schema.Int),
   /** Restrict selection to one credential (`pinned_auth_id`). */
   pinnedAuthId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
@@ -45,7 +52,9 @@ export const ModelRouteSnapshot = Schema.Struct({
   originalAlias: Schema.String,
   forceMapping: Schema.Boolean,
   /** Key under which cooldown state for this request is tracked. */
-  stateModel: Schema.String
+  stateModel: Schema.String,
+  /** Several upstream models share the alias: report each attempt under its upstream model (`ReportResult.model`). */
+  pooled: Schema.Boolean
 })
 export type ModelRouteSnapshot = typeof ModelRouteSnapshot.Type
 
@@ -110,14 +119,22 @@ export type PickResult =
 export const ReportResult = Schema.Struct({
   success: Schema.Boolean,
   httpStatus: optional(Schema.Int),
+  /** Error code: `request_scoped`, `connection_lifecycle`, `transient_transport` and `force_cooldown` are special. */
   error: optional(CredentialError),
-  /**
-   * The failure is not the credential's fault (request-scoped, cancelled, transport): keeps session bindings.
-   * Cooldown semantics for the other cases belong to the retry/cooldown slice.
-   */
+  /** Shorthand for `error.code = request_scoped`: the failure is the request's fault, no cooldown, bindings kept. */
   requestScoped: optional(Schema.Boolean),
   /** Upstream `Retry-After` in milliseconds, if any. */
-  retryAfterMs: optional(Schema.Number)
+  retryAfterMs: optional(Schema.Number),
+  /** The failure is tied to the whole credential (Anthropic 5h/7d window, Codex `usage_limit_reached`). */
+  credentialScoped: optional(Schema.Boolean),
+  /** Cooldown state key when it differs from the lease's model (pooled aliases report the upstream model). */
+  model: optional(Schema.String),
+  /** Upstream response headers for the passive quota snapshot (claude, codex, devin). */
+  headers: optional(Schema.Record(Schema.String, Schema.String)),
+  /** Skip the passive quota snapshot (token counting). */
+  skipQuotaObservation: optional(Schema.Boolean),
+  /** Count the request but never touch availability (`responses/compact` request faults). */
+  availabilityNeutral: optional(Schema.Boolean)
 })
 export type ReportResult = typeof ReportResult.Type
 

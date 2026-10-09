@@ -7,8 +7,13 @@ import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts"
 import { parseConfigYaml } from "../../src/config/codec.ts"
 import { ConfigReader } from "../../src/config/reader.ts"
 import type { Config } from "../../src/config/schema.ts"
+import type { CredentialPicker } from "../../src/executor/picker.ts"
+import { StaticCredentialPickerLayer } from "../../src/executor/static-picker.ts"
 import type { Thinking } from "../../src/executor/thinking.ts"
 import { makeProxyRoutes } from "../../src/handlers/layer.ts"
+import { ModelCapabilities } from "../../src/handlers/model-capabilities.ts"
+import { ModelProviders } from "../../src/handlers/model-providers.ts"
+import { CredentialRefresher } from "../../src/executor/helps/credential-refresh.ts"
 import { RootRoutes } from "../../src/http/routes.ts"
 import { requestContext } from "../../src/platform/env.ts"
 import type { UsageRecord } from "../../src/usage/record.ts"
@@ -87,6 +92,8 @@ export interface PipelineOptions {
   readonly config: Config
   readonly respond: UpstreamResponder
   readonly thinking?: Layer.Layer<Thinking>
+  /** Defaults to the config-only static picker (no Durable Object). */
+  readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>
 }
 
 export interface PipelineHarness {
@@ -104,6 +111,11 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
     configReader: staticConfigReader(options.config),
     httpClient: mockHttpClient(calls, options.respond),
     usageSink: UsageSink.memory(records),
+    credentialPicker: options.credentialPicker ?? StaticCredentialPickerLayer,
+    // Tests configure everything through the static config: no registry, no refresh.
+    modelProviders: ModelProviders.configLayer,
+    modelCapabilities: ModelCapabilities.configLayer,
+    credentialRefresher: CredentialRefresher.none,
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})
   })
   const { handler, dispose } = HttpRouter.toWebHandler(

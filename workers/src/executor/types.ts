@@ -10,6 +10,7 @@ import type { Effect, Stream } from "effect"
 import type { HttpClient } from "effect/http"
 import type { Config } from "../config/schema.ts"
 import type { Json } from "../json/index.ts"
+import type { ModelInfoLookup, ThinkingModelInfo } from "../thinking/index.ts"
 import type { Format } from "../translator/formats.ts"
 import type { UsageReporter } from "../usage/reporter.ts"
 import type { ExecutionError } from "./errors.ts"
@@ -22,6 +23,13 @@ export interface ExecutorRequest {
   readonly model: string
   /** Client body (entry-protocol format); executors must not mutate it. */
   readonly payload: Json
+  /**
+   * Capabilities of the selected model as resolved for this credential (Go `attachResolvedExecutionModelInfo`).
+   * Executors pass it to `Thinking.apply`; `undefined` = unknown model (no validation).
+   */
+  readonly modelInfo?: ThinkingModelInfo | undefined
+  /** Registry lookup (`registry.LookupModelInfo`) for models other than the selected one; pass to `Thinking.apply`. */
+  readonly modelLookup?: ModelInfoLookup | undefined
 }
 
 /** Typed subset of Go `Options.Metadata` (sdk/api/handlers/handlers.go requestExecutionMetadata). */

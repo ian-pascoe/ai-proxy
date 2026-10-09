@@ -109,6 +109,10 @@ client -> Cloudflare Access -> Worker
 - **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function belongs to the Codex executor slice.
+- **Config normalisation** follows the Go `Sanitize*` functions on the *flattened* list: gemini/interactions keys are
+  deduplicated across all groups of a family (key, base URL, proxy, prefix, order-independent headers; entry values override
+  the group's), vertex keys by `api-key|base-url` (keys without api-key and models without name or alias are dropped), and
+  credential-less entries (a gemini entry with only a base URL) are accepted.
 
 ## Thinking pipeline (`src/thinking/`)
 
@@ -147,13 +151,31 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 - **RPC**: `pick(request)` returns `{ ok: true, credential, route, lease }` (credential snapshot including token
   metadata, resolved base URL/headers, and the requested -> upstream model mapping) or `{ ok: false, failure }`
   (`model_cooldown` 429 + body, `auth_unavailable` 503, `auth_not_found`, `provider_not_found`). `report(lease, result)`
-  records counters/last error and affinity effects; the cooldown state machine is added on top of it by the
-  retry/cooldown slice (`CredentialState` already has the Go fields and `availability.ts` already reads them).
+  runs the cooldown/quota state machine (below); `planRetry(query)` answers whether another retry round is worth starting
+  and how long to wait.
   Management methods: `listCredentials` (redacted), `upsertCredential` (re-login merge, credentials.md §11),
   `importAuthFile`, `removeCredential`, `setCredentialDisabled`.
+- **Results, cooldowns and quota** (`credentials/cooldown/`, port of `conductor_cooldown.go` `MarkResult`): `markResult`
+  is a pure function over `CredentialState` with an injected clock. Per-(credential, model) cooldowns: 401/402/403 30 min,
+  404 and model-support errors 12 h (or `Retry-After`), 429 `Retry-After` (>= 10 s) or the 1 s·2^n ladder (once per open
+  window), 408/5xx 60 s (`transient-error-cooldown-seconds`), Cloudflare challenge ladder, invalid_grant 30 min;
+  credential-scoped 429s (`ReportResult.credentialScoped`: Anthropic 5h/7d windows, Codex `usage_limit_reached`) block the
+  whole credential (`credential_quota`); cooldowns only ever extend; request-scoped, connection-lifecycle and
+  transient-transport failures never cool (`classify.ts`, shared with the Worker). `disable-cooling` precedence: credential
+  metadata, then `routing.cooldown.disable-cooling`. Also kept per credential: counters, a 20x10 min recent-requests ring
+  and the passive quota header snapshot (claude/codex/devin). Alias pools report each attempt under its upstream model
+  (`ReportResult.model`, `route.pooled`) and `pick` drops cooling upstream models (a credential without any usable one is
+  skipped). Persistence: counters and the last error always survive restarts; cooldown fields only with
+  `routing.cooldown.save-cooldown-status` (or for a terminal 401), as plain `credential_state` rows instead of the Go `.cds`
+  files.
+- **Retry planning** (`selection/retry.ts`, `retryAllowed` + `closestCooldownWait`): per-credential `request_retry`,
+  `max-retry-interval`, the 10 s floor for an already-attempted 429 credential. `PickRequest.retryRound`/`requestRetry`
+  make credentials with an exhausted budget age out of later rounds. Alias pools count as available when any upstream model
+  is (Go only discovers a cooling pool when it filters the execution models). When the wait exceeds the limit the plan
+  carries the recovery time so the Worker can answer with `Retry-After`.
 - Deviations from Go: several providers are selected from one ID-sorted union (no per-provider slot cursor); alias groups
-  of the session cache are independent keys; the LCP conversation matcher and session-id extraction are left to the
-  pipeline slice (`PickRequest.session` carries the extracted id).
+  of the session cache are independent keys; the LCP conversation matcher is not ported (`PickRequest.session` carries the
+  id extracted by `handlers/session.ts`).
 
 ## Request pipeline
 
@@ -174,21 +196,53 @@ Core contracts every provider slice implements (Go references in each module hea
   `ExecutorRequest`/`ExecutorOptions` (Go `Request`/`Options`, typed `ExecutionMetadata`) and an `ExecutionContext`
   (credential snapshot, config snapshot, `UsageReporter`). Streams are `Stream<string, ExecutionError>` of client
   chunks. All failures are `ExecutionError` (status, upstream body as message, `retryAfterMs`, `credentialScoped`,
-  `requestScoped`, `terminalAuth`, `direct`, `code`). Order inside executors: translate -> `Thinking.apply` (no-op
-  service until the thinking slice) -> provider shaping -> `applyPayloadRules` (last) -> `HttpClient` (tracing
+  `requestScoped`, `terminalAuth`, `direct`, `code`). Order inside executors: translate -> `Thinking.apply` -> provider shaping -> `applyPayloadRules` (last) -> `HttpClient` (tracing
   propagation disabled so no `traceparent` reaches providers). Shared helpers live in `executor/helps/`.
-- **Credential selection**: `CredentialPicker { pick, report }` (`executor/picker.ts`, contract documented there);
-  `static-picker.ts` is a config-only stand-in (round-robin over `api-keys.openai-compatibility`) until the
-  ControlPlane implementation lands. Per-credential model resolution (prefix strip, alias pools, suffix kept) is a
-  pure Worker-side function (`executor/models.ts`), so the picker only returns snapshots + leases.
+- **Credential selection**: `CredentialPicker { pick, report, planRetry }` (`executor/picker.ts`, contract documented
+  there). The default implementation (`control-plane-picker.ts`) is a thin adapter over the ControlPlane RPC; it maps the
+  DO snapshot to the executor view (`kind`, `header:<Name>` attributes, `base_url`) and turns pick failures into
+  `ExecutionError`s (`model_cooldown` keeps its JSON body and `Retry-After`). `static-picker.ts` is a config-only stand-in
+  for tests (`makePipeline` uses it; `test/support/pool.ts` runs the real `CredentialPool` in-process with an injected
+  clock). The route returned by `pick` (`PickedRoute`: upstream model pool, `originalAlias`, `forceMapping`, `pooled`) is
+  computed in the DO; `executor/models.ts` is only used by the static picker.
 - **Handlers (`src/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: config-backed until the
   registry slice) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
   stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
   `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`.
   Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
-- One attempt per request for now; retries across credentials, cooldown waits and bootstrap retries are added by
-  the execution-retry slice around `runAttempt` in `handlers/execute.ts`.
+- **Conductor** (`handlers/conductor.ts`, port of `conductor_execution.go`/`conductor_stream.go`): `conduct(prepared, run)`
+  runs retry rounds. A round picks credentials one after another (`excludedIds` grows, no sleeping) until one succeeds, a
+  stop condition hits (request-scoped rule `stop*`, request faults 400/409/413/422 and the listed body codes,
+  `responses/compact` faults) or nothing is selectable; the final error is the last one that reached an upstream. Between
+  rounds the Worker asks `planRetry` (only for 403/408/429/500/502/503/504 and transient transport errors) and sleeps
+  `wait + jitter` (Effect clock, so tests use `TestClock`). `max-retry-credentials` caps a round, per-credential
+  `request-retry` ages credentials out of later rounds, request-scoped rules (`continue`, `continue-and-cooldown`, `stop`,
+  `stop-and-cooldown`) come from credential metadata or `oauth.request-scoped-errors`. Every attempt is reported exactly
+  once (`Attempt.finish`: picker report + one usage record), including client aborts (`connection_lifecycle`, no cooldown).
+  Workers limits (deviation): at most 16 upstream attempts per request and cooldown waits capped at 30 s; a longer recovery
+  returns the last error (429/503) with `Retry-After`.
+  Streams are only "successful" after the first payload chunk (bootstrap read inside the request scope); earlier errors, an
+  immediate close (`empty_stream`) or an HTTP error fail over; later errors reach the client and are reported when the
+  stream ends. `requests.streaming.bootstrap-retries` repeats the whole execution for bootstrap failures. Force-mapped
+  aliases rewrite the `model` fields of responses and chunks (`handlers/model-rewrite.ts`).
+  Credential preparation and the 401 loop wrap every attempt (`executor/helps/credential-refresh.ts`, port of
+  `prepareRequestAuth` + `tryRefreshAfterUnauthorized`): `ensureFresh` first when the snapshot cannot be used as is (Vertex
+  without a minted token, Meta without a key, OAuth token missing/expired, Antigravity within 5 min), and after a 401
+  `refreshNow(id, rejectedToken)` plus one repeat with the new token (a rejected attempt keeps its own failed usage record;
+  results are reported against the refreshed `credentialVersion`; a token that did not change is not repeated, a terminal
+  refresh failure marks the 401 `terminalAuth`). Executors with their own transport paths (WebSocket) can call
+  `withCredentialRefresh(context, use)` directly; `CredentialRefresher.none` disables it for API-key-only tests.
+- **Models and thinking**: `ModelProviders.registryLayer` resolves providers from the `ModelRegistry` snapshot
+  (`providersForModel`, `firstAvailableModel`); `ModelProviders.configLayer` remains for tests without a registry.
+  `Thinking.live` (`executor/thinking.ts`) wires `applyThinking`, the translated summary-intent rules of `helps/thinking.go`
+  and the registry summary hooks; `Thinking.noop` stays for tests. The conductor resolves the capabilities of each attempt
+  through `ModelCapabilities.registryLayer` (the credential's own registration first - prefix/alias/config `models` aware -
+  then `snapshot.lookupModelInfo`) and hands them to the executor as `ExecutorRequest.modelInfo` plus
+  `modelLookup = snapshot.lookupModelInfo`, which executors pass to `Thinking.apply`.
+- **Sessions**: `handlers/session.ts` ports `session.ExtractSessionInfo` (headers, Claude `metadata.user_id`, body fields)
+  and feeds `PickRequest.session` together with the Access `callerScope`. Not ported: the derived content-hash identity and
+  the LCP conversation matcher, so requests without an explicit session marker are never bound.
 
 ## Model registry and `/models` endpoints (`src/registry/`)
 

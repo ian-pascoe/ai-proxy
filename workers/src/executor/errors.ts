@@ -47,3 +47,34 @@ export const headersRecord = (headers: Headers): Record<string, string> => {
   })
   return out
 }
+
+/** Copy of `error` with some fields replaced (an `Error` subclass does not survive object spread). */
+export const withErrorFields = (
+  error: ExecutionError,
+  fields: Partial<{
+    status: number
+    message: string
+    code: string
+    retryAfterMs: number
+    credentialScoped: boolean
+    requestScoped: boolean
+    terminalAuth: boolean
+    direct: boolean
+    headers: Record<string, string>
+    safeHeaders: Record<string, string>
+  }>
+): ExecutionError =>
+  new ExecutionError({
+    status: error.status,
+    message: error.message,
+    ...(error.code === undefined ? {} : { code: error.code }),
+    ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+    ...(error.credentialScoped === undefined ? {} : { credentialScoped: error.credentialScoped }),
+    ...(error.requestScoped === undefined ? {} : { requestScoped: error.requestScoped }),
+    ...(error.terminalAuth === undefined ? {} : { terminalAuth: error.terminalAuth }),
+    ...(error.direct === undefined ? {} : { direct: error.direct }),
+    ...(error.headers === undefined ? {} : { headers: error.headers }),
+    ...(error.safeHeaders === undefined ? {} : { safeHeaders: error.safeHeaders }),
+    ...(error.cause === undefined ? {} : { cause: error.cause }),
+    ...fields
+  })

@@ -7,6 +7,7 @@ import type { JsonObject } from "../json/index.ts"
 import { isTokenPayloadKey } from "./merge.ts"
 import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts"
 import { RefreshManager, type RefreshOptions, type RefreshResult, type RunSummary } from "./refresh/index.ts"
+import { type RetryPlan, RetryQuery } from "./selection/retry.ts"
 import { Lease, PickRequest, ReportResult, type PickResult, type ReportOutcome } from "./selection/types.ts"
 import { CredentialStore } from "./store.ts"
 import type { CredentialSummary } from "./summary.ts"
@@ -15,6 +16,7 @@ import type { ModelSource } from "../registry/source.ts"
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
 const decodeLease = Schema.decodeUnknownSync(Lease)
 const decodeReportResult = Schema.decodeUnknownSync(ReportResult)
+const decodeRetryQuery = Schema.decodeUnknownSync(RetryQuery)
 
 const PROTECTED_KEYS = new Set(["type", "disabled", "api_key", "dca_token", "dca_expired", "dca_expires_at"])
 
@@ -91,7 +93,9 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#pool.pick(decodePickRequest(request))
   }
 
-  /** Reports the outcome of the attempt that used `lease`. */
+  /**
+   * Reports the outcome of the attempt that used `lease` (counters, cooldown/quota state machine, session affinity).
+   */
   report(lease: Lease, result: ReportResult): ReportOutcome {
     return this.#pool.report(decodeLease(lease), decodeReportResult(result))
   }
@@ -99,6 +103,14 @@ export class ControlPlane extends DurableObject<Env> {
   /** What the model registry needs from every credential (provider, prefix, exclusions, aliases, model state); no secrets. */
   listModelSources(): ModelSource[] {
     return this.#pool.modelSources()
+  }
+
+  /**
+   * After a failed retry round: should another round start and how long should the Worker wait first?
+   * (`request-retry`, cooldown recovery times, `max-retry-interval`; credentials.md §7.1.)
+   */
+  planRetry(query: RetryQuery): RetryPlan {
+    return this.#pool.planRetry(decodeRetryQuery(query))
   }
 
   /** All credentials with runtime state; token material is redacted. */

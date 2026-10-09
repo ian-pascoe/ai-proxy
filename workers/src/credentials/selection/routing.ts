@@ -43,6 +43,8 @@ export interface ModelRoute {
   readonly forceMapping: boolean
   /** Model used for the availability check and cooldown state key (alias-resolved for OAuth credentials). */
   readonly selectionModel: string
+  /** Several upstream models share the alias: cooldown state is tracked per upstream model. */
+  readonly pooled?: boolean
 }
 
 interface AliasResult {

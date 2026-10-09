@@ -208,6 +208,8 @@ const validateApiKeys = (apiKeys: Json | undefined): void => {
         if (!isJsonObject(key)) throw new ConfigValidationError({ message: `${where}: key must be a mapping` })
         delete key.auth_index
         delete key["auth-index"]
+        // Go accepts credential-less entries (e.g. a gemini entry with only a base URL).
+        if (family !== "openai-compatibility" && key["api-key"] === undefined) key["api-key"] = ""
         if (family !== "openai-compatibility" && key["base-url"] !== undefined) {
           throw new ConfigValidationError({ message: `api-keys.${family}: base-url belongs to the group` })
         }

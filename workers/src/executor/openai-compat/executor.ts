@@ -53,8 +53,14 @@ interface PreparedRequest {
   readonly baseModel: string
 }
 
+/** `fetch` failures carry no HTTP answer: the conductor treats them as transient transport errors (no cooldown). */
 const transportError = (error: HttpClientError.HttpClientError) =>
-  new ExecutionError({ status: 500, message: `upstream request failed: ${error.reason._tag}`, cause: error })
+  new ExecutionError({
+    status: 500,
+    code: "transient_transport",
+    message: `upstream request failed: ${error.reason._tag}`,
+    cause: error
+  })
 
 /** `resolveCredentials`: trimmed `base_url` and `api_key` attributes. */
 const credentialEndpoint = (context: ExecutionContext) => ({
@@ -156,7 +162,10 @@ export const makeOpenAICompatExecutor = (
       to,
       provider,
       source: request.payload,
-      configurationUpdatesChanged: translated.configurationUpdatesChanged === true
+      ...(options.originalRequest === undefined ? {} : { originalSource: options.originalRequest }),
+      configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
+      modelInfo: request.modelInfo,
+      lookupModelInfo: request.modelLookup
     })
 
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model

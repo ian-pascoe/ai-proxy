@@ -1,13 +1,15 @@
 /**
  * Config-only {@link CredentialPicker}: round-robin over the API keys configured in `api-keys.openai-compatibility`.
  *
- * Stand-in until the ControlPlane Durable Object implements selection (cooldowns, quota, affinity, weights). Cursors
- * live per isolate; `report` only logs failures. Only the highest-priority available credentials are used, as in Go.
+ * Test stand-in for the ControlPlane picker (no cooldowns, quota, affinity or weights). Cursors live per isolate;
+ * `report` only logs failures. Only the highest-priority available credentials are used, as in Go.
  */
 import { Effect, Layer } from "effect"
 import { ConfigReader } from "../config/reader.ts"
+import { canonicalModelKey } from "../credentials/selection/model-name.ts"
 import { configCredentials } from "./config-credentials.ts"
 import { ExecutionError } from "./errors.ts"
+import { executionModelCandidates } from "./models.ts"
 import { CredentialPicker, type PickRequest, type PickResult } from "./picker.ts"
 import { parseSuffix } from "./suffix.ts"
 
@@ -53,15 +55,40 @@ export const makeStaticCredentialPicker = Effect.fnUntraced(function* () {
         return yield* new ExecutionError({ status: 503, code: "auth_not_found", message: "no auth available" })
       }
       leases += 1
-      return { credential: chosen.credential, leaseId: `static:${chosen.credential.id}:${leases}` } satisfies PickResult
+      const upstreamModels = executionModelCandidates(config, chosen.credential, request.model)
+      const leaseId = `static:${chosen.credential.id}:${leases}`
+      return {
+        credential: chosen.credential,
+        leaseId,
+        route: {
+          requestedModel: request.model,
+          routeModel: upstreamModels[0] ?? request.model,
+          upstreamModels,
+          originalAlias: request.model,
+          forceMapping: false,
+          stateModel: canonicalModelKey(request.model),
+          pooled: upstreamModels.length > 1
+        },
+        lease: {
+          id: leaseId,
+          credentialId: chosen.credential.id,
+          credentialVersion: 1,
+          provider: chosen.credential.provider,
+          model: canonicalModelKey(request.model),
+          issuedAt: 0
+        }
+      } satisfies PickResult
     })
 
   return CredentialPicker.of({
     pick,
-    report: (leaseId, result) =>
-      result.ok
+    report: (lease, result) =>
+      result.success
         ? Effect.void
-        : Effect.logDebug(`static credential picker: attempt failed (lease ${leaseId}, status ${result.status})`)
+        : Effect.logDebug(`static credential picker: attempt failed (lease ${lease.id}, status ${result.httpStatus})`),
+    // No cooldown state: a retry round is allowed while the request-retry budget lasts.
+    planRetry: (query) =>
+      Effect.succeed(query.round < query.requestRetry ? { retry: true, waitMs: 0 } : { retry: false })
   })
 })
 

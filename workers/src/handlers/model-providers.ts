@@ -10,6 +10,7 @@ import { ConfigReader } from "../config/reader.ts"
 import { configCredentials } from "../executor/config-credentials.ts"
 import { ExecutionError } from "../executor/errors.ts"
 import type { WorkerEnv } from "../platform/env.ts"
+import { ModelRegistry } from "../registry/service.ts"
 
 export class ModelProviders extends Context.Service<
   ModelProviders,
@@ -20,7 +21,25 @@ export class ModelProviders extends Context.Service<
     readonly firstAvailableModel: Effect.Effect<string | undefined, ExecutionError, WorkerEnv>
   }
 >()("cliproxy/handlers/ModelProviders") {
-  /** Models declared under `api-keys.openai-compatibility` (requires `ConfigReader`). */
+  /**
+   * The model registry: every credential's catalog (prefixes, aliases, exclusions, cooling state) as of the current
+   * snapshot (requires `ModelRegistry`).
+   */
+  static readonly registryLayer = Layer.effect(
+    ModelProviders,
+    Effect.gen(function* () {
+      const registry = yield* ModelRegistry
+      const snapshot = registry.snapshot.pipe(
+        Effect.mapError((cause) => new ExecutionError({ status: 503, message: "model registry unavailable", cause }))
+      )
+      return ModelProviders.of({
+        providersFor: (model) => Effect.map(snapshot, (current) => current.providersForModel(model)),
+        firstAvailableModel: Effect.map(snapshot, (current) => current.firstAvailableModel())
+      })
+    })
+  )
+
+  /** Models declared under `api-keys.openai-compatibility` (requires `ConfigReader`); tests without a registry. */
   static readonly configLayer = Layer.effect(
     ModelProviders,
     Effect.gen(function* () {
