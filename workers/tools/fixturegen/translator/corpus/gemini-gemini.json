@@ -1,0 +1,59 @@
+[
+  {
+    "name": "request: roles normalised, tools renamed, schema key renamed, empty response names backfilled",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"contents":[{"parts":[{"text":"What is the weather in Paris and Berlin?"}]},{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"get_time","args":{"city":"Berlin"}}}]},{"role":"function","parts":[{"functionResponse":{"name":"","response":{"result":"sunny"}}},{"functionResponse":{"name":"","response":{"result":"noon"}}}]},{"parts":[{"text":"Thanks"}]}],"tools":[{"functionDeclarations":[{"name":"get_weather","description":"Weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},{"name":"get_time","parametersJsonSchema":{"type":"object","properties":{}}}]},{"googleSearch":{}}],"generationConfig":{"temperature":0.2,"responseSchema":{"type":"object","properties":{"a":{"type":"string"}}},"responseMimeType":"application/json"}}
+  },
+  {
+    "name": "request: missing contents only gets default safety settings",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"systemInstruction":{"parts":[{"text":"be brief"}]},"generationConfig":{"maxOutputTokens":100}}
+  },
+  {
+    "name": "request: existing safety settings are kept",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"contents":[{"role":"user","parts":[{"text":"hi"}]}],"safetySettings":[{"category":"HARM_CATEGORY_HARASSMENT","threshold":"BLOCK_NONE"}]}
+  },
+  {
+    "name": "request: thought signatures are sanitised (bypass for unsigned first call, foreign and sibling signatures dropped, response signature removed)",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-3-pro-preview",
+    "stream": false,
+    "request": {"contents":[{"role":"user","parts":[{"text":"run tools"}]},{"role":"model","parts":[{"text":"thinking","thought":true,"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"a","args":{}}},{"functionCall":{"name":"b","args":{}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"c","args":{}},"thought_signature":"EqQBCkYIBhABGAIiQNotAGeminiSignature"}]},{"role":"user","parts":[{"functionResponse":{"name":"a","response":{"result":1}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionResponse":{"name":"b","response":{"result":2}}},{"functionResponse":{"name":"c","response":{"result":3}}}]},{"role":"model","parts":[{"text":"done","thoughtSignature":"foreign-signature"},{"functionCall":{"name":"d","args":{}},"thoughtSignature":"gemini#EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}]},{"role":"user","parts":[{"functionResponse":{"name":"d","response":{"result":4}}}]},{"role":"model","parts":[{"functionCall":{"name":"e","args":{}},"thoughtSignature":"MTIzZTQ1NjctZTg5Yi0xMmQzLWE0NTYtNDI2NjE0MTc0MDAw"},{"functionCall":{"name":"f","args":{}},"extra_content":{"google":{"thought_signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}}}]}]}
+  },
+  {
+    "name": "stream: data prefix stripped, [DONE] swallowed",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"contents":[{"role":"user","parts":[{"text":"hi"}]}]},
+    "responseLines": [
+      "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":4,\"totalTokenCount\":4},\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"r1\"}",
+      "data:{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":4,\"candidatesTokenCount\":2,\"totalTokenCount\":6},\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"r1\"}",
+      "",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: body passes through, token count renders totalTokens",
+    "from": "gemini",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"contents":[{"role":"user","parts":[{"text":"hi"}]}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":4,"candidatesTokenCount":1,"totalTokenCount":5},"modelVersion":"gemini-2.5-pro"},
+    "tokenCount": 42,
+    "tokenCountUsage": {"totalTokens":42}
+  }
+]

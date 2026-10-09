@@ -6,8 +6,9 @@
  * executors in {@link makeExecutorRegistry}.
  */
 import { Context, Layer } from "effect"
-import { makeCodexExecutor } from "./codex/executor.ts"
 import { makeClaudeExecutor } from "./claude/executor.ts"
+import { makeCodexExecutor } from "./codex/executor.ts"
+import { makeGeminiExecutor, makeGeminiInteractionsExecutor, makeVertexExecutor } from "./gemini/index.ts"
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts"
 import type { ProviderExecutor } from "./types.ts"
 
@@ -24,6 +25,15 @@ export class ExecutorRegistry extends Context.Service<
 const isOpenAICompatProvider = (provider: string): boolean =>
   provider === "openai-compatibility" || provider.startsWith("openai-compatible-")
 
+/** Fixed provider keys (one executor each). */
+const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
+  codex: makeCodexExecutor,
+  claude: makeClaudeExecutor,
+  gemini: makeGeminiExecutor,
+  "gemini-interactions": makeGeminiInteractionsExecutor,
+  vertex: makeVertexExecutor
+}
+
 export const makeExecutorRegistry = (): { readonly get: (provider: string) => ProviderExecutor | undefined } => {
   const cache = new Map<string, ProviderExecutor>()
   return {
@@ -31,15 +41,9 @@ export const makeExecutorRegistry = (): { readonly get: (provider: string) => Pr
       const key = provider.trim().toLowerCase()
       const cached = cache.get(key)
       if (cached !== undefined) return cached
-      const executor =
-        key === "codex"
-          ? makeCodexExecutor()
-          : key === "claude"
-            ? makeClaudeExecutor()
-            : isOpenAICompatProvider(key)
-              ? makeOpenAICompatExecutor(key)
-              : undefined
-      if (executor === undefined) return undefined
+      const fixed = Object.hasOwn(FIXED_EXECUTORS, key) ? FIXED_EXECUTORS[key] : undefined
+      if (fixed === undefined && !isOpenAICompatProvider(key)) return undefined
+      const executor = fixed === undefined ? makeOpenAICompatExecutor(key) : fixed()
       cache.set(key, executor)
       return executor
     }

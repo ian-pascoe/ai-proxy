@@ -42,6 +42,10 @@ export interface ExecutionInput {
   readonly allowSpeechModel?: boolean
   /** Skip free-plan Codex credentials (image tools). */
   readonly disallowFreeAuth?: boolean
+  /** Skips provider lookup and routes to this provider (Interactions `agent` requests, Go `ForcedProvider`). */
+  readonly forcedProvider?: string
+  /** Select the credential as if for this model while executing `model` (Go `auth_selection_model`). */
+  readonly authSelectionModel?: string
 }
 
 export interface ExecutionOutput {
@@ -109,11 +113,14 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
   const { config } = yield* (yield* ConfigReader).get.pipe(
     Effect.mapError((cause) => new ExecutionError({ status: 503, message: "config unavailable", cause }))
   )
-  const resolved = yield* resolveModel(input.model, {
-    entryProtocol: input.entryProtocol,
-    ...(input.allowImageModel !== undefined ? { allowImageModel: input.allowImageModel } : {}),
-    ...(input.allowSpeechModel !== undefined ? { allowSpeechModel: input.allowSpeechModel } : {})
-  })
+  const resolved =
+    input.forcedProvider !== undefined
+      ? { providers: [input.forcedProvider], model: input.model }
+      : yield* resolveModel(input.model, {
+          entryProtocol: input.entryProtocol,
+          ...(input.allowImageModel !== undefined ? { allowImageModel: input.allowImageModel } : {}),
+          ...(input.allowSpeechModel !== undefined ? { allowSpeechModel: input.allowSpeechModel } : {})
+        })
   const url = new URL(input.request.url, "http://localhost")
   const headers = new Headers(input.request.headers as Record<string, string>)
   const originalRequest = input.originalRequest ?? input.body
@@ -147,7 +154,8 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
             ...(sessionInfo.parentSessionId === undefined ? {} : { parentId: sessionInfo.parentSessionId }),
             ...(sessionInfo.isFork ? { isFork: true } : {})
           },
-    ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {})
+    ...(input.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
+    ...(input.authSelectionModel === undefined ? {} : { selectionModel: input.authSelectionModel })
   } satisfies Prepared
 })
 

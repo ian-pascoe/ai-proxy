@@ -93,6 +93,8 @@ export interface Prepared {
   readonly pinnedId?: string | undefined
   /** Skip free-plan Codex credentials. */
   readonly disallowFreeAuth?: boolean
+  /** Select credentials as if for this model while executing `routeModel` (Go `auth_selection_model`). */
+  readonly selectionModel?: string
   /** Token counting (Go `ExecuteCount`): no passive quota snapshot, generic endpoint 404s are availability-neutral. */
   readonly countTokens?: boolean
 }
@@ -287,7 +289,8 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               requestRetry: settings.requestRetry,
               ...(prepared.session === undefined ? {} : { session: prepared.session }),
               ...(prepared.pinnedId === undefined ? {} : { pinnedId: prepared.pinnedId }),
-              ...(prepared.disallowFreeAuth === true ? { disallowFreeAuth: true } : {})
+              ...(prepared.disallowFreeAuth === true ? { disallowFreeAuth: true } : {}),
+              ...(prepared.selectionModel === undefined ? {} : { selectionModel: prepared.selectionModel })
             })
           )
           if (pick._tag === "Failure") {

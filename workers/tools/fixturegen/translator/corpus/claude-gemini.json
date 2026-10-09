@@ -1,0 +1,135 @@
+[
+  {
+    "name": "request: system, multimodal user turn, tool round trip, schema cleaning, strict tool choice, thinking budget",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"claude-sonnet-4","max_tokens":1024,"temperature":0.5,"top_p":0.9,"top_k":40,"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=1; cch=abc;"},{"type":"text","text":"You are a weather bot."},{"type":"text","text":"Be brief.","cache_control":{"type":"ephemeral"}}],"thinking":{"type":"enabled","budget_tokens":2048},"tools":[{"name":"get weather!","description":"Get weather","input_schema":{"type":"object","properties":{"city":{"type":"string","description":"City name","minLength":2},"units":{"type":"string","enum":["c","f"]},"mode":{"const":"fast"},"opt":{"anyOf":[{"type":"string"},{"type":"null"}]},"loc":{"$ref":"#/$defs/Loc"},"tags":{"type":"array"}},"required":["city","missing"],"additionalProperties":false,"$schema":"http://json-schema.org/draft-07/schema#","$defs":{"Loc":{"type":"object","properties":{"lat":{"type":"number"}}}}},"strict":true,"cache_control":{"type":"ephemeral"}},{"name":"ping","input_schema":{"type":"object","properties":{}}}],"tool_choice":{"type":"auto"},"messages":[{"role":"user","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"role":"assistant","content":[{"type":"thinking","thinking":"need weather","signature":"abc"},{"type":"text","text":"Checking."},{"type":"tool_use","id":"toolu_01","name":"get weather!","input":{"city":"Paris"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"sunny"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"type":"text","text":"and Berlin?"}]},{"role":"system","content":"Remember to answer in French."},{"role":"user","content":"merci"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"ping","input":{}}]}]}
+  },
+  {
+    "name": "request: named tool choice, adaptive thinking uses the model maximum, string and object tool results",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"claude-sonnet-4","tool_choice":{"type":"tool","name":"get weather!"},"thinking":{"type":"adaptive"},"system":"plain system","tools":[{"name":"get weather!","input_schema":{"type":"object","properties":{"q":{"type":"string"}}}}],"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":[{"type":"tool_use","id":"call-7","name":"get weather!","input":{"q":"x"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-7","content":"ok"},{"type":"tool_result","tool_use_id":"unknown-9","content":{"a":1}}]}]}
+  },
+  {
+    "name": "request: adaptive thinking with explicit effort and tool_choice any",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-3-pro-preview",
+    "stream": false,
+    "request": {"model":"claude-sonnet-4","thinking":{"type":"auto"},"output_config":{"effort":"Medium"},"tool_choice":"any","tools":[{"name":"t","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}
+  },
+  {
+    "name": "request: adaptive thinking without a known model maximum falls back to level high",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-unknown",
+    "stream": false,
+    "request": {"model":"claude-sonnet-4","thinking":{"type":"adaptive"},"messages":[{"role":"user","content":"hello"}]}
+  },
+  {
+    "name": "request: user turn with only a url image is refused",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":[{"type":"image","source":{"type":"url","url":"https://example.com/a.png"}}]}]}
+  },
+  {
+    "name": "request: url image next to text is dropped silently",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":[{"type":"image","source":{"type":"url","url":"https://example.com/a.png"}},{"type":"text","text":"describe"}]}]}
+  },
+  {
+    "name": "stream: thinking with signature, text, two tool calls, usage and finish",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization"],
+    "request": {"model":"claude-sonnet-4","max_tokens":1024,"temperature":0.5,"top_p":0.9,"top_k":40,"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=1; cch=abc;"},{"type":"text","text":"You are a weather bot."},{"type":"text","text":"Be brief.","cache_control":{"type":"ephemeral"}}],"thinking":{"type":"enabled","budget_tokens":2048},"tools":[{"name":"get weather!","description":"Get weather","input_schema":{"type":"object","properties":{"city":{"type":"string","description":"City name","minLength":2},"units":{"type":"string","enum":["c","f"]},"mode":{"const":"fast"},"opt":{"anyOf":[{"type":"string"},{"type":"null"}]},"loc":{"$ref":"#/$defs/Loc"},"tags":{"type":"array"}},"required":["city","missing"],"additionalProperties":false,"$schema":"http://json-schema.org/draft-07/schema#","$defs":{"Loc":{"type":"object","properties":{"lat":{"type":"number"}}}}},"strict":true,"cache_control":{"type":"ephemeral"}},{"name":"ping","input_schema":{"type":"object","properties":{}}}],"tool_choice":{"type":"auto"},"messages":[{"role":"user","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"role":"assistant","content":[{"type":"thinking","thinking":"need weather","signature":"abc"},{"type":"text","text":"Checking."},{"type":"tool_use","id":"toolu_01","name":"get weather!","input":{"city":"Paris"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"sunny"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"type":"text","text":"and Berlin?"}]},{"role":"system","content":"Remember to answer in French."},{"role":"user","content":"merci"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"ping","input":{}}]}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Let me think\",\"thought\":true}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\",\"usageMetadata\":{\"promptTokenCount\":10,\"totalTokenCount\":10}}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" more\",\"thought\":true,\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello \"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"world\"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather_\",\"args\":{\"city\":\"Paris\"}},\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"ping\",\"args\":{}}}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":10,\"cachedContentTokenCount\":4,\"candidatesTokenCount\":8,\"thoughtsTokenCount\":5,\"totalTokenCount\":23},\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"resp-1\"}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: max tokens finish and usage derived from the total",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": true,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Partial answer\"}]},\"index\":0}],\"responseId\":\"r2\",\"modelVersion\":\"gemini-2.5-flash\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}],\"tool\":1},\"finishReason\":\"MAX_TOKENS\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"totalTokenCount\":13},\"responseId\":\"r2\",\"modelVersion\":\"gemini-2.5-flash\"}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: signature-only carrier and safety refusal without content",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": true,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"responseId\":\"r3\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"SAFETY\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":3,\"totalTokenCount\":3},\"responseId\":\"r3\"}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: [DONE] before any chunk emits nothing",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": true,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseLines": [
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: thinking, text, tool calls, cached usage",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization"],
+    "request": {"model":"claude-sonnet-4","max_tokens":1024,"temperature":0.5,"top_p":0.9,"top_k":40,"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=1; cch=abc;"},{"type":"text","text":"You are a weather bot."},{"type":"text","text":"Be brief.","cache_control":{"type":"ephemeral"}}],"thinking":{"type":"enabled","budget_tokens":2048},"tools":[{"name":"get weather!","description":"Get weather","input_schema":{"type":"object","properties":{"city":{"type":"string","description":"City name","minLength":2},"units":{"type":"string","enum":["c","f"]},"mode":{"const":"fast"},"opt":{"anyOf":[{"type":"string"},{"type":"null"}]},"loc":{"$ref":"#/$defs/Loc"},"tags":{"type":"array"}},"required":["city","missing"],"additionalProperties":false,"$schema":"http://json-schema.org/draft-07/schema#","$defs":{"Loc":{"type":"object","properties":{"lat":{"type":"number"}}}}},"strict":true,"cache_control":{"type":"ephemeral"}},{"name":"ping","input_schema":{"type":"object","properties":{}}}],"tool_choice":{"type":"auto"},"messages":[{"role":"user","content":[{"type":"text","text":"What is the weather in Paris?"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"role":"assistant","content":[{"type":"thinking","thinking":"need weather","signature":"abc"},{"type":"text","text":"Checking."},{"type":"tool_use","id":"toolu_01","name":"get weather!","input":{"city":"Paris"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"sunny"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}}]},{"type":"text","text":"and Berlin?"}]},{"role":"system","content":"Remember to answer in French."},{"role":"user","content":"merci"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"ping","input":{}}]}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"reasoning...","thought":true},{"text":"","thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"text":"Answer: "},{"text":"42"},{"functionCall":{"name":"get_weather_","args":{"city":"Paris"}},"thoughtSignature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="},{"functionCall":{"name":"ping","args":{}}}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":20,"cachedContentTokenCount":5,"candidatesTokenCount":7,"thoughtsTokenCount":3,"totalTokenCount":30},"modelVersion":"gemini-2.5-pro","responseId":"resp-9"},
+    "tokenCount": 7,
+    "tokenCountUsage": {"totalTokens":7}
+  },
+  {
+    "name": "non-stream: plain text answer",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"Hi!"}]},"finishReason":"MAX_TOKENS","index":0}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1,"totalTokenCount":3},"modelVersion":"gemini-2.5-flash","responseId":"r"}
+  },
+  {
+    "name": "non-stream: response without usage drops the usage object",
+    "from": "claude",
+    "to": "gemini",
+    "model": "gemini-2.5-flash",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[]},"finishReason":"STOP"}],"responseId":"r"}
+  }
+]

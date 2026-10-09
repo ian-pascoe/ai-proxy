@@ -1,0 +1,111 @@
+[
+  {
+    "name": "request: multimodal user turn, tool round trip, reasoning, structured output, modalities, builtin tools",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["thinking-summary"],
+    "request": {"model":"gemini-2.5-pro","stream":false,"temperature":0.7,"top_p":0.95,"top_k":20,"max_completion_tokens":2048,"n":2,"reasoning_effort":"high","modalities":["text","image"],"image_config":{"aspect_ratio":"16:9","image_size":"2K"},"response_format":{"type":"json_schema","json_schema":{"name":"r","schema":{"type":"object","properties":{"a":{"type":"string"}}}}},"messages":[{"role":"system","content":"You are helpful."},{"role":"developer","content":[{"type":"text","text":"Use tools when needed."}]},{"role":"user","content":[{"type":"text","text":"Describe this and read the file"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"type":"file","file":{"filename":"a.pdf","file_data":"JVBERi0="}},{"type":"input_audio","input_audio":{"data":"AAAA","format":"mp3"}}]},{"role":"assistant","content":"Let me look.","reasoning_content":"thinking about it","tool_calls":[{"id":"call_1","type":"function","function":{"name":"get-weather","arguments":"{\"city\":\"Paris\"}"},"extra_content":{"google":{"thought_signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}}},{"id":"call_2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call_1","content":"sunny"},{"role":"tool","tool_call_id":"call_2","content":[{"type":"text","text":"found"}]},{"role":"system","content":"Mid conversation reminder"},{"role":"user","content":"thanks"},{"role":"assistant","content":"You're welcome."}],"tools":[{"type":"function","function":{"name":"get-weather","description":"Weather","strict":true,"parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"},"u":{"type":["string","null"]}},"required":["city"],"additionalProperties":false}}},{"type":"function","function":{"name":"lookup"}},{"google_search":{}},{"code_execution":{}},{"url_context":{}}],"tool_choice":"auto"}
+  },
+  {
+    "name": "request: sanitised name collision fails closed",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"a b","parameters":{"type":"object","properties":{}}}},{"type":"function","function":{"name":"a_b","parameters":{"type":"object","properties":{}}}}],"tool_choice":"required"}
+  },
+  {
+    "name": "request: allowed tools subset, required mode and parallel tool calls disabled",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["thinking-summary"],
+    "request": {"model":"m","reasoning_effort":"auto","response_format":{"type":"json_object"},"parallel_tool_calls":false,"max_tokens":10,"messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"f","parameters":{"type":"object"}}},{"type":"function","function":{"name":"g","parameters":{"type":"object"}}}],"tool_choice":{"type":"allowed_tools","allowed_tools":{"mode":"required","tools":[{"type":"function","function":{"name":"g"}}]}}}
+  },
+  {
+    "name": "request: function tool choice and passthrough generationConfig",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"f","parameters":{"type":"object"}}}],"tool_choice":{"type":"function","function":{"name":"f"}},"generationConfig":{"stopSequences":["x"]}}
+  },
+  {
+    "name": "request: undeclared function tool choice fails closed",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"f","parameters":{"type":"object"}}}],"tool_choice":{"type":"function","function":{"name":"missing"}}}
+  },
+  {
+    "name": "request: system-only conversation keeps the system message as a user turn",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"system","content":"only system"}]}
+  },
+  {
+    "name": "request: remote image url only is refused",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/a.png"}}]}]}
+  },
+  {
+    "name": "stream: reasoning, text, tool calls, image output and final usage",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "needs": ["id-normalization", "thinking-summary"],
+    "request": {"model":"gemini-2.5-pro","stream":false,"temperature":0.7,"top_p":0.95,"top_k":20,"max_completion_tokens":2048,"n":2,"reasoning_effort":"high","modalities":["text","image"],"image_config":{"aspect_ratio":"16:9","image_size":"2K"},"response_format":{"type":"json_schema","json_schema":{"name":"r","schema":{"type":"object","properties":{"a":{"type":"string"}}}}},"messages":[{"role":"system","content":"You are helpful."},{"role":"developer","content":[{"type":"text","text":"Use tools when needed."}]},{"role":"user","content":[{"type":"text","text":"Describe this and read the file"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"type":"file","file":{"filename":"a.pdf","file_data":"JVBERi0="}},{"type":"input_audio","input_audio":{"data":"AAAA","format":"mp3"}}]},{"role":"assistant","content":"Let me look.","reasoning_content":"thinking about it","tool_calls":[{"id":"call_1","type":"function","function":{"name":"get-weather","arguments":"{\"city\":\"Paris\"}"},"extra_content":{"google":{"thought_signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}}},{"id":"call_2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call_1","content":"sunny"},{"role":"tool","tool_call_id":"call_2","content":[{"type":"text","text":"found"}]},{"role":"system","content":"Mid conversation reminder"},{"role":"user","content":"thanks"},{"role":"assistant","content":"You're welcome."}],"tools":[{"type":"function","function":{"name":"get-weather","description":"Weather","strict":true,"parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"},"u":{"type":["string","null"]}},"required":["city"],"additionalProperties":false}}},{"type":"function","function":{"name":"lookup"}},{"google_search":{}},{"code_execution":{}},{"url_context":{}}],"tool_choice":"auto"},
+    "responseLines": [
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Thinking...\",\"thought\":true}]},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":9,\"totalTokenCount\":9},\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\",\"createTime\":\"2025-06-01T12:00:00.5Z\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thoughtSignature\":\"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM=\"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi \"},{\"text\":\"there\"}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Paris\"}}},{\"functionCall\":{\"name\":\"lookup\",\"args\":{}}}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"inlineData\":{\"mimeType\":\"image/jpeg\",\"data\":\"QUJD\"}}]},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\"}",
+      "{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":9,\"cachedContentTokenCount\":3,\"candidatesTokenCount\":6,\"thoughtsTokenCount\":4,\"totalTokenCount\":19},\"modelVersion\":\"gemini-2.5-pro\",\"responseId\":\"abc\"}",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: two candidates, max tokens, usage-only chunk and data prefix",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": true,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}],"n":2},
+    "responseLines": [
+      "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"A\"}]},\"index\":0},{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"B\"}]},\"index\":1}],\"responseId\":\"multi\"}",
+      "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"MAX_TOKENS\",\"index\":0},{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"STOP\",\"index\":1}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":2,\"totalTokenCount\":3},\"responseId\":\"multi\"}",
+      "{\"usageMetadata\":{\"promptTokenCount\":1,\"totalTokenCount\":1}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: reasoning, text, tool call, image and a second candidate",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "needs": ["id-normalization", "thinking-summary"],
+    "request": {"model":"gemini-2.5-pro","stream":false,"temperature":0.7,"top_p":0.95,"top_k":20,"max_completion_tokens":2048,"n":2,"reasoning_effort":"high","modalities":["text","image"],"image_config":{"aspect_ratio":"16:9","image_size":"2K"},"response_format":{"type":"json_schema","json_schema":{"name":"r","schema":{"type":"object","properties":{"a":{"type":"string"}}}}},"messages":[{"role":"system","content":"You are helpful."},{"role":"developer","content":[{"type":"text","text":"Use tools when needed."}]},{"role":"user","content":[{"type":"text","text":"Describe this and read the file"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="}},{"type":"file","file":{"filename":"a.pdf","file_data":"JVBERi0="}},{"type":"input_audio","input_audio":{"data":"AAAA","format":"mp3"}}]},{"role":"assistant","content":"Let me look.","reasoning_content":"thinking about it","tool_calls":[{"id":"call_1","type":"function","function":{"name":"get-weather","arguments":"{\"city\":\"Paris\"}"},"extra_content":{"google":{"thought_signature":"EhgKFgEMOdbHY2lwaGVyLXRleHQtYnl0ZXM="}}},{"id":"call_2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call_1","content":"sunny"},{"role":"tool","tool_call_id":"call_2","content":[{"type":"text","text":"found"}]},{"role":"system","content":"Mid conversation reminder"},{"role":"user","content":"thanks"},{"role":"assistant","content":"You're welcome."}],"tools":[{"type":"function","function":{"name":"get-weather","description":"Weather","strict":true,"parameters":{"type":"object","properties":{"city":{"type":"string","format":"city"},"u":{"type":["string","null"]}},"required":["city"],"additionalProperties":false}}},{"type":"function","function":{"name":"lookup"}},{"google_search":{}},{"code_execution":{}},{"url_context":{}}],"tool_choice":"auto"},
+    "responseBody": {"candidates":[{"content":{"role":"model","parts":[{"text":"I think","thought":true},{"text":"Answer "},{"text":"here"},{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}},{"inline_data":{"mime_type":"image/png","data":"QUJD"}}]},"finishReason":"STOP","index":0},{"content":{"role":"model","parts":[{"audioTranscription":{"text":"transcript"}}]},"finishReason":"MAX_TOKENS","index":1}],"usageMetadata":{"promptTokenCount":7,"cachedContentTokenCount":2,"candidatesTokenCount":5,"thoughtsTokenCount":2,"totalTokenCount":14},"modelVersion":"gemini-2.5-pro","responseId":"resp-x","createTime":"2025-06-01T12:00:00Z"}
+  },
+  {
+    "name": "non-stream: minimal response without candidates",
+    "from": "openai",
+    "to": "gemini",
+    "model": "gemini-2.5-pro",
+    "stream": false,
+    "request": {"model":"m","messages":[{"role":"user","content":"hi"}]},
+    "responseBody": {"usageMetadata":{"promptTokenCount":1,"totalTokenCount":1}}
+  }
+]
