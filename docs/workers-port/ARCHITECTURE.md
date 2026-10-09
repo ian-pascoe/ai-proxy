@@ -401,7 +401,6 @@ Deviations from Go (all deliberate, documented in code headers):
   ported; such tools behave like ordinary custom tools. Go's log-only invariant diagnostics are omitted.
 - `responses/compact` for Claude returns 501 until the compaction capsule slice lands.
 
-<<<<<<< HEAD
 ## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
 
 - **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
@@ -441,7 +440,7 @@ Deviations from Go (all deliberate, documented in code headers):
   (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
   `PrepareAntigravityInteractions` is not ported (no Antigravity provider yet); a Vertex Imagen request without a prompt
   answers 400; logging of signature decisions is dropped. Not ported: claude->interactions (not in the slice).
-=======
+
 ## OpenAI-compatible upstream for every client protocol (`src/translator/openai/`, `src/executor/openai-compat/`)
 
 Port of `internal/translator/openai/{claude,gemini,openai,interactions}` plus the image paths of
@@ -466,7 +465,6 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
   Go copies byte for byte (`gjson.Raw`) are re-serialised compactly.
 - **No equivalent needed**: the Go OpenAI-compatible executor has no refresh and no reasoning replay cache (§7 of the pipeline
   research lists none for it); 401s are ordinary upstream errors for the conductor's classification.
->>>>>>> b5077795 (feat(workers): OpenAI-compatible images, executor tests and docs for all client protocols (closes #14))
 
 ## Management API and control panel (`src/management/`)
 
