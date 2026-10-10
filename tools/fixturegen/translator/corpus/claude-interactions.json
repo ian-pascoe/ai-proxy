@@ -1,0 +1,1721 @@
+[
+  {
+    "name": "request: system, sampling, thinking budget, tools and stream",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": {
+      "model": "gemini-3.1-flash-lite",
+      "stream": true,
+      "max_tokens": 1024,
+      "temperature": 0.2,
+      "top_p": 0.9,
+      "stop_sequences": ["END", "STOP"],
+      "system": [
+        { "type": "text", "text": "You are terse." },
+        { "type": "text", "text": "x-anthropic-billing-header: cc_version=1" },
+        { "type": "text", "text": "Use metric units." }
+      ],
+      "thinking": { "type": "enabled", "budget_tokens": 2048 },
+      "tool_choice": { "type": "tool", "name": "get_weather" },
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Weather",
+          "input_schema": {
+            "type": "object",
+            "properties": { "location": { "type": "string" } },
+            "required": ["location"]
+          }
+        },
+        {
+          "name": "  ",
+          "description": "blank name is skipped",
+          "input_schema": { "type": "object" }
+        },
+        { "name": "ping", "input_schema": "not an object" },
+        {
+          "name": "web",
+          "description": null,
+          "type": "custom",
+          "input_schema": { "type": "object", "properties": {} },
+          "cache_control": { "type": "ephemeral" }
+        }
+      ],
+      "messages": [
+        { "role": "user", "content": [{ "type": "text", "text": "今天北京的天气怎么样？" }] }
+      ]
+    }
+  },
+  {
+    "name": "request: stream flag taken from the argument",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: body stream false wins over the argument",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "stream": false, "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: system as string and object with text",
+    "from": "claude",
+    "to": "interactions",
+    "model": "",
+    "stream": false,
+    "request": {
+      "model": "claude-x",
+      "system": "plain system",
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: system as object",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "system": { "type": "text", "text": "obj system" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: empty system array is dropped",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "system": [], "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: thinking disabled",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "disabled" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking enabled without budget",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "enabled" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking adaptive",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "adaptive" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking adaptive with effort",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "adaptive" },
+      "output_config": { "effort": " HIGH " },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking enabled with budget and effort",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "enabled", "budget_tokens": 512 },
+      "output_config": { "effort": "low" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking unknown type",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "thinking": { "type": "weird" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking effort only",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "output_config": { "effort": "medium" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: thinking effort not a string",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "output_config": { "effort": 3 },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice \"auto\"",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "tool_choice": "auto", "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: tool_choice \"any\"",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "tool_choice": "any", "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: tool_choice \"required\"",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "tool_choice": "required", "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: tool_choice \"none\"",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "tool_choice": "none", "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"auto\"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "auto" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"any\"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "any" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"required\"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "required" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"tool\"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "tool" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"none\"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "none" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice {\"type\":\"tool\",\"name\":\" pick \"}",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "tool_choice": { "type": "tool", "name": " pick " },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool_choice null",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "tool_choice": null, "messages": [{ "role": "user", "content": "hi" }] }
+  },
+  {
+    "name": "request: stop_sequences and max_tokens null are copied as-is",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "max_tokens": null,
+      "temperature": 0,
+      "stop_sequences": [],
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
+  },
+  {
+    "name": "request: tool use and result round trip",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "weather?" },
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "text", "text": "let me check" },
+            {
+              "type": "tool_use",
+              "id": "toolu_1",
+              "name": "get_weather",
+              "input": { "location": "北京" }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            { "type": "tool_result", "tool_use_id": "toolu_1", "content": "晴" },
+            { "type": "text", "text": "thanks" }
+          ]
+        },
+        { "role": "assistant", "content": "done" }
+      ]
+    }
+  },
+  {
+    "name": "request: tool_use input that is not an object, missing id, empty name",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "tool_use", "id": "toolu_a", "name": "a", "input": [1] },
+            { "type": "tool_use", "name": "b", "input": { "x": 1 } },
+            { "type": "tool_use", "id": "toolu_c", "name": "", "input": {} }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [{ "type": "tool_result", "tool_use_id": "toolu_a", "content": "r" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: out-of-order tool results are aligned with the tool uses",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "tool_use", "id": "toolu_1", "name": "lookup", "input": { "q": "x" } },
+            { "type": "tool_use", "id": "toolu_2", "name": "weather", "input": { "city": "bj" } }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            { "type": "tool_result", "tool_use_id": "toolu_2", "content": "sunny" },
+            { "type": "tool_result", "tool_use_id": "toolu_1", "content": "found" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool result errors, names and non-string content",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "tool_use", "id": "t1", "name": "run", "input": {} },
+            { "type": "tool_use", "id": "t2", "name": "calc", "input": {} },
+            { "type": "tool_use", "id": "t3", "name": "nul", "input": {} },
+            { "type": "tool_use", "id": "t4", "name": "emp", "input": {} }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "t1",
+              "content": "command failed",
+              "is_error": true
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "t2",
+              "content": { "value": 4 },
+              "name": "explicit"
+            },
+            { "type": "tool_result", "tool_use_id": "t3", "content": null },
+            { "type": "tool_result", "tool_use_id": "t4" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool result without matching tool use",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "tool_result", "tool_use_id": "orphan", "content": "x" },
+            { "type": "tool_result", "content": "no id" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool result array keeps images, business objects and unknown parts",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "tool_use", "id": "tool_image_1", "name": "screenshot", "input": {} }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "tool_image_1",
+              "content": [
+                { "type": "text", "text": "Captured desktop" },
+                { "type": "text", "text": "cached", "cache_control": { "type": "ephemeral" } },
+                { "text": "failed", "exit_code": 1, "retryable": true },
+                { "type": "text", "text": "failed with code", "exit_code": 2 },
+                {
+                  "type": "image",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                  }
+                },
+                {
+                  "type": "image",
+                  "source": { "type": "url", "url": "https://example.com/a.png" }
+                },
+                {
+                  "type": "document",
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjQK"
+                  }
+                },
+                { "type": "container_upload", "file_id": "file-1" },
+                { "type": "search_result", "title": "t" },
+                "bare string",
+                7
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: tool result with an empty array",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [{ "type": "tool_result", "tool_use_id": "t", "content": [] }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: system message between tool use and result becomes a reminder after the results",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": [{ "type": "text", "text": "Execute tools" }] },
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "tool_use", "id": "call_1", "name": "tool_one", "input": { "a": 1 } },
+            { "type": "tool_use", "id": "call_2", "name": "tool_two", "input": { "b": 2 } }
+          ]
+        },
+        { "role": "system", "content": "Context reminder between tool_use and tool_result" },
+        {
+          "role": "user",
+          "content": [
+            { "type": "tool_result", "tool_use_id": "call_2", "content": "result 2" },
+            { "type": "tool_result", "tool_use_id": "call_1", "content": "result 1" },
+            { "type": "text", "text": "Now summarize" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: system messages in several shapes",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "system", "content": "first" },
+        {
+          "role": "SYSTEM ",
+          "content": [
+            { "type": "text", "text": "second" },
+            { "type": "text", "text": "x-anthropic-billing-header: z" },
+            { "type": "image" }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [{ "type": "text", "text": "x-anthropic-billing-header: only attribution" }]
+        },
+        { "role": "system", "content": "   " },
+        { "role": "system", "content": 5 },
+        { "role": "user", "content": "hi" },
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
+        { "role": "system", "content": "pending" },
+        { "role": "system", "content": "pending two" },
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x2", "name": "n2", "input": {} }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: pending reminders flush before the next text of a user turn",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
+        { "role": "system", "content": "note" },
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "before" },
+            { "type": "tool_result", "tool_use_id": "x1", "content": "r" },
+            { "type": "text", "text": "after" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: pending reminders flush before the next string turn",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
+        { "role": "system", "content": "note" },
+        { "role": "user", "content": "plain" }
+      ]
+    }
+  },
+  {
+    "name": "request: assistant thinking blocks",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "q" },
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "thinking", "thinking": "hmm", "signature": "sig" },
+            { "type": "thinking", "thinking": "", "signature": "" },
+            { "type": "text", "text": "a" },
+            { "type": "thinking", "thinking": "again" },
+            { "type": "redacted_thinking", "data": "x" },
+            { "type": "text", "text": "" },
+            { "type": "text", "text": "b" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: only empty thinking is dropped",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [{ "type": "thinking", "thinking": "", "signature": "" }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: images and documents, base64 and alternative field spellings",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "look" },
+            {
+              "type": "image",
+              "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+              }
+            },
+            {
+              "type": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "JVBERi0xLjQK"
+              }
+            },
+            { "type": "container_upload", "mime_type": "text/plain", "data": "aGk=" },
+            {
+              "type": "image",
+              "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+              "source": { "media_type": "image/jpeg" }
+            },
+            {
+              "type": "IMAGE",
+              "source": { "type": "base64", "media_type": "image/webp", "data": "UklGRg==" }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: assistant media is dropped without refusal",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "hi" },
+        {
+          "role": "assistant",
+          "content": [
+            { "type": "image", "source": { "type": "url", "url": "https://x/y.png" } },
+            { "type": "text", "text": "ok" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: unknown roles and content shapes",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "tool", "content": "from tool" },
+        { "role": "developer", "content": [{ "type": "text", "text": "dev" }] },
+        { "role": "user", "content": null },
+        { "role": "user", "content": { "type": "text", "text": "obj" } },
+        { "role": "user", "content": 7 },
+        {
+          "role": "assistant",
+          "content": [{ "type": "text", "text": "z" }, 5, "str", null, { "type": "weird" }]
+        },
+        { "role": "user", "content": [] }
+      ]
+    }
+  },
+  {
+    "name": "request: messages that are not an array",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": "oops" }
+  },
+  {
+    "name": "request: no messages",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "model": "m" }
+  },
+  {
+    "name": "request: whitespace text only",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "  \n" },
+            { "type": "text", "text": "" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: text with HTML characters and unicode",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": [{ "type": "text", "text": "<b>&amp;   \"q\" \\ é 😀</b>" }] }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses history then attachment only",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "hello" },
+        { "role": "assistant", "content": [{ "type": "text", "text": "hi" }] },
+        { "role": "user", "content": [{ "type": "container_upload", "file_id": "file-1" }] }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses system prompt and system reminder",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "system": "sys",
+      "messages": [
+        { "role": "system", "content": "reminder" },
+        { "role": "user", "content": [{ "type": "container_upload", "file_id": "file-1" }] }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses emptied turn before a later text turn",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": [{ "type": "container_upload", "file_id": "file-1" }] },
+        { "role": "assistant", "content": [{ "type": "text", "text": "ok" }] },
+        { "role": "user", "content": "next" }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses document without bytes",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "hello" },
+        { "role": "assistant", "content": "hi" },
+        {
+          "role": "user",
+          "content": [{ "type": "document", "source": { "type": "file", "file_id": "file-1" } }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses whitespace text before image",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "  " },
+            { "type": "image", "source": { "type": "file", "file_id": "f1" } }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses whitespace text after image",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "image", "source": { "type": "file", "file_id": "f1" } },
+            { "type": "text", "text": " \n\t" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: refuses two emptied turns report the first",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [{ "type": "image", "source": { "type": "url", "url": "u" } }]
+        },
+        { "role": "assistant", "content": "x" },
+        {
+          "role": "user",
+          "content": [{ "type": "document", "source": { "type": "text", "data": "d" } }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: keeps a turn with text beside an unusable attachment",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "hello" },
+        { "role": "assistant", "content": "hi" },
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "keep me" },
+            { "type": "container_upload", "file_id": "file-1" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: real text beside whitespace and an unusable image",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            { "type": "text", "text": "  " },
+            { "type": "text", "text": "keep me" },
+            { "type": "image", "source": { "type": "file", "file_id": "f1" } }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: base64 document after history stays media",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "hello" },
+        { "role": "assistant", "content": "hi" },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "JVBERi0xLjQK"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "request: unusable media inside an assistant turn does not refuse",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": {
+      "messages": [
+        { "role": "user", "content": "q" },
+        {
+          "role": "assistant",
+          "content": [{ "type": "document", "source": { "type": "file", "file_id": "f" } }]
+        }
+      ]
+    }
+  },
+  {
+    "name": "stream: text with combined event/data frames, usage and DONE",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "event: interaction.created\ndata: {\"interaction\":{\"id\":\"interaction_1\",\"model\":\"gemini-3.1-flash-lite\"},\"event_type\":\"interaction.created\"}",
+      "event: step.start\ndata: {\"index\":0,\"step\":{\"type\":\"model_output\"},\"event_type\":\"step.start\"}",
+      "event: step.delta\ndata: {\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"北京今天晴\"},\"event_type\":\"step.delta\"}",
+      "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}",
+      "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"interaction_1\",\"model\":\"gemini-3.1-flash-lite\",\"usage\":{\"total_input_tokens\":3,\"total_output_tokens\":4}},\"event_type\":\"interaction.completed\"}",
+      "event: done\ndata: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: event and data lines arrive separately",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "event: interaction.created",
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"i9\",\"model\":\"m9\"}}",
+      "",
+      "event: step.start",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "",
+      "event: step.delta",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"hey\"}}",
+      "",
+      ": comment",
+      "not json",
+      "data: {broken",
+      "data: 12",
+      "data:",
+      "   ",
+      "data: {\"event_type\":\"step.stop\",\"index\":0}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"i9\"}}",
+      "data: [DONE]",
+      "[DONE]"
+    ]
+  },
+  {
+    "name": "stream: tool call with signature and arguments",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"interaction\":{\"id\":\"interaction_1\",\"model\":\"gemini-3.1-flash-lite\"},\"event_type\":\"interaction.created\"}",
+      "data: {\"index\":0,\"step\":{\"type\":\"function_call\",\"id\":\"toolu_1\",\"signature\":\"sig_1\",\"name\":\"get_weather\",\"arguments\":{}},\"event_type\":\"step.start\"}",
+      "data: {\"index\":0,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{\\\"location\\\":\\\"北京\\\"}\"},\"event_type\":\"step.delta\"}",
+      "data: {\"index\":0,\"event_type\":\"step.stop\"}",
+      "data: {\"interaction\":{\"usage\":{\"total_input_tokens\":1,\"total_output_tokens\":2}},\"event_type\":\"interaction.completed\"}"
+    ]
+  },
+  {
+    "name": "stream: arguments delta without step start, empty and object arguments",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"step\":{\"name\":\"late\"},\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{\\\"a\\\":\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"1}\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"arguments_delta\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":{\"obj\":true}}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":2}",
+      "data: {\"event_type\":\"step.start\",\"index\":3,\"step\":{\"type\":\"function_call\",\"call_id\":\"c3\",\"thoughtSignature\":\"ts\",\"name\":\"two\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":3,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{}\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":3}",
+      "data: {\"event_type\":\"step.start\",\"index\":4,\"step\":{\"type\":\"function_call\",\"name\":\"noid\",\"extra_content\":{\"google\":{\"thought_signature\":\"gs\"}}}}",
+      "data: {\"event_type\":\"finish\",\"metadata\":{\"total_usage\":{\"total_input_tokens\":2,\"total_output_tokens\":6,\"total_tokens\":8}}}"
+    ]
+  },
+  {
+    "name": "stream: thinking with summary, signature and text",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"t1\",\"model\":\"gemini-3-pro\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"thought\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"content\":{\"type\":\"text\",\"text\":\"think \"}}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"text\":\"more\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_signature\",\"signature\":\"SIG\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_signature\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":0}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"thought_signature\",\"signature\":\"ORPHAN\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":1,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"text\",\"text\":\"answer\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"text\",\"text\":\"\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"image\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":1}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"t1\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"t1\"}}",
+      "data: [DONE]",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: text delta without step start switches block types",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"thought_summary\",\"text\":\"t\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"text\":\"x\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":1,\"step\":{\"type\":\"function_call\",\"id\":\"f\",\"name\":\"n\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":1,\"delta\":{\"type\":\"arguments_delta\",\"arguments\":\"{}\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":2,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":2,\"delta\":{\"type\":\"text\",\"text\":\"after tool\"}}",
+      "data: {\"event_type\":\"interaction.completed\"}"
+    ]
+  },
+  {
+    "name": "stream: incomplete interaction ends with max_tokens",
+    "from": "claude",
+    "to": "interactions",
+    "model": "devin/swe-2",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"i1\",\"model\":\"devin/swe-2\"}}",
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"cut short\"}}",
+      "data: {\"event_type\":\"step.stop\",\"index\":0}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"i1\",\"status\":\"incomplete\",\"finish_reason\":\"length\"}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: finish reason max_tokens at the top level",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"finish\",\"finish_reason\":\"max_tokens\",\"usage\":{\"input_tokens\":5,\"output_tokens\":6}}"
+    ]
+  },
+  {
+    "name": "stream: usage cache hit",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"total_input_tokens\":10411,\"total_output_tokens\":76,\"total_cached_tokens\":10340,\"total_tokens\":10487}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage explicit uncached and cache writes",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"input_tokens\":71,\"total_input_tokens\":10436,\"total_output_tokens\":76,\"cache_read_input_tokens\":10340,\"cache_creation_input_tokens\":25}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage prompt tokens fallback",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"prompt_tokens\":100,\"output_tokens\":20,\"cached_tokens\":30}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage cached exceeds input",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"total_input_tokens\":50,\"total_output_tokens\":50,\"total_cached_tokens\":100}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage zero cache",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"total_input_tokens\":100,\"total_output_tokens\":50,\"total_cached_tokens\":0}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage output only",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{\"output_tokens\":9}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage empty usage object",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"id\":\"u\",\"model\":\"devin/swe-2\",\"status\":\"completed\",\"usage\":{}}}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: usage under metadata and top-level",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.completed\",\"interaction\":{\"metadata\":{\"usage\":{\"total_input_tokens\":4,\"total_output_tokens\":2}}}}"
+    ]
+  },
+  {
+    "name": "stream: failures: top level, nested and defaults",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"step.start\",\"index\":0,\"step\":{\"type\":\"model_output\"}}",
+      "data: {\"event_type\":\"response.failed\",\"error\":{\"message\":\"devin upstream error (permission_denied): MCP\",\"code\":\"403\"}}",
+      "data: {\"event_type\":\"interaction.failed\",\"interaction\":{\"error\":{\"message\":\"service unavailable\",\"type\":\"server_error\"}}}",
+      "data: {\"event_type\":\"response.failed\"}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "stream: done event type and unknown events",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.status_update\",\"status\":\"in_progress\"}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"x\"}}",
+      "data: {\"event_type\":\"done\"}",
+      "data: {\"event_type\":\"step.delta\",\"index\":0,\"delta\":{\"type\":\"text\",\"text\":\"late\"}}",
+      "data: {\"event_type\":\"interaction.completed\"}"
+    ]
+  },
+  {
+    "name": "stream: created event without model uses the request model",
+    "from": "claude",
+    "to": "interactions",
+    "model": "requested-model",
+    "stream": true,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseLines": [
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{}}",
+      "data: {\"event_type\":\"interaction.created\",\"interaction\":{\"id\":\"ignored\",\"model\":\"ignored\"}}",
+      "data: {\"event_type\":\"interaction.completed\"}"
+    ]
+  },
+  {
+    "name": "non-stream: text and tool call",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "interaction_1",
+      "model": "gemini-3.1-flash-lite",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "ok" }] },
+        {
+          "type": "function_call",
+          "call_id": "toolu_1",
+          "signature": "sig_1",
+          "name": "lookup",
+          "arguments": { "q": "x" }
+        }
+      ],
+      "usage": { "total_input_tokens": 3, "total_output_tokens": 4 }
+    }
+  },
+  {
+    "name": "non-stream: thought with signature and several texts",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "i2",
+      "status": "completed",
+      "steps": [
+        {
+          "type": "thought",
+          "signature": "S",
+          "content": [
+            { "type": "text", "text": "a" },
+            { "type": "text", "text": "b" },
+            { "type": "text", "text": "" }
+          ]
+        },
+        { "type": "thought", "thought_signature": "T", "content": "plain thought" },
+        {
+          "type": "model_output",
+          "content": [
+            { "type": "text", "text": "final" },
+            { "content": { "text": "nested" } },
+            { "type": "image" }
+          ]
+        },
+        { "type": "model_output", "content": "string content" },
+        { "type": "model_output", "content": { "text": "obj" } },
+        { "type": "model_output" }
+      ],
+      "usage": { "input_tokens": 1, "output_tokens": 2 }
+    }
+  },
+  {
+    "name": "non-stream: function call fallbacks: args, ids and non-object arguments",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "i3",
+      "steps": [
+        { "type": "function_call", "id": "a", "name": "one", "args": { "x": 1 } },
+        { "type": "function_call", "tool_use_id": "b", "name": "two", "arguments": [1] },
+        { "type": "function_call", "name": "three", "thoughtSignature": "ts" },
+        {
+          "type": "function_call",
+          "name": "four",
+          "extra_content": { "google": { "thought_signature": "gs" } },
+          "arguments": "{}"
+        }
+      ]
+    }
+  },
+  {
+    "name": "non-stream: nested interaction object",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "interaction": {
+        "id": "n1",
+        "model": "nested-model",
+        "status": "completed",
+        "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "nested" }] }],
+        "usage": { "total_input_tokens": 9, "total_output_tokens": 1 }
+      }
+    }
+  },
+  {
+    "name": "non-stream: steps only at the root next to a nested interaction",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "interaction": { "id": "n2" },
+      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "root steps" }] }],
+      "usage": { "total_input_tokens": 2, "total_output_tokens": 3 }
+    }
+  },
+  {
+    "name": "non-stream: incomplete status and finish reasons",
+    "from": "claude",
+    "to": "interactions",
+    "model": "devin/swe-2",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "i4",
+      "model": "devin/swe-2",
+      "status": "incomplete",
+      "finish_reason": "length",
+      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "cut short" }] }],
+      "usage": { "total_input_tokens": 3, "total_output_tokens": 4 }
+    }
+  },
+  {
+    "name": "non-stream: max_tokens finish reason beats tool use",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "i5",
+      "finish_reason": "max_tokens",
+      "steps": [{ "type": "function_call", "call_id": "c", "name": "n", "arguments": {} }]
+    }
+  },
+  {
+    "name": "non-stream: no id, no model and no steps",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {}
+  },
+  {
+    "name": "non-stream: blank id falls back to the nested id and root id",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": { "id": "root-id", "interaction": { "id": "  " } }
+  },
+  {
+    "name": "non-stream: steps as an object",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "o1",
+      "steps": {
+        "a": { "type": "model_output", "content": [{ "type": "text", "text": "from object" }] }
+      }
+    }
+  },
+  {
+    "name": "non-stream: invalid JSON body",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": "not json at all"
+  },
+  {
+    "name": "non-stream: empty body",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": ""
+  },
+  {
+    "name": "non-stream: usage cache hit",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "total_input_tokens": 96724,
+        "total_output_tokens": 269,
+        "total_cached_tokens": 30784,
+        "total_tokens": 96993
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage zero cache",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "total_input_tokens": 100, "total_output_tokens": 50, "total_cached_tokens": 0 }
+    }
+  },
+  {
+    "name": "non-stream: usage explicit uncached and cache creation",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "input_tokens": 71,
+        "total_input_tokens": 10411,
+        "total_output_tokens": 76,
+        "cache_read_input_tokens": 10340,
+        "cache_creation_input_tokens": 25
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage explicit uncached with cache write in the total",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "input_tokens": 71,
+        "total_input_tokens": 10436,
+        "total_output_tokens": 76,
+        "cache_read_input_tokens": 10340,
+        "cache_creation_input_tokens": 25
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage full cache hit",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "total_input_tokens": 500, "total_output_tokens": 50, "total_cached_tokens": 500 }
+    }
+  },
+  {
+    "name": "non-stream: usage cached exceeds input",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "total_input_tokens": 50, "total_output_tokens": 50, "total_cached_tokens": 100 }
+    }
+  },
+  {
+    "name": "non-stream: usage explicit uncached without total",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "input_tokens": 71, "output_tokens": 76, "cache_read_input_tokens": 10340 }
+    }
+  },
+  {
+    "name": "non-stream: usage explicit uncached zero with total",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "total_input_tokens": 500,
+        "output_tokens": 30,
+        "cache_read_input_tokens": 500
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage inclusive total without input tokens",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "total_input_tokens": 10436,
+        "output_tokens": 76,
+        "cache_read_input_tokens": 10340,
+        "cache_creation_input_tokens": 25
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage prompt tokens fallback",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "prompt_tokens": 100, "output_tokens": 20, "cached_tokens": 30 }
+    }
+  },
+  {
+    "name": "non-stream: usage cache aliases",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "total_input_tokens": 40,
+        "total_output_tokens": 5,
+        "cache_read_tokens": 10,
+        "cache_write_tokens": 5
+      }
+    }
+  },
+  {
+    "name": "non-stream: usage negative and string counts",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "u",
+      "model": "devin/swe-2",
+      "status": "completed",
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": { "total_input_tokens": "12", "output_tokens": "3", "cache_read_input_tokens": -4 }
+    }
+  },
+  {
+    "name": "non-stream: usage metadata total usage",
+    "from": "claude",
+    "to": "interactions",
+    "model": "gemini-3.1-flash-lite",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "hi" }] },
+    "responseBody": {
+      "id": "m1",
+      "metadata": { "total_usage": { "total_input_tokens": 2, "total_output_tokens": 6 } }
+    }
+  }
+]

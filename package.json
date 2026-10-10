@@ -1,0 +1,54 @@
+{
+  "name": "cliproxy",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CLIProxyAPI TypeScript/Effect port for Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "catalog:sync": "tools/sync-reference-repos.sh && go run ./tools/fixturegen/registry",
+    "deploy": "alchemy deploy",
+    "destroy": "alchemy destroy",
+    "dev": "alchemy dev",
+    "format": "oxfmt",
+    "lint": "oxlint && oxfmt --check",
+    "logs": "alchemy logs",
+    "panel:sync": "node --experimental-strip-types tools/panel-sync/cli.ts",
+    "plan": "alchemy plan",
+    "prepare": "effect-tsgo patch --no-typescript --oxlint && ([ -n \"$CI\" ] || tools/sync-reference-repos.sh)",
+    "repos:sync": "tools/sync-reference-repos.sh",
+    "smoke": "sh tools/dev-smoke.sh",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "effect": "4.0.2",
+    "fzstd": "^0.1.1",
+    "jose": "^6.2.12",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.0",
+    "@distilled.cloud/cloudflare": "1.0.0-rc.13",
+    "@effect/platform-node": "4.0.2",
+    "@effect/tsgo": "0.51.1",
+    "@effect/vitest": "4.0.2",
+    "@oxlint/plugins": "1.87.0",
+    "@types/node": "^22.20.5",
+    "alchemy": "2.0.0-beta.81",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.10.1",
+      "onFail": "warn"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

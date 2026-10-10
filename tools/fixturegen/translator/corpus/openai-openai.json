@@ -1,0 +1,106 @@
+[
+  {
+    "name": "request: model rewritten to the upstream name, other fields untouched",
+    "from": "openai",
+    "to": "openai",
+    "model": "upstream-model",
+    "stream": false,
+    "request": {
+      "model": "team/client-model",
+      "messages": [
+        { "role": "system", "content": "be brief" },
+        { "role": "user", "content": [{ "type": "text", "text": "hi <b>&</b>" }] }
+      ],
+      "temperature": 0.25,
+      "max_tokens": 64,
+      "tools": [
+        { "type": "function", "function": { "name": "f", "parameters": { "type": "object" } } }
+      ],
+      "metadata": { "z": 1, "a": 2 }
+    },
+    "responseBody": {
+      "id": "chatcmpl-1",
+      "object": "chat.completion",
+      "model": "upstream-model",
+      "choices": [
+        { "index": 0, "message": { "role": "assistant", "content": "ok" }, "finish_reason": "stop" }
+      ],
+      "usage": { "prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4 }
+    }
+  },
+  {
+    "name": "request: matching model is kept as-is",
+    "from": "openai",
+    "to": "openai",
+    "model": "upstream-model",
+    "stream": true,
+    "request": { "stream": true, "model": "upstream-model", "messages": [], "n": 1 }
+  },
+  {
+    "name": "request: missing and non-string models are set",
+    "from": "openai",
+    "to": "openai",
+    "model": "m",
+    "stream": false,
+    "request": { "messages": [{ "role": "user", "content": "x" }] }
+  },
+  {
+    "name": "request: numeric model replaced",
+    "from": "openai",
+    "to": "openai",
+    "model": "m",
+    "stream": false,
+    "request": { "model": 5, "messages": [] }
+  },
+  {
+    "name": "stream: data prefix stripped, [DONE] swallowed and later chunks dropped",
+    "from": "openai",
+    "to": "openai",
+    "model": "upstream-model",
+    "stream": true,
+    "request": { "model": "upstream-model", "messages": [], "stream": true },
+    "responseLines": [
+      "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"He\"},\"finish_reason\":null}]}",
+      "data:{\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"llo\"},\"finish_reason\":null}]}",
+      "{\"id\":\"c1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+      "data:    {\"id\":\"c1\",\"choices\":[],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}   ",
+      "data: [DONE]",
+      "data: {\"id\":\"c1\",\"choices\":[],\"cost\":\"0\"}",
+      "data: [DONE]"
+    ]
+  },
+  {
+    "name": "non-stream: non-JSON body passes through",
+    "from": "openai",
+    "to": "openai",
+    "model": "m",
+    "stream": false,
+    "request": { "model": "m", "messages": [] },
+    "responseBody": "plain text body"
+  },
+  {
+    "name": "token count: no transform registered returns the provider usage JSON",
+    "from": "openai",
+    "to": "openai",
+    "model": "m",
+    "stream": false,
+    "request": { "model": "m", "messages": [] },
+    "tokenCount": 42,
+    "tokenCountUsage": {
+      "usage": { "prompt_tokens": 42, "completion_tokens": 0, "total_tokens": 42 }
+    }
+  },
+  {
+    "name": "request: explicit reasoning visibility controls are preserved",
+    "from": "openai",
+    "to": "openai",
+    "model": "m",
+    "stream": false,
+    "request": {
+      "model": "m",
+      "messages": [],
+      "reasoning_effort": "high",
+      "include_reasoning": false
+    }
+  }
+]
