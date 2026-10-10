@@ -146,7 +146,7 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
   return (
     <>
       <div className={styles["toolbar"]}>
-        <div className={styles["filters"]} role="radiogroup" aria-label="Show">
+        <div className={kit["tabs"]} role="radiogroup" aria-label="Show">
           {FILTERS.map((candidate) => {
             const count = accounts.filter(candidate.keep).length;
 
@@ -156,11 +156,11 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
                 type="button"
                 role="radio"
                 aria-checked={filter === candidate.id}
-                className={styles["filter"]}
+                className={kit["tab"]}
                 onClick={() => setFilter(candidate.id)}
               >
                 {candidate.label}
-                <span className={styles["filterCount"]}>{formatCount(count)}</span>
+                <span className={kit["tabCount"]}>{formatCount(count)}</span>
               </button>
             );
           })}

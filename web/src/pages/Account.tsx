@@ -254,7 +254,18 @@ const History = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
   const result = useAtomValue(accountSeriesAtom(entry.id));
 
   return (
-    <Section title="History">
+    <Section
+      title="History"
+      aside={
+        <Link
+          to="/usage"
+          search={{ account: entry.id, range: "week" }}
+          className={kit["sectionLink"]}
+        >
+          Requests and usage
+        </Link>
+      }
+    >
       {AsyncResult.match(result, {
         onInitial: () => <p className={kit["muted"]}>Loading usage…</p>,
         onFailure: (failure) => <Problem>Could not load usage. {failureMessage(failure)}</Problem>,

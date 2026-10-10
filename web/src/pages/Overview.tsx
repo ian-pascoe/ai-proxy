@@ -301,7 +301,14 @@ const LastDay = () => {
   const retry = useAtomRefresh(usageLastDayAtom);
 
   return (
-    <Section title="Last 24 hours">
+    <Section
+      title="Last 24 hours"
+      aside={
+        <Link to="/usage" className={kit["sectionLink"]}>
+          All usage
+        </Link>
+      }
+    >
       <div aria-busy={result.waiting}>
         {AsyncResult.match(result, {
           onInitial: () => <p className={kit["muted"]}>Loading usage…</p>,

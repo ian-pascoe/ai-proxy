@@ -5,6 +5,15 @@ import { FetchHttpClient } from "effect/http";
 import { Atom, AtomHttpApi } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
+import {
+  type Breakdown,
+  filterQuery,
+  mergePoints,
+  type RangeId,
+  rangeOf,
+  rangeStart,
+  type UsageFilters,
+} from "../lib/usage.ts";
 
 export class ManagementClient extends AtomHttpApi.Service<ManagementClient>()(
   "cliproxy/ManagementClient",
@@ -29,10 +38,17 @@ export const credentialsAtom = ManagementClient.query("credentials", "list", {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Bumped by the shell's Refresh button: the usage atoms read it, so they refetch (keeping their figures while they
+ * load) and recompute their time range.
+ */
+export const usageEpochAtom = Atom.make(0).pipe(Atom.keepAlive);
+
 /** Usage of the last 24 hours by model; the window is recomputed on every refresh. */
 export const usageLastDayAtom = ManagementClient.runtime
-  .atom(
+  .atom((get) =>
     Effect.gen(function* () {
+      get(usageEpochAtom);
       const client = yield* ManagementClient;
       const now = yield* Clock.currentTimeMillis;
 
@@ -40,6 +56,93 @@ export const usageLastDayAtom = ManagementClient.runtime
     }),
   )
   .pipe(Atom.setIdleTTL(KEEP));
+
+/** What the Usage page shows: a range and filters (atom family keys compare structurally). */
+export interface UsageView {
+  readonly range: RangeId;
+  readonly filters: UsageFilters;
+}
+
+/** Totals and one breakdown over a range. */
+export const usageSummaryAtom = Atom.family(
+  (key: { readonly view: UsageView; readonly by: Breakdown["id"] }) =>
+    ManagementClient.runtime
+      .atom((get) =>
+        Effect.gen(function* () {
+          get(usageEpochAtom);
+          const client = yield* ManagementClient;
+          const now = yield* Clock.currentTimeMillis;
+
+          return yield* client.usage.summary({
+            query: {
+              group_by: key.by,
+              since: rangeStart(rangeOf(key.view.range), now),
+              ...filterQuery(key.view.filters),
+            },
+          });
+        }),
+      )
+      .pipe(Atom.setIdleTTL(KEEP)),
+);
+
+/** Hourly points over a range, every series summed, with the time they were read at (the chart's "now"). */
+export const usageSeriesAtom = Atom.family((view: UsageView) =>
+  ManagementClient.runtime
+    .atom((get) =>
+      Effect.gen(function* () {
+        get(usageEpochAtom);
+        const client = yield* ManagementClient;
+        const now = yield* Clock.currentTimeMillis;
+        const { model, provider, auth_id } = filterQuery(view.filters);
+
+        // The series has no principal filter: the page shows no chart while a user filter is set.
+        const series = yield* client.usage.series({
+          query: {
+            since: rangeStart(rangeOf(view.range), now),
+            bucket: "hour",
+            group_by: "provider",
+            ...(model === undefined ? {} : { model }),
+            ...(provider === undefined ? {} : { provider }),
+            ...(auth_id === undefined ? {} : { auth_id }),
+          },
+        });
+
+        return { now, points: mergePoints(series.series) };
+      }),
+    )
+    .pipe(Atom.setIdleTTL(KEEP)),
+);
+
+/** Records per page of the request log. */
+export const LOG_PAGE_SIZE = 50;
+
+/** One page of the request log, newest first; `before` is the previous page's `next_before`. */
+export const usageRecordsAtom = Atom.family(
+  (key: {
+    readonly view: UsageView;
+    readonly failedOnly: boolean;
+    readonly before: string | undefined;
+  }) =>
+    ManagementClient.runtime
+      .atom((get) =>
+        Effect.gen(function* () {
+          get(usageEpochAtom);
+          const client = yield* ManagementClient;
+          const now = yield* Clock.currentTimeMillis;
+
+          return yield* client.usage.records({
+            query: {
+              since: rangeStart(rangeOf(key.view.range), now),
+              limit: LOG_PAGE_SIZE,
+              ...filterQuery(key.view.filters),
+              ...(key.failedOnly ? { failed: "true" as const } : {}),
+              ...(key.before === undefined ? {} : { before: key.before }),
+            },
+          });
+        }),
+      )
+      .pipe(Atom.setIdleTTL(KEEP)),
+);
 
 /** One account's hourly usage over the history span (credential id), for its window history. */
 export const accountSeriesAtom = Atom.family((authId: string) =>

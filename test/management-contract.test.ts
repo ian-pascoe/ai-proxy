@@ -141,6 +141,102 @@ describe("management contract", () => {
     }).pipe(through(harness)),
   );
 
+  describe("usage records", () => {
+    const seedRecords = Effect.promise(async () => {
+      const db = await resetUsageDb();
+      const base = 1_700_000_000_000;
+      await insertUsageRecord(db, sampleRecord({ requestId: "r1", requestedAt: base }));
+      await insertUsageRecord(
+        db,
+        sampleRecord({
+          requestId: "r2",
+          requestedAt: base + 1000,
+          authId: "codex-b.json",
+          failed: true,
+          fail: { statusCode: 429, body: "rate limited" },
+        }),
+      );
+      await insertUsageRecord(db, sampleRecord({ requestId: "r3", requestedAt: base + 2000 }));
+    });
+
+    it.effect("decodes records newest first", () =>
+      Effect.gen(function* () {
+        yield* seedRecords;
+        const api = yield* client;
+        const page = yield* api.usage.records({ query: {} });
+
+        assert.deepStrictEqual(
+          page.records.map((record) => record.request_id),
+          ["r3", "r2", "r1"],
+        );
+        assert.strictEqual(page.next_before, undefined);
+
+        const first = page.records[2];
+        assert.strictEqual(first?.api_key, "user:dev@example.com");
+        assert.strictEqual(first?.failed, false);
+        assert.deepStrictEqual(first?.fail, { status_code: 200, body: "" });
+        assert.strictEqual(first?.token_breakdown.output.reasoning_tokens, 12);
+        assert.strictEqual(first?.trace_id, "trace-1");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("filters failed records with their status and body", () =>
+      Effect.gen(function* () {
+        yield* seedRecords;
+        const api = yield* client;
+        const page = yield* api.usage.records({ query: { failed: "true" } });
+
+        assert.strictEqual(page.records.length, 1);
+        assert.strictEqual(page.records[0]?.request_id, "r2");
+        assert.strictEqual(page.records[0]?.failed, true);
+        assert.deepStrictEqual(page.records[0]?.fail, { status_code: 429, body: "rate limited" });
+
+        const ok = yield* api.usage.records({ query: { failed: "false" } });
+        assert.deepStrictEqual(
+          ok.records.map((record) => record.request_id),
+          ["r3", "r1"],
+        );
+      }).pipe(through(harness)),
+    );
+
+    it.effect("pages with limit and next_before", () =>
+      Effect.gen(function* () {
+        yield* seedRecords;
+        const api = yield* client;
+        const first = yield* api.usage.records({ query: { limit: 2 } });
+
+        assert.deepStrictEqual(
+          first.records.map((record) => record.request_id),
+          ["r3", "r2"],
+        );
+        assert.isDefined(first.next_before);
+
+        const second = yield* api.usage.records({
+          query: { limit: 2, before: first.next_before ?? "" },
+        });
+
+        assert.deepStrictEqual(
+          second.records.map((record) => record.request_id),
+          ["r1"],
+        );
+        assert.strictEqual(second.next_before, undefined);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("filters by auth_id", () =>
+      Effect.gen(function* () {
+        yield* seedRecords;
+        const api = yield* client;
+        const page = yield* api.usage.records({ query: { auth_id: "codex-a.json" } });
+
+        assert.deepStrictEqual(
+          page.records.map((record) => record.request_id),
+          ["r3", "r1"],
+        );
+      }).pipe(through(harness)),
+    );
+  });
+
   it("lists the same group keys as the D1 summary", () => {
     assert.deepStrictEqual([...UsageGroupBy.literals], [...GROUP_BY]);
   });

@@ -240,8 +240,16 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Filter Tabs
 
-- A radiogroup above a list: 0.875rem labels (700) with the count in stone-4 (400), 40px tall, a 4px underline that is
-  stone-2 on hover and ink when chosen. Same underline language as the shell links.
+- A radiogroup above a list: 0.875rem labels (650) with an optional count in stone-4 (400), 40px tall, a 4px underline
+  that is stone-2 on hover and ink when chosen. Same underline language as the shell links. Shared from `Kit` (`tabs`,
+  `tab`, `tabCount`): the Accounts filter, the Usage range, breakdown and All / Failed switches.
+
+### Filter Chips
+
+- What a page is narrowed to, after a stone-4 "Narrowed to" caption: ink blocks (3px radius, 2.25rem tall) with the
+  filter's name in stone-3 (400) and its value in white (650), ending in an ×, stone-4 on hover; choosing one removes
+  that filter. The only
+  inverted element besides the shell bar's ink text, so a narrowed page is never mistaken for the whole.
 
 ### History Chart
 
@@ -277,6 +285,15 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 ### Tables
 
 - 0.875rem text, 1rem cell padding, a 2px ink rule under headings, stone-2 hairlines between rows, numbers right-aligned. A failed count above zero is red.
+
+### Request Log
+
+- A table of requests, newest first: the time (a chevron button, 600, tabular figures) opens the request in place as a
+  stone-1 block of labelled facts (caption labels, 600 values), then the provider's failure body under a hairline,
+  captioned with the trail mark and its status.
+  Secondary figures (in/out tokens, the user) sit under the main one in stone-4 captions. A failed result is red with
+  the trail mark and the HTTP status. Older pages append below behind a secondary "Show older requests" button. On
+  narrow screens each request becomes three lines: time and result, model and tokens, account and latency.
 
 ### Links
 
