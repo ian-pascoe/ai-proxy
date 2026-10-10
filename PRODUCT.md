@@ -47,8 +47,8 @@ compatibility is not a goal.
 
 - Management API under `/v8/management` (config document with versioned writes, credentials, OAuth sessions, usage
   summaries and records, upstream probe). It may change freely to serve the panel; breaking changes are acceptable.
-- Tokens, API keys and credential secrets never reach the browser except where the operator explicitly downloads a
-  credential file.
+- Tokens, API keys and credential secrets never reach the browser. The panel offers no credential download, and
+  provider usage endpoints are asked by the server (the quota check), not from the browser.
 - Not available on Workers and must not appear: plugins, file logs, management key, server host/port/TLS, outbound proxy
   URLs, the deprecated `/v0/management`.
 - Terminology: an **account** is an OAuth/auth-file credential; an **API key** belongs to a provider key group or an

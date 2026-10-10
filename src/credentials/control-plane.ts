@@ -11,7 +11,7 @@ import type { Config } from "../config/schema.ts";
 import type { JsonObject } from "../json/index.ts";
 import { isTokenPayloadKey } from "./merge.ts";
 import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts";
-import type { Credential } from "./model.ts";
+import { type Credential, executorKey } from "./model.ts";
 import {
   RefreshManager,
   type RefreshOptions,
@@ -52,6 +52,10 @@ import {
   type StatusResult,
 } from "../oauth/service.ts";
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
+import type { QuotaReport } from "../management/contract/credentials.ts";
+import { isQuotaProvider, mergeQuotaReport, type QuotaOutcome } from "../quota/report.ts";
+import { QuotaReportStore } from "../quota/store.ts";
+import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -93,11 +97,13 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #pool: CredentialPool;
   readonly #refresh: RefreshManager;
   readonly #oauth: OAuthService;
+  readonly #quota: QuotaReportStore;
   #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#config = new ConfigStore(ctx.storage.sql);
+    this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
       config: () => this.#currentConfig(),
@@ -125,7 +131,7 @@ export class ControlPlane extends DurableObject<Env> {
             metadata: credential.metadata,
           })),
         save: async (name, metadata) => {
-          const result = this.#pool.upsert(name, metadata, { mergeExisting: false });
+          const result = this.#upsert(name, metadata, false);
 
           if (!result.ok) return { ok: false, message: result.message };
           await this.#rearm();
@@ -210,9 +216,7 @@ export class ControlPlane extends DurableObject<Env> {
     content: string | JsonObject,
     options?: { mergeExisting?: boolean },
   ): Promise<UpsertResult> {
-    const result = this.#pool.upsert(name, content, {
-      mergeExisting: options?.mergeExisting ?? true,
-    });
+    const result = this.#upsert(name, content, options?.mergeExisting ?? true);
 
     if (result.ok) await this.#rearm();
 
@@ -228,9 +232,7 @@ export class ControlPlane extends DurableObject<Env> {
     content: string | JsonObject,
     options: { readonly mergeExisting?: boolean } = {},
   ): Promise<UpsertResult> {
-    const result = this.#pool.upsert(name, content, {
-      mergeExisting: options.mergeExisting === true,
-    });
+    const result = this.#upsert(name, content, options.mergeExisting === true);
 
     if (result.ok) await this.#rearm();
 
@@ -243,6 +245,7 @@ export class ControlPlane extends DurableObject<Env> {
 
     if (removed) {
       this.#refresh.forget(id);
+      this.#quota.delete(id);
       await this.#rearm();
     }
 
@@ -352,11 +355,14 @@ export class ControlPlane extends DurableObject<Env> {
   /** Panel entries of all stored auth files (no secrets). Config API keys are not listed. */
   listCredentialEntries(): WireJsonObject[] {
     const now = Date.now();
+    const reports = this.#quota.all();
 
     return this.#pool
       .entries()
       .filter(({ credential }) => credential.source === "file")
-      .map(({ credential, state }) => buildCredentialEntry(credential, state, now));
+      .map(({ credential, state }) =>
+        buildCredentialEntry(credential, state, now, reports.get(credential.id)),
+      );
   }
 
   /** The stored auth file verbatim, for download. */
@@ -430,7 +436,12 @@ export class ControlPlane extends DurableObject<Env> {
     return {
       ok: true,
       refreshed: result.ok && result.refreshed,
-      entry: buildCredentialEntry(current.credential, current.state, Date.now()),
+      entry: buildCredentialEntry(
+        current.credential,
+        current.state,
+        Date.now(),
+        this.#quota.get(id),
+      ),
     };
   }
 
@@ -477,6 +488,61 @@ export class ControlPlane extends DurableObject<Env> {
     return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token };
   }
 
+  // --- quota check (src/quota) ----------------------------------------------------------------------------------
+
+  /**
+   * What the Worker needs to probe the usage endpoint of an auth file (`POST /credentials/quota`, cron `quota-check`):
+   * the provider and the token of the credential refreshed when needed. Carries token material: the Worker uses it for
+   * the upstream call only.
+   */
+  async quotaProbeTarget(ref: CredentialRef): Promise<QuotaTargetResult> {
+    const target = findCredential(this.#pool.entries(), ref);
+
+    if (target === undefined || target.credential.source !== "file")
+      return { ok: false, error: "not_found" };
+    const provider = executorKey(target.credential);
+
+    if (!isQuotaProvider(provider)) return { ok: false, error: "unsupported", provider };
+    const id = target.credential.id;
+    const fresh = await this.#refresh.ensureFresh(id);
+
+    if (!fresh.ok) return { ok: false, error: "unavailable", id, message: "token refresh failed" };
+
+    return buildQuotaTarget(fresh.credential, provider);
+  }
+
+  /** Stores the result of one quota check made at `checkedAtMs`; `undefined` when the credential is gone. */
+  recordQuotaReport(
+    id: string,
+    outcome: QuotaOutcome,
+    checkedAtMs: number,
+  ): QuotaReport | undefined {
+    if (this.#pool.entry(id) === undefined) return undefined;
+
+    const report = mergeQuotaReport(
+      this.#quota.get(id),
+      outcome,
+      new Date(checkedAtMs).toISOString(),
+    );
+
+    this.#quota.put(id, report);
+
+    return report;
+  }
+
+  /** Ids of the enabled auth files whose provider has a usage endpoint (cron `quota-check`). */
+  quotaCheckTargets(): string[] {
+    return this.#pool
+      .entries()
+      .filter(
+        ({ credential }) =>
+          credential.source === "file" &&
+          !credential.disabled &&
+          isQuotaProvider(executorKey(credential)),
+      )
+      .map(({ credential }) => credential.id);
+  }
+
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------
 
   /** Starts a provider login (`GET /oauth/auth-url`): returns the URL to open and the session `state`. */
@@ -501,6 +567,18 @@ export class ControlPlane extends DurableObject<Env> {
 
   #runOAuth<A>(effect: Effect.Effect<A, never, HttpClient.HttpClient>): Promise<A> {
     return Effect.runPromise(effect.pipe(Effect.provide(FetchHttpClient.layer)));
+  }
+
+  /**
+   * Stores an auth file. Replacing the token material of an existing credential (a re-login, possibly into another
+   * account) drops its quota report, which described the previous tokens.
+   */
+  #upsert(name: string, content: string | JsonObject, mergeExisting: boolean): UpsertResult {
+    const result = this.#pool.upsert(name, content, { mergeExisting });
+
+    if (result.ok && result.credentialsChanged && !result.created) this.#quota.delete(result.id);
+
+    return result;
   }
 
   /** Credential changes move refresh deadlines; a failure to re-arm must never fail the management call. */

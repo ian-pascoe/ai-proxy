@@ -4,7 +4,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
-import { afterAll, beforeEach } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { ManagementApi } from "../src/management/contract/api.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";
 import { UsageGroupBy } from "../src/management/contract/usage.ts";
@@ -20,9 +20,33 @@ import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const harness = makeHarness();
 
+// The ControlPlane Durable Object reaches providers through `globalThis.fetch` (resolved once by FetchHttpClient): one
+// stable stub delegates to the current test's upstream table. The generated client's own `fetch` is separate (`through`).
+type Upstream = (request: { method: string; url: string }) => Response | undefined;
+
+let upstream: Upstream = () => undefined;
+
+const realFetch = globalThis.fetch;
+
+beforeAll(() => {
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+
+    return (
+      upstream({ method: request.method, url: request.url }) ??
+      new Response("no upstream route", { status: 599 })
+    );
+  };
+});
+
+afterEach(() => {
+  upstream = () => undefined;
+});
+
 const withoutUsage = makeHarness(undefined, { USAGE: undefined as unknown as D1Database });
 
 afterAll(async () => {
+  globalThis.fetch = realFetch;
   await harness.dispose();
   await withoutUsage.dispose();
 });
@@ -53,6 +77,12 @@ beforeEach(async () => {
   await resetControlPlane();
   await resetUsageDb();
 });
+
+/** Imports a Claude auth file into the ControlPlane. */
+const seed = (name: string, extra: Record<string, unknown> = {}) =>
+  Effect.promise(async () => {
+    await controlPlane().importAuthFile(name, JSON.stringify(claudeFile(extra)));
+  });
 
 describe("management contract", () => {
   it.effect("decodes the credential list", () =>
@@ -124,4 +154,322 @@ describe("management contract", () => {
       assert.strictEqual(error.error, "usage store unavailable");
     }).pipe(through(withoutUsage)),
   );
+
+  describe("credential mutations", () => {
+    it.effect("setDisabled toggles the flag and a missing file is a 404", () =>
+      Effect.gen(function* () {
+        yield* seed("a.json");
+        const api = yield* client;
+
+        const off = yield* api.credentials.setDisabled({
+          payload: { name: "a.json", disabled: true },
+        });
+
+        assert.deepStrictEqual(off, { status: "ok", disabled: true });
+        assert.strictEqual((yield* api.credentials.list()).files[0]?.disabled, true);
+
+        const on = yield* api.credentials.setDisabled({
+          payload: { name: "a.json", disabled: false },
+        });
+
+        assert.deepStrictEqual(on, { status: "ok", disabled: false });
+        assert.strictEqual((yield* api.credentials.list()).files[0]?.disabled, false);
+
+        const error = yield* Effect.flip(
+          api.credentials.setDisabled({ payload: { name: "ghost.json", disabled: true } }),
+        );
+
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "auth file not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("patchFields sets, clears and rejects fields", () =>
+      Effect.gen(function* () {
+        yield* seed("a.json");
+        const api = yield* client;
+
+        assert.deepStrictEqual(
+          yield* api.credentials.patchFields({
+            payload: { name: "a.json", priority: 5, note: "primary", weight: 3, request_retry: 2 },
+          }),
+          { status: "ok" },
+        );
+
+        const set = (yield* api.credentials.list()).files[0];
+        assert.strictEqual(set?.priority, 5);
+        assert.strictEqual(set?.note, "primary");
+        assert.strictEqual(set?.weight, 3);
+        assert.strictEqual(set?.request_retry, 2);
+
+        yield* api.credentials.patchFields({
+          payload: { name: "a.json", priority: null, note: null, request_retry: null },
+        });
+
+        const cleared = (yield* api.credentials.list()).files[0];
+        assert.strictEqual(cleared?.priority, undefined);
+        assert.strictEqual(cleared?.note, undefined);
+        assert.strictEqual(cleared?.request_retry, undefined);
+
+        const invalid = yield* Effect.flip(
+          api.credentials.patchFields({ payload: { name: "a.json", weight: 2_000_000 } }),
+        );
+
+        assert.instanceOf(invalid, ManagementError);
+
+        const missing = yield* Effect.flip(
+          api.credentials.patchFields({ payload: { name: "ghost.json", note: "x" } }),
+        );
+
+        assert.instanceOf(missing, ManagementError);
+        assert.strictEqual(missing.error, "auth file not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("refresh answers the fresh entry without a refresh token", () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await controlPlane().importAuthFile(
+            "noref.json",
+            JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
+          );
+        });
+        const api = yield* client;
+        const refreshed = yield* api.credentials.refresh({ payload: { name: "noref.json" } });
+
+        assert.strictEqual(refreshed.ok, true);
+        assert.strictEqual(refreshed.auth.name, "noref.json");
+        assert.strictEqual(refreshed.auth.email, "n@x.com");
+
+        const error = yield* Effect.flip(
+          api.credentials.refresh({ payload: { name: "ghost.json" } }),
+        );
+
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "auth file not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("refresh with a mocked token endpoint decodes the entry", () =>
+      Effect.gen(function* () {
+        upstream = ({ method, url }) =>
+          `${method} ${url}` === "POST https://platform.claude.com/v1/oauth/token"
+            ? Response.json({
+                access_token: "new-access",
+                refresh_token: "new-refresh",
+                expires_in: 3600,
+              })
+            : undefined;
+        yield* seed("a.json");
+        const api = yield* client;
+        const refreshed = yield* api.credentials.refresh({ payload: { name: "a.json" } });
+
+        assert.strictEqual(refreshed.auth.name, "a.json");
+        assert.strictEqual(refreshed.auth.recent_requests.length, 20);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("resetCooldown answers the cleared models and a missing index is a 404", () =>
+      Effect.gen(function* () {
+        yield* seed("a.json");
+        const api = yield* client;
+        const entry = (yield* api.credentials.list()).files[0];
+        assert.isDefined(entry);
+
+        const reset = yield* api.credentials.resetCooldown({
+          payload: { auth_index: entry?.auth_index ?? "" },
+        });
+
+        assert.strictEqual(reset.status, "ok");
+        assert.strictEqual(reset.auth_index, entry?.auth_index);
+        assert.isArray(reset.models);
+
+        const error = yield* Effect.flip(
+          api.credentials.resetCooldown({ payload: { auth_index: "0000000000000000" } }),
+        );
+
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "auth not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("remove deletes one credential and a missing one is a 404", () =>
+      Effect.gen(function* () {
+        yield* seed("a.json");
+        yield* seed("b.json", { email: "b@x.com" });
+        const api = yield* client;
+
+        assert.deepStrictEqual(yield* api.credentials.remove({ query: { name: "a.json" } }), {
+          status: "ok",
+        });
+        assert.deepStrictEqual(
+          (yield* api.credentials.list()).files.map((file) => file.name),
+          ["b.json"],
+        );
+
+        const error = yield* Effect.flip(api.credentials.remove({ query: { name: "a.json" } }));
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "auth file not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("upload sends the JSON text and rejects an invalid file", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+
+        assert.deepStrictEqual(
+          yield* api.credentials.upload({
+            query: { name: "up.json" },
+            payload: JSON.stringify(claudeFile({ email: "up@x.com" })),
+          }),
+          { status: "ok" },
+        );
+
+        const files = (yield* api.credentials.list()).files;
+        assert.deepStrictEqual(
+          files.map((file) => [file.name, file.email]),
+          [["up.json", "up@x.com"]],
+        );
+
+        const notJson = yield* Effect.flip(
+          api.credentials.upload({ query: { name: "bad.json" }, payload: "not json" }),
+        );
+
+        assert.instanceOf(notJson, ManagementError);
+        assert.include(notJson.error, "invalid auth file");
+
+        const noType = yield* Effect.flip(
+          api.credentials.upload({ query: { name: "bad.json" }, payload: "{}" }),
+        );
+
+        assert.instanceOf(noType, ManagementError);
+
+        const badName = yield* Effect.flip(
+          api.credentials.upload({
+            query: { name: "bad.txt" },
+            payload: JSON.stringify(claudeFile()),
+          }),
+        );
+
+        assert.instanceOf(badName, ManagementError);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("models decodes the registry's list and rejects an empty name", () =>
+      Effect.gen(function* () {
+        yield* seed("a.json");
+        const api = yield* client;
+        const { models } = yield* api.credentials.models({ query: { name: "a.json" } });
+
+        assert.isArray(models);
+
+        const error = yield* Effect.flip(api.credentials.models({ query: { name: "" } }));
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "name is required");
+      }).pipe(through(harness)),
+    );
+  });
+
+  describe("oauth", () => {
+    it.effect("start answers a callback flow's authorize URL, pending status and cancel", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const started = yield* api.oauth.start({ query: { provider: "claude" } });
+
+        assert.strictEqual(started.status, "ok");
+        assert.strictEqual(new URL(started.url).hostname, "claude.ai");
+        assert.isAbove(started.state.length, 0);
+        assert.strictEqual(started.flow, undefined);
+
+        assert.deepStrictEqual(yield* api.oauth.status({ query: { state: started.state } }), {
+          status: "wait",
+        });
+        assert.deepStrictEqual(yield* api.oauth.cancel({ query: { state: started.state } }), {
+          status: "ok",
+          cancelled: true,
+        });
+        assert.deepStrictEqual(yield* api.oauth.status({ query: { state: started.state } }), {
+          status: "error",
+          error: "unknown or expired state",
+        });
+      }).pipe(through(harness)),
+    );
+
+    it.effect("start answers a device flow with a user code", () =>
+      Effect.gen(function* () {
+        upstream = ({ method, url }) => {
+          const key = `${method} ${url}`;
+
+          if (key === "GET https://auth.x.ai/.well-known/openid-configuration") {
+            return Response.json({
+              device_authorization_endpoint: "https://auth.x.ai/oauth2/device/code",
+              token_endpoint: "https://auth.x.ai/oauth2/token",
+            });
+          }
+
+          return key === "POST https://auth.x.ai/oauth2/device/code"
+            ? Response.json({
+                device_code: "dc",
+                user_code: "UC-1",
+                verification_uri: "https://x.ai/device",
+                expires_in: 900,
+              })
+            : undefined;
+        };
+
+        const api = yield* client;
+        const started = yield* api.oauth.start({ query: { provider: "xai" } });
+
+        assert.strictEqual(started.flow, "device");
+        assert.strictEqual(started.url, "https://x.ai/device");
+        assert.strictEqual(started.user_code, "UC-1");
+        assert.strictEqual(started.expires_in, 900);
+        assert.deepStrictEqual(yield* api.oauth.status({ query: { state: started.state } }), {
+          status: "wait",
+        });
+      }).pipe(through(harness)),
+    );
+
+    it.effect("status of an unknown state is an error progress, not a failure", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+
+        assert.deepStrictEqual(yield* api.oauth.status({ query: { state: "nope-123" } }), {
+          status: "error",
+          error: "unknown or expired state",
+        });
+      }).pipe(through(harness)),
+    );
+
+    it.effect("cancel of an unknown state answers cancelled: false", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const cancelled = yield* api.oauth.cancel({ query: { state: "nope-123" } });
+
+        assert.strictEqual(cancelled.status, "ok");
+        assert.strictEqual(cancelled.cancelled, false);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("callback with a malformed redirect_url is a ManagementError", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+
+        const unparsable = yield* Effect.flip(
+          api.oauth.callback({ payload: { provider: "claude", redirect_url: "http://" } }),
+        );
+
+        assert.instanceOf(unparsable, ManagementError);
+        assert.strictEqual(unparsable.error, "invalid redirect_url");
+
+        // A pasted string that parses (relative to localhost) but carries no state is rejected too.
+        const stateless = yield* Effect.flip(
+          api.oauth.callback({ payload: { provider: "claude", redirect_url: "not a url" } }),
+        );
+
+        assert.instanceOf(stateless, ManagementError);
+        assert.strictEqual(stateless.error, "state is required");
+      }).pipe(through(harness)),
+    );
+  });
 });

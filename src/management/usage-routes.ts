@@ -3,7 +3,9 @@
  *
  * Go source: internal/api/server_management_v8.go (route table), internal/api/handlers/management/usage.go
  * (`GetUsageQueue`) and api_key_usage.go (`GetAPIKeyUsage`). Records are read from D1 (`src/usage/d1.ts`) instead of
- * the in-process RESP queue. `records` and `summary` are Workers additions that expose the persisted history.
+ * the in-process RESP queue. `records`, `summary` and `series` are Workers additions that expose the persisted history
+ * (`series`: requests/failures/tokens per key × UTC hour or day bucket for the panel's quota-window bars; `since` is
+ * required, `until` defaults to now, hour ranges are capped at 31 days and day ranges at 400).
  *
  * Deviations: `api-keys` keys use the masked API key the ControlPlane exposes (`<base_url>|[redacted]…abcd`) rather
  * than the raw key, so keys that share their last four characters and base URL are merged; `queue` pops from the
@@ -14,13 +16,20 @@ import { HttpRouter } from "effect/http";
 import type { CredentialSummary } from "../credentials/summary.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import {
+  BUCKET_MS,
   GROUP_BY,
   type GroupBy,
   listUsageRecords,
   MAX_QUEUE_COUNT,
+  MAX_SERIES_RANGE_DAYS,
   popUsageQueue,
   rowToPayload,
+  SERIES_BUCKETS,
+  SERIES_GROUP_BY,
+  type SeriesBucket,
+  type SeriesGroupBy,
   summarizeUsage,
+  summarizeUsageSeries,
   type UsageFilter,
 } from "../usage/d1.ts";
 import { recentRequestBuckets } from "./credential-entry.ts";
@@ -270,9 +279,70 @@ const usageSummary = Effect.gen(function* () {
   return jsonReply(200, { group_by: groupBy, totals: summary.totals, groups: summary.groups });
 });
 
+/** `GET /series`: per key × UTC hour/day bucket requests, failures and total tokens (v2 `acct_total_tokens`). */
+const usageSeries = Effect.gen(function* () {
+  const params = yield* queryParams;
+  // Only the series filters: summary-only params (principal, failed) are ignored, not validated.
+  const scoped = new URLSearchParams();
+
+  for (const name of ["since", "until", "provider", "model", "auth_id"]) {
+    const value = params.get(name);
+
+    if (value !== null) scoped.set(name, value);
+  }
+
+  const filter = yield* parseFilter(scoped);
+
+  const since = filter.since;
+
+  if (since === undefined) return yield* replyError(400, "since is required");
+  const bucket = optional(params, "bucket") ?? "hour";
+
+  // SAFETY: widening the literal tuple to string for the membership test; it is only read.
+  if (!(SERIES_BUCKETS as ReadonlyArray<string>).includes(bucket)) {
+    return yield* replyError(400, `bucket must be one of ${SERIES_BUCKETS.join(", ")}`);
+  }
+
+  const groupBy = optional(params, "group_by") ?? "auth";
+
+  // SAFETY: widening the literal tuple to string for the membership test; it is only read.
+  if (!(SERIES_GROUP_BY as ReadonlyArray<string>).includes(groupBy)) {
+    return yield* replyError(400, `group_by must be one of ${SERIES_GROUP_BY.join(", ")}`);
+  }
+
+  // SAFETY: bucket and groupBy were checked against their literal tuples above.
+  const seriesBucket = bucket as SeriesBucket;
+  const until = filter.until ?? (yield* Clock.currentTimeMillis);
+
+  if (until <= since) return yield* replyError(400, "until must be after since");
+  const maxDays = MAX_SERIES_RANGE_DAYS[seriesBucket];
+
+  if (until - since > maxDays * BUCKET_MS.day) {
+    return yield* replyError(400, `range must not exceed ${maxDays} days for bucket=${bucket}`);
+  }
+
+  const db = yield* usageDb;
+
+  const series = yield* query("series", () =>
+    summarizeUsageSeries(db, {
+      since,
+      until,
+      bucket: seriesBucket,
+      // SAFETY: see above.
+      groupBy: groupBy as SeriesGroupBy,
+      ...(filter.provider === undefined ? {} : { provider: filter.provider }),
+      ...(filter.model === undefined ? {} : { model: filter.model }),
+      ...(filter.authId === undefined ? {} : { authId: filter.authId }),
+    }),
+  );
+
+  return jsonReply(200, { bucket, group_by: groupBy, series });
+});
+
 export const usageRoutes = [
   HttpRouter.route("GET", `${BASE}/api-keys`, handled(apiKeyUsage)),
   HttpRouter.route("GET", `${BASE}/queue`, handled(usageQueue)),
   HttpRouter.route("GET", `${BASE}/records`, handled(usageRecords)),
+  HttpRouter.route("GET", `${BASE}/series`, handled(usageSeries)),
   HttpRouter.route("GET", `${BASE}/summary`, handled(usageSummary)),
 ];

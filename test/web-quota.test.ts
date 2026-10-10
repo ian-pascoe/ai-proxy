@@ -2,7 +2,14 @@
 import { describe, expect, it } from "vitest";
 import type { CredentialEntry } from "#contract/credentials.ts";
 import { formatCount, formatDuration, formatPercent, formatTokens } from "../web/src/lib/format.ts";
-import { accountStanding, byUrgency, quotaWindows, windowLabel } from "../web/src/lib/quota.ts";
+import { accountName, assess } from "../web/src/lib/accounts.ts";
+import {
+  accountStanding,
+  byUrgency,
+  quotaReading,
+  quotaWindows,
+  windowLabel,
+} from "../web/src/lib/quota.ts";
 
 const entry = (
   overrides: Partial<CredentialEntry> & Pick<CredentialEntry, "name" | "provider">,
@@ -45,8 +52,8 @@ describe("quotaWindows", () => {
     );
 
     expect(windows).toEqual([
-      { label: "5-hour", usedPercent: 69, resetsAt: 1_791_655_200_000 },
-      { label: "Weekly", usedPercent: 100, resetsAt: undefined },
+      { label: "5-hour", usedPercent: 69, resetsAt: 1_791_655_200_000, seconds: 18_000 },
+      { label: "Weekly", usedPercent: 100, resetsAt: undefined, seconds: 604_800 },
     ]);
   });
 
@@ -70,8 +77,13 @@ describe("quotaWindows", () => {
     );
 
     expect(windows).toEqual([
-      { label: "5-hour", usedPercent: 42, resetsAt: Date.parse("2026-10-10T12:10:00.000Z") },
-      { label: "Weekly", usedPercent: 85, resetsAt: Date.parse(RESET) },
+      {
+        label: "5-hour",
+        usedPercent: 42,
+        resetsAt: Date.parse("2026-10-10T12:10:00.000Z"),
+        seconds: 18_000,
+      },
+      { label: "Weekly", usedPercent: 85, resetsAt: Date.parse(RESET), seconds: 604_800 },
     ]);
   });
 
@@ -91,8 +103,8 @@ describe("quotaWindows", () => {
     );
 
     expect(windows).toEqual([
-      { label: "Daily", usedPercent: 75, resetsAt: Date.parse(RESET) },
-      { label: "Weekly", usedPercent: 10, resetsAt: undefined },
+      { label: "Daily", usedPercent: 75, resetsAt: Date.parse(RESET), seconds: 86_400 },
+      { label: "Weekly", usedPercent: 10, resetsAt: undefined, seconds: 604_800 },
     ]);
   });
 
@@ -103,6 +115,77 @@ describe("quotaWindows", () => {
         entry({ name: "g.json", provider: "gemini", quota: { signals: { "x-anything": "1" } } }),
       ),
     ).toEqual([]);
+  });
+
+  it("prefers the quota check when it is fresher than the last response", () => {
+    const headers = {
+      observed_at: "2026-10-10T12:00:00.000Z",
+      signals: { "anthropic-ratelimit-unified-5h-utilization": "0.5" },
+    };
+
+    const report = (refreshedAt: string) => ({
+      checked_at: refreshedAt,
+      refreshed_at: refreshedAt,
+      windows: [
+        {
+          id: "five_hour",
+          label: "5-hour",
+          used_percent: 70,
+          resets_at: RESET,
+          window_seconds: 18_000,
+        },
+        { id: "seven_day_opus", label: "Weekly Opus", used_percent: 120 },
+      ],
+    });
+
+    const fresher = quotaReading(
+      entry({
+        name: "c.json",
+        provider: "claude",
+        quota: headers,
+        quota_report: report("2026-10-10T12:30:00.000Z"),
+      }),
+    );
+
+    expect(fresher).toEqual({
+      source: "check",
+      readAt: Date.parse("2026-10-10T12:30:00.000Z"),
+      windows: [
+        { label: "5-hour", usedPercent: 70, resetsAt: Date.parse(RESET), seconds: 18_000 },
+        { label: "Weekly Opus", usedPercent: 100, resetsAt: undefined, seconds: undefined },
+      ],
+    });
+
+    const older = quotaReading(
+      entry({
+        name: "c.json",
+        provider: "claude",
+        quota: headers,
+        quota_report: report("2026-10-10T11:00:00.000Z"),
+      }),
+    );
+
+    expect(older.source).toBe("response");
+    expect(older.windows.map((window) => window.usedPercent)).toEqual([50]);
+
+    // A failed check without an earlier success has no figures: the headers stay.
+    expect(
+      quotaReading(
+        entry({
+          name: "c.json",
+          provider: "claude",
+          quota: headers,
+          quota_report: { checked_at: RESET, windows: [], error: "unauthorized" },
+        }),
+      ).source,
+    ).toBe("response");
+
+    // Checked figures for a provider that sends no headers.
+    expect(
+      quotaReading(
+        entry({ name: "k.json", provider: "kimi", quota_report: report("2026-10-10T11:00:00Z") }),
+      ).source,
+    ).toBe("check");
   });
 
   it("labels window lengths", () => {
@@ -204,6 +287,35 @@ describe("byUrgency", () => {
       "no-data.json",
       "disabled.json",
     ]);
+  });
+});
+
+describe("accounts", () => {
+  it("names an account by its address, never by its provider", () => {
+    expect(accountName(entry({ name: "a.json", provider: "claude", email: "me@x.dev" }))).toBe(
+      "me@x.dev",
+    );
+    expect(accountName(entry({ name: "xai-1.json", provider: "xai", label: "xai" }))).toBe(
+      "xai-1.json",
+    );
+  });
+
+  it("says what needs attention", () => {
+    expect(assess(entry({ name: "a.json", provider: "claude", disabled: true }))).toMatchObject({
+      closed: false,
+      note: "Disabled",
+      tone: "disabled",
+    });
+    expect(
+      assess(
+        entry({ name: "a.json", provider: "claude", status: "error", status_message: "expired" }),
+      ),
+    ).toMatchObject({ closed: true, note: "Failing: expired", tone: "closed" });
+    expect(assess(entry({ name: "a.json", provider: "claude" }))).toMatchObject({
+      closed: false,
+      note: undefined,
+      tone: undefined,
+    });
   });
 });
 

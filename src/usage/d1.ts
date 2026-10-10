@@ -4,6 +4,9 @@
  * Go source: internal/redisqueue/plugin.go (queuedUsageDetail: the export JSON, pipeline.md §8.4) and
  * internal/redisqueue/queue.go (PopOldest). Go keeps records in an in-process queue for 60 s; here they live in D1
  * (`migrations/0001_usage_records.sql`) and the "queue" is the set of records not yet exported.
+ *
+ * Workers addition (not in Go): `summarizeUsageSeries` (one aggregate query: requests, failures and v2
+ * `acct_total_tokens` per key × UTC hour/day bucket) for the control panel's per-account quota-window bars.
  */
 import { authIndexOf } from "../management/auth-index.ts";
 import { normalizeToCanonicalUuid } from "../session-routing/identity.ts";
@@ -514,6 +517,116 @@ export const summarizeUsage = async (
       key: String(group.key ?? ""),
     })),
   };
+};
+
+// ---------------------------------------------------------------------------------------------------------------
+// Series
+// ---------------------------------------------------------------------------------------------------------------
+
+export const SERIES_BUCKETS = ["hour", "day"] as const;
+
+export type SeriesBucket = (typeof SERIES_BUCKETS)[number];
+
+export const SERIES_GROUP_BY = ["auth", "model", "provider"] as const;
+
+export type SeriesGroupBy = (typeof SERIES_GROUP_BY)[number];
+
+const HOUR_MS = 3_600_000;
+
+const DAY_MS = 86_400_000;
+
+export const BUCKET_MS: Readonly<Record<SeriesBucket, number>> = { hour: HOUR_MS, day: DAY_MS };
+
+/** Widest range a series query may span, per bucket size (keeps the response bounded). */
+export const MAX_SERIES_RANGE_DAYS: Readonly<Record<SeriesBucket, number>> = { hour: 31, day: 400 };
+
+const SERIES_KEY_EXPRESSIONS: Readonly<Record<SeriesGroupBy, string>> = {
+  auth: "auth_id",
+  model: "model",
+  provider: "provider",
+};
+
+export interface UsagePoint {
+  /** Bucket start, epoch ms (UTC hour or day boundary). */
+  readonly start: number;
+  readonly requests: number;
+  readonly failed: number;
+  readonly total_tokens: number;
+}
+
+export interface UsageSeriesGroup {
+  readonly key: string;
+  readonly points: ReadonlyArray<UsagePoint>;
+}
+
+export interface UsageSeriesQuery {
+  /** Inclusive (epoch ms). */
+  readonly since: number;
+  /** Exclusive (epoch ms). */
+  readonly until: number;
+  readonly bucket: SeriesBucket;
+  readonly groupBy: SeriesGroupBy;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly authId?: string;
+}
+
+interface SeriesRow {
+  readonly key: string | null;
+  readonly start: number;
+  readonly requests: number;
+  readonly failed: number;
+  readonly total_tokens: number;
+}
+
+/**
+ * Requests, failures and `acct_total_tokens` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
+ * series sorted by key, points by time. The first bucket may start before `since` (it holds the records from `since`).
+ */
+export const summarizeUsageSeries = async (
+  db: D1Database,
+  query: UsageSeriesQuery,
+): Promise<ReadonlyArray<UsageSeriesGroup>> => {
+  const { where, params } = filterClauses({
+    since: query.since,
+    until: query.until,
+    ...(query.provider === undefined ? {} : { provider: query.provider }),
+    ...(query.model === undefined ? {} : { model: query.model }),
+    ...(query.authId === undefined ? {} : { authId: query.authId }),
+  });
+
+  const ms = BUCKET_MS[query.bucket];
+  const key = SERIES_KEY_EXPRESSIONS[query.groupBy];
+
+  const result = await db
+    .prepare(
+      `SELECT ${key} AS key, (requested_at / ${ms}) * ${ms} AS start, COUNT(*) AS requests,
+         COALESCE(SUM(failed), 0) AS failed, COALESCE(SUM(acct_total_tokens), 0) AS total_tokens
+       FROM usage_records${where} GROUP BY key, start ORDER BY key ASC, start ASC`,
+    )
+    .bind(...params)
+    .all<SeriesRow>();
+
+  const series: Array<{ key: string; points: UsagePoint[] }> = [];
+
+  for (const row of result.results) {
+    const rowKey = String(row.key ?? "");
+    let current = series[series.length - 1];
+
+    if (current === undefined || current.key !== rowKey) {
+      current = { key: rowKey, points: [] };
+      series.push(current);
+    }
+
+    current.points.push({
+      start: row.start,
+      requests: row.requests,
+      failed: row.failed,
+      total_tokens: row.total_tokens,
+    });
+  }
+
+  return series;
 };
 
 // ---------------------------------------------------------------------------------------------------------------

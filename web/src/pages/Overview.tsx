@@ -4,59 +4,19 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { Plus } from "lucide-react";
-import type { ReactNode } from "react";
 import type { CredentialEntry } from "#contract/credentials.ts";
 import type { UsageSummary } from "#contract/usage.ts";
 import { credentialsAtom, nowAtom, usageLastDayAtom } from "../api/client.ts";
+import { kit, Problem, Section } from "../components/Kit.tsx";
 import { Meter } from "../components/Meter.tsx";
 import { ResetBlade, TrailMark } from "../components/Signs.tsx";
+import { type Assessed, accountName, assess } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
 import { formatClock, formatCount, formatDuration, formatTokens } from "../lib/format.ts";
-import { OLD_PANEL_CONNECT } from "../lib/old-panel.ts";
 import { providerName } from "../lib/providers.ts";
-import {
-  type AccountStanding,
-  accountStanding,
-  byUrgency,
-  reportsQuota,
-  windowLevel,
-} from "../lib/quota.ts";
+import { type AccountStanding, byUrgency, checksQuota, windowLevel } from "../lib/quota.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Overview.module.css";
-
-/** The account's address or label, whichever it has (the file name as a last resort). */
-const accountName = (entry: CredentialEntry): string =>
-  [entry.email, entry.account, entry.label].find((name) => name !== undefined && name !== "") ??
-  entry.name;
-
-interface Assessed {
-  readonly entry: CredentialEntry;
-  readonly standing: AccountStanding;
-  /** Closed or failing: the red trail mark beside the name. */
-  readonly closed: boolean;
-  /** What the operator needs to know, shown under the name ("Closed", "Failing: ..."); none when healthy. */
-  readonly note: string | undefined;
-}
-
-const assess = (entry: CredentialEntry): Assessed => {
-  const standing = accountStanding(entry);
-
-  if (entry.disabled) return { entry, standing, closed: false, note: "Disabled" };
-
-  if (standing.cutOffUntil !== undefined) {
-    return { entry, standing, closed: true, note: "Closed by the provider's rate limit" };
-  }
-
-  if (entry.status === "error") {
-    const detail = entry.status_message === "" ? "" : `: ${entry.status_message}`;
-
-    return { entry, standing, closed: true, note: `Failing${detail}` };
-  }
-
-  if (standing.level === "near") return { entry, standing, closed: false, note: "Near its limit" };
-
-  return { entry, standing, closed: false, note: undefined };
-};
 
 /** One sentence over the table: what needs attention, or that nothing does. */
 const statusSentence = (accounts: ReadonlyArray<Assessed>): string => {
@@ -97,7 +57,7 @@ const ResetCell = ({
   const now = useAtomValue(nowAtom);
 
   if (standing.nextReset === undefined || standing.nextReset <= now) {
-    return <span className={styles["muted"]}>No reset reported</span>;
+    return <span className={kit["muted"]}>No reset reported</span>;
   }
 
   const closed = standing.cutOffUntil !== undefined;
@@ -123,12 +83,12 @@ const ResetCell = ({
 
 /** Why an account shows no meters. */
 const noQuotaNote = (entry: CredentialEntry): string =>
-  reportsQuota(entry.provider)
-    ? "No figures yet; they arrive with the next request."
+  checksQuota(entry.provider)
+    ? "No figures yet; the next quota check reads them."
     : `${providerName(entry.provider)} does not report quota.`;
 
 const AccountRow = ({ account, index }: { readonly account: Assessed; readonly index: number }) => {
-  const { entry, standing, closed, note } = account;
+  const { entry, standing, closed, note, tone } = account;
 
   const requests = entry.recent_requests.reduce(
     (sum, bucket) => sum + bucket.success + bucket.failed,
@@ -146,10 +106,7 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
             <span className={styles["provider"]}>{providerName(entry.provider)}</span>
             <span className={styles["address"]}>{accountName(entry)}</span>
             {note === undefined ? null : (
-              <span
-                className={styles["note"]}
-                data-tone={closed ? "closed" : entry.disabled ? "disabled" : "near"}
-              >
+              <span className={styles["note"]} data-tone={tone}>
                 {note}
               </span>
             )}
@@ -158,7 +115,7 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
       </th>
       <td className={styles["quota"]}>
         {standing.windows.length === 0 ? (
-          <span className={styles["muted"]}>{noQuotaNote(entry)}</span>
+          <span className={kit["muted"]}>{noQuotaNote(entry)}</span>
         ) : (
           <div className={styles["meters"]}>
             {standing.windows.map((window) => (
@@ -174,7 +131,7 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
       </td>
       <td className={styles["reset"]}>
         {entry.disabled ? (
-          <span className={styles["muted"]}>Not in use</span>
+          <span className={kit["muted"]}>Not in use</span>
         ) : (
           <ResetCell standing={standing} order={index} />
         )}
@@ -187,29 +144,11 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
   );
 };
 
-const Section = ({
-  title,
-  aside,
-  children,
-}: {
-  readonly title: string;
-  readonly aside?: ReactNode;
-  readonly children: ReactNode;
-}) => (
-  <section className={styles["section"]} aria-label={title}>
-    <header className={styles["sectionHead"]}>
-      <h2 className={styles["sectionTitle"]}>{title}</h2>
-      {aside}
-    </header>
-    {children}
-  </section>
-);
-
 const ConnectButton = () => (
-  <a className={styles["primary"]} href={OLD_PANEL_CONNECT}>
+  <Link to="/accounts/connect" className={kit["primary"]}>
     <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
     Connect account
-  </a>
+  </Link>
 );
 
 /** Requests per account are counted over the recent-requests ring: ten-minute buckets. */
@@ -222,20 +161,14 @@ const Accounts = () => {
   return AsyncResult.match(result, {
     onInitial: () => (
       <Section title="Accounts">
-        <p className={styles["muted"]} aria-busy="true">
+        <p className={kit["muted"]} aria-busy="true">
           Loading accounts…
         </p>
       </Section>
     ),
     onFailure: (failure) => (
       <Section title="Accounts">
-        <div className={styles["problem"]} role="alert">
-          <TrailMark />
-          <p>Could not load accounts. {failureMessage(failure)}</p>
-          <button type="button" className={styles["secondary"]} onClick={retry}>
-            Try again
-          </button>
-        </div>
+        <Problem onRetry={retry}>Could not load accounts. {failureMessage(failure)}</Problem>
       </Section>
     ),
     onSuccess: ({ value }) => {
@@ -269,7 +202,7 @@ const Accounts = () => {
           <Section
             title="Accounts"
             aside={
-              <Link to="/accounts" className={styles["sectionLink"]}>
+              <Link to="/accounts" className={kit["sectionLink"]}>
                 Manage accounts
               </Link>
             }
@@ -306,7 +239,7 @@ const UsageTable = ({ summary }: { readonly summary: UsageSummary }) => {
 
   return (
     <table className={styles["usage"]}>
-      <caption className={styles["visuallyHidden"]}>Usage by model, last 24 hours</caption>
+      <caption className={kit["visuallyHidden"]}>Usage by model, last 24 hours</caption>
       <thead>
         <tr>
           <th scope="col">Model</th>
@@ -320,7 +253,7 @@ const UsageTable = ({ summary }: { readonly summary: UsageSummary }) => {
             Tokens
           </th>
           <th scope="col" className={styles["shareHead"]}>
-            <span className={styles["visuallyHidden"]}>Share of tokens</span>
+            <span className={kit["visuallyHidden"]}>Share of tokens</span>
           </th>
         </tr>
       </thead>
@@ -371,19 +304,13 @@ const LastDay = () => {
     <Section title="Last 24 hours">
       <div aria-busy={result.waiting}>
         {AsyncResult.match(result, {
-          onInitial: () => <p className={styles["muted"]}>Loading usage…</p>,
+          onInitial: () => <p className={kit["muted"]}>Loading usage…</p>,
           onFailure: (failure) => (
-            <div className={styles["problem"]} role="alert">
-              <TrailMark />
-              <p>Could not load usage. {failureMessage(failure)}</p>
-              <button type="button" className={styles["secondary"]} onClick={retry}>
-                Try again
-              </button>
-            </div>
+            <Problem onRetry={retry}>Could not load usage. {failureMessage(failure)}</Problem>
           ),
           onSuccess: ({ value }) =>
             value.totals.requests === 0 ? (
-              <p className={styles["muted"]}>No requests in the last 24 hours.</p>
+              <p className={kit["muted"]}>No requests in the last 24 hours.</p>
             ) : (
               <div className={styles["lastDay"]}>
                 <Totals summary={value} />
@@ -400,8 +327,8 @@ export const OverviewPage = () => {
   usePageTitle("Overview");
 
   return (
-    <div className={styles["page"]}>
-      <h1 className={styles["visuallyHidden"]}>Overview</h1>
+    <div className={kit["page"]}>
+      <h1 className={kit["visuallyHidden"]}>Overview</h1>
       <Accounts />
       <LastDay />
     </div>

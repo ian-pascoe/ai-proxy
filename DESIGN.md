@@ -106,6 +106,32 @@ components:
     backgroundColor: "{colors.red}"
     width: "16px"
     height: "8px"
+  button-danger:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.red}"
+    rounded: "{rounded.default}"
+    height: "40px"
+    padding: "0 16px"
+  button-danger-hover:
+    backgroundColor: "{colors.red}"
+    textColor: "{colors.white}"
+  input:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.default}"
+    height: "40px"
+    padding: "0 12px"
+  history-bar:
+    backgroundColor: "{colors.stone-3}"
+  history-bar-current:
+    backgroundColor: "{colors.ink}"
+  step-number:
+    textColor: "{colors.ink}"
+    size: "32px"
+  dialog:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.default}"
 ---
 
 # Design System: cliproxy control panel
@@ -202,6 +228,37 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 - **Primary / Connect:** ink fill, white text, 3px radius, 700 weight, leading icon from lucide-react; 44px tall in pages, 40px in the shell. Hover mixes ink toward white.
 - **Secondary:** white, 2px ink border, 40px tall; hover fills stone-1.
+- **Danger:** white, 2px red border, red text, 40px tall; hover fills red with white text. Only for deleting.
+- **Busy:** the leading icon spins and the label turns into what is happening ("Checking…"); the button is disabled
+  until the request settles. A
+  disabled button sits at 55% opacity with no hover change.
+
+### Form Fields
+
+- Label above in 0.75rem stone-4 (600); the input is 40px, white, 2px stone-3 border that goes ink on focus and red
+  when invalid, with the message beneath in red 0.75rem (650). Help text beneath in stone-4.
+
+### Filter Tabs
+
+- A radiogroup above a list: 0.875rem labels (700) with the count in stone-4 (400), 40px tall, a 4px underline that is
+  stone-2 on hover and ink when chosen. Same underline language as the shell links.
+
+### History Chart
+
+- Columns of one window or day each, 2px apart, at most 2.75rem wide (a chart of few windows stays narrow), 6rem tall
+  over a 2px ink baseline. Past bars stone-3, the bar in progress ink; the pointed bar stone-4. A readout above names
+  the pointed (else current) period with its tokens (750) and requests (stone-4); the first period and "Now" sit under
+  the baseline. A visually hidden table carries the same figures.
+
+### Steps
+
+- Numbered 2rem squares with a 2px ink border and the number in 750, the step title (1rem, 750) beside, the step's
+  content indented under the title. A device code is set very large in 800 with a secondary Copy code button.
+
+### Dialog
+
+- Native `<dialog>`, 28rem, white, 2px ink border, no shadow; the backdrop is ink at 45%. Title 1.25rem (750), body,
+  then actions left-aligned (the danger action first, the safe one second).
 - **Focus:** 3px ink outline, 2px offset, on every element.
 
 ### Reset Blade (signature)
@@ -211,7 +268,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Meter
 
-- Grid of label (4rem), track, value (2.75rem). Track stone-2, 8px high; fill ink; at 100% fill and value turn red. The scale is a shared 0–100%.
+- Grid of label (5rem; a longer window name wraps rather than touching the track), track, value (2.75rem). Track stone-2, 8px high; fill ink; at 100% fill and value turn red. The scale is a shared 0–100%.
 
 ### Trail Mark
 

@@ -4,7 +4,6 @@ import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { credentialsAtom, usageLastDayAtom } from "../api/client.ts";
-import { OLD_PANEL_CONNECT } from "../lib/old-panel.ts";
 import styles from "./Shell.module.css";
 
 const PAGES = [
@@ -114,10 +113,10 @@ export const Shell = () => {
             </ul>
           </nav>
           <div className={styles["actions"]}>
-            <a className={styles["connect"]} href={OLD_PANEL_CONNECT}>
+            <Link to="/accounts/connect" className={styles["connect"]}>
               <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
               Connect account
-            </a>
+            </Link>
             <RefreshButton />
           </div>
         </div>

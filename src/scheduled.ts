@@ -11,6 +11,7 @@ import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
 import { refreshAntigravityVersion } from "./executor/antigravity/version.ts";
 import { causeSummary } from "./observability/cause.ts";
 import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts";
+import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
 import { refreshCatalogs } from "./registry/refresh.ts";
@@ -51,6 +52,9 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       );
     }),
   },
+  // Quota check (Workers addition, src/quota): provider usage windows of every enabled auth file that has a usage
+  // endpoint, stored as the credential's `quota_report`.
+  { name: "quota-check", run: runQuotaSweep },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
   {
     name: "credential-refresh-sweep",

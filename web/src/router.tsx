@@ -2,6 +2,9 @@
 // (src/access/routes.ts `PANEL_SECTIONS`); add a section there when adding a top-level page here.
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { Shell } from "./components/Shell.tsx";
+import { AccountPage } from "./pages/Account.tsx";
+import { AccountsPage } from "./pages/Accounts.tsx";
+import { ConnectPage } from "./pages/Connect.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound, Placeholder } from "./pages/Placeholder.tsx";
 
@@ -16,11 +19,17 @@ const page = (path: string, title: string, holds: string) =>
 
 const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: OverviewPage }),
-  page(
-    "/accounts",
-    "Accounts",
-    "Every connected account with its quota, cooldowns, priority and refresh, and Connect account.",
-  ),
+  createRoute({ getParentRoute: () => rootRoute, path: "/accounts", component: AccountsPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/accounts/connect",
+    component: ConnectPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/accounts/$authIndex",
+    component: AccountPage,
+  }),
   page(
     "/keys",
     "API keys",
