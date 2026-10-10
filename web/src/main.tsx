@@ -1,4 +1,4 @@
-import "@fontsource-variable/public-sans";
+import "@fontsource-variable/atkinson-hyperlegible-next";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import { RegistryProvider } from "@effect/atom-react";

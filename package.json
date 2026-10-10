@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@effect/atom-react": "4.0.2",
-    "@fontsource-variable/public-sans": "5.3.0",
+    "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
     "@tanstack/react-router": "1.170.41",
     "effect": "4.0.2",
     "fzstd": "^0.1.1",

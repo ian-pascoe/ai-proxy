@@ -1,4 +1,4 @@
-// Use against allowance: a flat bar on the shared 0–100% scale (grey is the unused allowance) with its figure.
+// Use against allowance: a flat bar on the shared 0–100% scale (stone is the unused allowance) with its figure.
 import type { QuotaLevel } from "../lib/quota.ts";
 import { formatPercent } from "../lib/format.ts";
 import styles from "./Meter.module.css";

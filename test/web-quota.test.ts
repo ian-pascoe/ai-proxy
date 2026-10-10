@@ -160,6 +160,7 @@ describe("accountStanding", () => {
       level: "near",
       peakPercent: 80,
       nextReset: Date.parse(RESET),
+      nextResetWindow: "Long",
       cutOffUntil: undefined,
     });
   });
@@ -230,6 +231,6 @@ describe("format", () => {
         (4 * 24 + 3) * 60 * minute,
         2 * 1440 * minute,
       ].map(formatDuration),
-    ).toEqual(["under 1 m", "12 m", "2 h 35 m", "2 h", "4 d 3 h", "2 d"]);
+    ).toEqual(["under 1 min", "12 min", "2 h 35 min", "2 h", "4 d 3 h", "2 d"]);
   });
 });

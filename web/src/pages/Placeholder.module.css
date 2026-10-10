@@ -7,11 +7,11 @@
 
 .title {
   font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   margin-bottom: var(--space-2);
 }
 
 .lead {
-  color: var(--ink-2);
+  color: var(--stone-4);
 }

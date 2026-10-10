@@ -171,6 +171,8 @@ export interface AccountStanding {
   readonly cutOffUntil: number | undefined;
   /** The reset the operator waits for: the cooldown's end, else the fullest window's reset, else the soonest known. */
   readonly nextReset: number | undefined;
+  /** The window `nextReset` belongs to ("5-hour"); `undefined` when it is the cooldown's end. */
+  readonly nextResetWindow: string | undefined;
   /** The fullest window's share, 0–100 (`undefined` without quota data). */
   readonly peakPercent: number | undefined;
 }
@@ -191,18 +193,24 @@ export const accountStanding = (entry: CredentialEntry): AccountStanding => {
         ? "ok"
         : windowLevel(fullest);
 
-  const earliestReset = windows
-    .flatMap((window) => (window.resetsAt === undefined ? [] : [window.resetsAt]))
-    .reduce<number | undefined>(
-      (soonest, at) => (soonest === undefined || at < soonest ? at : soonest),
+  const soonest = windows
+    .filter((window) => window.resetsAt !== undefined)
+    .reduce<QuotaWindow | undefined>(
+      (best, window) =>
+        best === undefined || (window.resetsAt ?? Infinity) < (best.resetsAt ?? Infinity)
+          ? window
+          : best,
       undefined,
     );
+
+  const waitedFor = fullest?.resetsAt === undefined ? soonest : fullest;
 
   return {
     level,
     windows,
     cutOffUntil: until,
-    nextReset: until ?? fullest?.resetsAt ?? earliestReset,
+    nextReset: until ?? waitedFor?.resetsAt,
+    nextResetWindow: until === undefined ? waitedFor?.label : undefined,
     peakPercent: fullest?.usedPercent,
   };
 };

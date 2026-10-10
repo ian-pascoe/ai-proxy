@@ -1,51 +1,36 @@
 .meter {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) 3rem;
+  grid-template-columns: 4rem minmax(4rem, 1fr) 2.75rem;
   align-items: center;
   gap: var(--space-3);
 }
 
 .label {
-  font-size: var(--text-sm);
-  color: var(--ink-2);
+  font-size: var(--text-xs);
+  color: var(--stone-4);
+  white-space: nowrap;
 }
 
 .track {
-  height: 0.75rem;
-  background: var(--allowance);
+  height: 0.5rem;
+  background: var(--stone-2);
   border-radius: 1px;
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  background: var(--blue);
-  transform-origin: left;
-  animation: fill 600ms var(--ease-out) both;
-}
-
-.fill[data-level="near"] {
-  background: var(--amber);
+  background: var(--ink);
 }
 
 .fill[data-level="out"] {
   background: var(--red);
 }
 
-@keyframes fill {
-  from {
-    transform: scaleX(0.001);
-  }
-}
-
 .value {
   text-align: right;
   font-size: var(--text-sm);
   font-weight: 650;
-}
-
-.value[data-level="near"] {
-  color: var(--amber-ink);
 }
 
 .value[data-level="out"] {

@@ -36,18 +36,18 @@ const HOUR = 60 * MINUTE;
 
 const DAY = 24 * HOUR;
 
-/** A remaining time in its two largest units: "4 d 3 h", "2 h 35 m", "12 m", "under 1 m". */
+/** A remaining time in its two largest units, as trail signs give walking times: "4 d 3 h", "2 h 35 min", "12 min". */
 export const formatDuration = (ms: number): string => {
-  if (ms < MINUTE) return "under 1 m";
+  if (ms < MINUTE) return "under 1 min";
   const days = Math.floor(ms / DAY);
   const hours = Math.floor((ms % DAY) / HOUR);
   const minutes = Math.floor((ms % HOUR) / MINUTE);
 
   if (days > 0) return hours > 0 ? `${days} d ${hours} h` : `${days} d`;
 
-  if (hours > 0) return minutes > 0 ? `${hours} h ${minutes} m` : `${hours} h`;
+  if (hours > 0) return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
 
-  return `${minutes} m`;
+  return `${minutes} min`;
 };
 
 const clock = new Intl.DateTimeFormat("en-US", {

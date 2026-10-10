@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T20:26:44.184Z",
+  "title": "Design System: cliproxy control panel",
+  "extensions": {
+    "colorMeta": {
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "stone-1": {
+        "role": "neutral",
+        "displayName": "Stone 1",
+        "canonical": "#f3f3f1",
+        "tonalRamp": [
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1",
+          "#f3f3f1"
+        ]
+      },
+      "stone-2": {
+        "role": "neutral",
+        "displayName": "Stone 2",
+        "canonical": "#e3e3df",
+        "tonalRamp": [
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df",
+          "#e3e3df"
+        ]
+      },
+      "stone-3": {
+        "role": "neutral",
+        "displayName": "Stone 3",
+        "canonical": "#c4c5c0",
+        "tonalRamp": [
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0",
+          "#c4c5c0"
+        ]
+      },
+      "stone-4": {
+        "role": "neutral",
+        "displayName": "Stone 4",
+        "canonical": "#6a6c69",
+        "tonalRamp": [
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69",
+          "#6a6c69"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Sign Ink",
+        "canonical": "#1b1c1b",
+        "tonalRamp": [
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b",
+          "#1b1c1b"
+        ]
+      },
+      "yellow": {
+        "role": "primary",
+        "displayName": "Wanderweg Yellow",
+        "canonical": "#f5c400",
+        "tonalRamp": [
+          "#f5c400",
+          "#f5c400",
+          "#f5c400",
+          "#f5c400",
+          "#f5c400",
+          "#f5c400",
+          "#f5c400",
+          "#f5c400"
+        ]
+      },
+      "yellow-deep": {
+        "role": "primary",
+        "displayName": "Pressed Yellow",
+        "canonical": "#dcae00",
+        "tonalRamp": [
+          "#dcae00",
+          "#dcae00",
+          "#dcae00",
+          "#dcae00",
+          "#dcae00",
+          "#dcae00",
+          "#dcae00",
+          "#dcae00"
+        ]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "Swiss Red",
+        "canonical": "#d52b1e",
+        "tonalRamp": [
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e",
+          "#d52b1e"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "totals": {
+        "displayName": "Totals",
+        "purpose": "The day's totals."
+      },
+      "status": {
+        "displayName": "Status",
+        "purpose": "The one-sentence status under the shell."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose."
+      },
+      "table": {
+        "displayName": "Table",
+        "purpose": "Table text, nav, buttons."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Column heads, meter labels, clock times, notes."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tip-edge",
+        "value": "drop-shadow(1px 0 0 #6a6c69) drop-shadow(0 1px 0 #6a6c69) drop-shadow(0 -1px 0 #6a6c69)",
+        "purpose": "A filter used only as a 1px edge on the near-limit tip. Not elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Easing for the blade unfold and the tip settle."
+      },
+      {
+        "name": "unfold",
+        "value": "520ms, 45ms stagger per row",
+        "purpose": "The one authored motion: blades unfold left to right, top first."
+      },
+      {
+        "name": "settle",
+        "value": "200ms, 420ms after the blade starts",
+        "purpose": "Tip band fades in after its blade."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "gutter",
+        "value": "40rem"
+      },
+      {
+        "name": "rows-stack",
+        "value": "48rem"
+      },
+      {
+        "name": "nav-wrap",
+        "value": "64rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Reset Blade",
+      "kind": "custom",
+      "refersTo": "reset-blade",
+      "description": "Yellow pointed blade: window name left, time right.",
+      "html": "<span class=\"ds-blade\"><span class=\"ds-dest\">5-hour</span><span class=\"ds-time\">1 h 34 min</span></span>",
+      "css": ".ds-blade{display:inline-flex;align-items:center;justify-content:space-between;gap:12px;width:12rem;height:2.125rem;padding:0 1.625rem 0 12px;background:var(--yellow,#f5c400);color:var(--ink,#1b1c1b);clip-path:polygon(0 0,calc(100% - .875rem) 0,100% 50%,calc(100% - .875rem) 100%,0 100%);white-space:nowrap}.ds-dest{font-size:.875rem;font-weight:500}.ds-time{font-size:.9375rem;font-weight:750;letter-spacing:-.01em}"
+    },
+    {
+      "name": "Closed Blade",
+      "kind": "custom",
+      "refersTo": "reset-blade-closed",
+      "description": "Red blade for a closed account.",
+      "html": "<span class=\"ds-blade-closed\"><span class=\"ds-dest\">Back in</span><span class=\"ds-time\">3 h 10 min</span></span>",
+      "css": ".ds-blade-closed{display:inline-flex;align-items:center;justify-content:space-between;gap:12px;width:12rem;height:2.125rem;padding:0 1.625rem 0 12px;background:#d52b1e;color:#fff;clip-path:polygon(0 0,calc(100% - .875rem) 0,100% 50%,calc(100% - .875rem) 100%,0 100%);white-space:nowrap}.ds-dest{font-size:.875rem;font-weight:500}.ds-time{font-size:.9375rem;font-weight:750}"
+    },
+    {
+      "name": "Meter",
+      "kind": "custom",
+      "refersTo": "meter-fill",
+      "description": "Flat bar on a shared 0-100% scale.",
+      "html": "<div class=\"ds-meter\"><span class=\"ds-lbl\">5-hour</span><div class=\"ds-track\"><div class=\"ds-fill\" style=\"width:62%\"></div></div><span class=\"ds-val\">62%</span></div>",
+      "css": ".ds-meter{display:grid;grid-template-columns:4rem minmax(4rem,1fr) 2.75rem;align-items:center;gap:12px;width:22rem}.ds-lbl{font-size:.8125rem;color:var(--stone-4,#6a6c69)}.ds-track{height:.5rem;background:var(--stone-2,#e3e3df);border-radius:1px;overflow:hidden}.ds-fill{height:100%;background:var(--ink,#1b1c1b)}.ds-val{text-align:right;font-size:.875rem;font-weight:650}"
+    },
+    {
+      "name": "Connect Button",
+      "kind": "button",
+      "refersTo": "button-connect",
+      "description": "Ink button for the one primary action.",
+      "html": "<a class=\"ds-connect\" href=\"#\">Connect account</a>",
+      "css": ".ds-connect{display:inline-flex;align-items:center;height:2.5rem;padding:0 16px;background:var(--ink,#1b1c1b);color:#fff;font-size:.875rem;font-weight:700;text-decoration:none;border-radius:3px}.ds-connect:hover{background:color-mix(in oklab,#1b1c1b 82%,#f5c400)}.ds-connect:focus-visible{outline:3px solid #1b1c1b;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White with a 2px ink border.",
+      "html": "<button class=\"ds-secondary\">Try again</button>",
+      "css": ".ds-secondary{height:2.5rem;padding:0 16px;background:#fff;border:2px solid #1b1c1b;border-radius:3px;font:inherit;font-size:.875rem;font-weight:700;color:#1b1c1b;cursor:pointer}.ds-secondary:hover{background:#f3f3f1}.ds-secondary:focus-visible{outline:3px solid #1b1c1b;outline-offset:2px}"
+    },
+    {
+      "name": "Shell Nav",
+      "kind": "nav",
+      "refersTo": "shell-bar",
+      "description": "Yellow bar; the active link has a 4px ink underline.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-link\" aria-current=\"page\" href=\"#\">Overview</a><a class=\"ds-link\" href=\"#\">Accounts</a></nav>",
+      "css": ".ds-nav{display:flex;height:4rem;background:#f5c400;padding:0 16px}.ds-link{display:flex;align-items:center;padding:0 12px;color:#1b1c1b;font-size:.9375rem;font-weight:500;text-decoration:none;box-shadow:inset 0 -4px 0 transparent}.ds-link:hover{box-shadow:inset 0 -4px 0 color-mix(in oklab,#1b1c1b 25%,#f5c400)}.ds-link[aria-current=page]{font-weight:750;box-shadow:inset 0 -4px 0 #1b1c1b}.ds-link:focus-visible{outline:3px solid #1b1c1b;outline-offset:-3px}"
+    },
+    {
+      "name": "Trail Mark",
+      "kind": "custom",
+      "refersTo": "trail-mark",
+      "description": "Red paint band beside something closed or failing.",
+      "html": "<span class=\"ds-mark\"></span>",
+      "css": ".ds-mark{display:inline-block;width:1rem;height:.5rem;background:#d52b1e}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Trail Signpost",
+    "overview": "Quota is a walk to the next reset. Each account reads like a Swiss Wanderweg signpost: where it stands now, and how long until capacity is back, in walking-sign time. The ground is plain white; the only loud things are the yellow route (the shell bar and the reset blades) and, when something is wrong, red. Structure comes from hairlines and one ink rule under table headings: no cards, no shadows, no per-section colour strips.",
+    "keyCharacteristics": [
+      "White ground, yellow shell bar, black sign ink.",
+      "One meaning per colour; stone is the only neutral ramp.",
+      "Every figure is labelled once, by its column.",
+      "The reset blade is the memorable object; its unfold is the only authored motion.",
+      "Hairlines, no cards, no shadows."
+    ],
+    "rules": [
+      {
+        "name": "The One Meaning Rule",
+        "body": "Every colour carries one meaning. Yellow is the route, never a link underline or a highlight. Red is closed or failing, never decoration. Stone is the only neutral ramp; no ad-hoc greys.",
+        "section": "colors"
+      },
+      {
+        "name": "The Near-Limit Rule",
+        "body": "Near-limit is never solid red. It is the white-red-white band on the blade tip, with an ink note in the row. Solid red is reserved for closed, failed, and 100%.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Label Rule",
+        "body": "A figure is labelled once, by its column head. On narrow screens the request figure gets one key line above the list, not a label per row.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Separate with rules, never with boxes or shadows.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep yellow to the shell bar and the reset blades.",
+      "Do use red only for closed, failing, and 100%; show near-limit as the tip band plus an ink note.",
+      "Do draw every neutral from stone-1 to stone-4.",
+      "Do give blades a fixed 12rem length with destination left and time right.",
+      "Do label each figure once, by its column; give the mobile request figure one key line above the list.",
+      "Do separate with 1px stone-2 hairlines and the 2px ink heading rule.",
+      "Do keep the unfold as the only authored motion and respect reduced motion."
+    ],
+    "donts": [
+      "Don't use cards, boxes inside boxes, shadows, or per-section colour strips.",
+      "Don't colour link underlines yellow, or add a second accent.",
+      "Don't fill a meter or blade solid red for near-limit.",
+      "Don't repeat a label on every row.",
+      "Don't add greys outside the stone ramp."
+    ]
+  }
+}
