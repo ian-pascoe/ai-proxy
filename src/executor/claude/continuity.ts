@@ -8,8 +8,8 @@
  * with a per-isolate in-memory fallback. A turn costs one read (which slides the TTL), one write when the prompt id
  * or date changed, and one compare-and-swap write at commit (the generation is carried in {@link ContinuityState}).
  */
-import { createHash, randomUUID } from "node:crypto"
-import { Effect } from "effect"
+import { createHash, randomUUID } from "node:crypto";
+import { Effect } from "effect";
 import {
   type BackendResolver,
   bestEffort,
@@ -18,25 +18,25 @@ import {
   makeMemoryBackend,
   putValue,
   resolveBackend,
-  updateEntry
-} from "../../session-state/client.ts"
-import type { SessionAddress } from "../../session-state/protocol.ts"
+  updateEntry,
+} from "../../session-state/client.ts";
+import type { SessionAddress } from "../../session-state/protocol.ts";
 
-const TTL_MS = 60 * 60 * 1000
+const TTL_MS = 60 * 60 * 1000;
 
-const STORE_NAME = "claude-continuity"
+const STORE_NAME = "claude-continuity";
 
-const ENTRY_KEY = "state"
+const ENTRY_KEY = "state";
 
 export interface ContinuityState {
-  readonly key: string
-  readonly previousMessageId: string
-  readonly previousRequestId: string
-  readonly promptId: string
+  readonly key: string;
+  readonly previousMessageId: string;
+  readonly previousRequestId: string;
+  readonly promptId: string;
   /** The session's pinned `currentDate` (the date passed to `begin` on first use). */
-  readonly pinnedDate: string
+  readonly pinnedDate: string;
   /** Compare-and-swap token of the stored entry (0 when it could not be stored). */
-  readonly generation: number
+  readonly generation: number;
 }
 
 export interface ContinuityStore {
@@ -49,75 +49,86 @@ export interface ContinuityStore {
     sessionId: string,
     isNewPromptTurn: boolean,
     explicitPromptId: string,
-    date: string
-  ) => Effect.Effect<ContinuityState | undefined>
+    date: string,
+  ) => Effect.Effect<ContinuityState | undefined>;
   /** Records a completed response. */
   readonly commit: (
     state: ContinuityState,
     messageId: string,
     requestId: string,
-    promptId: string
-  ) => Effect.Effect<void>
+    promptId: string,
+  ) => Effect.Effect<void>;
 }
 
 interface Entry {
-  previousMessageId: string
-  previousRequestId: string
-  promptId: string
-  pinnedDate: string
+  previousMessageId: string;
+  previousRequestId: string;
+  promptId: string;
+  pinnedDate: string;
 }
 
-const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const REQUEST_ID = /^req_[A-Za-z0-9_-]{1,36}$/
+const REQUEST_ID = /^req_[A-Za-z0-9_-]{1,36}$/;
 
-export const isValidPromptId = (id: string): boolean => PROMPT_ID.test(id.trim())
+export const isValidPromptId = (id: string): boolean => PROMPT_ID.test(id.trim());
 
 /** `ClaudeDeterministicPromptID`: a v4-shaped UUID derived from a seed. */
 export const deterministicPromptId = (seed: string): string => {
-  const digest = createHash("sha256").update(seed).digest()
-  digest[6] = ((digest[6] as number) & 0x0f) | 0x40
-  digest[8] = ((digest[8] as number) & 0x3f) | 0x80
-  const hex = digest.toString("hex")
+  const digest = createHash("sha256").update(seed).digest();
+  digest[6] = ((digest[6] as number) & 0x0f) | 0x40;
+  digest[8] = ((digest[8] as number) & 0x3f) | 0x80;
+  const hex = digest.toString("hex");
 
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
-}
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+};
 
-const emptyEntry = (): Entry => ({ previousMessageId: "", previousRequestId: "", promptId: "", pinnedDate: "" })
+const emptyEntry = (): Entry => ({
+  previousMessageId: "",
+  previousRequestId: "",
+  promptId: "",
+  pinnedDate: "",
+});
 
 const parseEntry = (text: string | undefined): Entry | undefined => {
-  if (text === undefined) return undefined
+  if (text === undefined) return undefined;
 
   try {
-    const parsed = JSON.parse(text) as Partial<Entry> | null
+    const parsed = JSON.parse(text) as Partial<Entry> | null;
 
-    if (parsed === null || typeof parsed !== "object") return undefined
-    const field = (value: unknown): string => (typeof value === "string" ? value : "")
+    if (parsed === null || typeof parsed !== "object") return undefined;
+    const field = (value: unknown): string => (typeof value === "string" ? value : "");
 
     return {
       previousMessageId: field(parsed.previousMessageId),
       previousRequestId: field(parsed.previousRequestId),
       promptId: field(parsed.promptId),
-      pinnedDate: field(parsed.pinnedDate)
-    }
+      pinnedDate: field(parsed.pinnedDate),
+    };
   } catch {
-    return undefined
+    return undefined;
   }
-}
+};
 
-const addressOf = (key: string): SessionAddress => ({ store: STORE_NAME, scope: "", session: key })
+const addressOf = (key: string): SessionAddress => ({ store: STORE_NAME, scope: "", session: key });
 
-const stateOf = (key: string, entry: Entry, generation: number): ContinuityState => ({ key, ...entry, generation })
+const stateOf = (key: string, entry: Entry, generation: number): ContinuityState => ({
+  key,
+  ...entry,
+  generation,
+});
 
 /** Store over the `SessionState` backend of the current request (Durable Object, or the per-isolate fallback). */
-export const makeSessionStateContinuityStore = (backend: BackendResolver = resolveBackend()): ContinuityStore => ({
+export const makeSessionStateContinuityStore = (
+  backend: BackendResolver = resolveBackend(),
+): ContinuityStore => ({
   begin: (credentialIdentity, sessionId, isNewPromptTurn, explicitPromptId, date) => {
-    const identity = credentialIdentity.trim()
-    const session = sessionId.trim()
+    const identity = credentialIdentity.trim();
+    const session = sessionId.trim();
 
-    if (identity === "" || session === "") return Effect.succeed(undefined)
-    const key = createHash("sha256").update(`${identity}\u0000${session}`).digest("hex")
-    const explicit = explicitPromptId.trim()
+    if (identity === "" || session === "") return Effect.succeed(undefined);
+    const key = createHash("sha256").update(`${identity}\u0000${session}`).digest("hex");
+    const explicit = explicitPromptId.trim();
 
     return bestEffort(
       "claude continuity begin",
@@ -126,14 +137,15 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
         key,
         {
           ...emptyEntry(),
-          promptId: explicit !== "" && isValidPromptId(explicit) ? explicit.toLowerCase() : randomUUID(),
-          pinnedDate: date
+          promptId:
+            explicit !== "" && isValidPromptId(explicit) ? explicit.toLowerCase() : randomUUID(),
+          pinnedDate: date,
         },
-        0
+        0,
       ),
       Effect.gen(function* () {
-        const state = yield* backend
-        let next = emptyEntry()
+        const state = yield* backend;
+        let next = emptyEntry();
 
         const outcome = yield* updateEntry(
           state,
@@ -141,43 +153,46 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
           ENTRY_KEY,
           { ttlMs: TTL_MS, maxEntries: 1, slideTtl: true },
           (current) => {
-            const stored = parseEntry(current)
-            const entry: Entry = { ...(stored ?? emptyEntry()) }
+            const stored = parseEntry(current);
+            const entry: Entry = { ...(stored ?? emptyEntry()) };
 
-            if (explicit !== "" && isValidPromptId(explicit)) entry.promptId = explicit.toLowerCase()
-            else if (isNewPromptTurn || entry.promptId === "") entry.promptId = randomUUID()
+            if (explicit !== "" && isValidPromptId(explicit))
+              entry.promptId = explicit.toLowerCase();
+            else if (isNewPromptTurn || entry.promptId === "") entry.promptId = randomUUID();
 
-            if (entry.pinnedDate === "") entry.pinnedDate = date
-            next = entry
+            if (entry.pinnedDate === "") entry.pinnedDate = date;
+            next = entry;
 
             const unchanged =
-              stored !== undefined && stored.promptId === entry.promptId && stored.pinnedDate === entry.pinnedDate
+              stored !== undefined &&
+              stored.promptId === entry.promptId &&
+              stored.pinnedDate === entry.pinnedDate;
 
-            return unchanged ? keepValue : putValue(JSON.stringify(entry))
-          }
-        )
+            return unchanged ? keepValue : putValue(JSON.stringify(entry));
+          },
+        );
 
-        return stateOf(key, next, outcome.generation)
-      })
-    )
+        return stateOf(key, next, outcome.generation);
+      }),
+    );
   },
   commit: (state, messageId, requestId, promptId) => {
-    const id = messageId.trim()
+    const id = messageId.trim();
 
-    if (id === "") return Effect.void
+    if (id === "") return Effect.void;
 
     return bestEffort(
       "claude continuity commit",
       undefined,
       Effect.gen(function* () {
-        const backendState = yield* backend
+        const backendState = yield* backend;
 
         const known: Entry = {
           previousMessageId: state.previousMessageId,
           previousRequestId: state.previousRequestId,
           promptId: state.promptId,
-          pinnedDate: state.pinnedDate
-        }
+          pinnedDate: state.pinnedDate,
+        };
 
         yield* updateEntry(
           backendState,
@@ -186,26 +201,29 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
           {
             ttlMs: TTL_MS,
             maxEntries: 1,
-            known: { generation: state.generation, value: state.generation === 0 ? undefined : JSON.stringify(known) }
+            known: {
+              generation: state.generation,
+              value: state.generation === 0 ? undefined : JSON.stringify(known),
+            },
           },
           (current) => {
             // An expired or never stored session is not resurrected by a commit.
-            const stored = parseEntry(current)
+            const stored = parseEntry(current);
 
-            if (stored === undefined) return keepValue
-            stored.previousMessageId = id
-            stored.previousRequestId = REQUEST_ID.test(requestId.trim()) ? requestId.trim() : ""
+            if (stored === undefined) return keepValue;
+            stored.previousMessageId = id;
+            stored.previousRequestId = REQUEST_ID.test(requestId.trim()) ? requestId.trim() : "";
 
-            if (isValidPromptId(promptId)) stored.promptId = promptId.toLowerCase()
+            if (isValidPromptId(promptId)) stored.promptId = promptId.toLowerCase();
 
-            return putValue(JSON.stringify(stored))
-          }
-        )
-      })
-    )
-  }
-})
+            return putValue(JSON.stringify(stored));
+          },
+        );
+      }),
+    );
+  },
+});
 
 /** In-memory store for tests (`now` is injectable). */
 export const makeMemoryContinuityStore = (now?: () => number): ContinuityStore =>
-  makeSessionStateContinuityStore(fixedBackend(makeMemoryBackend(now)))
+  makeSessionStateContinuityStore(fixedBackend(makeMemoryBackend(now)));

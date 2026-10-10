@@ -8,42 +8,42 @@
  *
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
-import { Effect, Schema } from "effect"
-import type { JsonObject } from "../json/index.ts"
-import type { StoredCredential } from "./derive.ts"
-import { credentialsChanged, mergeExistingMetadata } from "./merge.ts"
-import { CredentialState } from "./model.ts"
+import { Effect, Schema } from "effect";
+import type { JsonObject } from "../json/index.ts";
+import type { StoredCredential } from "./derive.ts";
+import { credentialsChanged, mergeExistingMetadata } from "./merge.ts";
+import { CredentialState } from "./model.ts";
 
 interface CredentialRow {
-  id: string
-  provider: string
-  disabled: number
-  metadata: string
-  credential_version: number
-  created_at: number
-  updated_at: number
-  [column: string]: SqlStorageValue
+  id: string;
+  provider: string;
+  disabled: number;
+  metadata: string;
+  credential_version: number;
+  created_at: number;
+  updated_at: number;
+  [column: string]: SqlStorageValue;
 }
 
 interface StateRow {
-  id: string
-  state: string
-  [column: string]: SqlStorageValue
+  id: string;
+  state: string;
+  [column: string]: SqlStorageValue;
 }
 
 export interface UpsertOptions {
   /** Carry user settings over from the existing file (re-login semantics, credentials.md §11). */
-  readonly mergeExisting: boolean
+  readonly mergeExisting: boolean;
 }
 
 export interface UpsertOutcome {
-  readonly record: StoredCredential
-  readonly created: boolean
+  readonly record: StoredCredential;
+  readonly created: boolean;
   /** Token/API-key material changed (`credentialVersion` was bumped). */
-  readonly credentialsChanged: boolean
+  readonly credentialsChanged: boolean;
 }
 
-const decodeState = Schema.decodeUnknownEffect(CredentialState)
+const decodeState = Schema.decodeUnknownEffect(CredentialState);
 
 const toRecord = (row: CredentialRow): StoredCredential => ({
   id: row.id,
@@ -51,16 +51,16 @@ const toRecord = (row: CredentialRow): StoredCredential => ({
   metadata: JSON.parse(row.metadata) as JsonObject,
   credentialVersion: row.credential_version,
   createdAt: row.created_at,
-  updatedAt: row.updated_at
-})
+  updatedAt: row.updated_at,
+});
 
 export class CredentialStore {
-  readonly #sql: SqlStorage
-  readonly #now: () => number
+  readonly #sql: SqlStorage;
+  readonly #now: () => number;
 
   constructor(sql: SqlStorage, now: () => number = Date.now) {
-    this.#sql = sql
-    this.#now = now
+    this.#sql = sql;
+    this.#now = now;
     sql.exec(
       `CREATE TABLE IF NOT EXISTS credentials (
          id TEXT PRIMARY KEY,
@@ -70,89 +70,95 @@ export class CredentialStore {
          credential_version INTEGER NOT NULL,
          created_at INTEGER NOT NULL,
          updated_at INTEGER NOT NULL
-       )`
-    )
-    sql.exec("CREATE INDEX IF NOT EXISTS credentials_provider ON credentials (provider, disabled)")
+       )`,
+    );
+    sql.exec("CREATE INDEX IF NOT EXISTS credentials_provider ON credentials (provider, disabled)");
     sql.exec(
       `CREATE TABLE IF NOT EXISTS credential_state (
          id TEXT PRIMARY KEY,
          state TEXT NOT NULL,
          updated_at INTEGER NOT NULL
-       )`
-    )
+       )`,
+    );
   }
 
   list(): StoredCredential[] {
     return this.#sql
       .exec<CredentialRow>(
-        "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials ORDER BY id"
+        "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials ORDER BY id",
       )
       .toArray()
-      .map(toRecord)
+      .map(toRecord);
   }
 
   get(id: string): StoredCredential | undefined {
     const row = this.#sql
       .exec<CredentialRow>(
         "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials WHERE id = ?",
-        id
+        id,
       )
-      .toArray()[0]
+      .toArray()[0];
 
-    return row === undefined ? undefined : toRecord(row)
+    return row === undefined ? undefined : toRecord(row);
   }
 
   /** Inserts or replaces one auth file. `incoming` is the complete new file content. */
-  upsert(id: string, provider: string, incoming: JsonObject, options: UpsertOptions): UpsertOutcome {
-    const existing = this.get(id)
+  upsert(
+    id: string,
+    provider: string,
+    incoming: JsonObject,
+    options: UpsertOptions,
+  ): UpsertOutcome {
+    const existing = this.get(id);
 
     const metadata =
       existing !== undefined && options.mergeExisting
         ? mergeExistingMetadata(provider, incoming, existing.metadata)
-        : incoming
+        : incoming;
 
-    const now = this.#now()
-    const changed = existing === undefined ? true : credentialsChanged(existing.metadata, metadata)
+    const now = this.#now();
+    const changed = existing === undefined ? true : credentialsChanged(existing.metadata, metadata);
 
     const record: StoredCredential = {
       id,
       provider,
       metadata,
-      credentialVersion: existing === undefined ? 1 : existing.credentialVersion + (changed ? 1 : 0),
+      credentialVersion:
+        existing === undefined ? 1 : existing.credentialVersion + (changed ? 1 : 0),
       createdAt: existing?.createdAt ?? now,
-      updatedAt: now
-    }
+      updatedAt: now,
+    };
 
-    this.#write(record)
+    this.#write(record);
 
-    return { record, created: existing === undefined, credentialsChanged: changed }
+    return { record, created: existing === undefined, credentialsChanged: changed };
   }
 
   /** Sets the `disabled` flag (persisted in the file JSON like Go). `undefined` when the credential is unknown. */
   setDisabled(id: string, disabled: boolean): StoredCredential | undefined {
-    const existing = this.get(id)
+    const existing = this.get(id);
 
-    if (existing === undefined) return undefined
+    if (existing === undefined) return undefined;
 
     const record: StoredCredential = {
       ...existing,
       metadata: { ...existing.metadata, disabled },
-      updatedAt: this.#now()
-    }
+      updatedAt: this.#now(),
+    };
 
-    this.#write(record)
+    this.#write(record);
 
-    return record
+    return record;
   }
 
   remove(id: string): boolean {
-    const existing = this.get(id)
+    const existing = this.get(id);
 
-    if (existing === undefined) return false
-    this.#sql.exec("DELETE FROM credentials WHERE id = ?", id)
-    this.deleteState(id)
+    if (existing === undefined) return false;
+    this.#sql.exec("DELETE FROM credentials WHERE id = ?", id);
+    this.deleteState(id);
 
-    return true
+    return true;
   }
 
   #write(record: StoredCredential): void {
@@ -168,26 +174,28 @@ export class CredentialStore {
       JSON.stringify(record.metadata),
       record.credentialVersion,
       record.createdAt,
-      record.updatedAt
-    )
+      record.updatedAt,
+    );
   }
 
   /** Persisted runtime states; rows that no longer decode are dropped. */
   loadStates(): Map<string, CredentialState> {
-    const states = new Map<string, CredentialState>()
+    const states = new Map<string, CredentialState>();
 
-    for (const row of this.#sql.exec<StateRow>("SELECT id, state FROM credential_state").toArray()) {
+    for (const row of this.#sql
+      .exec<StateRow>("SELECT id, state FROM credential_state")
+      .toArray()) {
       try {
-        const decoded = Effect.runSync(Effect.result(decodeState(JSON.parse(row.state))))
+        const decoded = Effect.runSync(Effect.result(decodeState(JSON.parse(row.state))));
 
-        if (decoded._tag === "Success") states.set(row.id, decoded.success)
-        else this.deleteState(row.id)
+        if (decoded._tag === "Success") states.set(row.id, decoded.success);
+        else this.deleteState(row.id);
       } catch {
-        this.deleteState(row.id)
+        this.deleteState(row.id);
       }
     }
 
-    return states
+    return states;
   }
 
   saveState(id: string, state: CredentialState): void {
@@ -196,11 +204,11 @@ export class CredentialStore {
        ON CONFLICT (id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at`,
       id,
       JSON.stringify(state),
-      this.#now()
-    )
+      this.#now(),
+    );
   }
 
   deleteState(id: string): void {
-    this.#sql.exec("DELETE FROM credential_state WHERE id = ?", id)
+    this.#sql.exec("DELETE FROM credential_state WHERE id = ?", id);
   }
 }

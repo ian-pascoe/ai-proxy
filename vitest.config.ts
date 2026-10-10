@@ -1,5 +1,5 @@
-import { cloudflareTest } from "@cloudflare/vitest-plugin"
-import { defineConfig } from "vitest/config"
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
+import { defineConfig } from "vitest/config";
 
 // The test Worker mirrors the deployed one declared in alchemy.run.ts (same entry, compatibility settings and binding
 // names); there is no Wrangler configuration file.
@@ -14,14 +14,14 @@ export default defineConfig({
         modulesRules: [{ type: "Data", include: ["**/*.bin"] }],
         durableObjects: {
           CONTROL_PLANE: { className: "ControlPlane", useSQLite: true },
-          SESSION_STATE: { className: "SessionState", useSQLite: true }
+          SESSION_STATE: { className: "SessionState", useSQLite: true },
         },
         kvNamespaces: ["CACHE"],
         d1Databases: ["USAGE"],
         assets: {
           directory: "./public",
           binding: "ASSETS",
-          routerConfig: { invoke_user_worker_ahead_of_assets: true }
+          routerConfig: { invoke_user_worker_ahead_of_assets: true },
         },
         bindings: {
           ACCESS_TEAM_DOMAIN: "",
@@ -33,15 +33,15 @@ export default defineConfig({
           // fail closed (`https://proxy.test/...` answers 500 without Access settings).
           ACCESS_DEV_BYPASS: "true",
           USAGE_RETENTION_DAYS: "30",
-          META_MINT_URL: ""
-        }
-      }
-    })
+          META_MINT_URL: "",
+        },
+      },
+    }),
   ],
   test: {
     include: ["test/**/*.test.ts"],
     // The first test in each file pays for module transformation inside workerd; keep generous timeouts.
     testTimeout: 30_000,
-    hookTimeout: 30_000
-  }
-})
+    hookTimeout: 30_000,
+  },
+});

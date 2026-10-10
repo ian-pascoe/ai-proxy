@@ -3,457 +3,494 @@
  *
  * Go source: internal/translator/claude/openai/chat-completions/claude_openai_request.go.
  */
-import { asFloat, asInt, get, type Json, type JsonObject } from "../../../../json/index.ts"
+import { asFloat, asInt, get, type Json, type JsonObject } from "../../../../json/index.ts";
 import {
   convertLevelToBudget,
   hasLevel,
   mapToClaudeEffort,
-  applyTranslatedSummaryToClaude
-} from "../../../../thinking/index.ts"
-import { lookupModelInfo } from "../../../model-info.ts"
+  applyTranslatedSummaryToClaude,
+} from "../../../../thinking/index.ts";
+import { lookupModelInfo } from "../../../model-info.ts";
 import {
   attachCacheControl,
   attachMessageCacheControl,
-  attachToolMessageCacheControl
-} from "../../../common/cache-control.ts"
-import { ClaudeMessageAccumulator } from "../../../common/claude-messages.ts"
-import { buildClaudeStructuredOutputInstruction } from "../../../common/claude-system.ts"
-import { deriveClaudeUserID } from "../../../common/claude-user-id.ts"
-import { normalizeClaudeToolInputSchema, sanitizeClaudeFunctionName } from "../../../common/claude-util.ts"
-import { generateClaudeToolCallId } from "../../../common/request.ts"
-import { sanitizeClaudeToolId } from "../../../common/tool-names.ts"
-import { exists, isArr, isObj, str, toArray, trimmed } from "../../../common/gjson.ts"
-import { UserTurnDrops } from "../../../common/parts.ts"
+  attachToolMessageCacheControl,
+} from "../../../common/cache-control.ts";
+import { ClaudeMessageAccumulator } from "../../../common/claude-messages.ts";
+import { buildClaudeStructuredOutputInstruction } from "../../../common/claude-system.ts";
+import { deriveClaudeUserID } from "../../../common/claude-user-id.ts";
+import {
+  normalizeClaudeToolInputSchema,
+  sanitizeClaudeFunctionName,
+} from "../../../common/claude-util.ts";
+import { generateClaudeToolCallId } from "../../../common/request.ts";
+import { sanitizeClaudeToolId } from "../../../common/tool-names.ts";
+import { exists, isArr, isObj, str, toArray, trimmed } from "../../../common/gjson.ts";
+import { UserTurnDrops } from "../../../common/parts.ts";
 
 const firstExisting = (...values: Array<Json | undefined>): Json | undefined =>
-  values.find((value) => value !== undefined)
+  values.find((value) => value !== undefined);
 
 /** `ConvertOpenAIRequestToClaude`. */
-export const convertOpenAIRequestToClaude = (modelName: string, input: Json, stream: boolean): Json =>
-  convertRequest(modelName, input, stream, false)
+export const convertOpenAIRequestToClaude = (
+  modelName: string,
+  input: Json,
+  stream: boolean,
+): Json => convertRequest(modelName, input, stream, false);
 
 /** `ConvertOpenAIRequestToClaudeWithCompat`: assistant reasoning becomes an unsigned thinking block. */
-export const convertOpenAIRequestToClaudeWithCompat = (modelName: string, input: Json, stream: boolean): Json =>
-  convertRequest(modelName, input, stream, true)
+export const convertOpenAIRequestToClaudeWithCompat = (
+  modelName: string,
+  input: Json,
+  stream: boolean,
+): Json => convertRequest(modelName, input, stream, true);
 
-const convertRequest = (modelName: string, root: Json, stream: boolean, preserveEmptyThinkingBlocks: boolean): Json => {
-  const drops = new UserTurnDrops()
-  const userId = deriveClaudeUserID(root)
+const convertRequest = (
+  modelName: string,
+  root: Json,
+  stream: boolean,
+  preserveEmptyThinkingBlocks: boolean,
+): Json => {
+  const drops = new UserTurnDrops();
+  const userId = deriveClaudeUserID(root);
 
-  const out: JsonObject = { model: "", max_tokens: 32000, messages: [], metadata: { user_id: userId } }
+  const out: JsonObject = {
+    model: "",
+    max_tokens: 32000,
+    messages: [],
+    metadata: { user_id: userId },
+  };
 
-  const reasoning = get(root, "reasoning_effort")
+  const reasoning = get(root, "reasoning_effort");
 
   if (exists(reasoning)) {
-    let effort = str(reasoning).trim().toLowerCase()
+    let effort = str(reasoning).trim().toLowerCase();
 
     if (effort !== "") {
-      const mi = lookupModelInfo(modelName, "claude")
-      const supportsAdaptive = (mi?.thinking?.levels?.length ?? 0) > 0
-      const supportsMax = supportsAdaptive && hasLevel(mi?.thinking?.levels, "max")
+      const mi = lookupModelInfo(modelName, "claude");
+      const supportsAdaptive = (mi?.thinking?.levels?.length ?? 0) > 0;
+      const supportsMax = supportsAdaptive && hasLevel(mi?.thinking?.levels, "max");
 
       if (supportsAdaptive) {
         switch (effort) {
           case "none":
-            out.thinking = { type: "disabled" }
-            break
+            out.thinking = { type: "disabled" };
+            break;
           case "auto":
-            out.thinking = { type: "adaptive" }
-            break
+            out.thinking = { type: "adaptive" };
+            break;
           default: {
-            const mapped = mapToClaudeEffort(effort, supportsMax)
+            const mapped = mapToClaudeEffort(effort, supportsMax);
 
-            if (mapped !== undefined) effort = mapped
-            out.thinking = { type: "adaptive" }
-            out.output_config = { effort }
+            if (mapped !== undefined) effort = mapped;
+            out.thinking = { type: "adaptive" };
+            out.output_config = { effort };
           }
         }
       } else {
-        const budget = convertLevelToBudget(effort)
+        const budget = convertLevelToBudget(effort);
 
         if (budget !== undefined) {
-          if (budget === 0) out.thinking = { type: "disabled" }
-          else if (budget === -1) out.thinking = { type: "enabled" }
-          else if (budget > 0) out.thinking = { type: "enabled", budget_tokens: budget }
+          if (budget === 0) out.thinking = { type: "disabled" };
+          else if (budget === -1) out.thinking = { type: "enabled" };
+          else if (budget > 0) out.thinking = { type: "enabled", budget_tokens: budget };
         }
       }
     }
   }
 
-  out.model = modelName
+  out.model = modelName;
 
-  const maxTokens = firstExisting(get(root, "max_tokens"), get(root, "max_completion_tokens"))
+  const maxTokens = firstExisting(get(root, "max_tokens"), get(root, "max_completion_tokens"));
 
-  if (exists(maxTokens)) out.max_tokens = asInt(maxTokens)
+  if (exists(maxTokens)) out.max_tokens = asInt(maxTokens);
 
-  const topP = get(root, "top_p")
+  const topP = get(root, "top_p");
 
-  if (exists(topP)) out.top_p = asFloat(topP)
+  if (exists(topP)) out.top_p = asFloat(topP);
 
-  const stop = get(root, "stop")
+  const stop = get(root, "stop");
 
   if (exists(stop)) {
     if (isArr(stop)) {
-      const sequences = stop.map(str)
+      const sequences = stop.map(str);
 
-      if (sequences.length > 0) out.stop_sequences = sequences
+      if (sequences.length > 0) out.stop_sequences = sequences;
     } else {
-      out.stop_sequences = [str(stop)]
+      out.stop_sequences = [str(stop)];
     }
   }
 
-  out.stream = stream
+  out.stream = stream;
 
-  const systemBlocks: JsonObject[] = []
-  let messageBlocks: JsonObject[] = []
+  const systemBlocks: JsonObject[] = [];
+  let messageBlocks: JsonObject[] = [];
 
-  const messages = get(root, "messages")
+  const messages = get(root, "messages");
 
   if (isArr(messages)) {
-    const lastToolMessage = new Map<string, Json>()
+    const lastToolMessage = new Map<string, Json>();
 
     for (const message of messages) {
       if (str(get(message, "role")) === "tool") {
-        const rawId = str(get(message, "tool_call_id"))
+        const rawId = str(get(message, "tool_call_id"));
 
-        if (rawId !== "") lastToolMessage.set(rawId, message)
+        if (rawId !== "") lastToolMessage.set(rawId, message);
       }
     }
 
-    const emittedToolResults = new Set<string>()
-    const accumulator = new ClaudeMessageAccumulator()
+    const emittedToolResults = new Set<string>();
+    const accumulator = new ClaudeMessageAccumulator();
 
     for (const message of messages) {
-      const role = str(get(message, "role"))
-      const content = get(message, "content")
+      const role = str(get(message, "role"));
+      const content = get(message, "content");
 
       switch (role) {
         case "system":
         case "developer": {
-          const systemStart = systemBlocks.length
+          const systemStart = systemBlocks.length;
 
           if (typeof content === "string" && content !== "") {
-            systemBlocks.push(attachCacheControl({ type: "text", text: content }, message))
+            systemBlocks.push(attachCacheControl({ type: "text", text: content }, message));
           } else if (isArr(content)) {
             for (const part of content) {
               if (str(get(part, "type")) === "text") {
-                systemBlocks.push(attachCacheControl({ type: "text", text: str(get(part, "text")) }, part))
+                systemBlocks.push(
+                  attachCacheControl({ type: "text", text: str(get(part, "text")) }, part),
+                );
               }
             }
 
             if (exists(get(message, "cache_control")) && systemBlocks.length > systemStart) {
-              const last = systemBlocks[systemBlocks.length - 1] as JsonObject
+              const last = systemBlocks[systemBlocks.length - 1] as JsonObject;
 
-              if (last.cache_control === undefined) attachCacheControl(last, message)
+              if (last.cache_control === undefined) attachCacheControl(last, message);
             }
           }
 
-          break
+          break;
         }
 
         case "user":
         case "assistant": {
-          const contentBlocks: JsonObject[] = []
+          const contentBlocks: JsonObject[] = [];
 
           if (preserveEmptyThinkingBlocks && role === "assistant") {
-            const reasoningContent = get(message, "reasoning_content")
+            const reasoningContent = get(message, "reasoning_content");
 
             if (typeof reasoningContent === "string" && reasoningContent.trim() !== "") {
-              contentBlocks.push({ type: "thinking", thinking: reasoningContent, signature: "" })
+              contentBlocks.push({ type: "thinking", thinking: reasoningContent, signature: "" });
             }
           }
 
           if (typeof content === "string" && content !== "") {
-            contentBlocks.push({ type: "text", text: content })
+            contentBlocks.push({ type: "text", text: content });
           } else if (isArr(content)) {
             for (const part of content) {
-              const claudePart = convertContentPart(part)
+              const claudePart = convertContentPart(part);
 
               if (claudePart !== undefined) {
-                contentBlocks.push(claudePart)
+                contentBlocks.push(claudePart);
               } else {
-                const partType = str(get(part, "type"))
+                const partType = str(get(part, "type"));
 
-                if (role === "user" && (partType === "file" || partType === "input_audio")) drops.drop(partType)
+                if (role === "user" && (partType === "file" || partType === "input_audio"))
+                  drops.drop(partType);
               }
             }
           }
 
-          if (role === "user") drops.endTurn(contentBlocks.length)
+          if (role === "user") drops.endTurn(contentBlocks.length);
 
-          const toolCalls = get(message, "tool_calls")
+          const toolCalls = get(message, "tool_calls");
 
           if (isArr(toolCalls) && role === "assistant") {
             for (const toolCall of toolCalls) {
-              if (str(get(toolCall, "type")) !== "function") continue
-              let toolCallId = str(get(toolCall, "id"))
+              if (str(get(toolCall, "type")) !== "function") continue;
+              let toolCallId = str(get(toolCall, "id"));
 
-              if (toolCallId === "") toolCallId = generateClaudeToolCallId()
-              toolCallId = sanitizeClaudeToolId(toolCallId)
-              const fn = get(toolCall, "function")
+              if (toolCallId === "") toolCallId = generateClaudeToolCallId();
+              toolCallId = sanitizeClaudeToolId(toolCallId);
+              const fn = get(toolCall, "function");
 
               const toolUse: JsonObject = {
                 type: "tool_use",
                 id: toolCallId,
                 name: sanitizeClaudeFunctionName(str(get(fn, "name"))),
-                input: toolInput(get(fn, "arguments"))
-              }
+                input: toolInput(get(fn, "arguments")),
+              };
 
-              contentBlocks.push(toolUse)
+              contentBlocks.push(toolUse);
             }
           }
 
-          const msg: JsonObject = { role, content: contentBlocks }
-          attachMessageCacheControl(msg, message)
-          accumulator.append(msg)
-          break
+          const msg: JsonObject = { role, content: contentBlocks };
+          attachMessageCacheControl(msg, message);
+          accumulator.append(msg);
+          break;
         }
 
         case "tool": {
-          const rawId = str(get(message, "tool_call_id"))
-          const toolCallId = sanitizeClaudeToolId(rawId)
+          const rawId = str(get(message, "tool_call_id"));
+          const toolCallId = sanitizeClaudeToolId(rawId);
 
           if (rawId !== "") {
-            if (emittedToolResults.has(rawId)) break
-            emittedToolResults.add(rawId)
+            if (emittedToolResults.has(rawId)) break;
+            emittedToolResults.add(rawId);
           }
 
-          const target = rawId !== "" ? (lastToolMessage.get(rawId) ?? message) : message
+          const target = rawId !== "" ? (lastToolMessage.get(rawId) ?? message) : message;
 
           const msg: JsonObject = {
             role: "user",
             content: [
-              { type: "tool_result", tool_use_id: toolCallId, content: toolResultContent(get(target, "content")) }
-            ]
-          }
+              {
+                type: "tool_result",
+                tool_use_id: toolCallId,
+                content: toolResultContent(get(target, "content")),
+              },
+            ],
+          };
 
-          attachToolMessageCacheControl(msg, target)
-          accumulator.append(msg)
-          break
+          attachToolMessageCacheControl(msg, target);
+          accumulator.append(msg);
+          break;
         }
       }
     }
 
-    messageBlocks = accumulator.messages()
+    messageBlocks = accumulator.messages();
   }
 
-  const formatInstruction = buildClaudeStructuredOutputInstruction(get(root, "response_format"))
+  const formatInstruction = buildClaudeStructuredOutputInstruction(get(root, "response_format"));
 
-  if (formatInstruction !== "") systemBlocks.push({ type: "text", text: formatInstruction })
+  if (formatInstruction !== "") systemBlocks.push({ type: "text", text: formatInstruction });
 
   if (messageBlocks.length === 0 && systemBlocks.length > 0) {
-    messageBlocks.push({ role: "user", content: [{ type: "text", text: "" }] })
+    messageBlocks.push({ role: "user", content: [{ type: "text", text: "" }] });
   }
 
-  if (systemBlocks.length > 0) out.system = systemBlocks
+  if (systemBlocks.length > 0) out.system = systemBlocks;
 
-  if (messageBlocks.length > 0) out.messages = messageBlocks
+  if (messageBlocks.length > 0) out.messages = messageBlocks;
 
   // Tools mapping
-  const allowedToolNames = new Set<string>()
-  let isAllowedTools = false
-  let allowedMode = "auto"
-  const toolChoice = get(root, "tool_choice")
+  const allowedToolNames = new Set<string>();
+  let isAllowedTools = false;
+  let allowedMode = "auto";
+  const toolChoice = get(root, "tool_choice");
 
   if (isObj(toolChoice) && str(toolChoice.type) === "allowed_tools") {
-    isAllowedTools = true
-    let toolList = toArray(get(toolChoice, "allowed_tools.tools"))
+    isAllowedTools = true;
+    let toolList = toArray(get(toolChoice, "allowed_tools.tools"));
 
-    if (toolList.length === 0) toolList = toArray(get(toolChoice, "tools"))
+    if (toolList.length === 0) toolList = toArray(get(toolChoice, "tools"));
 
     for (const tool of toolList) {
-      let fnName = trimmed(get(tool, "function.name"))
+      let fnName = trimmed(get(tool, "function.name"));
 
-      if (fnName === "") fnName = trimmed(get(tool, "name"))
+      if (fnName === "") fnName = trimmed(get(tool, "name"));
 
       if (fnName !== "") {
-        allowedToolNames.add(fnName)
-        allowedToolNames.add(sanitizeClaudeFunctionName(fnName))
+        allowedToolNames.add(fnName);
+        allowedToolNames.add(sanitizeClaudeFunctionName(fnName));
       }
     }
 
-    let mode = trimmed(get(toolChoice, "allowed_tools.mode")).toLowerCase()
+    let mode = trimmed(get(toolChoice, "allowed_tools.mode")).toLowerCase();
 
-    if (mode === "") mode = trimmed(get(toolChoice, "mode")).toLowerCase()
+    if (mode === "") mode = trimmed(get(toolChoice, "mode")).toLowerCase();
 
-    if (mode !== "") allowedMode = mode
+    if (mode !== "") allowedMode = mode;
   }
 
-  const anthropicTools: JsonObject[] = []
-  const tools = get(root, "tools")
+  const anthropicTools: JsonObject[] = [];
+  const tools = get(root, "tools");
 
   if (isArr(tools) && tools.length > 0) {
     for (const tool of tools) {
-      if (str(get(tool, "type")) !== "function") continue
-      const fn = get(tool, "function")
-      const fnName = str(get(fn, "name"))
-      const sanitized = sanitizeClaudeFunctionName(fnName)
+      if (str(get(tool, "type")) !== "function") continue;
+      const fn = get(tool, "function");
+      const fnName = str(get(fn, "name"));
+      const sanitized = sanitizeClaudeFunctionName(fnName);
 
-      if (isAllowedTools && !allowedToolNames.has(fnName) && !allowedToolNames.has(sanitized)) continue
-      const anthropicTool: JsonObject = { name: sanitized, description: str(get(fn, "description")) }
-      const parameters = get(fn, "parameters") ?? get(fn, "parametersJsonSchema")
-      anthropicTool.input_schema = normalizeClaudeToolInputSchema(parameters)
-      attachCacheControl(anthropicTool, tool)
+      if (isAllowedTools && !allowedToolNames.has(fnName) && !allowedToolNames.has(sanitized))
+        continue;
+      const anthropicTool: JsonObject = {
+        name: sanitized,
+        description: str(get(fn, "description")),
+      };
+      const parameters = get(fn, "parameters") ?? get(fn, "parametersJsonSchema");
+      anthropicTool.input_schema = normalizeClaudeToolInputSchema(parameters);
+      attachCacheControl(anthropicTool, tool);
 
-      if (anthropicTool.cache_control === undefined) attachCacheControl(anthropicTool, fn)
-      const strict = get(fn, "strict") ?? get(tool, "strict")
+      if (anthropicTool.cache_control === undefined) attachCacheControl(anthropicTool, fn);
+      const strict = get(fn, "strict") ?? get(tool, "strict");
 
-      if (strict === true) anthropicTool.strict = true
-      else if (strict === false) anthropicTool.strict = false
-      anthropicTools.push(anthropicTool)
+      if (strict === true) anthropicTool.strict = true;
+      else if (strict === false) anthropicTool.strict = false;
+      anthropicTools.push(anthropicTool);
     }
 
-    if (anthropicTools.length > 0) out.tools = anthropicTools
-    else delete out.tools
+    if (anthropicTools.length > 0) out.tools = anthropicTools;
+    else delete out.tools;
   }
 
   if (isAllowedTools) {
-    if (anthropicTools.length === 0) out.tool_choice = { type: "none" }
-    else if (allowedMode === "required") out.tool_choice = { type: "any" }
-    else out.tool_choice = { type: "auto" }
+    if (anthropicTools.length === 0) out.tool_choice = { type: "none" };
+    else if (allowedMode === "required") out.tool_choice = { type: "any" };
+    else out.tool_choice = { type: "auto" };
   } else if (exists(toolChoice) && toolChoice !== null) {
     if (typeof toolChoice === "string") {
-      if (toolChoice === "none") out.tool_choice = { type: "none" }
-      else if (toolChoice === "auto") out.tool_choice = { type: "auto" }
-      else if (toolChoice === "required") out.tool_choice = { type: "any" }
+      if (toolChoice === "none") out.tool_choice = { type: "none" };
+      else if (toolChoice === "auto") out.tool_choice = { type: "auto" };
+      else if (toolChoice === "required") out.tool_choice = { type: "any" };
     } else if (isObj(toolChoice) || isArr(toolChoice)) {
       switch (str(get(toolChoice, "type"))) {
         case "none":
-          out.tool_choice = { type: "none" }
-          break
+          out.tool_choice = { type: "none" };
+          break;
         case "auto":
-          out.tool_choice = { type: "auto" }
-          break
+          out.tool_choice = { type: "auto" };
+          break;
         case "required":
         case "any":
-          out.tool_choice = { type: "any" }
-          break
+          out.tool_choice = { type: "any" };
+          break;
         case "function": {
-          let functionName = str(get(toolChoice, "function.name"))
+          let functionName = str(get(toolChoice, "function.name"));
 
-          if (functionName === "") functionName = str(get(toolChoice, "name"))
+          if (functionName === "") functionName = str(get(toolChoice, "name"));
           out.tool_choice =
-            functionName !== "" ? { type: "tool", name: sanitizeClaudeFunctionName(functionName) } : { type: "none" }
+            functionName !== ""
+              ? { type: "tool", name: sanitizeClaudeFunctionName(functionName) }
+              : { type: "none" };
         }
       }
     }
   }
 
   if (get(root, "parallel_tool_calls") === false) {
-    const choice = out.tool_choice
+    const choice = out.tool_choice;
 
     if (choice !== undefined) {
-      if (str(get(choice, "type")) !== "none") (choice as JsonObject).disable_parallel_tool_use = true
+      if (str(get(choice, "type")) !== "none")
+        (choice as JsonObject).disable_parallel_tool_use = true;
     } else if (out.tools !== undefined) {
-      out.tool_choice = { type: "auto", disable_parallel_tool_use: true }
+      out.tool_choice = { type: "auto", disable_parallel_tool_use: true };
     }
   }
 
-  const result = applyTranslatedSummaryToClaude(out, root, "openai", modelName, lookupModelInfo) ?? out
-  const refusal = drops.err(result)
+  const result =
+    applyTranslatedSummaryToClaude(out, root, "openai", modelName, lookupModelInfo) ?? out;
+  const refusal = drops.err(result);
 
-  if (refusal !== undefined) throw refusal
+  if (refusal !== undefined) throw refusal;
 
-  return result
-}
+  return result;
+};
 
 const toolInput = (args: Json | undefined): Json => {
-  if (!exists(args)) return {}
-  const text = str(args)
+  if (!exists(args)) return {};
+  const text = str(args);
 
-  if (text === "") return {}
+  if (text === "") return {};
 
   try {
-    const parsed = JSON.parse(text) as Json
+    const parsed = JSON.parse(text) as Json;
 
-    return isObj(parsed) ? parsed : {}
+    return isObj(parsed) ? parsed : {};
   } catch {
-    return {}
+    return {};
   }
-}
+};
 
 const convertContentPartRaw = (part: Json | undefined): JsonObject | undefined => {
   switch (str(get(part, "type"))) {
     case "text":
-      return { type: "text", text: str(get(part, "text")) }
+      return { type: "text", text: str(get(part, "text")) };
     case "image_url":
-      return convertImageURL(str(get(part, "image_url.url")))
+      return convertImageURL(str(get(part, "image_url.url")));
     case "file": {
-      const fileData = str(get(part, "file.file_data"))
+      const fileData = str(get(part, "file.file_data"));
 
       if (fileData.startsWith("data:")) {
-        const semicolon = fileData.indexOf(";")
-        const comma = fileData.indexOf(",")
+        const semicolon = fileData.indexOf(";");
+        const comma = fileData.indexOf(",");
 
         if (semicolon !== -1 && comma !== -1 && comma > semicolon) {
-          const mediaType = fileData.slice(0, semicolon).replace(/^data:/u, "")
+          const mediaType = fileData.slice(0, semicolon).replace(/^data:/u, "");
 
           return {
             type: "document",
-            source: { type: "base64", media_type: mediaType, data: fileData.slice(comma + 1) }
-          }
+            source: { type: "base64", media_type: mediaType, data: fileData.slice(comma + 1) },
+          };
         }
       }
     }
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 const convertContentPart = (part: Json | undefined): JsonObject | undefined => {
-  const claudePart = convertContentPartRaw(part)
+  const claudePart = convertContentPartRaw(part);
 
-  return claudePart === undefined ? undefined : attachCacheControl(claudePart, part)
-}
+  return claudePart === undefined ? undefined : attachCacheControl(claudePart, part);
+};
 
 const convertImageURL = (imageURL: string): JsonObject | undefined => {
-  if (imageURL === "") return undefined
+  if (imageURL === "") return undefined;
 
   if (imageURL.startsWith("data:")) {
-    const comma = imageURL.indexOf(",")
+    const comma = imageURL.indexOf(",");
 
-    if (comma === -1) return undefined
-    const head = imageURL.slice(0, comma)
-    let mediaType = head.split(";", 1)[0]?.replace(/^data:/u, "") ?? ""
+    if (comma === -1) return undefined;
+    const head = imageURL.slice(0, comma);
+    let mediaType = head.split(";", 1)[0]?.replace(/^data:/u, "") ?? "";
 
-    if (mediaType === "") mediaType = "application/octet-stream"
+    if (mediaType === "") mediaType = "application/octet-stream";
 
-    return { type: "image", source: { type: "base64", media_type: mediaType, data: imageURL.slice(comma + 1) } }
+    return {
+      type: "image",
+      source: { type: "base64", media_type: mediaType, data: imageURL.slice(comma + 1) },
+    };
   }
 
-  return { type: "image", source: { type: "url", url: imageURL } }
-}
+  return { type: "image", source: { type: "url", url: imageURL } };
+};
 
 /** `convertOpenAIToolResultContent`: a string, or an array of Claude parts. */
 const toolResultContent = (content: Json | undefined): Json => {
-  if (!exists(content)) return ""
+  if (!exists(content)) return "";
 
-  if (typeof content === "string") return content
+  if (typeof content === "string") return content;
 
   if (isArr(content)) {
-    const parts: JsonObject[] = []
+    const parts: JsonObject[] = [];
 
     for (const part of content) {
       if (typeof part === "string") {
-        parts.push({ type: "text", text: part })
-        continue
+        parts.push({ type: "text", text: part });
+        continue;
       }
 
-      const claudePart = convertContentPartRaw(part)
+      const claudePart = convertContentPartRaw(part);
 
-      if (claudePart !== undefined) parts.push(claudePart)
+      if (claudePart !== undefined) parts.push(claudePart);
     }
 
-    if (parts.length > 0 || content.length === 0) return parts
+    if (parts.length > 0 || content.length === 0) return parts;
 
-    return JSON.stringify(content)
+    return JSON.stringify(content);
   }
 
   if (isObj(content)) {
-    const claudePart = convertContentPartRaw(content)
+    const claudePart = convertContentPartRaw(content);
 
-    return claudePart !== undefined ? [claudePart] : JSON.stringify(content)
+    return claudePart !== undefined ? [claudePart] : JSON.stringify(content);
   }
 
-  return JSON.stringify(content)
-}
+  return JSON.stringify(content);
+};

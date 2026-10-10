@@ -6,11 +6,20 @@
  * (same as Go): the v8 value wins when both spellings exist (by presence, even `false`/`0`), the legacy key is
  * removed, and `null` means "missing" everywhere except inside `requests.payload` where `null` is a real value.
  */
-import { del, escapePathKey, get, isJsonArray, isJsonObject, type Json, type JsonObject, set } from "../json/index.ts"
-import { API_KEY_FAMILIES } from "./schema.ts"
-import { ConfigValidationError } from "./errors.ts"
+import {
+  del,
+  escapePathKey,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  set,
+} from "../json/index.ts";
+import { API_KEY_FAMILIES } from "./schema.ts";
+import { ConfigValidationError } from "./errors.ts";
 
-type Move = readonly [from: string, to: string]
+type Move = readonly [from: string, to: string];
 
 /** Historical v8 spellings (`v8ClientPaths`, `v8SharedPaths`, `v8SharedStructPaths`). */
 const V8_ALIASES: readonly Move[] = [
@@ -20,13 +29,19 @@ const V8_ALIASES: readonly Move[] = [
   ["oauth.providers.codex.disable-codex-cloaking", "upstream.codex.disable-codex-cloaking"],
   ["oauth.providers.codex.stream-bootstrap-buffering", "upstream.codex.stream-bootstrap-buffering"],
   ["oauth.providers.codex.stream-bootstrap-timeout", "upstream.codex.stream-bootstrap-timeout"],
-  ["oauth.providers.codex.orphan-delegation-compatibility", "upstream.codex.orphan-delegation-compatibility"],
+  [
+    "oauth.providers.codex.orphan-delegation-compatibility",
+    "upstream.codex.orphan-delegation-compatibility",
+  ],
   ["oauth.providers.codex.model-level-cooling", "upstream.codex.model-level-cooling"],
   ["oauth.providers.codex.response-steering", "upstream.codex.response-steering"],
-  ["oauth.providers.claude.claude-code.disable-cloaking-model-list", "upstream.claude.disable-cloaking-model-list"],
+  [
+    "oauth.providers.claude.claude-code.disable-cloaking-model-list",
+    "upstream.claude.disable-cloaking-model-list",
+  ],
   ["oauth.providers.claude", "upstream.claude"],
-  ["oauth.providers.xai", "upstream.xai"]
-]
+  ["oauth.providers.xai", "upstream.xai"],
+];
 
 /** Legacy flat layout -> v8 (`buildV8Paths`), restricted to the keys modelled by the Workers schema. */
 const LEGACY_MOVES: readonly Move[] = [
@@ -70,8 +85,11 @@ const LEGACY_MOVES: readonly Move[] = [
   ["debug", "observability.logs.debug"],
   ["request-log", "observability.logs.request-log"],
   ["usage-statistics-enabled", "observability.usage.usage-statistics-enabled"],
-  ["redis-usage-queue-retention-seconds", "observability.usage.redis-usage-queue-retention-seconds"]
-]
+  [
+    "redis-usage-queue-retention-seconds",
+    "observability.usage.redis-usage-queue-retention-seconds",
+  ],
+];
 
 /** Legacy `*-api-key` lists -> `api-keys.<family>` (`v8KeyFamilies`). */
 const LEGACY_FAMILIES: ReadonlyArray<readonly [legacy: string, family: string]> = [
@@ -82,8 +100,8 @@ const LEGACY_FAMILIES: ReadonlyArray<readonly [legacy: string, family: string]> 
   ["claude-api-key", "claude"],
   ["xai-api-key", "xai"],
   ["meta-api-key", "meta"],
-  ["openai-compatibility", "openai-compatibility"]
-]
+  ["openai-compatibility", "openai-compatibility"],
+];
 
 /** Group-level fields besides `name`, `base-url` and `keys` (`sharedKeyFields`). */
 const SHARED_KEY_FIELDS = [
@@ -95,8 +113,8 @@ const SHARED_KEY_FIELDS = [
   "excluded-models",
   "disable-cooling",
   "request-retry",
-  "request-scoped-errors"
-] as const
+  "request-scoped-errors",
+] as const;
 
 const ROUTING_STRATEGY_ALIASES: Readonly<Record<string, string>> = {
   "round-robin": "round-robin",
@@ -107,84 +125,91 @@ const ROUTING_STRATEGY_ALIASES: Readonly<Record<string, string>> = {
   wrr: "weighted-round-robin",
   "fill-first": "fill-first",
   fillfirst: "fill-first",
-  ff: "fill-first"
-}
+  ff: "fill-first",
+};
 
 /** Moves `from` to `to`; an existing target wins, object values merge key by key. */
 const moveMerge = (doc: JsonObject, from: string, to: string): void => {
-  const value = get(doc, from)
+  const value = get(doc, from);
 
-  if (value === undefined) return
-  const target = get(doc, to)
+  if (value === undefined) return;
+  const target = get(doc, to);
 
   if (target === undefined) {
-    set(doc, to, value)
+    set(doc, to, value);
   } else if (isJsonObject(value) && isJsonObject(target)) {
     for (const key of Object.keys(value)) {
-      const escaped = escapePathKey(key)
-      moveMerge(doc, `${from}.${escaped}`, `${to}.${escaped}`)
+      const escaped = escapePathKey(key);
+      moveMerge(doc, `${from}.${escaped}`, `${to}.${escaped}`);
     }
   }
 
-  del(doc, from)
-}
+  del(doc, from);
+};
 
 /** `groupLegacyKeys`: one group per legacy entry, auto-named `<family>-<index+1>`. */
 const groupLegacyKeys = (entries: readonly Json[], family: string): Json[] =>
   entries.map((entry, index) => {
-    if (!isJsonObject(entry)) return entry
+    if (!isJsonObject(entry)) return entry;
 
     if (family === "openai-compatibility") {
-      const { "api-key-entries": keys, ...group } = entry
+      const { "api-key-entries": keys, ...group } = entry;
 
-      return { ...group, keys: keys ?? [] }
+      return { ...group, keys: keys ?? [] };
     }
 
-    const group: JsonObject = { name: `${family}-${index + 1}` }
-    const key: JsonObject = {}
+    const group: JsonObject = { name: `${family}-${index + 1}` };
+    const key: JsonObject = {};
 
     for (const [field, value] of Object.entries(entry)) {
-      if (field === "base-url" || (SHARED_KEY_FIELDS as readonly string[]).includes(field)) group[field] = value
-      else key[field] = value
+      if (field === "base-url" || (SHARED_KEY_FIELDS as readonly string[]).includes(field))
+        group[field] = value;
+      else key[field] = value;
     }
 
-    group.keys = [key]
+    group.keys = [key];
 
-    return group
-  })
+    return group;
+  });
 
 /** Removes `null` values (YAML `key:` without value) except inside `requests.payload`. */
 const stripNulls = (value: Json, path: string): Json | undefined => {
-  if (value === null) return path === "requests.payload" || path.startsWith("requests.payload.") ? null : undefined
+  if (value === null)
+    return path === "requests.payload" || path.startsWith("requests.payload.") ? null : undefined;
 
   if (isJsonArray(value)) {
     // Null items are only kept inside payload rules (handled by the null check above).
     return value.flatMap((item) => {
-      const stripped = stripNulls(item, `${path}[]`)
+      const stripped = stripNulls(item, `${path}[]`);
 
-      return stripped === undefined ? [] : [stripped]
-    })
+      return stripped === undefined ? [] : [stripped];
+    });
   }
 
   if (isJsonObject(value)) {
-    const out: JsonObject = {}
+    const out: JsonObject = {};
 
     for (const [key, child] of Object.entries(value)) {
-      const stripped = stripNulls(child, path === "" ? key : `${path}.${key}`)
+      const stripped = stripNulls(child, path === "" ? key : `${path}.${key}`);
 
       if (stripped !== undefined)
-        Object.defineProperty(out, key, { value: stripped, enumerable: true, writable: true, configurable: true })
+        Object.defineProperty(out, key, {
+          value: stripped,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
     }
 
-    return out
+    return out;
   }
 
-  return value
-}
+  return value;
+};
 
 /** Lenient parsing of `disable-image-generation` strings (`on`, `yes`, `Chat`, ...). */
 const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefined => {
-  if (typeof value !== "string") return value
+  if (typeof value !== "string") return value;
 
   switch (value.trim().toLowerCase()) {
     case "":
@@ -192,122 +217,131 @@ const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefi
     case "0":
     case "off":
     case "no":
-      return false
+      return false;
     case "true":
     case "1":
     case "on":
     case "yes":
-      return true
+      return true;
     case "chat":
-      return "chat"
+      return "chat";
     case "passthrough":
-      return "passthrough"
+      return "passthrough";
     default:
       throw new ConfigValidationError({
-        message: `invalid multimedia.disable-image-generation value "${value}" (allowed: true, false, chat, passthrough)`
-      })
+        message: `invalid multimedia.disable-image-generation value "${value}" (allowed: true, false, chat, passthrough)`,
+      });
   }
-}
+};
 
 const validateApiKeys = (apiKeys: Json | undefined): void => {
-  if (apiKeys === undefined) return
+  if (apiKeys === undefined) return;
 
   if (!isJsonObject(apiKeys))
-    throw new ConfigValidationError({ message: "api-keys must be a mapping of provider groups" })
-  const allowed = new Set<string>(API_KEY_FAMILIES)
+    throw new ConfigValidationError({ message: "api-keys must be a mapping of provider groups" });
+  const allowed = new Set<string>(API_KEY_FAMILIES);
 
   for (const [family, groups] of Object.entries(apiKeys)) {
-    if (!allowed.has(family)) throw new ConfigValidationError({ message: `api-keys.${family}: unknown provider` })
+    if (!allowed.has(family))
+      throw new ConfigValidationError({ message: `api-keys.${family}: unknown provider` });
 
-    if (!isJsonArray(groups)) throw new ConfigValidationError({ message: `api-keys.${family} must be a list` })
+    if (!isJsonArray(groups))
+      throw new ConfigValidationError({ message: `api-keys.${family} must be a list` });
 
     for (const [index, group] of groups.entries()) {
-      const where = `api-keys.${family}[${index}]`
+      const where = `api-keys.${family}[${index}]`;
 
-      if (!isJsonObject(group)) throw new ConfigValidationError({ message: `${where} must be a mapping` })
+      if (!isJsonObject(group))
+        throw new ConfigValidationError({ message: `${where} must be a mapping` });
 
-      if (!isJsonArray(group.keys)) throw new ConfigValidationError({ message: `${where}.keys must be a list` })
+      if (!isJsonArray(group.keys))
+        throw new ConfigValidationError({ message: `${where}.keys must be a list` });
 
       for (const key of group.keys) {
-        if (!isJsonObject(key)) throw new ConfigValidationError({ message: `${where}: key must be a mapping` })
-        delete key.auth_index
-        delete key["auth-index"]
+        if (!isJsonObject(key))
+          throw new ConfigValidationError({ message: `${where}: key must be a mapping` });
+        delete key.auth_index;
+        delete key["auth-index"];
 
         // Go accepts credential-less entries (e.g. a gemini entry with only a base URL).
-        if (family !== "openai-compatibility" && key["api-key"] === undefined) key["api-key"] = ""
+        if (family !== "openai-compatibility" && key["api-key"] === undefined) key["api-key"] = "";
 
         if (family !== "openai-compatibility" && key["base-url"] !== undefined) {
-          throw new ConfigValidationError({ message: `api-keys.${family}: base-url belongs to the group` })
+          throw new ConfigValidationError({
+            message: `api-keys.${family}: base-url belongs to the group`,
+          });
         }
       }
 
-      delete group.auth_index
-      delete group["auth-index"]
+      delete group.auth_index;
+      delete group["auth-index"];
 
       if (family !== "openai-compatibility") {
-        const groupFields = new Set<string>(["name", "base-url", "keys", ...SHARED_KEY_FIELDS])
+        const groupFields = new Set<string>(["name", "base-url", "keys", ...SHARED_KEY_FIELDS]);
 
         for (const field of Object.keys(group)) {
           if (!groupFields.has(field)) {
-            throw new ConfigValidationError({ message: `api-keys.${family}: unsupported group field ${field}` })
+            throw new ConfigValidationError({
+              message: `api-keys.${family}: unsupported group field ${field}`,
+            });
           }
         }
       }
     }
   }
-}
+};
 
 /**
  * Converts any supported raw document (parsed YAML or JSON) into the canonical v8 shape expected by the schema.
  * The input is not modified. Throws {@link ConfigValidationError}.
  */
 export const prepareDocument = (raw: unknown): JsonObject => {
-  if (!isJsonObject(raw)) throw new ConfigValidationError({ message: "config must be a mapping" })
-  const doc = structuredClone(raw)
+  if (!isJsonObject(raw)) throw new ConfigValidationError({ message: "config must be a mapping" });
+  const doc = structuredClone(raw);
 
-  const version = doc["config-version"]
+  const version = doc["config-version"];
 
   if (version !== undefined && version !== null && version !== 8) {
-    throw new ConfigValidationError({ message: "unsupported config-version (expected 8)" })
+    throw new ConfigValidationError({ message: "unsupported config-version (expected 8)" });
   }
 
   // Legacy `api-keys` is the client key list; v8 `api-keys` is the provider map.
   if (isJsonArray(doc["api-keys"])) {
-    const clientKeys = doc["api-keys"]
-    delete doc["api-keys"]
+    const clientKeys = doc["api-keys"];
+    delete doc["api-keys"];
 
-    if (get(doc, "access.api-keys") === undefined) set(doc, "access.api-keys", clientKeys)
+    if (get(doc, "access.api-keys") === undefined) set(doc, "access.api-keys", clientKeys);
   }
 
-  for (const [from, to] of [...V8_ALIASES, ...LEGACY_MOVES]) moveMerge(doc, from, to)
+  for (const [from, to] of [...V8_ALIASES, ...LEGACY_MOVES]) moveMerge(doc, from, to);
 
   for (const [legacy, family] of LEGACY_FAMILIES) {
-    const entries = doc[legacy]
+    const entries = doc[legacy];
 
-    if (!isJsonArray(entries)) continue
-    delete doc[legacy]
-    const apiKeys = isJsonObject(doc["api-keys"]) ? doc["api-keys"] : {}
-    doc["api-keys"] = apiKeys
+    if (!isJsonArray(entries)) continue;
+    delete doc[legacy];
+    const apiKeys = isJsonObject(doc["api-keys"]) ? doc["api-keys"] : {};
+    doc["api-keys"] = apiKeys;
 
-    if (apiKeys[family] === undefined) apiKeys[family] = groupLegacyKeys(entries, family)
+    if (apiKeys[family] === undefined) apiKeys[family] = groupLegacyKeys(entries, family);
   }
 
-  validateApiKeys(doc["api-keys"])
+  validateApiKeys(doc["api-keys"]);
 
-  const stripped = stripNulls(doc, "")
-  const out = isJsonObject(stripped) ? stripped : {}
+  const stripped = stripNulls(doc, "");
+  const out = isJsonObject(stripped) ? stripped : {};
 
-  const strategy = get(out, "routing.strategy")
+  const strategy = get(out, "routing.strategy");
 
   if (typeof strategy === "string") {
-    const canonical = ROUTING_STRATEGY_ALIASES[strategy.trim().toLowerCase()]
+    const canonical = ROUTING_STRATEGY_ALIASES[strategy.trim().toLowerCase()];
     // Like Go, an unrecognised strategy falls back to round-robin.
-    set(out, "routing.strategy", canonical ?? "round-robin")
+    set(out, "routing.strategy", canonical ?? "round-robin");
   }
 
-  const disable = normalizeDisableImageGeneration(get(out, "multimedia.disable-image-generation"))
+  const disable = normalizeDisableImageGeneration(get(out, "multimedia.disable-image-generation"));
 
-  if (disable !== undefined) set(out, "multimedia.disable-image-generation", disable)
+  if (disable !== undefined) set(out, "multimedia.disable-image-generation", disable);
 
-  return out
-}
+  return out;
+};

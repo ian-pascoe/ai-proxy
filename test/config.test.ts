@@ -1,25 +1,30 @@
-import { assert, describe, it } from "@effect/vitest"
-import { Effect, Schema } from "effect"
+import { assert, describe, it } from "@effect/vitest";
+import { Effect, Schema } from "effect";
 import {
   codexStreamBootstrapTimeoutMs,
   gptImage2BaseModel,
   parseGoDuration,
   sessionAffinityTtlMs,
-  videoResultAuthCacheTtlMs
-} from "../src/config/accessors.ts"
-import { decodeConfig, encodeConfig, parseConfigYaml, stringifyConfigYaml } from "../src/config/codec.ts"
-import { ConfigValidationError } from "../src/config/errors.ts"
-import { Config } from "../src/config/schema.ts"
-import { applyPayloadRules } from "../src/config/payload/index.ts"
-import { get } from "../src/json/index.ts"
+  videoResultAuthCacheTtlMs,
+} from "../src/config/accessors.ts";
+import {
+  decodeConfig,
+  encodeConfig,
+  parseConfigYaml,
+  stringifyConfigYaml,
+} from "../src/config/codec.ts";
+import { ConfigValidationError } from "../src/config/errors.ts";
+import { Config } from "../src/config/schema.ts";
+import { applyPayloadRules } from "../src/config/payload/index.ts";
+import { get } from "../src/json/index.ts";
 
-const parse = (yaml: string) => parseConfigYaml(yaml)
+const parse = (yaml: string) => parseConfigYaml(yaml);
 
 const failure = <A>(effect: Effect.Effect<A, ConfigValidationError>) =>
   effect.pipe(
     Effect.flip,
-    Effect.map((error) => error.message)
-  )
+    Effect.map((error) => error.message),
+  );
 
 // A v8 document using the keys that apply on Workers.
 const V8_YAML = `
@@ -112,86 +117,96 @@ multimedia:
 observability:
   usage:
     redis-usage-queue-retention-seconds: 99999
-`
+`;
 
 describe("config schema and normalisation", () => {
   it.effect("an empty document decodes to the documented defaults", () =>
     Effect.gen(function* () {
-      const config = yield* parse("")
-      assert.strictEqual(config["config-version"], 8)
-      assert.strictEqual(config.routing.strategy, "round-robin")
-      assert.strictEqual(config.routing["session-affinity-ttl"], "1h")
-      assert.strictEqual(config.routing["session-affinity-subagents"], true)
-      assert.strictEqual(config.routing.retry["request-retry"], 0)
-      assert.strictEqual(config.multimedia["disable-image-generation"], false)
-      assert.strictEqual(config.multimedia["video-result-auth-cache-ttl"], "3h")
-      assert.strictEqual(config.observability.usage["redis-usage-queue-retention-seconds"], 60)
-      assert.strictEqual(config.upstream.codex["stream-bootstrap-timeout"], "0")
-      assert.deepStrictEqual(config.requests.payload.default, [])
-      assert.deepStrictEqual(config["api-keys"].claude, [])
-      assert.isUndefined(config.oauth.providers.antigravity["signature-cache-enabled"])
-    })
-  )
+      const config = yield* parse("");
+      assert.strictEqual(config["config-version"], 8);
+      assert.strictEqual(config.routing.strategy, "round-robin");
+      assert.strictEqual(config.routing["session-affinity-ttl"], "1h");
+      assert.strictEqual(config.routing["session-affinity-subagents"], true);
+      assert.strictEqual(config.routing.retry["request-retry"], 0);
+      assert.strictEqual(config.multimedia["disable-image-generation"], false);
+      assert.strictEqual(config.multimedia["video-result-auth-cache-ttl"], "3h");
+      assert.strictEqual(config.observability.usage["redis-usage-queue-retention-seconds"], 60);
+      assert.strictEqual(config.upstream.codex["stream-bootstrap-timeout"], "0");
+      assert.deepStrictEqual(config.requests.payload.default, []);
+      assert.deepStrictEqual(config["api-keys"].claude, []);
+      assert.isUndefined(config.oauth.providers.antigravity["signature-cache-enabled"]);
+    }),
+  );
 
   it.effect("decodes and normalises a v8 document", () =>
     Effect.gen(function* () {
-      const config = yield* parse(V8_YAML)
-      assert.deepStrictEqual(config.access["api-keys"], ["k1", "k2"])
-      assert.deepStrictEqual(config.access["admin-emails"], ["admin@example.com"])
-      assert.strictEqual(config.routing.strategy, "weighted-round-robin")
-      assert.strictEqual(config.routing["session-affinity"], true)
-      assert.strictEqual(config.routing.retry["max-retry-credentials"], 0)
-      assert.strictEqual(config.routing.cooldown["transient-error-cooldown-seconds"], -1)
-      assert.strictEqual(config.client.codex["enable-apply-patch"], true)
-      assert.strictEqual(config.upstream.codex["stream-bootstrap-timeout"], "20s")
-      assert.strictEqual(config.upstream.claude["header-defaults"]["user-agent"], "claude-cli/2.1.280")
-      assert.strictEqual(config.multimedia["disable-image-generation"], "chat")
-      assert.strictEqual(config.observability.usage["redis-usage-queue-retention-seconds"], 3600)
+      const config = yield* parse(V8_YAML);
+      assert.deepStrictEqual(config.access["api-keys"], ["k1", "k2"]);
+      assert.deepStrictEqual(config.access["admin-emails"], ["admin@example.com"]);
+      assert.strictEqual(config.routing.strategy, "weighted-round-robin");
+      assert.strictEqual(config.routing["session-affinity"], true);
+      assert.strictEqual(config.routing.retry["max-retry-credentials"], 0);
+      assert.strictEqual(config.routing.cooldown["transient-error-cooldown-seconds"], -1);
+      assert.strictEqual(config.client.codex["enable-apply-patch"], true);
+      assert.strictEqual(config.upstream.codex["stream-bootstrap-timeout"], "20s");
+      assert.strictEqual(
+        config.upstream.claude["header-defaults"]["user-agent"],
+        "claude-cli/2.1.280",
+      );
+      assert.strictEqual(config.multimedia["disable-image-generation"], "chat");
+      assert.strictEqual(config.observability.usage["redis-usage-queue-retention-seconds"], 3600);
 
-      const [anthropic] = config["api-keys"].claude
-      assert.strictEqual(anthropic?.["base-url"], "https://api.anthropic.com")
-      assert.strictEqual(anthropic?.prefix, "")
-      assert.deepStrictEqual(anthropic?.headers, { "X-Trace": "yes" })
-      assert.deepStrictEqual(anthropic?.["excluded-models"], ["claude-3-*"])
-      assert.strictEqual(anthropic?.keys[0]?.["api-key"], "sk-ant-1")
-      assert.strictEqual(anthropic?.keys[0]?.weight, 5)
-      assert.strictEqual(anthropic?.keys[1]?.priority, 10)
-      assert.deepStrictEqual(anthropic?.keys[1]?.cloak, { mode: "always", "sensitive-words": ["a"] })
+      const [anthropic] = config["api-keys"].claude;
+      assert.strictEqual(anthropic?.["base-url"], "https://api.anthropic.com");
+      assert.strictEqual(anthropic?.prefix, "");
+      assert.deepStrictEqual(anthropic?.headers, { "X-Trace": "yes" });
+      assert.deepStrictEqual(anthropic?.["excluded-models"], ["claude-3-*"]);
+      assert.strictEqual(anthropic?.keys[0]?.["api-key"], "sk-ant-1");
+      assert.strictEqual(anthropic?.keys[0]?.weight, 5);
+      assert.strictEqual(anthropic?.keys[1]?.priority, 10);
+      assert.deepStrictEqual(anthropic?.keys[1]?.cloak, {
+        mode: "always",
+        "sensitive-words": ["a"],
+      });
 
       // codex groups without base-url are dropped (config_normalization.go sanitizeCodexKeyEntries)
       assert.deepStrictEqual(
         config["api-keys"].codex.map((group) => group.name),
-        ["codex-1"]
-      )
+        ["codex-1"],
+      );
       assert.strictEqual(
         config["api-keys"]["openai-compatibility"][0]?.models?.[0]?.["use-max-completion-tokens"],
-        true
-      )
+        true,
+      );
 
-      assert.deepStrictEqual(config.oauth["model-alias"], { claude: [{ name: "claude-opus-4", alias: "opus" }] })
-      assert.deepStrictEqual(config.oauth.settings, { codex: [{ name: "gpt-5", alias: "", "max-context-length": 2 }] })
-      assert.deepStrictEqual(config.oauth["excluded-models"], { gemini: ["gemini-2.5-*"] })
+      assert.deepStrictEqual(config.oauth["model-alias"], {
+        claude: [{ name: "claude-opus-4", alias: "opus" }],
+      });
+      assert.deepStrictEqual(config.oauth.settings, {
+        codex: [{ name: "gpt-5", alias: "", "max-context-length": 2 }],
+      });
+      assert.deepStrictEqual(config.oauth["excluded-models"], { gemini: ["gemini-2.5-*"] });
       assert.deepStrictEqual(config.oauth["request-scoped-errors"], {
-        claude: [{ status: 400, match: ["too long"], "match-regexr": [], action: "stop" }]
-      })
-    })
-  )
+        claude: [{ status: 400, match: ["too long"], "match-regexr": [], action: "stop" }],
+      });
+    }),
+  );
 
   it.effect("drops raw payload rules whose params are not valid JSON", () =>
     Effect.gen(function* () {
-      const config = yield* parse(V8_YAML)
-      assert.strictEqual(config.requests.payload["override-raw"].length, 1)
+      const config = yield* parse(V8_YAML);
+      assert.strictEqual(config.requests.payload["override-raw"].length, 1);
 
       const out = applyPayloadRules(
         { requests: config.requests, multimedia: config.multimedia },
         { model: "gpt-5", protocol: "openai" },
-        {}
-      )
+        {},
+      );
 
-      assert.deepStrictEqual(get(out.payload, "reasoning.effort"), "high")
-      assert.deepStrictEqual(get(out.payload, "tools"), [{ type: "web_search" }])
-    })
-  )
+      assert.deepStrictEqual(get(out.payload, "reasoning.effort"), "high");
+      assert.deepStrictEqual(get(out.payload, "tools"), [{ type: "web_search" }]);
+    }),
+  );
 
   it.effect("accepts the legacy flat layout and maps it onto v8", () =>
     Effect.gen(function* () {
@@ -236,7 +251,7 @@ openai-compatibility:
   - name: compat
     base-url: https://compat.example.com/v1
     api-key-entries: [{ api-key: ck }]
-`)
+`);
 
       const v8 = yield* parse(`
 access: { api-keys: ["legacy-key"] }
@@ -288,13 +303,13 @@ api-keys:
     - name: compat
       base-url: https://compat.example.com/v1
       keys: [{ api-key: ck }]
-`)
+`);
 
-      assert.deepStrictEqual(encodeConfig(legacy), encodeConfig(v8))
+      assert.deepStrictEqual(encodeConfig(legacy), encodeConfig(v8));
       // null is a real value inside payload rules
-      assert.deepStrictEqual(legacy.requests.payload.override[0]?.params, { temperature: null })
-    })
-  )
+      assert.deepStrictEqual(legacy.requests.payload.override[0]?.params, { temperature: null });
+    }),
+  );
 
   it.effect("the v8 value wins over a legacy spelling of the same key, even when false", () =>
     Effect.gen(function* () {
@@ -303,12 +318,12 @@ routing: { force-model-prefix: false }
 force-model-prefix: true
 codex: { response-steering: true }
 upstream: { codex: { response-steering: false } }
-`)
+`);
 
-      assert.strictEqual(config.routing["force-model-prefix"], false)
-      assert.strictEqual(config.upstream.codex["response-steering"], false)
-    })
-  )
+      assert.strictEqual(config.routing["force-model-prefix"], false);
+      assert.strictEqual(config.upstream.codex["response-steering"], false);
+    }),
+  );
 
   it.effect("historical v8 spellings map to their canonical paths", () =>
     Effect.gen(function* () {
@@ -318,15 +333,15 @@ oauth:
     codex: { optimize-multi-agent-v2: true, disable-codex-cloaking: true }
     claude: { model-level-cooling: true, header-defaults: { os: "Linux" } }
     xai: { inject-x-search: true }
-`)
+`);
 
-      assert.strictEqual(config.client.codex["optimize-multi-agent-v2"], true)
-      assert.strictEqual(config.upstream.codex["disable-codex-cloaking"], true)
-      assert.strictEqual(config.upstream.claude["model-level-cooling"], true)
-      assert.strictEqual(config.upstream.claude["header-defaults"].os, "Linux")
-      assert.strictEqual(config.upstream.xai["inject-x-search"], true)
-    })
-  )
+      assert.strictEqual(config.client.codex["optimize-multi-agent-v2"], true);
+      assert.strictEqual(config.upstream.codex["disable-codex-cloaking"], true);
+      assert.strictEqual(config.upstream.claude["model-level-cooling"], true);
+      assert.strictEqual(config.upstream.claude["header-defaults"].os, "Linux");
+      assert.strictEqual(config.upstream.xai["inject-x-search"], true);
+    }),
+  );
 
   it.effect("strips null values outside payload rules", () =>
     Effect.gen(function* () {
@@ -341,136 +356,152 @@ api-keys:
     - name: g
       prefix: null
       keys: [{ api-key: k, weight: null }]
-`)
+`);
 
-      assert.strictEqual(config.routing.strategy, "round-robin")
-      assert.isUndefined(config["api-keys"].gemini[0]?.prefix)
-      assert.isUndefined(config["api-keys"].gemini[0]?.keys[0]?.weight)
-    })
-  )
+      assert.strictEqual(config.routing.strategy, "round-robin");
+      assert.isUndefined(config["api-keys"].gemini[0]?.prefix);
+      assert.isUndefined(config["api-keys"].gemini[0]?.keys[0]?.weight);
+    }),
+  );
 
   it.effect("an unknown routing strategy falls back to round-robin like Go", () =>
     Effect.gen(function* () {
-      const config = yield* parse("routing: { strategy: random }")
-      assert.strictEqual(config.routing.strategy, "round-robin")
-    })
-  )
+      const config = yield* parse("routing: { strategy: random }");
+      assert.strictEqual(config.routing.strategy, "round-robin");
+    }),
+  );
 
   it.effect("accepts JSON text and JSON-shaped input", () =>
     Effect.gen(function* () {
-      const fromJson = yield* parse('{"routing":{"strategy":"fill-first"}}')
-      assert.strictEqual(fromJson.routing.strategy, "fill-first")
-      const fromValue = yield* decodeConfig({ routing: { strategy: "ff" } })
-      assert.strictEqual(fromValue.routing.strategy, "fill-first")
-    })
-  )
+      const fromJson = yield* parse('{"routing":{"strategy":"fill-first"}}');
+      assert.strictEqual(fromJson.routing.strategy, "fill-first");
+      const fromValue = yield* decodeConfig({ routing: { strategy: "ff" } });
+      assert.strictEqual(fromValue.routing.strategy, "fill-first");
+    }),
+  );
 
   it.effect.each([
     { name: "non-mapping", yaml: "- a\n- b\n", message: "config must be a mapping" },
     { name: "wrong version", yaml: "config-version: 7\n", message: "unsupported config-version" },
     { name: "invalid YAML", yaml: "a: [1, 2\n", message: "invalid YAML" },
     { name: "duplicate keys", yaml: "routing: {}\nrouting: {}\n", message: "invalid YAML" },
-    { name: "unknown provider", yaml: "api-keys:\n  nope: []\n", message: "api-keys.nope: unknown provider" },
-    { name: "groups must be lists", yaml: "api-keys:\n  claude: {}\n", message: "api-keys.claude must be a list" },
-    { name: "keys must be a list", yaml: "api-keys:\n  claude:\n    - name: x\n", message: "keys must be a list" },
+    {
+      name: "unknown provider",
+      yaml: "api-keys:\n  nope: []\n",
+      message: "api-keys.nope: unknown provider",
+    },
+    {
+      name: "groups must be lists",
+      yaml: "api-keys:\n  claude: {}\n",
+      message: "api-keys.claude must be a list",
+    },
+    {
+      name: "keys must be a list",
+      yaml: "api-keys:\n  claude:\n    - name: x\n",
+      message: "keys must be a list",
+    },
     {
       name: "base-url at key level",
       yaml: "api-keys:\n  claude:\n    - keys: [{ api-key: a, base-url: 'https://x' }]\n",
-      message: "base-url belongs to the group"
+      message: "base-url belongs to the group",
     },
     {
       name: "unsupported group field",
       yaml: "api-keys:\n  claude:\n    - bogus: 1\n      keys: []\n",
-      message: "unsupported group field bogus"
+      message: "unsupported group field bogus",
     },
     {
       name: "weight above the maximum",
       yaml: "api-keys:\n  claude:\n    - keys: [{ api-key: a, weight: 1000001 }]\n",
-      message: "1000000"
+      message: "1000000",
     },
     {
       name: "bad image mode",
       yaml: "multimedia: { disable-image-generation: sometimes }\n",
-      message: "invalid multimedia.disable-image-generation"
+      message: "invalid multimedia.disable-image-generation",
     },
-    { name: "wrong type", yaml: "routing: { retry: { request-retry: many } }\n", message: "request-retry" }
+    {
+      name: "wrong type",
+      yaml: "routing: { retry: { request-retry: many } }\n",
+      message: "request-retry",
+    },
   ])("rejects $name", ({ yaml, message }) =>
     Effect.gen(function* () {
-      const text = yield* failure(parse(yaml))
-      assert.include(text, message)
-    })
-  )
+      const text = yield* failure(parse(yaml));
+      assert.include(text, message);
+    }),
+  );
 
   it.effect("YAML export is stable: yaml -> config -> yaml -> config", () =>
     Effect.gen(function* () {
-      const first = yield* parse(V8_YAML)
-      const exported = stringifyConfigYaml(first)
-      const second = yield* parse(exported)
-      assert.deepStrictEqual(encodeConfig(second), encodeConfig(first))
-      assert.strictEqual(stringifyConfigYaml(second), exported)
+      const first = yield* parse(V8_YAML);
+      const exported = stringifyConfigYaml(first);
+      const second = yield* parse(exported);
+      assert.deepStrictEqual(encodeConfig(second), encodeConfig(first));
+      assert.strictEqual(stringifyConfigYaml(second), exported);
       // Compact export lists only non-default values.
-      assert.notInclude(exported, "session-affinity-subagents")
-      assert.include(exported, "config-version: 8")
-      assert.include(exported, "weighted-round-robin")
+      assert.notInclude(exported, "session-affinity-subagents");
+      assert.include(exported, "config-version: 8");
+      assert.include(exported, "weighted-round-robin");
       // Full export includes defaults and decodes to the same config.
-      const full = stringifyConfigYaml(first, { includeDefaults: true })
-      assert.include(full, "session-affinity-subagents: true")
-      assert.deepStrictEqual(encodeConfig(yield* parse(full)), encodeConfig(first))
-    })
-  )
+      const full = stringifyConfigYaml(first, { includeDefaults: true });
+      assert.include(full, "session-affinity-subagents: true");
+      assert.deepStrictEqual(encodeConfig(yield* parse(full)), encodeConfig(first));
+    }),
+  );
 
   it.effect("defaults export as just the version marker", () =>
     Effect.gen(function* () {
-      const config = yield* parse("")
-      assert.strictEqual(stringifyConfigYaml(config).trim(), "config-version: 8")
-      assert.deepStrictEqual(Schema.decodeUnknownSync(Config)(encodeConfig(config)), config)
-    })
-  )
-})
+      const config = yield* parse("");
+      assert.strictEqual(stringifyConfigYaml(config).trim(), "config-version: 8");
+      assert.deepStrictEqual(Schema.decodeUnknownSync(Config)(encodeConfig(config)), config);
+    }),
+  );
+});
 
 describe("derived settings", () => {
   it("parseGoDuration follows time.ParseDuration", () => {
-    assert.strictEqual(parseGoDuration("1h30m"), 5_400_000)
-    assert.strictEqual(parseGoDuration("1.5s"), 1500)
-    assert.strictEqual(parseGoDuration("300ms"), 300)
-    assert.strictEqual(parseGoDuration("-2m"), -120_000)
-    assert.strictEqual(parseGoDuration("0"), 0)
-    assert.strictEqual(parseGoDuration(" 10s "), 10_000)
-    assert.isUndefined(parseGoDuration("10"))
-    assert.isUndefined(parseGoDuration("abc"))
-    assert.isUndefined(parseGoDuration(""))
-    assert.isUndefined(parseGoDuration("5x"))
-  })
+    assert.strictEqual(parseGoDuration("1h30m"), 5_400_000);
+    assert.strictEqual(parseGoDuration("1.5s"), 1500);
+    assert.strictEqual(parseGoDuration("300ms"), 300);
+    assert.strictEqual(parseGoDuration("-2m"), -120_000);
+    assert.strictEqual(parseGoDuration("0"), 0);
+    assert.strictEqual(parseGoDuration(" 10s "), 10_000);
+    assert.isUndefined(parseGoDuration("10"));
+    assert.isUndefined(parseGoDuration("abc"));
+    assert.isUndefined(parseGoDuration(""));
+    assert.isUndefined(parseGoDuration("5x"));
+  });
 
   it.effect("applies the Go fallbacks", () =>
     Effect.gen(function* () {
-      const defaults = yield* parse("")
-      assert.strictEqual(sessionAffinityTtlMs(defaults), 3_600_000)
-      assert.strictEqual(codexStreamBootstrapTimeoutMs(defaults), 0)
-      assert.strictEqual(videoResultAuthCacheTtlMs(defaults), 10_800_000)
-      assert.strictEqual(gptImage2BaseModel(defaults), "gpt-5.4-mini")
+      const defaults = yield* parse("");
+      assert.strictEqual(sessionAffinityTtlMs(defaults), 3_600_000);
+      assert.strictEqual(codexStreamBootstrapTimeoutMs(defaults), 0);
+      assert.strictEqual(videoResultAuthCacheTtlMs(defaults), 10_800_000);
+      assert.strictEqual(gptImage2BaseModel(defaults), "gpt-5.4-mini");
 
       const custom = yield* parse(`
 routing: { session-affinity-ttl: "500ms" }
 upstream: { codex: { stream-bootstrap-timeout: "15" } }
 multimedia: { video-result-auth-cache-ttl: "30m", gpt-image-2-base-model: " GPT-6 " }
-`)
+`);
 
-      assert.strictEqual(sessionAffinityTtlMs(custom), 1000)
-      assert.strictEqual(codexStreamBootstrapTimeoutMs(custom), 15_000)
-      assert.strictEqual(videoResultAuthCacheTtlMs(custom), 1_800_000)
-      assert.strictEqual(gptImage2BaseModel(custom), "GPT-6")
+      assert.strictEqual(sessionAffinityTtlMs(custom), 1000);
+      assert.strictEqual(codexStreamBootstrapTimeoutMs(custom), 15_000);
+      assert.strictEqual(videoResultAuthCacheTtlMs(custom), 1_800_000);
+      assert.strictEqual(gptImage2BaseModel(custom), "GPT-6");
 
       const invalid = yield* parse(`
 routing: { session-affinity-ttl: "soon" }
 upstream: { codex: { stream-bootstrap-timeout: "Unlimited" } }
 multimedia: { video-result-auth-cache-ttl: "-1h", gpt-image-2-base-model: "claude" }
-`)
+`);
 
-      assert.strictEqual(sessionAffinityTtlMs(invalid), 3_600_000)
-      assert.strictEqual(codexStreamBootstrapTimeoutMs(invalid), 0)
-      assert.strictEqual(videoResultAuthCacheTtlMs(invalid), 10_800_000)
-      assert.strictEqual(gptImage2BaseModel(invalid), "gpt-5.4-mini")
-    })
-  )
-})
+      assert.strictEqual(sessionAffinityTtlMs(invalid), 3_600_000);
+      assert.strictEqual(codexStreamBootstrapTimeoutMs(invalid), 0);
+      assert.strictEqual(videoResultAuthCacheTtlMs(invalid), 10_800_000);
+      assert.strictEqual(gptImage2BaseModel(invalid), "gpt-5.4-mini");
+    }),
+  );
+});

@@ -6,211 +6,219 @@
  * (plan type). Docs: credentials.md §2.1, §3.
  * Derivation is pure so global config changes (exclusions) are applied by re-deriving, never by rewriting files.
  */
-import type { Config, OAuthModelAlias } from "../config/schema.ts"
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
-import { decodeJwtClaims } from "./expiry.ts"
-import { type Credential } from "./model.ts"
-import { normalizeExclusions } from "./selection/model-name.ts"
-import { DEFAULT_WEIGHT, parseWeightValue } from "./weight.ts"
+import type { Config, OAuthModelAlias } from "../config/schema.ts";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { decodeJwtClaims } from "./expiry.ts";
+import { type Credential } from "./model.ts";
+import { normalizeExclusions } from "./selection/model-name.ts";
+import { DEFAULT_WEIGHT, parseWeightValue } from "./weight.ts";
 
 /** What the store keeps per file credential. */
 export interface StoredCredential {
-  readonly id: string
-  readonly provider: string
-  readonly metadata: JsonObject
-  readonly credentialVersion: number
-  readonly createdAt: number
-  readonly updatedAt: number
+  readonly id: string;
+  readonly provider: string;
+  readonly metadata: JsonObject;
+  readonly credentialVersion: number;
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
-const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "")
+const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
 /** Prefix: trimmed, slashes stripped from both ends, ignored when it still contains a slash. */
 export const normalizePrefix = (raw: string | undefined): string | undefined => {
-  const trimmed = (raw ?? "").trim().replace(/^\/+|\/+$/g, "")
+  const trimmed = (raw ?? "").trim().replace(/^\/+|\/+$/g, "");
 
-  return trimmed === "" || trimmed.includes("/") ? undefined : trimmed
-}
+  return trimmed === "" || trimmed.includes("/") ? undefined : trimmed;
+};
 
 /** `ExtractCustomHeadersFromMetadata`: non-empty string values with trimmed names. */
 export const extractHeaders = (raw: Json | undefined): Record<string, string> => {
-  const out: Record<string, string> = {}
+  const out: Record<string, string> = {};
 
-  if (!isJsonObject(raw)) return out
+  if (!isJsonObject(raw)) return out;
 
   for (const [key, value] of Object.entries(raw)) {
-    const name = key.trim()
-    const headerValue = typeof value === "string" ? value.trim() : ""
+    const name = key.trim();
+    const headerValue = typeof value === "string" ? value.trim() : "";
 
-    if (name !== "" && headerValue !== "") out[name] = headerValue
+    if (name !== "" && headerValue !== "") out[name] = headerValue;
   }
 
-  return out
-}
+  return out;
+};
 
 /** `SanitizeOAuthModelAlias`: drop empty or identical pairs, de-duplicate by lower-cased alias (first wins). */
 export const sanitizeAliases = (aliases: ReadonlyArray<OAuthModelAlias>): OAuthModelAlias[] => {
-  const seen = new Set<string>()
-  const out: OAuthModelAlias[] = []
+  const seen = new Set<string>();
+  const out: OAuthModelAlias[] = [];
 
   for (const entry of aliases) {
-    const name = entry.name.trim()
-    const alias = entry.alias.trim()
+    const name = entry.name.trim();
+    const alias = entry.alias.trim();
 
-    if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue
-    const key = alias.toLowerCase()
+    if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue;
+    const key = alias.toLowerCase();
 
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push({ ...entry, name, alias })
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...entry, name, alias });
   }
 
-  return out
-}
+  return out;
+};
 
 /** Per-account `model_aliases` from auth-file metadata. */
 const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
-  if (!Array.isArray(raw)) return []
-  const entries: OAuthModelAlias[] = []
+  if (!Array.isArray(raw)) return [];
+  const entries: OAuthModelAlias[] = [];
 
   for (const item of raw) {
-    if (!isJsonObject(item)) continue
+    if (!isJsonObject(item)) continue;
     entries.push({
       name: text(item.name),
       alias: text(item.alias),
       ...(item.fork === true ? { fork: true } : {}),
       ...(item["force-mapping"] === true ? { "force-mapping": true } : {}),
-      ...(text(item["display-name"]) !== "" ? { "display-name": text(item["display-name"]) } : {})
-    })
+      ...(text(item["display-name"]) !== "" ? { "display-name": text(item["display-name"]) } : {}),
+    });
   }
 
-  return sanitizeAliases(entries)
-}
+  return sanitizeAliases(entries);
+};
 
 const stringList = (raw: Json | undefined): string[] =>
-  Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : []
+  Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : [];
 
 /** `ApplyAuthPriorityMetadata`: numbers are truncated, strings must be integers; anything else is ignored. */
 const parsePriority = (raw: Json | undefined): number | undefined => {
-  if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw)
+  if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw);
 
-  if (typeof raw === "string" && /^[+-]?\d+$/.test(raw.trim())) return Number(raw.trim())
+  if (typeof raw === "string" && /^[+-]?\d+$/.test(raw.trim())) return Number(raw.trim());
 
-  return undefined
-}
+  return undefined;
+};
 
-const KIMI_PROVIDERS = new Set(["kimi", "kimi-ai", "kimi.ai", "kimi.com"])
+const KIMI_PROVIDERS = new Set(["kimi", "kimi-ai", "kimi.ai", "kimi.com"]);
 
-const KIMI_COM_BASE = "https://api.kimi.com/coding"
+const KIMI_COM_BASE = "https://api.kimi.com/coding";
 
-const KIMI_AI_BASE = "https://api.kimi.ai/coding"
+const KIMI_AI_BASE = "https://api.kimi.ai/coding";
 
 const isKimiAiDomain = (domain: string): boolean => {
-  const value = domain.trim().toLowerCase()
+  const value = domain.trim().toLowerCase();
 
-  return value === "kimi.ai" || value === "ai" || value === "kimi-ai" || value.endsWith(".kimi.ai")
-}
+  return value === "kimi.ai" || value === "ai" || value === "kimi-ai" || value.endsWith(".kimi.ai");
+};
 
 const kimiHost = (baseUrl: string): string => {
   try {
-    return new URL(baseUrl.includes("://") ? baseUrl : `https://${baseUrl}`).hostname.toLowerCase()
+    return new URL(baseUrl.includes("://") ? baseUrl : `https://${baseUrl}`).hostname.toLowerCase();
   } catch {
-    return ""
+    return "";
   }
-}
+};
 
 const kimiDomain = (provider: string, domain: string, baseUrl: string): string => {
   if (domain !== "") {
-    if (isKimiAiDomain(domain)) return "kimi.ai"
+    if (isKimiAiDomain(domain)) return "kimi.ai";
 
-    if (domain.trim().toLowerCase().endsWith("kimi.com")) return "kimi.com"
+    if (domain.trim().toLowerCase().endsWith("kimi.com")) return "kimi.com";
   }
 
   if (baseUrl !== "") {
-    const host = kimiHost(baseUrl)
+    const host = kimiHost(baseUrl);
 
-    if (host === "kimi.ai" || host.endsWith(".kimi.ai")) return "kimi.ai"
+    if (host === "kimi.ai" || host.endsWith(".kimi.ai")) return "kimi.ai";
 
-    if (host === "kimi.com" || host.endsWith(".kimi.com")) return "kimi.com"
+    if (host === "kimi.com" || host.endsWith(".kimi.com")) return "kimi.com";
   }
 
-  return provider === "kimi-ai" || provider === "kimi.ai" ? "kimi.ai" : "kimi.com"
-}
+  return provider === "kimi-ai" || provider === "kimi.ai" ? "kimi.ai" : "kimi.com";
+};
 
 /** Codex plan: metadata `plan_type`, else the id_token claim `chatgpt_plan_type`, else `free`. */
 const codexPlanType = (metadata: JsonObject): string | undefined => {
-  const explicit = text(metadata.plan_type)
+  const explicit = text(metadata.plan_type);
 
-  if (explicit !== "") return explicit
-  const idToken = text(metadata.id_token)
+  if (explicit !== "") return explicit;
+  const idToken = text(metadata.id_token);
 
-  if (idToken === "") return undefined
-  const auth = decodeJwtClaims(idToken)?.["https://api.openai.com/auth"]
-  const plan = isJsonObject(auth) ? text(auth.chatgpt_plan_type) : ""
+  if (idToken === "") return undefined;
+  const auth = decodeJwtClaims(idToken)?.["https://api.openai.com/auth"];
+  const plan = isJsonObject(auth) ? text(auth.chatgpt_plan_type) : "";
 
-  return plan === "" ? "free" : plan
-}
+  return plan === "" ? "free" : plan;
+};
 
 export interface DeriveOptions {
-  readonly config: Pick<Config, "oauth">
+  readonly config: Pick<Config, "oauth">;
 }
 
 /** Builds the runtime credential for a stored auth file. */
-export const deriveFileCredential = (stored: StoredCredential, options: DeriveOptions): Credential => {
-  const { metadata, provider } = stored
-  const attributes: Record<string, string> = { source: stored.id, path: stored.id, source_backend: "file" }
+export const deriveFileCredential = (
+  stored: StoredCredential,
+  options: DeriveOptions,
+): Credential => {
+  const { metadata, provider } = stored;
+  const attributes: Record<string, string> = {
+    source: stored.id,
+    path: stored.id,
+    source_backend: "file",
+  };
 
-  const priority = parsePriority(metadata.priority)
+  const priority = parsePriority(metadata.priority);
 
   if (priority !== undefined) {
-    attributes.priority = String(priority)
-    attributes.file_priority = "true"
+    attributes.priority = String(priority);
+    attributes.file_priority = "true";
   }
 
-  let weight = DEFAULT_WEIGHT
+  let weight = DEFAULT_WEIGHT;
 
   if (Object.hasOwn(metadata, "weight")) {
-    const parsed = parseWeightValue(metadata.weight)
+    const parsed = parseWeightValue(metadata.weight);
 
     if (parsed.ok) {
-      weight = parsed.value
-      attributes.weight = String(weight)
+      weight = parsed.value;
+      attributes.weight = String(weight);
     }
   }
 
-  const note = text(metadata.note)
+  const note = text(metadata.note);
 
-  if (note !== "") attributes.note = note
-  const email = text(metadata.email)
+  if (note !== "") attributes.note = note;
+  const email = text(metadata.email);
 
-  if (email !== "") attributes.email = email
-  const fingerprint = text(metadata.fingerprint_profile).toLowerCase()
+  if (email !== "") attributes.email = email;
+  const fingerprint = text(metadata.fingerprint_profile).toLowerCase();
 
-  if (fingerprint !== "") attributes.fingerprint_profile = fingerprint
+  if (fingerprint !== "") attributes.fingerprint_profile = fingerprint;
 
   const excludedModels = normalizeExclusions(
     stringList(metadata.excluded_models),
-    options.config.oauth["excluded-models"][provider]
-  )
+    options.config.oauth["excluded-models"][provider],
+  );
 
-  if (excludedModels.length > 0) attributes.excluded_models = excludedModels.join(",")
-  attributes.auth_kind = "oauth"
+  if (excludedModels.length > 0) attributes.excluded_models = excludedModels.join(",");
+  attributes.auth_kind = "oauth";
 
   if (KIMI_PROVIDERS.has(provider)) {
-    const baseUrl = text(metadata.base_url)
-    const domain = kimiDomain(provider, text(metadata.domain), baseUrl)
-    attributes.domain = domain
-    attributes.base_url = baseUrl !== "" ? baseUrl : domain === "kimi.ai" ? KIMI_AI_BASE : KIMI_COM_BASE
+    const baseUrl = text(metadata.base_url);
+    const domain = kimiDomain(provider, text(metadata.domain), baseUrl);
+    attributes.domain = domain;
+    attributes.base_url =
+      baseUrl !== "" ? baseUrl : domain === "kimi.ai" ? KIMI_AI_BASE : KIMI_COM_BASE;
   }
 
   if (provider === "codex") {
-    const plan = codexPlanType(metadata)
+    const plan = codexPlanType(metadata);
 
-    if (plan !== undefined) attributes.plan_type = plan
+    if (plan !== undefined) attributes.plan_type = plan;
   }
 
-  const proxyUrl = typeof metadata.proxy_url === "string" ? metadata.proxy_url : ""
-  const prefix = normalizePrefix(typeof metadata.prefix === "string" ? metadata.prefix : undefined)
+  const proxyUrl = typeof metadata.proxy_url === "string" ? metadata.proxy_url : "";
+  const prefix = normalizePrefix(typeof metadata.prefix === "string" ? metadata.prefix : undefined);
 
   return {
     id: stored.id,
@@ -230,6 +238,6 @@ export const deriveFileCredential = (stored: StoredCredential, options: DeriveOp
     modelAliases: aliasesFromMetadata(metadata.model_aliases),
     credentialVersion: stored.credentialVersion,
     createdAt: stored.createdAt,
-    updatedAt: stored.updatedAt
-  }
-}
+    updatedAt: stored.updatedAt,
+  };
+};

@@ -6,31 +6,31 @@
  * constants and the device id is the login-time `metadata.device_id` (persisted with the credential in the
  * ControlPlane), falling back to a stable id derived from the credential id (never random per request).
  */
-import { uuidV5Oid } from "../helps/uuid.ts"
-import { applyCustomHeaders } from "../helps/custom-headers.ts"
-import type { CredentialSnapshot } from "../picker.ts"
+import { uuidV5Oid } from "../helps/uuid.ts";
+import { applyCustomHeaders } from "../helps/custom-headers.ts";
+import type { CredentialSnapshot } from "../picker.ts";
 
-export const KIMI_VERSION = "cliproxy-workers"
+export const KIMI_VERSION = "cliproxy-workers";
 
-const DEVICE_NAME = "cliproxy-workers"
+const DEVICE_NAME = "cliproxy-workers";
 
-const DEVICE_MODEL = "Cloudflare Workers"
+const DEVICE_MODEL = "Cloudflare Workers";
 
 /** `resolveKimiDeviceID`, then a stable per-credential fallback. */
 export const kimiDeviceId = (credential: CredentialSnapshot): string => {
-  const stored = credential.metadata["device_id"]
+  const stored = credential.metadata["device_id"];
 
-  if (typeof stored === "string" && stored.trim() !== "") return stored.trim()
+  if (typeof stored === "string" && stored.trim() !== "") return stored.trim();
 
-  return uuidV5Oid(`cli-proxy-api:kimi:device:${credential.id}`)
-}
+  return uuidV5Oid(`cli-proxy-api:kimi:device:${credential.id}`);
+};
 
 export const kimiHeaders = (
   credential: CredentialSnapshot,
   token: string,
   stream: boolean,
   clientHeaders: Headers,
-  sessionId: string | undefined
+  sessionId: string | undefined,
 ): Record<string, string> => {
   const headers: Record<string, string> = {
     "content-type": "application/json",
@@ -41,8 +41,8 @@ export const kimiHeaders = (
     "x-msh-device-name": DEVICE_NAME,
     "x-msh-device-model": DEVICE_MODEL,
     "x-msh-device-id": kimiDeviceId(credential),
-    accept: stream ? "text/event-stream" : "application/json"
-  }
+    accept: stream ? "text/event-stream" : "application/json",
+  };
 
-  return applyCustomHeaders(headers, credential, clientHeaders, sessionId)
-}
+  return applyCustomHeaders(headers, credential, clientHeaders, sessionId);
+};

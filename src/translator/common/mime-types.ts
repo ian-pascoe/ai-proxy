@@ -732,5 +732,5 @@ export const MIME_TYPES: Readonly<Record<string, string>> = {
   avi: "video/x-msvideo",
   movie: "video/x-sgi-movie",
   smv: "video/x-smv",
-  ice: "x-conference/x-cooltalk"
-}
+  ice: "x-conference/x-cooltalk",
+};

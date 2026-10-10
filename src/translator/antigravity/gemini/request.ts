@@ -15,326 +15,351 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-  set
-} from "../../../json/index.ts"
-import { compatibleAntigravityClaudeThinkingSignature } from "../../../signature/claude.ts"
-import { TranslationError } from "../../registry.ts"
-import { contentHasGeminiFunctionResponse } from "../../gemini/common/contents.ts"
-import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts"
-import { sanitizeGeminiRequestThoughtSignatures } from "../../gemini/common/signature.ts"
-import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts"
-import { sortKeysDeep } from "../../common/go-json.ts"
+  set,
+} from "../../../json/index.ts";
+import { compatibleAntigravityClaudeThinkingSignature } from "../../../signature/claude.ts";
+import { TranslationError } from "../../registry.ts";
+import { contentHasGeminiFunctionResponse } from "../../gemini/common/contents.ts";
+import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts";
+import { sanitizeGeminiRequestThoughtSignatures } from "../../gemini/common/signature.ts";
+import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts";
+import { sortKeysDeep } from "../../common/go-json.ts";
 
-const DECLARATION_KEYS = ["functionDeclarations", "function_declarations"] as const
+const DECLARATION_KEYS = ["functionDeclarations", "function_declarations"] as const;
 
-const FUNCTION_NAME_FIELDS = ["functionCall", "functionResponse", "function_call", "function_response"] as const
+const FUNCTION_NAME_FIELDS = [
+  "functionCall",
+  "functionResponse",
+  "function_call",
+  "function_response",
+] as const;
 
 interface FunctionCallGroup {
-  readonly responsesNeeded: number
-  readonly callNames: string[]
+  readonly responsesNeeded: number;
+  readonly callNames: string[];
 }
 
-const clone = <T extends Json>(value: T): T => structuredClone(value)
+const clone = <T extends Json>(value: T): T => structuredClone(value);
 
 /** `normalizeAntigravityInlineDataPart`: an inlineData part with a mime type, or `undefined`. */
 const normalizeInlineDataPart = (part: Json): JsonObject | undefined => {
-  const inline = get(part, "inlineData") ?? get(part, "inline_data")
+  const inline = get(part, "inlineData") ?? get(part, "inline_data");
 
-  if (inline === undefined) return undefined
-  const data = asString(get(inline, "data"))
+  if (inline === undefined) return undefined;
+  const data = asString(get(inline, "data"));
 
-  if (data === "") return undefined
-  let mimeType = asString(get(inline, "mimeType"))
+  if (data === "") return undefined;
+  let mimeType = asString(get(inline, "mimeType"));
 
-  if (mimeType === "") mimeType = asString(get(inline, "mime_type"))
+  if (mimeType === "") mimeType = asString(get(inline, "mime_type"));
 
   // Cloud Code Assist ignores inlineData without mimeType.
-  if (mimeType === "") mimeType = "image/png"
+  if (mimeType === "") mimeType = "image/png";
 
-  return { inlineData: { mimeType, data } }
-}
+  return { inlineData: { mimeType, data } };
+};
 
 const attachInlineData = (response: Json, images: ReadonlyArray<JsonObject>): Json => {
-  if (images.length === 0) return response
-  const target = clone(response)
+  if (images.length === 0) return response;
+  const target = clone(response);
 
-  for (const image of images) set(target, "functionResponse.parts.-1", clone(image))
+  for (const image of images) set(target, "functionResponse.parts.-1", clone(image));
 
-  return target
-}
+  return target;
+};
 
 /** `collectFunctionResponsesWithSiblingInlineData`. */
 const collectFunctionResponses = (parts: Json | undefined): Json[] => {
-  const responses: Json[] = []
-  let leadingImages: JsonObject[] = []
-  let current = -1
-  const items = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : []
+  const responses: Json[] = [];
+  let leadingImages: JsonObject[] = [];
+  let current = -1;
+  const items = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : [];
 
   for (const part of items) {
     if (exists(part, "functionResponse")) {
-      responses.push(part)
-      current = responses.length - 1
+      responses.push(part);
+      current = responses.length - 1;
 
       if (leadingImages.length > 0) {
-        responses[current] = attachInlineData(responses[current] as Json, leadingImages)
-        leadingImages = []
+        responses[current] = attachInlineData(responses[current] as Json, leadingImages);
+        leadingImages = [];
       }
 
-      continue
+      continue;
     }
 
-    const image = normalizeInlineDataPart(part)
+    const image = normalizeInlineDataPart(part);
 
-    if (image === undefined) continue
+    if (image === undefined) continue;
 
-    if (current >= 0) responses[current] = attachInlineData(responses[current] as Json, [image])
-    else leadingImages.push(image)
+    if (current >= 0) responses[current] = attachInlineData(responses[current] as Json, [image]);
+    else leadingImages.push(image);
   }
 
-  return responses
-}
+  return responses;
+};
 
 /** `parseFunctionResponseRaw` for an object part: backfills an empty name with the matching call name. */
 const functionResponsePart = (response: Json, fallbackName: string): Json => {
   if (isJsonObject(response)) {
-    const name = asString(get(response, "functionResponse.name"))
+    const name = asString(get(response, "functionResponse.name"));
 
-    if (name.trim() === "" && fallbackName !== "") set(response, "functionResponse.name", fallbackName)
+    if (name.trim() === "" && fallbackName !== "")
+      set(response, "functionResponse.name", fallbackName);
 
-    return response
+    return response;
   }
 
   return {
-    functionResponse: { name: fallbackName === "" ? "unknown" : fallbackName, response: { result: asString(response) } }
-  }
-}
+    functionResponse: {
+      name: fallbackName === "" ? "unknown" : fallbackName,
+      response: { result: asString(response) },
+    },
+  };
+};
 
 /** `fixCLIToolResponse`: groups function calls with their responses (responses become one `function` turn). */
 const fixCliToolResponse = (root: Json): void => {
-  const contents = get(root, "request.contents")
+  const contents = get(root, "request.contents");
 
-  if (contents === undefined) throw new TranslationError("antigravity: gemini request has no contents")
-  let needsGrouping = false
-  let allObjects = true
-  const items = isJsonArray(contents) ? contents : isJsonObject(contents) ? Object.values(contents) : []
+  if (contents === undefined)
+    throw new TranslationError("antigravity: gemini request has no contents");
+  let needsGrouping = false;
+  let allObjects = true;
+  const items = isJsonArray(contents)
+    ? contents
+    : isJsonObject(contents)
+      ? Object.values(contents)
+      : [];
 
   for (const content of items) {
     if (!isJsonObject(content)) {
-      allObjects = false
-      continue
+      allObjects = false;
+      continue;
     }
 
-    const parts = get(content, "parts")
-    const list = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : []
+    const parts = get(content, "parts");
+    const list = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : [];
 
     if (list.some((part) => exists(part, "functionResponse"))) {
-      needsGrouping = true
-      break
+      needsGrouping = true;
+      break;
     }
   }
 
-  if (isJsonArray(contents) && allObjects && !needsGrouping) return
+  if (isJsonArray(contents) && allObjects && !needsGrouping) return;
 
-  const out: Json[] = []
-  const pendingGroups: FunctionCallGroup[] = []
-  let collected: Json[] = []
+  const out: Json[] = [];
+  const pendingGroups: FunctionCallGroup[] = [];
+  let collected: Json[] = [];
 
   const appendResponses = (responses: Json[], callNames: string[]): void => {
-    const parts = responses.map((response, index) => functionResponsePart(response, callNames[index] ?? ""))
+    const parts = responses.map((response, index) =>
+      functionResponsePart(response, callNames[index] ?? ""),
+    );
 
-    if (parts.length > 0) out.push({ parts, role: "function" })
-  }
+    if (parts.length > 0) out.push({ parts, role: "function" });
+  };
 
   for (const value of items) {
-    const parts = get(value, "parts")
-    const responses = collectFunctionResponses(parts)
+    const parts = get(value, "parts");
+    const responses = collectFunctionResponses(parts);
 
     if (responses.length > 0) {
-      collected.push(...responses)
+      collected.push(...responses);
 
-      while (pendingGroups.length > 0 && collected.length >= (pendingGroups[0] as FunctionCallGroup).responsesNeeded) {
-        const group = pendingGroups.shift() as FunctionCallGroup
-        const groupResponses = collected.slice(0, group.responsesNeeded)
-        collected = collected.slice(group.responsesNeeded)
-        appendResponses(groupResponses, group.callNames)
+      while (
+        pendingGroups.length > 0 &&
+        collected.length >= (pendingGroups[0] as FunctionCallGroup).responsesNeeded
+      ) {
+        const group = pendingGroups.shift() as FunctionCallGroup;
+        const groupResponses = collected.slice(0, group.responsesNeeded);
+        collected = collected.slice(group.responsesNeeded);
+        appendResponses(groupResponses, group.callNames);
       }
 
-      continue
+      continue;
     }
 
-    if (!isJsonObject(value)) continue
+    if (!isJsonObject(value)) continue;
 
     if (asString(get(value, "role")) === "model") {
-      const callNames: string[] = []
-      const list = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : []
+      const callNames: string[] = [];
+      const list = isJsonArray(parts) ? parts : isJsonObject(parts) ? Object.values(parts) : [];
 
       for (const part of list)
-        if (exists(part, "functionCall")) callNames.push(asString(get(part, "functionCall.name")))
-      out.push(value)
+        if (exists(part, "functionCall")) callNames.push(asString(get(part, "functionCall.name")));
+      out.push(value);
 
-      if (callNames.length > 0) pendingGroups.push({ responsesNeeded: callNames.length, callNames })
+      if (callNames.length > 0)
+        pendingGroups.push({ responsesNeeded: callNames.length, callNames });
     } else {
-      out.push(value)
+      out.push(value);
     }
   }
 
   for (const group of pendingGroups) {
     if (collected.length >= group.responsesNeeded) {
-      const groupResponses = collected.slice(0, group.responsesNeeded)
-      collected = collected.slice(group.responsesNeeded)
-      appendResponses(groupResponses, group.callNames)
+      const groupResponses = collected.slice(0, group.responsesNeeded);
+      collected = collected.slice(group.responsesNeeded);
+      appendResponses(groupResponses, group.callNames);
     }
   }
 
-  set(root, "request.contents", out)
-}
+  set(root, "request.contents", out);
+};
 
 /** `normalizeGeminiGenerationConfigResponseSchema`. */
 const normalizeResponseSchema = (root: Json): void => {
   for (const container of ["request.generationConfig", "request.generation_config"]) {
-    if (!exists(root, container)) continue
+    if (!exists(root, container)) continue;
 
     for (const schemaKey of ["responseJsonSchema", "response_json_schema"]) {
-      const oldPath = `${container}.${schemaKey}`
-      const schema = get(root, oldPath)
+      const oldPath = `${container}.${schemaKey}`;
+      const schema = get(root, oldPath);
 
-      if (schema === undefined) continue
-      const target = `${container}.responseSchema`
+      if (schema === undefined) continue;
+      const target = `${container}.responseSchema`;
 
-      if (!exists(root, target)) set(root, target, schema)
-      del(root, oldPath)
+      if (!exists(root, target)) set(root, target, schema);
+      del(root, oldPath);
     }
   }
-}
+};
 
 const normalizeRoles = (root: Json): void => {
-  const contents = get(root, "request.contents")
+  const contents = get(root, "request.contents");
 
-  if (!isJsonArray(contents)) return
+  if (!isJsonArray(contents)) return;
 
-  if (contents.every((content) => ["user", "model"].includes(asString(get(content, "role"))))) return
-  let previousRole = ""
+  if (contents.every((content) => ["user", "model"].includes(asString(get(content, "role")))))
+    return;
+  let previousRole = "";
 
   for (const content of contents) {
-    let role = asString(get(content, "role"))
+    let role = asString(get(content, "role"));
 
     if (role !== "user" && role !== "model") {
-      if (contentHasGeminiFunctionResponse(content)) role = "user"
-      else if (previousRole === "" || previousRole === "model") role = "user"
-      else role = "model"
+      if (contentHasGeminiFunctionResponse(content)) role = "user";
+      else if (previousRole === "" || previousRole === "model") role = "user";
+      else role = "model";
 
-      if (isJsonObject(content)) content["role"] = role
+      if (isJsonObject(content)) content["role"] = role;
     }
 
-    previousRole = role
+    previousRole = role;
   }
-}
+};
 
 const normalizeTools = (root: Json, nameMap: ReadonlyMap<string, string> | undefined): void => {
-  const tools = get(root, "request.tools")
+  const tools = get(root, "request.tools");
 
-  if (!isJsonArray(tools)) return
-  const seen = new Set<string>()
+  if (!isJsonArray(tools)) return;
+  const seen = new Set<string>();
 
   for (const tool of tools) {
-    if (!isJsonObject(tool)) continue
+    if (!isJsonObject(tool)) continue;
 
     for (const key of DECLARATION_KEYS) {
-      const declarations = tool[key]
+      const declarations = tool[key];
 
-      if (!isJsonArray(declarations)) continue
-      const kept: Json[] = []
+      if (!isJsonArray(declarations)) continue;
+      const kept: Json[] = [];
 
       for (const declaration of declarations) {
-        const original = asString(get(declaration, "name"))
-        const mapped = mapSanitizedFunctionName(nameMap, original)
+        const original = asString(get(declaration, "name"));
+        const mapped = mapSanitizedFunctionName(nameMap, original);
 
         if (mapped !== "") {
-          if (seen.has(mapped)) continue
-          seen.add(mapped)
+          if (seen.has(mapped)) continue;
+          seen.add(mapped);
         }
 
         if (isJsonObject(declaration)) {
-          if (typeof declaration["name"] !== "string" || mapped !== original) declaration["name"] = mapped
+          if (typeof declaration["name"] !== "string" || mapped !== original)
+            declaration["name"] = mapped;
 
           if (Object.hasOwn(declaration, "parameters")) {
-            declaration["parametersJsonSchema"] = declaration["parameters"] as Json
-            delete declaration["parameters"]
+            declaration["parametersJsonSchema"] = declaration["parameters"] as Json;
+            delete declaration["parameters"];
           }
         }
 
-        kept.push(declaration)
+        kept.push(declaration);
       }
 
-      tool[key] = kept
+      tool[key] = kept;
     }
   }
 
-  removeEmptyFunctionTools(root)
-}
+  removeEmptyFunctionTools(root);
+};
 
 /** `removeEmptyGeminiFunctionTools`. */
 const removeEmptyFunctionTools = (root: Json): void => {
-  const tools = get(root, "request.tools")
+  const tools = get(root, "request.tools");
 
-  if (!isJsonArray(tools)) return
+  if (!isJsonArray(tools)) return;
 
   if (tools.length === 0) {
-    del(root, "request.tools")
+    del(root, "request.tools");
 
-    return
+    return;
   }
 
-  let changed = false
-  const cleaned: Json[] = []
+  let changed = false;
+  const cleaned: Json[] = [];
 
   for (const tool of tools) {
     if (isJsonObject(tool)) {
       for (const key of DECLARATION_KEYS) {
-        const declarations = tool[key]
+        const declarations = tool[key];
 
         if (isJsonArray(declarations) && declarations.length === 0) {
-          delete tool[key]
-          changed = true
+          delete tool[key];
+          changed = true;
         }
       }
 
       if (Object.keys(tool).length === 0) {
-        changed = true
-        continue
+        changed = true;
+        continue;
       }
     }
 
-    cleaned.push(tool)
+    cleaned.push(tool);
   }
 
-  if (!changed) return
+  if (!changed) return;
 
-  if (cleaned.length === 0) del(root, "request.tools")
-  else set(root, "request.tools", cleaned)
-}
+  if (cleaned.length === 0) del(root, "request.tools");
+  else set(root, "request.tools", cleaned);
+};
 
-const rewriteFunctionNames = (root: Json, nameMap: ReadonlyMap<string, string> | undefined): void => {
-  const contents = get(root, "request.contents")
+const rewriteFunctionNames = (
+  root: Json,
+  nameMap: ReadonlyMap<string, string> | undefined,
+): void => {
+  const contents = get(root, "request.contents");
 
   if (isJsonArray(contents)) {
     for (const content of contents) {
-      const parts = get(content, "parts")
+      const parts = get(content, "parts");
 
-      if (!isJsonArray(parts)) continue
+      if (!isJsonArray(parts)) continue;
 
       for (const part of parts) {
-        if (!isJsonObject(part)) continue
+        if (!isJsonObject(part)) continue;
 
         for (const field of FUNCTION_NAME_FIELDS) {
-          const nameResult = get(part, `${field}.name`)
-          const name = asString(nameResult)
+          const nameResult = get(part, `${field}.name`);
+          const name = asString(nameResult);
 
-          if (name === "") continue
-          const mapped = mapSanitizedFunctionName(nameMap, name)
+          if (name === "") continue;
+          const mapped = mapSanitizedFunctionName(nameMap, name);
 
-          if (typeof nameResult === "string" && mapped === name) continue
-          set(part, `${field}.name`, mapped)
+          if (typeof nameResult === "string" && mapped === name) continue;
+          set(part, `${field}.name`, mapped);
         }
       }
     }
@@ -342,23 +367,23 @@ const rewriteFunctionNames = (root: Json, nameMap: ReadonlyMap<string, string> |
 
   for (const allowedPath of [
     "request.toolConfig.functionCallingConfig.allowedFunctionNames",
-    "request.tool_config.function_calling_config.allowed_function_names"
+    "request.tool_config.function_calling_config.allowed_function_names",
   ]) {
-    const allowed = get(root, allowedPath)
+    const allowed = get(root, allowedPath);
 
-    if (!isJsonArray(allowed)) continue
-    let changed = false
+    if (!isJsonArray(allowed)) continue;
+    let changed = false;
 
     const mappedNames = allowed.map((name) => {
-      const mapped = mapSanitizedFunctionName(nameMap, asString(name))
-      changed = changed || typeof name !== "string" || mapped !== name
+      const mapped = mapSanitizedFunctionName(nameMap, asString(name));
+      changed = changed || typeof name !== "string" || mapped !== name;
 
-      return mapped
-    })
+      return mapped;
+    });
 
-    if (changed) set(root, allowedPath, mappedNames)
+    if (changed) set(root, allowedPath, mappedNames);
   }
-}
+};
 
 const SIGNATURE_KEY_PATHS: ReadonlyArray<ReadonlyArray<string>> = [
   ["thoughtSignature"],
@@ -367,175 +392,184 @@ const SIGNATURE_KEY_PATHS: ReadonlyArray<ReadonlyArray<string>> = [
   ["functionCall", "thought_signature"],
   ["functionResponse", "thoughtSignature"],
   ["functionResponse", "thought_signature"],
-  ["extra_content", "google", "thought_signature"]
-]
+  ["extra_content", "google", "thought_signature"],
+];
 
 const valueAtPath = (value: Json | undefined, path: ReadonlyArray<string>): Json | undefined => {
-  let current: Json | undefined = value
+  let current: Json | undefined = value;
 
   for (const key of path) {
-    if (!isJsonObject(current) || !Object.hasOwn(current, key)) return undefined
-    current = current[key]
+    if (!isJsonObject(current) || !Object.hasOwn(current, key)) return undefined;
+    current = current[key];
   }
 
-  return current
-}
+  return current;
+};
 
-const hasKeyAtPath = (value: Json, path: ReadonlyArray<string>): boolean => valueAtPath(value, path) !== undefined
+const hasKeyAtPath = (value: Json, path: ReadonlyArray<string>): boolean =>
+  valueAtPath(value, path) !== undefined;
 
 const partSignature = (part: Json): { signature: string; hasString: boolean } => {
   for (const path of SIGNATURE_KEY_PATHS) {
-    const value = valueAtPath(part, path)
+    const value = valueAtPath(part, path);
 
-    if (typeof value === "string") return { signature: value, hasString: true }
+    if (typeof value === "string") return { signature: value, hasString: true };
   }
 
-  return { signature: "", hasString: false }
-}
+  return { signature: "", hasString: false };
+};
 
 const deleteSignatureFields = (part: JsonObject): void => {
   for (const path of SIGNATURE_KEY_PATHS) {
-    const parent = path.length === 1 ? part : valueAtPath(part, path.slice(0, -1))
+    const parent = path.length === 1 ? part : valueAtPath(part, path.slice(0, -1));
 
-    if (isJsonObject(parent)) delete parent[path[path.length - 1] as string]
+    if (isJsonObject(parent)) delete parent[path[path.length - 1] as string];
   }
-}
+};
 
 /** `antigravityClaudeGeminiPartHasThoughtSignatureKeyInRaw`: a signature key anywhere inside the part. */
 const hasSignatureKeyAnywhere = (value: Json): boolean => {
-  if (isJsonArray(value)) return value.some(hasSignatureKeyAnywhere)
+  if (isJsonArray(value)) return value.some(hasSignatureKeyAnywhere);
 
-  if (!isJsonObject(value)) return false
+  if (!isJsonObject(value)) return false;
 
   return Object.entries(value).some(
-    ([key, item]) => key === "thoughtSignature" || key === "thought_signature" || hasSignatureKeyAnywhere(item)
-  )
-}
+    ([key, item]) =>
+      key === "thoughtSignature" || key === "thought_signature" || hasSignatureKeyAnywhere(item),
+  );
+};
 
 /** `SanitizeAntigravityClaudeGeminiRequestSignatures`: Claude-target replay rules for Gemini-format parts. */
 export const sanitizeAntigravityClaudeGeminiRequestSignatures = (root: Json): Json => {
-  const contents = get(root, "request.contents")
+  const contents = get(root, "request.contents");
 
-  if (!isJsonArray(contents)) return root
-  let changed = false
-  const rewritten: Json[] = []
+  if (!isJsonArray(contents)) return root;
+  let changed = false;
+  const rewritten: Json[] = [];
 
   for (const content of contents) {
-    const parts = get(content, "parts")
+    const parts = get(content, "parts");
 
     if (!isJsonArray(parts)) {
-      rewritten.push(content)
-      continue
+      rewritten.push(content);
+      continue;
     }
 
-    const isModelTurn = asString(get(content, "role")) === "model"
-    let contentChanged = false
-    const rewrittenParts: Json[] = []
+    const isModelTurn = asString(get(content, "role")) === "model";
+    let contentChanged = false;
+    const rewrittenParts: Json[] = [];
 
     for (const part of parts) {
       if (!isJsonObject(part)) {
-        rewrittenParts.push(part)
-        continue
+        rewrittenParts.push(part);
+        continue;
       }
 
-      const { signature, hasString } = partSignature(part)
+      const { signature, hasString } = partSignature(part);
 
       const hasKey =
-        hasString || SIGNATURE_KEY_PATHS.some((path) => hasKeyAtPath(part, path)) || hasSignatureKeyAnywhere(part)
+        hasString ||
+        SIGNATURE_KEY_PATHS.some((path) => hasKeyAtPath(part, path)) ||
+        hasSignatureKeyAnywhere(part);
 
       const rewriteWithoutSignature = (): void => {
-        changed = true
-        contentChanged = true
-        const copy = clone(part)
-        deleteSignatureFields(copy)
-        rewrittenParts.push(sortKeysDeep(copy))
-      }
+        changed = true;
+        contentChanged = true;
+        const copy = clone(part);
+        deleteSignatureFields(copy);
+        rewrittenParts.push(sortKeysDeep(copy));
+      };
 
       if (Object.hasOwn(part, "functionResponse") || Object.hasOwn(part, "function_response")) {
-        if (hasKey) rewriteWithoutSignature()
-        else rewrittenParts.push(part)
-        continue
+        if (hasKey) rewriteWithoutSignature();
+        else rewrittenParts.push(part);
+        continue;
       }
 
       if (!isModelTurn) {
-        if (hasKey) rewriteWithoutSignature()
-        else rewrittenParts.push(part)
-        continue
+        if (hasKey) rewriteWithoutSignature();
+        else rewrittenParts.push(part);
+        continue;
       }
 
       if (part["thought"] === true) {
-        const normalized = compatibleAntigravityClaudeThinkingSignature(signature)
+        const normalized = compatibleAntigravityClaudeThinkingSignature(signature);
 
         if (normalized === undefined) {
-          changed = true
-          contentChanged = true
-          continue
+          changed = true;
+          contentChanged = true;
+          continue;
         }
 
-        const text = typeof part["text"] === "string" ? part["text"] : ""
+        const text = typeof part["text"] === "string" ? part["text"] : "";
 
         if (text.trim() === "") {
-          changed = true
-          contentChanged = true
-          continue
+          changed = true;
+          contentChanged = true;
+          continue;
         }
 
         if (normalized !== signature) {
-          changed = true
-          contentChanged = true
+          changed = true;
+          contentChanged = true;
         }
 
-        const copy = clone(part)
-        deleteSignatureFields(copy)
-        copy["thoughtSignature"] = normalized
-        rewrittenParts.push(sortKeysDeep(copy))
-        continue
+        const copy = clone(part);
+        deleteSignatureFields(copy);
+        copy["thoughtSignature"] = normalized;
+        rewrittenParts.push(sortKeysDeep(copy));
+        continue;
       }
 
-      if (hasKey) rewriteWithoutSignature()
-      else rewrittenParts.push(part)
+      if (hasKey) rewriteWithoutSignature();
+      else rewrittenParts.push(part);
     }
 
     if (rewrittenParts.length === 0) {
-      changed = true
-      continue
+      changed = true;
+      continue;
     }
 
     if (contentChanged || rewrittenParts.length !== parts.length) {
-      if (isJsonObject(content)) content["parts"] = rewrittenParts
+      if (isJsonObject(content)) content["parts"] = rewrittenParts;
     }
 
-    rewritten.push(content)
+    rewritten.push(content);
   }
 
-  if (!changed) return root
+  if (!changed) return root;
 
-  return set(root, "request.contents", rewritten)
-}
+  return set(root, "request.contents", rewritten);
+};
 
 /** `ConvertGeminiRequestToAntigravity`. */
-export const convertGeminiRequestToAntigravity = (modelName: string, body: Json, _stream: boolean): Json => {
-  const nameMap = sanitizedFunctionNameMap(body)
-  const root: Json = { project: "", request: body, model: modelName }
+export const convertGeminiRequestToAntigravity = (
+  modelName: string,
+  body: Json,
+  _stream: boolean,
+): Json => {
+  const nameMap = sanitizedFunctionNameMap(body);
+  const root: Json = { project: "", request: body, model: modelName };
 
-  if (exists(root, "request.model")) del(root, "request.model")
+  if (exists(root, "request.model")) del(root, "request.model");
 
-  fixCliToolResponse(root)
+  fixCliToolResponse(root);
 
-  const systemInstruction = get(root, "request.system_instruction")
+  const systemInstruction = get(root, "request.system_instruction");
 
   if (systemInstruction !== undefined) {
-    set(root, "request.systemInstruction", systemInstruction)
-    del(root, "request.system_instruction")
+    set(root, "request.systemInstruction", systemInstruction);
+    del(root, "request.system_instruction");
   }
 
-  normalizeResponseSchema(root)
-  normalizeRoles(root)
-  normalizeTools(root, nameMap)
-  rewriteFunctionNames(root, nameMap)
+  normalizeResponseSchema(root);
+  normalizeRoles(root);
+  normalizeTools(root, nameMap);
+  rewriteFunctionNames(root, nameMap);
 
-  if (modelName.toLowerCase().includes("claude")) sanitizeAntigravityClaudeGeminiRequestSignatures(root)
-  else sanitizeGeminiRequestThoughtSignatures(root, "request.contents")
+  if (modelName.toLowerCase().includes("claude"))
+    sanitizeAntigravityClaudeGeminiRequestSignatures(root);
+  else sanitizeGeminiRequestThoughtSignatures(root, "request.contents");
 
-  return attachDefaultSafetySettings(root, "request.safetySettings")
-}
+  return attachDefaultSafetySettings(root, "request.safetySettings");
+};

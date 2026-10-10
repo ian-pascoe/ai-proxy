@@ -9,28 +9,32 @@
  *    target is neither Codex nor Responses, their multi-agent `agent_message` input converted to plain messages;
  *  - `is-compat` models use the registered `*WithCompat` request transforms (assistant thinking blocks survive).
  */
-import type { HeaderInput } from "../../config/payload/index.ts"
-import type { Config } from "../../config/schema.ts"
-import { cloneJson } from "../../json/index.ts"
-import { Formats } from "../../translator/formats.ts"
-import type { RequestEnvelope, SummaryHooks, TranslatorRegistry } from "../../translator/registry.ts"
-import type { ExecutorRequest } from "../types.ts"
+import type { HeaderInput } from "../../config/payload/index.ts";
+import type { Config } from "../../config/schema.ts";
+import { cloneJson } from "../../json/index.ts";
+import { Formats } from "../../translator/formats.ts";
+import type {
+  RequestEnvelope,
+  SummaryHooks,
+  TranslatorRegistry,
+} from "../../translator/registry.ts";
+import type { ExecutorRequest } from "../types.ts";
 import {
   codexMultiAgentV2Enabled,
   rewriteCodexMultiAgentV2Input,
-  rewriteCodexOrphanDelegationInputForConfig
-} from "./codex-multi-agent-v2.ts"
+  rewriteCodexOrphanDelegationInputForConfig,
+} from "./codex-multi-agent-v2.ts";
 
 /** `APIKeyModelIsCompat`: the executed model was resolved with `is-compat`. */
 export const modelIsCompat = (request: Pick<ExecutorRequest, "modelInfo">): boolean =>
-  request.modelInfo?.isCompat === true
+  request.modelInfo?.isCompat === true;
 
 export interface RequestRewriteContext {
   /** Inbound request headers (User-Agent and `X-Openai-Subagent` select the Codex rewrites). */
-  readonly headers: HeaderInput
-  readonly config: Config
+  readonly headers: HeaderInput;
+  readonly config: Config;
   /** The executed model has `is-compat`. */
-  readonly isCompat?: boolean
+  readonly isCompat?: boolean;
 }
 
 /**
@@ -44,25 +48,26 @@ export const translateRequestForExecutor = (
   to: string,
   envelope: RequestEnvelope,
   hooks: SummaryHooks,
-  context: RequestRewriteContext
+  context: RequestRewriteContext,
 ): RequestEnvelope => {
   // Go: compat applies unless the target is Codex for a non-Claude client.
-  const compat = context.isCompat === true && !(to === Formats.Codex && from !== Formats.Claude)
-  let body = envelope.body
+  const compat = context.isCompat === true && !(to === Formats.Codex && from !== Formats.Claude);
+  let body = envelope.body;
 
   if (from === Formats.OpenAIResponse) {
     const rewriteInput =
       to !== Formats.Codex &&
       to !== Formats.OpenAIResponse &&
-      (compat || codexMultiAgentV2Enabled(context.headers, context.config))
+      (compat || codexMultiAgentV2Enabled(context.headers, context.config));
 
     if (context.config.upstream.codex["orphan-delegation-compatibility"] || rewriteInput) {
-      body = cloneJson(body)
-      rewriteCodexOrphanDelegationInputForConfig(context.headers, body, context.config)
+      body = cloneJson(body);
+      rewriteCodexOrphanDelegationInputForConfig(context.headers, body, context.config);
 
-      if (rewriteInput) rewriteCodexMultiAgentV2Input(context.headers, body, context.config, compat)
+      if (rewriteInput)
+        rewriteCodexMultiAgentV2Input(context.headers, body, context.config, compat);
     }
   }
 
-  return registry.translateRequest(from, to, { ...envelope, body }, hooks, { compat })
-}
+  return registry.translateRequest(from, to, { ...envelope, body }, hooks, { compat });
+};

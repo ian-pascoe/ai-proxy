@@ -1,29 +1,37 @@
 // Kimi executor: model naming, request normalisation (ported Go table tests), the Chat/Responses/Claude routing and the
 // thinking replay, against a mocked Kimi upstream.
-import { Effect } from "effect"
-import { describe, expect, it } from "vitest"
-import { makeClaudeExecutor } from "../src/executor/claude/executor.ts"
-import { makeKimiExecutor } from "../src/executor/kimi/executor.ts"
-import { kimiDeviceId } from "../src/executor/kimi/headers.ts"
+import { Effect } from "effect";
+import { describe, expect, it } from "vitest";
+import { makeClaudeExecutor } from "../src/executor/claude/executor.ts";
+import { makeKimiExecutor } from "../src/executor/kimi/executor.ts";
+import { kimiDeviceId } from "../src/executor/kimi/headers.ts";
 import {
   kimiBaseUrl,
   kimiChatUrl,
   kimiClaudeBaseUrl,
   kimiResponsesUrl,
-  normalizeKimiUpstreamModel
-} from "../src/executor/kimi/model.ts"
+  normalizeKimiUpstreamModel,
+} from "../src/executor/kimi/model.ts";
 import {
   KIMI_REASONING_UNAVAILABLE,
   normalizeKimiResponsesInput,
   normalizeKimiTemperature,
   normalizeKimiToolMessageLinks,
-  normalizeKimiTools
-} from "../src/executor/kimi/request.ts"
-import { makeKimiReplayStore } from "../src/executor/kimi/replay.ts"
-import type { JsonObject } from "../src/json/index.ts"
-import { collectStream, credential, execute, harness, json, options, runFail } from "./support/executor-run.ts"
+  normalizeKimiTools,
+} from "../src/executor/kimi/request.ts";
+import { makeKimiReplayStore } from "../src/executor/kimi/replay.ts";
+import type { JsonObject } from "../src/json/index.ts";
+import {
+  collectStream,
+  credential,
+  execute,
+  harness,
+  json,
+  options,
+  runFail,
+} from "./support/executor-run.ts";
 
-const obj = (value: unknown): JsonObject => value as JsonObject
+const obj = (value: unknown): JsonObject => value as JsonObject;
 
 describe("normalizeKimiUpstreamModel (Go table)", () => {
   const cases: Array<[string, string]> = [
@@ -59,34 +67,36 @@ describe("normalizeKimiUpstreamModel (Go table)", () => {
     ["Kimi-For-Coding", "kimi-for-coding"],
     ["kimi-for-coding[1m]", "kimi-for-coding"],
     ["for-coding", "kimi-for-coding"],
-    ["for-coding-highspeed", "kimi-for-coding-highspeed"]
-  ]
+    ["for-coding-highspeed", "kimi-for-coding-highspeed"],
+  ];
 
   for (const [input, want] of cases) {
-    it(`${input} -> ${want}`, () => expect(normalizeKimiUpstreamModel(input)).toBe(want))
+    it(`${input} -> ${want}`, () => expect(normalizeKimiUpstreamModel(input)).toBe(want));
   }
-})
+});
 
 describe("endpoints and domains", () => {
   it("derives chat/responses/messages URLs from the base URL", () => {
-    const com = credential("kimi", { attributes: { base_url: "https://api.kimi.com/coding" } })
-    expect(kimiChatUrl(com)).toBe("https://api.kimi.com/coding/v1/chat/completions")
-    expect(kimiResponsesUrl(com)).toBe("https://api.kimi.com/coding/v1/responses")
-    expect(kimiClaudeBaseUrl(com)).toBe("https://api.kimi.com/coding")
-    const v1 = credential("kimi", { attributes: { base_url: "https://gw.test/coding/v1/" } })
-    expect(kimiChatUrl(v1)).toBe("https://gw.test/coding/v1/chat/completions")
-    expect(kimiClaudeBaseUrl(v1)).toBe("https://gw.test/coding")
-    expect(kimiBaseUrl(credential("kimi-ai", { attributes: { domain: "kimi.ai" } }))).toBe("https://api.kimi.ai/coding")
-    expect(kimiBaseUrl(credential("kimi"))).toBe("https://api.kimi.com/coding")
-  })
+    const com = credential("kimi", { attributes: { base_url: "https://api.kimi.com/coding" } });
+    expect(kimiChatUrl(com)).toBe("https://api.kimi.com/coding/v1/chat/completions");
+    expect(kimiResponsesUrl(com)).toBe("https://api.kimi.com/coding/v1/responses");
+    expect(kimiClaudeBaseUrl(com)).toBe("https://api.kimi.com/coding");
+    const v1 = credential("kimi", { attributes: { base_url: "https://gw.test/coding/v1/" } });
+    expect(kimiChatUrl(v1)).toBe("https://gw.test/coding/v1/chat/completions");
+    expect(kimiClaudeBaseUrl(v1)).toBe("https://gw.test/coding");
+    expect(kimiBaseUrl(credential("kimi-ai", { attributes: { domain: "kimi.ai" } }))).toBe(
+      "https://api.kimi.ai/coding",
+    );
+    expect(kimiBaseUrl(credential("kimi"))).toBe("https://api.kimi.com/coding");
+  });
 
   it("keeps the login device id and otherwise derives a stable one", () => {
-    expect(kimiDeviceId(credential("kimi", { metadata: { device_id: " dev-1 " } }))).toBe("dev-1")
-    const first = kimiDeviceId(credential("kimi", { id: "a" }))
-    expect(first).toBe(kimiDeviceId(credential("kimi", { id: "a" })))
-    expect(first).not.toBe(kimiDeviceId(credential("kimi", { id: "b" })))
-  })
-})
+    expect(kimiDeviceId(credential("kimi", { metadata: { device_id: " dev-1 " } }))).toBe("dev-1");
+    const first = kimiDeviceId(credential("kimi", { id: "a" }));
+    expect(first).toBe(kimiDeviceId(credential("kimi", { id: "a" })));
+    expect(first).not.toBe(kimiDeviceId(credential("kimi", { id: "b" })));
+  });
+});
 
 describe("normalizeKimiToolMessageLinks", () => {
   it("uses call_id and infers the single pending tool call id", () => {
@@ -96,36 +106,43 @@ describe("normalizeKimiToolMessageLinks", () => {
           role: "assistant",
           content: "x",
           tool_calls: [{ id: "call_1", function: { name: "f" } }],
-          reasoning_content: "why"
+          reasoning_content: "why",
         },
         { role: "tool", call_id: "call_1", content: "ok" },
         {
           role: "assistant",
           content: "y",
           tool_calls: [{ id: "call_2", function: { name: "f" } }],
-          reasoning_content: "why"
+          reasoning_content: "why",
         },
-        { role: "tool", content: "ok" }
-      ]
-    })
+        { role: "tool", content: "ok" },
+      ],
+    });
 
-    normalizeKimiToolMessageLinks(body)
-    const messages = body["messages"] as Array<Record<string, unknown>>
-    expect(messages[1]?.["tool_call_id"]).toBe("call_1")
-    expect(messages[3]?.["tool_call_id"]).toBe("call_2")
-  })
+    normalizeKimiToolMessageLinks(body);
+    const messages = body["messages"] as Array<Record<string, unknown>>;
+    expect(messages[1]?.["tool_call_id"]).toBe("call_1");
+    expect(messages[3]?.["tool_call_id"]).toBe("call_2");
+  });
 
   it("does not guess an id when several calls are pending", () => {
     const body = obj({
       messages: [
-        { role: "assistant", content: "x", reasoning_content: "r", tool_calls: [{ id: "a" }, { id: "b" }] },
-        { role: "tool", content: "ok" }
-      ]
-    })
+        {
+          role: "assistant",
+          content: "x",
+          reasoning_content: "r",
+          tool_calls: [{ id: "a" }, { id: "b" }],
+        },
+        { role: "tool", content: "ok" },
+      ],
+    });
 
-    normalizeKimiToolMessageLinks(body)
-    expect((body["messages"] as Array<Record<string, unknown>>)[1]).not.toHaveProperty("tool_call_id")
-  })
+    normalizeKimiToolMessageLinks(body);
+    expect((body["messages"] as Array<Record<string, unknown>>)[1]).not.toHaveProperty(
+      "tool_call_id",
+    );
+  });
 
   it("gives tool-calling assistants a reasoning_content (previous, own text, marker)", () => {
     const body = obj({
@@ -136,39 +153,41 @@ describe("normalizeKimiToolMessageLinks", () => {
           role: "assistant",
           content: [{ type: "text", text: "from text" }],
           tool_calls: [{ id: "2" }],
-          reasoning_content: KIMI_REASONING_UNAVAILABLE
+          reasoning_content: KIMI_REASONING_UNAVAILABLE,
         },
-        { role: "assistant", content: "", tool_calls: [{ id: "3" }], reasoning_content: "" }
-      ]
-    })
+        { role: "assistant", content: "", tool_calls: [{ id: "3" }], reasoning_content: "" },
+      ],
+    });
 
-    normalizeKimiToolMessageLinks(body)
-    const messages = body["messages"] as Array<Record<string, unknown>>
+    normalizeKimiToolMessageLinks(body);
+    const messages = body["messages"] as Array<Record<string, unknown>>;
     expect(messages.map((message) => message["reasoning_content"])).toEqual([
       "earlier thinking",
       "earlier thinking",
       "earlier thinking",
-      "earlier thinking"
-    ])
+      "earlier thinking",
+    ]);
 
     // Only a message's own usable reasoning feeds later fallbacks, not text copied into an earlier message.
     const fresh = obj({
       messages: [
         { role: "assistant", content: "own words", tool_calls: [{ id: "1" }] },
-        { role: "assistant", content: "", tool_calls: [{ id: "2" }] }
-      ]
-    })
+        { role: "assistant", content: "", tool_calls: [{ id: "2" }] },
+      ],
+    });
 
-    normalizeKimiToolMessageLinks(fresh)
+    normalizeKimiToolMessageLinks(fresh);
     expect(
-      (fresh["messages"] as Array<Record<string, unknown>>).map((message) => message["reasoning_content"])
-    ).toEqual(["own words", KIMI_REASONING_UNAVAILABLE])
-    const none = obj({ messages: [{ role: "assistant", content: "", tool_calls: [{ id: "1" }] }] })
-    normalizeKimiToolMessageLinks(none)
+      (fresh["messages"] as Array<Record<string, unknown>>).map(
+        (message) => message["reasoning_content"],
+      ),
+    ).toEqual(["own words", KIMI_REASONING_UNAVAILABLE]);
+    const none = obj({ messages: [{ role: "assistant", content: "", tool_calls: [{ id: "1" }] }] });
+    normalizeKimiToolMessageLinks(none);
     expect((none["messages"] as Array<Record<string, unknown>>)[0]?.["reasoning_content"]).toBe(
-      KIMI_REASONING_UNAVAILABLE
-    )
-  })
+      KIMI_REASONING_UNAVAILABLE,
+    );
+  });
 
   it("drops empty assistant messages unless they carry calls or reasoning", () => {
     const body = obj({
@@ -179,19 +198,16 @@ describe("normalizeKimiToolMessageLinks", () => {
         { role: "assistant", content: null },
         { role: "assistant", content: "", reasoning_content: "kept" },
         { role: "assistant", content: "", function_call: { name: "f" } },
-        { role: "assistant", content: "text" }
-      ]
-    })
+        { role: "assistant", content: "text" },
+      ],
+    });
 
-    normalizeKimiToolMessageLinks(body)
-    expect((body["messages"] as Array<Record<string, unknown>>).map((message) => message["content"])).toEqual([
-      "hi",
-      "",
-      "",
-      "text"
-    ])
-  })
-})
+    normalizeKimiToolMessageLinks(body);
+    expect(
+      (body["messages"] as Array<Record<string, unknown>>).map((message) => message["content"]),
+    ).toEqual(["hi", "", "", "text"]);
+  });
+});
 
 describe("tools, temperature and Responses input", () => {
   it("inlines local refs, strips definitions and defaults the object type", () => {
@@ -203,27 +219,32 @@ describe("tools, temperature and Responses input", () => {
             name: "test_fn",
             parameters: {
               definitions: { prop: { type: "number" } },
-              properties: { count: { $ref: "#/definitions/prop", description: "item count" } }
-            }
-          }
+              properties: { count: { $ref: "#/definitions/prop", description: "item count" } },
+            },
+          },
         },
-        { type: "function", name: "flat", parameters: { properties: {} } }
+        { type: "function", name: "flat", parameters: { properties: {} } },
       ],
-      functions: [{ name: "legacy_fn", parameters: { properties: { name: { type: "string" } } } }]
-    })
+      functions: [{ name: "legacy_fn", parameters: { properties: { name: { type: "string" } } } }],
+    });
 
-    normalizeKimiTools(body)
+    normalizeKimiTools(body);
 
-    const params = (body["tools"] as Array<{ function: { parameters: Record<string, unknown> } }>)[0]?.function
-      .parameters
+    const params = (
+      body["tools"] as Array<{ function: { parameters: Record<string, unknown> } }>
+    )[0]?.function.parameters;
 
     expect(params).toEqual({
       properties: { count: { type: "number", description: "item count" } },
-      type: "object"
-    })
-    expect((body["tools"] as Array<{ parameters: Record<string, unknown> }>)[1]?.parameters["type"]).toBe("object")
-    expect((body["functions"] as Array<{ parameters: Record<string, unknown> }>)[0]?.parameters["type"]).toBe("object")
-  })
+      type: "object",
+    });
+    expect(
+      (body["tools"] as Array<{ parameters: Record<string, unknown> }>)[1]?.parameters["type"],
+    ).toBe("object");
+    expect(
+      (body["functions"] as Array<{ parameters: Record<string, unknown> }>)[0]?.parameters["type"],
+    ).toBe("object");
+  });
 
   const temperatureCases: Array<[string, Record<string, unknown>, number | undefined]> = [
     ["absent", { model: "m" }, undefined],
@@ -232,13 +253,13 @@ describe("tools, temperature and Responses input", () => {
     ["enabled strips 0.6", { thinking: { type: "enabled" }, temperature: 0.6 }, undefined],
     ["disabled keeps 0.6", { thinking: { type: "disabled" }, temperature: 0.6 }, 0.6],
     ["disabled strips 1.0", { thinking: { type: "disabled" }, temperature: 1.0 }, undefined],
-    ["implicit strips 0.5", { temperature: 0.5 }, undefined]
-  ]
+    ["implicit strips 0.5", { temperature: 0.5 }, undefined],
+  ];
 
   for (const [name, body, want] of temperatureCases) {
     it(`temperature: ${name}`, () => {
-      expect(obj(normalizeKimiTemperature(obj(structuredClone(body))))["temperature"]).toBe(want)
-    })
+      expect(obj(normalizeKimiTemperature(obj(structuredClone(body))))["temperature"]).toBe(want);
+    });
   }
 
   it("keeps parallel tool outputs contiguous by deferring intervening items", () => {
@@ -249,39 +270,36 @@ describe("tools, temperature and Responses input", () => {
         { type: "function_call_output", call_id: "a", output: "1" },
         { type: "message", role: "developer", content: "note" },
         { type: "function_call_output", call_id: "b", output: "2" },
-        { type: "message", role: "user", content: "next" }
-      ]
-    })
+        { type: "message", role: "user", content: "next" },
+      ],
+    });
 
-    normalizeKimiResponsesInput(body)
-    expect((body["input"] as Array<Record<string, unknown>>).map((item) => item["call_id"] ?? item["role"])).toEqual([
-      "a",
-      "b",
-      "a",
-      "b",
-      "developer",
-      "user"
-    ])
+    normalizeKimiResponsesInput(body);
+    expect(
+      (body["input"] as Array<Record<string, unknown>>).map(
+        (item) => item["call_id"] ?? item["role"],
+      ),
+    ).toEqual(["a", "b", "a", "b", "developer", "user"]);
 
     const untouched = obj({
       input: [
         { type: "function_call", call_id: "a" },
-        { type: "function_call_output", call_id: "a" }
-      ]
-    })
+        { type: "function_call_output", call_id: "a" },
+      ],
+    });
 
-    const before = JSON.stringify(untouched)
-    normalizeKimiResponsesInput(untouched)
-    expect(JSON.stringify(untouched)).toBe(before)
-  })
-})
+    const before = JSON.stringify(untouched);
+    normalizeKimiResponsesInput(untouched);
+    expect(JSON.stringify(untouched)).toBe(before);
+  });
+});
 
 const kimiCredential = (overrides = {}) =>
   credential("kimi", {
     attributes: { base_url: "https://api.kimi.com/coding", domain: "kimi.com" },
     metadata: { access_token: "kimi-token", device_id: "device-1" },
-    ...overrides
-  })
+    ...overrides,
+  });
 
 const chatCompletion = {
   id: "chatcmpl-1",
@@ -289,21 +307,21 @@ const chatCompletion = {
   created: 1,
   model: "kimi-for-coding",
   choices: [{ index: 0, message: { role: "assistant", content: "hello" }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 }
-}
+  usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
+};
 
 describe("Kimi chat completions path", () => {
-  const executor = makeKimiExecutor()
+  const executor = makeKimiExecutor();
 
   const chatOptions = (stream = false) =>
     options({
       stream,
       sourceFormat: "openai",
-      metadata: { ...options().metadata, requestPath: "/v1/chat/completions" }
-    })
+      metadata: { ...options().metadata, requestPath: "/v1/chat/completions" },
+    });
 
   it("shapes the request: model alias, headers, tools, temperature and tool-message repair", async () => {
-    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(chatCompletion)))
+    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(chatCompletion)));
 
     const response = await execute(
       executor,
@@ -318,56 +336,63 @@ describe("Kimi chat completions path", () => {
             {
               role: "assistant",
               content: "",
-              tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }]
+              tool_calls: [
+                { id: "c1", type: "function", function: { name: "f", arguments: "{}" } },
+              ],
             },
-            { role: "tool", content: "done" }
+            { role: "tool", content: "done" },
           ],
-          tools: [{ type: "function", function: { name: "f", parameters: { properties: {} } } }]
-        })
+          tools: [{ type: "function", function: { name: "f", parameters: { properties: {} } } }],
+        }),
       },
-      chatOptions()
-    )
+      chatOptions(),
+    );
 
-    const call = h.calls[0]
-    expect(call?.url).toBe("https://api.kimi.com/coding/v1/chat/completions")
-    expect(call?.headers["authorization"]).toBe("Bearer kimi-token")
-    expect(call?.headers["x-msh-device-id"]).toBe("device-1")
-    expect(call?.headers["x-msh-platform"]).toBe("CLIProxyAPI")
-    expect(call?.headers["accept"]).toBe("application/json")
+    const call = h.calls[0];
+    expect(call?.url).toBe("https://api.kimi.com/coding/v1/chat/completions");
+    expect(call?.headers["authorization"]).toBe("Bearer kimi-token");
+    expect(call?.headers["x-msh-device-id"]).toBe("device-1");
+    expect(call?.headers["x-msh-platform"]).toBe("CLIProxyAPI");
+    expect(call?.headers["accept"]).toBe("application/json");
 
     const body = JSON.parse(call?.text ?? "{}") as Record<string, unknown> & {
-      messages: Array<Record<string, unknown>>
-    }
+      messages: Array<Record<string, unknown>>;
+    };
 
-    expect(body["model"]).toBe("kimi-for-coding")
-    expect(body).not.toHaveProperty("temperature")
-    expect(body.messages[2]?.["tool_call_id"]).toBe("c1")
-    expect(body.messages[1]?.["reasoning_content"]).toBe(KIMI_REASONING_UNAVAILABLE)
-    expect((body["tools"] as Array<{ function: { parameters: { type: string } } }>)[0]?.function.parameters.type).toBe(
-      "object"
-    )
-    expect(JSON.parse(response.payload)).toMatchObject({ object: "chat.completion" })
-    expect(h.usage.failed).toBe(false)
-  })
+    expect(body["model"]).toBe("kimi-for-coding");
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.messages[2]?.["tool_call_id"]).toBe("c1");
+    expect(body.messages[1]?.["reasoning_content"]).toBe(KIMI_REASONING_UNAVAILABLE);
+    expect(
+      (body["tools"] as Array<{ function: { parameters: { type: string } } }>)[0]?.function
+        .parameters.type,
+    ).toBe("object");
+    expect(JSON.parse(response.payload)).toMatchObject({ object: "chat.completion" });
+    expect(h.usage.failed).toBe(false);
+  });
 
   it("applies the suffix thinking config and the payload rules last", async () => {
-    const yaml = `payload:\n  override:\n    - models: [{ name: "kimi-k2.8*", protocol: openai }]\n      params:\n        temperature: 0.42\n`
-    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(chatCompletion)), yaml)
+    const yaml = `payload:\n  override:\n    - models: [{ name: "kimi-k2.8*", protocol: openai }]\n      params:\n        temperature: 0.42\n`;
+    const h = await harness(
+      kimiCredential(),
+      () => new Response(JSON.stringify(chatCompletion)),
+      yaml,
+    );
     await execute(
       executor,
       h,
       {
         model: "kimi-k2.8(high)",
-        payload: json({ model: "kimi-k2.8(high)", messages: [{ role: "user", content: "hi" }] })
+        payload: json({ model: "kimi-k2.8(high)", messages: [{ role: "user", content: "hi" }] }),
       },
-      chatOptions()
-    )
-    const body = JSON.parse(h.calls[0]?.text ?? "{}") as Record<string, unknown>
+      chatOptions(),
+    );
+    const body = JSON.parse(h.calls[0]?.text ?? "{}") as Record<string, unknown>;
     // The suffix drives the thinking config (applied before the payload rules); the upstream model has none.
-    expect(body["model"]).toBe("kimi-for-coding")
-    expect(body["thinking"]).toMatchObject({ effort: "high" })
-    expect(body["temperature"]).toBe(0.42)
-  })
+    expect(body["model"]).toBe("kimi-for-coding");
+    expect(body["thinking"]).toMatchObject({ effort: "high" });
+    expect(body["temperature"]).toBe(0.42);
+  });
 
   it("streams chunks with include_usage and ends with the [DONE] translation", async () => {
     const lines = [
@@ -376,70 +401,83 @@ describe("Kimi chat completions path", () => {
       `data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 1, model: "kimi-for-coding", choices: [{ index: 0, delta: { content: "llo" }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } })}`,
       "",
       "data: [DONE]",
-      ""
-    ].join("\n")
+      "",
+    ].join("\n");
 
     const h = await harness(
       kimiCredential(),
       () => new Response(lines, { headers: { "content-type": "text/event-stream" } }),
       undefined,
-      true
-    )
+      true,
+    );
 
     const collected = await collectStream(
       executor,
       h,
       {
         model: "kimi-k3",
-        payload: json({ model: "kimi-k3", stream: true, messages: [{ role: "user", content: "hi" }] })
+        payload: json({
+          model: "kimi-k3",
+          stream: true,
+          messages: [{ role: "user", content: "hi" }],
+        }),
       },
-      chatOptions(true)
-    )
+      chatOptions(true),
+    );
 
-    expect(collected.error).toBeUndefined()
-    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ model: "k3", stream_options: { include_usage: true } })
-    expect(h.calls[0]?.headers["accept"]).toBe("text/event-stream")
+    expect(collected.error).toBeUndefined();
+    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({
+      model: "k3",
+      stream_options: { include_usage: true },
+    });
+    expect(h.calls[0]?.headers["accept"]).toBe("text/event-stream");
 
     const text = collected.chunks
       .filter((chunk) => chunk.trim().startsWith("{") || chunk.startsWith("data: {"))
       .map(
         (chunk) =>
-          (JSON.parse(chunk.replace(/^data: /, "")) as { choices: Array<{ delta: { content?: string } }> }).choices[0]
-            ?.delta.content
-      )
+          (
+            JSON.parse(chunk.replace(/^data: /, "")) as {
+              choices: Array<{ delta: { content?: string } }>;
+            }
+          ).choices[0]?.delta.content,
+      );
 
-    expect(text.filter(Boolean).join("")).toBe("Hello")
-  })
+    expect(text.filter(Boolean).join("")).toBe("Hello");
+  });
 
   it("surfaces upstream errors with their body", async () => {
     const h = await harness(
       kimiCredential(),
-      () => new Response('{"error":{"message":"bad temperature"}}', { status: 400 })
-    )
+      () => new Response('{"error":{"message":"bad temperature"}}', { status: 400 }),
+    );
 
     const error = await runFail(
       executor.execute(
         h.context,
         { model: "k3", payload: json({ messages: [{ role: "user", content: "x" }] }) },
-        chatOptions()
+        chatOptions(),
       ),
-      h.layers
-    )
+      h.layers,
+    );
 
-    expect(error).toMatchObject({ status: 400, message: '{"error":{"message":"bad temperature"}}' })
-    expect(h.usage.failed).toBe(true)
-  })
-})
+    expect(error).toMatchObject({
+      status: 400,
+      message: '{"error":{"message":"bad temperature"}}',
+    });
+    expect(h.usage.failed).toBe(true);
+  });
+});
 
 describe("Kimi responses path", () => {
-  const executor = makeKimiExecutor()
+  const executor = makeKimiExecutor();
 
   const responsesOptions = (stream = false) =>
     options({
       stream,
       sourceFormat: "openai-response",
-      metadata: { ...options().metadata, requestPath: "/v1/responses" }
-    })
+      metadata: { ...options().metadata, requestPath: "/v1/responses" },
+    });
 
   const upstream = {
     id: "resp_1",
@@ -447,14 +485,14 @@ describe("Kimi responses path", () => {
     status: "completed",
     model: "kimi-for-coding",
     output: [],
-    usage: { input_tokens: 4, output_tokens: 1, total_tokens: 5 }
-  }
+    usage: { input_tokens: 4, output_tokens: 1, total_tokens: 5 },
+  };
 
   it("passes the Responses body through with model, stream, tools and temperature fixes", async () => {
     const h = await harness(
       kimiCredential({ attributes: { base_url: "https://api.kimi.ai/coding" } }),
-      () => new Response(JSON.stringify(upstream))
-    )
+      () => new Response(JSON.stringify(upstream)),
+    );
 
     const response = await execute(
       executor,
@@ -469,87 +507,99 @@ describe("Kimi responses path", () => {
           input: [
             { type: "function_call", call_id: "a", name: "f" },
             { type: "message", role: "developer", content: "n" },
-            { type: "function_call_output", call_id: "a", output: "1" }
-          ]
-        })
+            { type: "function_call_output", call_id: "a", output: "1" },
+          ],
+        }),
       },
-      responsesOptions()
-    )
+      responsesOptions(),
+    );
 
-    expect(h.calls[0]?.url).toBe("https://api.kimi.ai/coding/v1/responses")
+    expect(h.calls[0]?.url).toBe("https://api.kimi.ai/coding/v1/responses");
 
     const body = JSON.parse(h.calls[0]?.text ?? "{}") as Record<string, unknown> & {
-      input: Array<Record<string, unknown>>
-    }
+      input: Array<Record<string, unknown>>;
+    };
 
-    expect(body["model"]).toBe("kimi-for-coding")
-    expect(body["stream"]).toBe(false)
-    expect(body).not.toHaveProperty("temperature")
-    expect(body.input.map((item) => item["type"])).toEqual(["function_call", "function_call_output", "message"])
-    expect((body["tools"] as Array<{ parameters: { type: string } }>)[0]?.parameters.type).toBe("object")
-    const out = JSON.parse(response.payload) as { usage: { input_tokens_details: { cached_tokens: number } } }
-    expect(out.usage.input_tokens_details.cached_tokens).toBe(0)
-    expect(h.usage.failed).toBe(false)
-  })
+    expect(body["model"]).toBe("kimi-for-coding");
+    expect(body["stream"]).toBe(false);
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.input.map((item) => item["type"])).toEqual([
+      "function_call",
+      "function_call_output",
+      "message",
+    ]);
+    expect((body["tools"] as Array<{ parameters: { type: string } }>)[0]?.parameters.type).toBe(
+      "object",
+    );
+    const out = JSON.parse(response.payload) as {
+      usage: { input_tokens_details: { cached_tokens: number } };
+    };
+    expect(out.usage.input_tokens_details.cached_tokens).toBe(0);
+    expect(h.usage.failed).toBe(false);
+  });
 
   it("answers compaction with 501 (400 when streaming) and streams SSE lines unchanged", async () => {
-    const h = await harness(kimiCredential(), () => new Response("data: {}\n\n"))
-    const compactOptions = { ...responsesOptions(), alt: "responses/compact" }
+    const h = await harness(kimiCredential(), () => new Response("data: {}\n\n"));
+    const compactOptions = { ...responsesOptions(), alt: "responses/compact" };
     expect(
       (
         await runFail(
-          executor.execute(h.context, { model: "k3", payload: json({ input: "x" }) }, compactOptions),
-          h.layers
+          executor.execute(
+            h.context,
+            { model: "k3", payload: json({ input: "x" }) },
+            compactOptions,
+          ),
+          h.layers,
         )
-      ).status
-    ).toBe(501)
+      ).status,
+    ).toBe(501);
 
     const streaming = await collectStream(
       executor,
       h,
       { model: "k3", payload: json({ input: "x" }) },
-      { ...compactOptions, stream: true }
-    )
+      { ...compactOptions, stream: true },
+    );
 
-    expect(streaming.error?.status).toBe(400)
+    expect(streaming.error?.status).toBe(400);
 
-    const sse = `event: response.created\ndata: ${JSON.stringify({ type: "response.created" })}\n\ndata: ${JSON.stringify({ type: "response.completed", response: { usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } } })}\n\n`
-    const s = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const sse = `event: response.created\ndata: ${JSON.stringify({ type: "response.created" })}\n\ndata: ${JSON.stringify({ type: "response.completed", response: { usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 } } })}\n\n`;
+    const s = await harness(kimiCredential(), () => new Response(sse), undefined, true);
 
     const collected = await collectStream(
       executor,
       s,
       { model: "k3", payload: json({ input: "x", stream: true }) },
-      responsesOptions(true)
-    )
+      responsesOptions(true),
+    );
 
     expect(collected.chunks.join("")).toBe(
-      `${sse.slice(0, -1)}\n`.replace(/\n$/, "\n") === sse ? sse : collected.chunks.join("")
-    )
-    expect(collected.chunks.filter((chunk) => chunk.trim() !== "").map((chunk) => chunk.trim())).toEqual(
-      sse.split("\n").filter((line) => line.trim() !== "")
-    )
-  })
-})
+      `${sse.slice(0, -1)}\n`.replace(/\n$/, "\n") === sse ? sse : collected.chunks.join(""),
+    );
+    expect(
+      collected.chunks.filter((chunk) => chunk.trim() !== "").map((chunk) => chunk.trim()),
+    ).toEqual(sse.split("\n").filter((line) => line.trim() !== ""));
+  });
+});
 
 /** Loosely typed JSON object of an event/item/tool in the assertions below. */
 interface Item {
-  [key: string]: unknown
-  parameters?: { required?: string[] }
+  [key: string]: unknown;
+  parameters?: { required?: string[] };
 }
 
 describe("Kimi responses path: apply_patch bridge", () => {
-  const executor = makeKimiExecutor()
+  const executor = makeKimiExecutor();
 
   const responsesOptions = (stream = false) =>
     options({
       stream,
       sourceFormat: "openai-response",
-      metadata: { ...options().metadata, requestPath: "/v1/responses" }
-    })
+      metadata: { ...options().metadata, requestPath: "/v1/responses" },
+    });
 
-  const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
-  const ARGS = JSON.stringify({ input: PATCH })
+  const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch";
+  const ARGS = JSON.stringify({ input: PATCH });
 
   const call = (args: string) => ({
     id: "fc_1",
@@ -557,8 +607,8 @@ describe("Kimi responses path: apply_patch bridge", () => {
     call_id: "call_1",
     name: "apply_patch",
     arguments: args,
-    status: "completed"
-  })
+    status: "completed",
+  });
 
   const request = () => ({
     model: "k3",
@@ -566,14 +616,14 @@ describe("Kimi responses path: apply_patch bridge", () => {
     input: [
       { type: "message", role: "user", content: "go" },
       { type: "custom_tool_call", call_id: "c0", name: "apply_patch", input: PATCH },
-      { type: "custom_tool_call_output", call_id: "c0", output: "ok" }
-    ]
-  })
+      { type: "custom_tool_call_output", call_id: "c0", output: "ok" },
+    ],
+  });
 
   const frame = (event: unknown): string =>
-    `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`
+    `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`;
 
-  const done = (item: unknown) => ({ type: "response.output_item.done", output_index: 0, item })
+  const done = (item: unknown) => ({ type: "response.output_item.done", output_index: 0, item });
 
   const completed = (output: unknown[]) => ({
     type: "response.completed",
@@ -581,110 +631,147 @@ describe("Kimi responses path: apply_patch bridge", () => {
       id: "resp_1",
       status: "completed",
       output,
-      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
-    }
-  })
+      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+    },
+  });
 
   it("sends the strict function and restores custom_tool_call output in the non-stream body", async () => {
     const h = await harness(
       kimiCredential(),
       () =>
-        new Response(JSON.stringify({ id: "resp_1", object: "response", status: "completed", output: [call(ARGS)] }))
-    )
+        new Response(
+          JSON.stringify({
+            id: "resp_1",
+            object: "response",
+            status: "completed",
+            output: [call(ARGS)],
+          }),
+        ),
+    );
 
-    const response = await execute(executor, h, { model: "k3", payload: json(request()) }, responsesOptions())
+    const response = await execute(
+      executor,
+      h,
+      { model: "k3", payload: json(request()) },
+      responsesOptions(),
+    );
 
     const body = JSON.parse(h.calls[0]?.text ?? "{}") as {
-      tools: Array<Item>
-      input: Array<Item>
-    }
+      tools: Array<Item>;
+      input: Array<Item>;
+    };
 
-    expect(body.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
-    expect(body.input[1]).toMatchObject({ type: "function_call", arguments: ARGS })
-    expect(body.input[2]).toMatchObject({ type: "function_call_output" })
-    const out = JSON.parse(response.payload) as { output: Array<Item> }
-    expect(out.output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
-  })
+    expect(body.tools[0]).toMatchObject({ type: "function", name: "apply_patch" });
+    expect(body.input[1]).toMatchObject({ type: "function_call", arguments: ARGS });
+    expect(body.input[2]).toMatchObject({ type: "function_call_output" });
+    const out = JSON.parse(response.payload) as { output: Array<Item> };
+    expect(out.output[0]).toMatchObject({
+      type: "custom_tool_call",
+      name: "apply_patch",
+      input: PATCH,
+    });
+  });
 
   it("fails a malformed non-stream answer with a sanitised 502", async () => {
     const h = await harness(
       kimiCredential(),
-      () => new Response(JSON.stringify({ object: "response", output: [call('{"nope":"secret text"}')] }))
-    )
+      () =>
+        new Response(
+          JSON.stringify({ object: "response", output: [call('{"nope":"secret text"}')] }),
+        ),
+    );
 
     const error = await runFail(
       executor.execute(h.context, { model: "k3", payload: json(request()) }, responsesOptions()),
-      h.layers
-    )
+      h.layers,
+    );
 
-    expect(error.status).toBe(502)
-    expect(error.message).not.toContain("secret text")
-  })
+    expect(error.status).toBe(502);
+    expect(error.message).not.toContain("secret text");
+  });
 
   it("rewrites streamed function-call events into custom tool input events", async () => {
-    const item = call(ARGS)
+    const item = call(ARGS);
 
     const sse = [
-      frame({ type: "response.output_item.added", output_index: 0, item: { ...item, arguments: "" } }),
-      frame({ type: "response.function_call_arguments.delta", item_id: "fc_1", output_index: 0, delta: ARGS }),
-      frame({ type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 0, arguments: ARGS }),
+      frame({
+        type: "response.output_item.added",
+        output_index: 0,
+        item: { ...item, arguments: "" },
+      }),
+      frame({
+        type: "response.function_call_arguments.delta",
+        item_id: "fc_1",
+        output_index: 0,
+        delta: ARGS,
+      }),
+      frame({
+        type: "response.function_call_arguments.done",
+        item_id: "fc_1",
+        output_index: 0,
+        arguments: ARGS,
+      }),
       frame(done(item)),
-      frame(completed([item]))
-    ].join("")
+      frame(completed([item])),
+    ].join("");
 
-    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true);
 
     const collected = await collectStream(
       executor,
       h,
       { model: "k3", payload: json({ ...request(), stream: true }) },
-      responsesOptions(true)
-    )
+      responsesOptions(true),
+    );
 
-    const text = collected.chunks.join("")
-    expect(collected.error).toBeUndefined()
-    expect(text).toContain("event: response.custom_tool_call_input.delta")
-    expect(text).toContain("event: response.custom_tool_call_input.done")
-    expect(text).not.toContain("response.function_call_arguments")
-    expect(text).toContain('"type":"custom_tool_call"')
-  })
+    const text = collected.chunks.join("");
+    expect(collected.error).toBeUndefined();
+    expect(text).toContain("event: response.custom_tool_call_input.delta");
+    expect(text).toContain("event: response.custom_tool_call_input.done");
+    expect(text).not.toContain("response.function_call_arguments");
+    expect(text).toContain('"type":"custom_tool_call"');
+  });
 
   it("fails a malformed stream with the one local failure frame and a 502", async () => {
-    const bad = call('{"nope":"secret text"}')
-    const sse = [frame(done(bad)), frame(completed([bad]))].join("")
-    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const bad = call('{"nope":"secret text"}');
+    const sse = [frame(done(bad)), frame(completed([bad]))].join("");
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true);
 
     const collected = await collectStream(
       executor,
       h,
       { model: "k3", payload: json({ ...request(), stream: true }) },
-      responsesOptions(true)
-    )
+      responsesOptions(true),
+    );
 
-    expect(collected.error?.status).toBe(502)
-    expect(collected.chunks.join("")).toContain("invalid_tool_arguments")
-    expect(collected.chunks.join("")).not.toContain("secret text")
-  })
+    expect(collected.error?.status).toBe(502);
+    expect(collected.chunks.join("")).toContain("invalid_tool_arguments");
+    expect(collected.chunks.join("")).not.toContain("secret text");
+  });
 
   it("fails a stream that ends without a validated completion once", async () => {
-    const item = call(ARGS)
+    const item = call(ARGS);
 
-    const sse = [frame({ type: "response.output_item.added", output_index: 0, item: { ...item, arguments: "" } })].join(
-      ""
-    )
+    const sse = [
+      frame({
+        type: "response.output_item.added",
+        output_index: 0,
+        item: { ...item, arguments: "" },
+      }),
+    ].join("");
 
-    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true)
+    const h = await harness(kimiCredential(), () => new Response(sse), undefined, true);
 
     const collected = await collectStream(
       executor,
       h,
       { model: "k3", payload: json({ ...request(), stream: true }) },
-      responsesOptions(true)
-    )
+      responsesOptions(true),
+    );
 
-    expect(collected.error?.status).toBe(502)
-    expect(collected.chunks.join("").match(/invalid_tool_arguments/g)).toHaveLength(1)
-  })
+    expect(collected.error?.status).toBe(502);
+    expect(collected.chunks.join("").match(/invalid_tool_arguments/g)).toHaveLength(1);
+  });
 
   it("leaves requests without apply_patch untouched", async () => {
     const h = await harness(
@@ -694,10 +781,10 @@ describe("Kimi responses path: apply_patch bridge", () => {
           JSON.stringify({
             object: "response",
             output: [],
-            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
-          })
-        )
-    )
+            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+          }),
+        ),
+    );
 
     await execute(
       executor,
@@ -707,15 +794,15 @@ describe("Kimi responses path: apply_patch bridge", () => {
         payload: json({
           model: "k3",
           input: "x",
-          tools: [{ type: "function", name: "f", parameters: { type: "object" } }]
-        })
+          tools: [{ type: "function", name: "f", parameters: { type: "object" } }],
+        }),
       },
-      responsesOptions()
-    )
-    const body = JSON.parse(h.calls[0]?.text ?? "{}") as { tools: Array<Item> }
-    expect(body.tools[0]).toMatchObject({ type: "function", name: "f" })
-  })
-})
+      responsesOptions(),
+    );
+    const body = JSON.parse(h.calls[0]?.text ?? "{}") as { tools: Array<Item> };
+    expect(body.tools[0]).toMatchObject({ type: "function", name: "f" });
+  });
+});
 
 const anthropicMessage = (content: unknown[], model = "kimi-for-coding") => ({
   id: "msg_1",
@@ -725,8 +812,8 @@ const anthropicMessage = (content: unknown[], model = "kimi-for-coding") => ({
   content,
   stop_reason: "end_turn",
   stop_sequence: null,
-  usage: { input_tokens: 9, output_tokens: 3 }
-})
+  usage: { input_tokens: 9, output_tokens: 3 },
+});
 
 describe("Kimi Claude Messages path", () => {
   const claudeOptions = (stream = false) =>
@@ -734,23 +821,23 @@ describe("Kimi Claude Messages path", () => {
       stream,
       sourceFormat: "claude",
       headers: new Headers({ "x-claude-code-session-id": "sess-1" }),
-      metadata: { ...options().metadata, requestPath: "/v1/messages" }
-    })
+      metadata: { ...options().metadata, requestPath: "/v1/messages" },
+    });
 
   const claudeRequest = (extra: Record<string, unknown> = {}) => ({
     model: "kimi-k2.8[1m]",
     max_tokens: 64,
     messages: [{ role: "user", content: "hi" }],
-    ...extra
-  })
+    ...extra,
+  });
 
   it("delegates to the Claude executor with the Messages base URL, bearer auth and Kimi model naming", async () => {
-    const executor = makeKimiExecutor({ replay: makeKimiReplayStore() })
+    const executor = makeKimiExecutor({ replay: makeKimiReplayStore() });
 
     const h = await harness(
       kimiCredential(),
-      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "hello" }])))
-    )
+      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "hello" }]))),
+    );
 
     const response = await execute(
       executor,
@@ -760,101 +847,130 @@ describe("Kimi Claude Messages path", () => {
         payload: json(
           claudeRequest({
             system: [
-              { type: "text", text: "x-anthropic-billing-header: cc_version=2.1.0; cc_entrypoint=cli; cch=00000;" },
-              { type: "text", text: "Be brief." }
-            ]
-          })
-        )
+              {
+                type: "text",
+                text: "x-anthropic-billing-header: cc_version=2.1.0; cc_entrypoint=cli; cch=00000;",
+              },
+              { type: "text", text: "Be brief." },
+            ],
+          }),
+        ),
       },
-      claudeOptions()
-    )
+      claudeOptions(),
+    );
 
-    const call = h.calls[0]
-    expect(call?.url).toBe("https://api.kimi.com/coding/v1/messages?beta=true")
-    expect(call?.headers["authorization"]).toBe("Bearer kimi-token")
-    expect(call?.headers).not.toHaveProperty("x-api-key")
-    const body = JSON.parse(call?.text ?? "{}") as { model: string; system: Array<{ text: string }> }
-    expect(body.model).toBe("kimi-for-coding")
+    const call = h.calls[0];
+    expect(call?.url).toBe("https://api.kimi.com/coding/v1/messages?beta=true");
+    expect(call?.headers["authorization"]).toBe("Bearer kimi-token");
+    expect(call?.headers).not.toHaveProperty("x-api-key");
+    const body = JSON.parse(call?.text ?? "{}") as {
+      model: string;
+      system: Array<{ text: string }>;
+    };
+    expect(body.model).toBe("kimi-for-coding");
     // The Claude Code attribution block is prompt text for Kimi; other system content stays.
-    expect(body.system.map((block) => block.text)).toEqual(["Be brief."])
+    expect(body.system.map((block) => block.text)).toEqual(["Be brief."]);
     // The client sees the model it asked for.
-    expect((JSON.parse(response.payload) as { model: string }).model).toBe("kimi-k2.8[1m]")
-  })
+    expect((JSON.parse(response.payload) as { model: string }).model).toBe("kimi-k2.8[1m]");
+  });
 
   it("counts tokens upstream through the Messages base URL", async () => {
-    const executor = makeKimiExecutor()
-    const h = await harness(kimiCredential(), () => new Response(JSON.stringify({ input_tokens: 42 })))
+    const executor = makeKimiExecutor();
+    const h = await harness(
+      kimiCredential(),
+      () => new Response(JSON.stringify({ input_tokens: 42 })),
+    );
 
     const response = await Effect.runPromise(
       executor
         .countTokens(
           h.context,
-          { model: "kimi-k3", payload: json({ model: "kimi-k3", messages: [{ role: "user", content: "hi" }] }) },
-          claudeOptions()
+          {
+            model: "kimi-k3",
+            payload: json({ model: "kimi-k3", messages: [{ role: "user", content: "hi" }] }),
+          },
+          claudeOptions(),
         )
-        .pipe(Effect.provide(h.layers))
-    )
+        .pipe(Effect.provide(h.layers)),
+    );
 
-    expect(h.calls[0]?.url).toBe("https://api.kimi.com/coding/v1/messages/count_tokens?beta=true")
-    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ model: "k3" })
-    expect(JSON.parse(response.payload)).toEqual({ input_tokens: 42 })
-  })
+    expect(h.calls[0]?.url).toBe("https://api.kimi.com/coding/v1/messages/count_tokens?beta=true");
+    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ model: "k3" });
+    expect(JSON.parse(response.payload)).toEqual({ input_tokens: 42 });
+  });
 
   const thinkingContent = [
     { type: "thinking", thinking: "plan", signature: "sig-abc" },
-    { type: "tool_use", id: "toolu_1", name: "Read", input: { path: "a" } }
-  ]
+    { type: "tool_use", id: "toolu_1", name: "Read", input: { path: "a" } },
+  ];
 
   const followUp = {
     model: "kimi-k2.8",
     max_tokens: 64,
     messages: [
       { role: "user", content: "hi" },
-      { role: "assistant", content: [{ type: "tool_use", id: "toolu_1", name: "Read", input: { path: "a" } }] },
-      { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "ok" }] }
-    ]
-  }
+      {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "toolu_1", name: "Read", input: { path: "a" } }],
+      },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "ok" }] },
+    ],
+  };
 
   it("caches signed thinking next to tool_use and restores it into the next request (non-stream)", async () => {
-    const store = makeKimiReplayStore()
-    const executor = makeKimiExecutor({ replay: store })
-    let reply: unknown = anthropicMessage(thinkingContent)
-    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(reply)))
+    const store = makeKimiReplayStore();
+    const executor = makeKimiExecutor({ replay: store });
+    let reply: unknown = anthropicMessage(thinkingContent);
+    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(reply)));
     await execute(
       executor,
       h,
       { model: "kimi-k2.8", payload: json({ ...followUp, messages: [followUp.messages[0]] }) },
-      claudeOptions()
-    )
-    reply = anthropicMessage([{ type: "text", text: "done" }])
-    await execute(executor, h, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions())
+      claudeOptions(),
+    );
+    reply = anthropicMessage([{ type: "text", text: "done" }]);
+    await execute(executor, h, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions());
 
     const second = JSON.parse(h.calls[1]?.text ?? "{}") as {
-      messages: Array<{ role: string; content: Array<{ type: string }> }>
-    }
+      messages: Array<{ role: string; content: Array<{ type: string }> }>;
+    };
 
-    expect(second.messages[1]?.content.map((part) => part.type)).toEqual(["thinking", "tool_use"])
+    expect(second.messages[1]?.content.map((part) => part.type)).toEqual(["thinking", "tool_use"]);
 
     // An upstream 400 after a replay clears the cached entry.
-    const failing = await harness(kimiCredential(), () => new Response('{"error":"bad"}', { status: 400 }))
+    const failing = await harness(
+      kimiCredential(),
+      () => new Response('{"error":"bad"}', { status: 400 }),
+    );
     await runFail(
-      executor.execute(failing.context, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions()),
-      failing.layers
-    )
+      executor.execute(
+        failing.context,
+        { model: "kimi-k2.8", payload: json(followUp) },
+        claudeOptions(),
+      ),
+      failing.layers,
+    );
 
     const again = await harness(
       kimiCredential(),
-      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "x" }])))
-    )
+      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "x" }]))),
+    );
 
-    await execute(executor, again, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions())
-    const third = JSON.parse(again.calls[0]?.text ?? "{}") as { messages: Array<{ content: Array<{ type: string }> }> }
-    expect(third.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"])
-  })
+    await execute(
+      executor,
+      again,
+      { model: "kimi-k2.8", payload: json(followUp) },
+      claudeOptions(),
+    );
+    const third = JSON.parse(again.calls[0]?.text ?? "{}") as {
+      messages: Array<{ content: Array<{ type: string }> }>;
+    };
+    expect(third.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"]);
+  });
 
   it("caches replay content from a streamed answer", async () => {
-    const store = makeKimiReplayStore()
-    const executor = makeKimiExecutor({ replay: store })
+    const store = makeKimiReplayStore();
+    const executor = makeKimiExecutor({ replay: store });
 
     const events = [
       {
@@ -865,72 +981,96 @@ describe("Kimi Claude Messages path", () => {
           role: "assistant",
           model: "kimi-for-coding",
           content: [],
-          usage: { input_tokens: 5, output_tokens: 1 }
-        }
+          usage: { input_tokens: 5, output_tokens: 1 },
+        },
       },
       { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } },
-      { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "plan" } },
-      { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "sig-abc" } },
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "thinking_delta", thinking: "plan" },
+      },
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "signature_delta", signature: "sig-abc" },
+      },
       { type: "content_block_stop", index: 0 },
       {
         type: "content_block_start",
         index: 1,
-        content_block: { type: "tool_use", id: "toolu_1", name: "Read", input: {} }
+        content_block: { type: "tool_use", id: "toolu_1", name: "Read", input: {} },
       },
-      { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"path":"a"}' } },
+      {
+        type: "content_block_delta",
+        index: 1,
+        delta: { type: "input_json_delta", partial_json: '{"path":"a"}' },
+      },
       { type: "content_block_stop", index: 1 },
-      { type: "message_delta", delta: { stop_reason: "tool_use", stop_sequence: null }, usage: { output_tokens: 4 } },
-      { type: "message_stop" }
-    ]
+      {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use", stop_sequence: null },
+        usage: { output_tokens: 4 },
+      },
+      { type: "message_stop" },
+    ];
 
-    const stream = events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join("")
+    const stream = events
+      .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+      .join("");
 
     const h = await harness(
       kimiCredential(),
       () => new Response(stream, { headers: { "content-type": "text/event-stream" } }),
       undefined,
-      true
-    )
+      true,
+    );
 
     const collected = await collectStream(
       executor,
       h,
-      { model: "kimi-k2.8", payload: json({ ...followUp, stream: true, messages: [followUp.messages[0]] }) },
-      claudeOptions(true)
-    )
+      {
+        model: "kimi-k2.8",
+        payload: json({ ...followUp, stream: true, messages: [followUp.messages[0]] }),
+      },
+      claudeOptions(true),
+    );
 
-    expect(collected.error).toBeUndefined()
-    expect(collected.chunks.join("")).toContain('"model":"kimi-k2.8"')
+    expect(collected.error).toBeUndefined();
+    expect(collected.chunks.join("")).toContain('"model":"kimi-k2.8"');
 
     const next = await harness(
       kimiCredential(),
-      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "ok" }])))
-    )
+      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "ok" }]))),
+    );
 
-    await execute(executor, next, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions())
+    await execute(executor, next, { model: "kimi-k2.8", payload: json(followUp) }, claudeOptions());
 
     const sent = JSON.parse(next.calls[0]?.text ?? "{}") as {
-      messages: Array<{ content: Array<{ type: string; signature?: string }> }>
-    }
+      messages: Array<{ content: Array<{ type: string; signature?: string }> }>;
+    };
 
-    expect(sent.messages[1]?.content[0]).toMatchObject({ type: "thinking", signature: "sig-abc" })
-  })
+    expect(sent.messages[1]?.content[0]).toMatchObject({ type: "thinking", signature: "sig-abc" });
+  });
 
   it("isolates replay per caller scope", async () => {
-    const store = makeKimiReplayStore()
-    const executor = makeKimiExecutor({ replay: store })
-    const h = await harness(kimiCredential(), () => new Response(JSON.stringify(anthropicMessage(thinkingContent))))
+    const store = makeKimiReplayStore();
+    const executor = makeKimiExecutor({ replay: store });
+    const h = await harness(
+      kimiCredential(),
+      () => new Response(JSON.stringify(anthropicMessage(thinkingContent))),
+    );
     await execute(
       executor,
       h,
       { model: "kimi-k2.8", payload: json({ ...followUp, messages: [followUp.messages[0]] }) },
-      claudeOptions()
-    )
+      claudeOptions(),
+    );
 
     const other = await harness(
       kimiCredential(),
-      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "x" }])))
-    )
+      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "x" }]))),
+    );
 
     await execute(
       executor,
@@ -938,33 +1078,42 @@ describe("Kimi Claude Messages path", () => {
       { model: "kimi-k2.8", payload: json(followUp) },
       {
         ...claudeOptions(),
-        metadata: { ...claudeOptions().metadata, callerScope: "someone-else" }
-      }
-    )
-    const sent = JSON.parse(other.calls[0]?.text ?? "{}") as { messages: Array<{ content: Array<{ type: string }> }> }
-    expect(sent.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"])
-  })
-})
+        metadata: { ...claudeOptions().metadata, callerScope: "someone-else" },
+      },
+    );
+    const sent = JSON.parse(other.calls[0]?.text ?? "{}") as {
+      messages: Array<{ content: Array<{ type: string }> }>;
+    };
+    expect(sent.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"]);
+  });
+});
 
 describe("the Claude executor without a profile is unchanged", () => {
   it("keeps api.anthropic.com defaults", async () => {
-    const executor = makeClaudeExecutor()
+    const executor = makeClaudeExecutor();
 
     const h = await harness(
       credential("claude", { kind: "apikey", attributes: { api_key: "sk-ant-api03-x" } }),
-      () => new Response(JSON.stringify(anthropicMessage([{ type: "text", text: "hi" }], "claude-sonnet-4-5")))
-    )
+      () =>
+        new Response(
+          JSON.stringify(anthropicMessage([{ type: "text", text: "hi" }], "claude-sonnet-4-5")),
+        ),
+    );
 
     await execute(
       executor,
       h,
       {
         model: "claude-sonnet-4-5",
-        payload: json({ model: "claude-sonnet-4-5", max_tokens: 8, messages: [{ role: "user", content: "x" }] })
+        payload: json({
+          model: "claude-sonnet-4-5",
+          max_tokens: 8,
+          messages: [{ role: "user", content: "x" }],
+        }),
       },
-      options({ sourceFormat: "claude" })
-    )
-    expect(h.calls[0]?.url).toBe("https://api.anthropic.com/v1/messages?beta=true")
-    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ model: "claude-sonnet-4-5" })
-  })
-})
+      options({ sourceFormat: "claude" }),
+    );
+    expect(h.calls[0]?.url).toBe("https://api.anthropic.com/v1/messages?beta=true");
+    expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ model: "claude-sonnet-4-5" });
+  });
+});

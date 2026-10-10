@@ -14,398 +14,445 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-  set
-} from "../../../json/index.ts"
-import { normalizeOpenAIFileData } from "../../common/file-data.ts"
+  set,
+} from "../../../json/index.ts";
+import { normalizeOpenAIFileData } from "../../common/file-data.ts";
 
 /** `strings.TrimSpace` + first non-empty (returns the trimmed value). */
 export const firstNonEmptyString = (...values: string[]): string => {
   for (const value of values) {
-    const trimmed = value.trim()
+    const trimmed = value.trim();
 
-    if (trimmed !== "") return trimmed
+    if (trimmed !== "") return trimmed;
   }
 
-  return ""
-}
+  return "";
+};
 
 /** `firstNonEmptyInteractionString`: first value that is not blank (returned untrimmed). */
-export const firstNonBlankString = (...values: string[]): string => values.find((value) => value.trim() !== "") ?? ""
+export const firstNonBlankString = (...values: string[]): string =>
+  values.find((value) => value.trim() !== "") ?? "";
 
-export const firstExistingPath = (root: Json | undefined, paths: ReadonlyArray<string>): Json | undefined => {
+export const firstExistingPath = (
+  root: Json | undefined,
+  paths: ReadonlyArray<string>,
+): Json | undefined => {
   for (const path of paths) {
-    const value = get(root, path)
+    const value = get(root, path);
 
-    if (value !== undefined) return value
+    if (value !== undefined) return value;
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 // --- key case conversion ---------------------------------------------------------------------------------------------
 
-const joinJsonPath = (path: string, key: string): string => (path === "" ? key : `${path}.${key}`)
+const joinJsonPath = (path: string, key: string): string => (path === "" ? key : `${path}.${key}`);
 
 export const toCamelCase = (s: string): string => {
-  const parts = s.split("_")
-  let out = parts[0] ?? ""
+  const parts = s.split("_");
+  let out = parts[0] ?? "";
 
   for (const part of parts.slice(1)) {
-    if (part === "") continue
-    out += part.slice(0, 1).toUpperCase() + part.slice(1)
+    if (part === "") continue;
+    out += part.slice(0, 1).toUpperCase() + part.slice(1);
   }
 
-  return out
-}
+  return out;
+};
 
 export const toSnakeCase = (s: string): string => {
-  let out = ""
+  let out = "";
 
   for (const [i, ch] of [...s].entries()) {
-    if (i > 0 && ch >= "A" && ch <= "Z") out += "_"
-    out += ch
+    if (i > 0 && ch >= "A" && ch <= "Z") out += "_";
+    out += ch;
   }
 
-  return out.toLowerCase()
-}
+  return out.toLowerCase();
+};
 
 /**
  * Go copies every leaf of the source into a fresh document with sjson paths; arrays use the append path `.-1` for every
  * leaf, so an object inside an array is split into one element per key and empty containers vanish. The path engine
  * reproduces this exactly.
  */
-const copyLeaves = (out: Json, path: string, node: Json, convert: (key: string) => string): Json => {
+const copyLeaves = (
+  out: Json,
+  path: string,
+  node: Json,
+  convert: (key: string) => string,
+): Json => {
   if (isJsonObject(node)) {
     for (const [key, value] of Object.entries(node))
-      out = copyLeaves(out, joinJsonPath(path, convert(key)), value, convert)
+      out = copyLeaves(out, joinJsonPath(path, convert(key)), value, convert);
 
-    return out
+    return out;
   }
 
   if (isJsonArray(node)) {
-    for (const value of node) out = copyLeaves(out, `${path}.-1`, value, convert)
+    for (const value of node) out = copyLeaves(out, `${path}.-1`, value, convert);
 
-    return out
+    return out;
   }
 
-  if (path === "") return out
+  if (path === "") return out;
 
   try {
-    return set(out, path, node)
+    return set(out, path, node);
   } catch {
-    return out
+    return out;
   }
-}
+};
 
-export const convertSnakeCaseKeysToCamelCase = (raw: Json): Json => copyLeaves({}, "", raw, toCamelCase)
+export const convertSnakeCaseKeysToCamelCase = (raw: Json): Json =>
+  copyLeaves({}, "", raw, toCamelCase);
 
-export const convertCamelCaseKeysToSnakeCase = (raw: Json): Json => copyLeaves({}, "", raw, toSnakeCase)
+export const convertCamelCaseKeysToSnakeCase = (raw: Json): Json =>
+  copyLeaves({}, "", raw, toSnakeCase);
 
 // --- parts -------------------------------------------------------------------------------------------------------------
 
 export const geminiTextPartJson = (text: string, thought: boolean): JsonObject =>
-  thought ? { text, thought: true } : { text }
+  thought ? { text, thought: true } : { text };
 
 export const geminiInlineDataPartJson = (inline: Json | undefined): JsonObject | undefined => {
-  let mimeType = asString(get(inline, "mimeType"))
+  let mimeType = asString(get(inline, "mimeType"));
 
-  if (mimeType === "") mimeType = asString(get(inline, "mime_type"))
-  const data = asString(get(inline, "data"))
+  if (mimeType === "") mimeType = asString(get(inline, "mime_type"));
+  const data = asString(get(inline, "data"));
 
-  return mimeType === "" || data === "" ? undefined : { inlineData: { mimeType, data } }
-}
+  return mimeType === "" || data === "" ? undefined : { inlineData: { mimeType, data } };
+};
 
 export const geminiFileDataPartJson = (fileData: Json | undefined): JsonObject | undefined => {
-  let mimeType = asString(get(fileData, "mimeType"))
+  let mimeType = asString(get(fileData, "mimeType"));
 
-  if (mimeType === "") mimeType = asString(get(fileData, "mime_type"))
-  let fileUri = asString(get(fileData, "fileUri"))
+  if (mimeType === "") mimeType = asString(get(fileData, "mime_type"));
+  let fileUri = asString(get(fileData, "fileUri"));
 
-  if (fileUri === "") fileUri = asString(get(fileData, "file_uri"))
+  if (fileUri === "") fileUri = asString(get(fileData, "file_uri"));
 
-  return mimeType === "" || fileUri === "" ? undefined : { fileData: { mimeType, fileUri } }
-}
+  return mimeType === "" || fileUri === "" ? undefined : { fileData: { mimeType, fileUri } };
+};
 
 export const geminiInlineDataPartFromDataUrl = (dataUrl: string): JsonObject | undefined => {
-  if (!dataUrl.startsWith("data:")) return undefined
-  const payload = dataUrl.slice(5)
-  const semicolon = payload.indexOf(";")
+  if (!dataUrl.startsWith("data:")) return undefined;
+  const payload = dataUrl.slice(5);
+  const semicolon = payload.indexOf(";");
 
-  if (semicolon < 0) return undefined
-  const rest = payload.slice(semicolon + 1)
+  if (semicolon < 0) return undefined;
+  const rest = payload.slice(semicolon + 1);
 
-  if (!rest.startsWith("base64,")) return undefined
+  if (!rest.startsWith("base64,")) return undefined;
 
-  return geminiInlineDataPartJson({ mime_type: payload.slice(0, semicolon), data: rest.slice(7) })
-}
+  return geminiInlineDataPartJson({ mime_type: payload.slice(0, semicolon), data: rest.slice(7) });
+};
 
 export const interactionsInputAudioMimeType = (format: string): string => {
   switch (format.trim().toLowerCase()) {
     case "wav":
-      return "audio/wav"
+      return "audio/wav";
     case "mp3":
-      return "audio/mpeg"
+      return "audio/mpeg";
     case "flac":
-      return "audio/flac"
+      return "audio/flac";
     case "opus":
-      return "audio/opus"
+      return "audio/opus";
     case "pcm16":
-      return "audio/pcm"
+      return "audio/pcm";
     default:
-      return "audio/mpeg"
+      return "audio/mpeg";
   }
-}
+};
 
 /** `geminiInteractionsMediaType`. */
 export const geminiInteractionsMediaType = (mimeType: string): string => {
-  const lower = mimeType.toLowerCase()
+  const lower = mimeType.toLowerCase();
 
-  if (lower.startsWith("image/")) return "image"
+  if (lower.startsWith("image/")) return "image";
 
-  if (lower.startsWith("audio/")) return "audio"
+  if (lower.startsWith("audio/")) return "audio";
 
-  if (lower.startsWith("video/")) return "video"
+  if (lower.startsWith("video/")) return "video";
 
-  return "document"
-}
+  return "document";
+};
 
-export const geminiInlineDataToInteractionsContent = (mimeType: string, data: string): JsonObject => ({
+export const geminiInlineDataToInteractionsContent = (
+  mimeType: string,
+  data: string,
+): JsonObject => ({
   type: geminiInteractionsMediaType(mimeType),
   mime_type: mimeType,
-  data
-})
+  data,
+});
 
 /** `geminiFileDataToInteractionsContent`: references the file by uri; `undefined` without a uri. */
-export const geminiFileDataToInteractionsContent = (fileData: Json | undefined): JsonObject | undefined => {
-  let fileUri = asString(get(fileData, "fileUri")).trim()
+export const geminiFileDataToInteractionsContent = (
+  fileData: Json | undefined,
+): JsonObject | undefined => {
+  let fileUri = asString(get(fileData, "fileUri")).trim();
 
-  if (fileUri === "") fileUri = asString(get(fileData, "file_uri")).trim()
+  if (fileUri === "") fileUri = asString(get(fileData, "file_uri")).trim();
 
-  if (fileUri === "") return undefined
-  let mimeType = asString(get(fileData, "mimeType"))
+  if (fileUri === "") return undefined;
+  let mimeType = asString(get(fileData, "mimeType"));
 
-  if (mimeType === "") mimeType = asString(get(fileData, "mime_type"))
-  const item: JsonObject = { type: geminiInteractionsMediaType(mimeType), uri: fileUri }
+  if (mimeType === "") mimeType = asString(get(fileData, "mime_type"));
+  const item: JsonObject = { type: geminiInteractionsMediaType(mimeType), uri: fileUri };
 
-  if (mimeType !== "") item["mime_type"] = mimeType
+  if (mimeType !== "") item["mime_type"] = mimeType;
 
-  return item
-}
+  return item;
+};
 
 /** `geminiPartFileData`: the fileData object of a Gemini part in either spelling. */
 export const geminiPartFileData = (part: Json | undefined): Json | undefined =>
-  get(part, "fileData") ?? get(part, "file_data")
+  get(part, "fileData") ?? get(part, "file_data");
 
 /** `geminiPartToInteractionsContent`. */
 export const geminiPartToInteractionsContent = (part: Json): JsonObject | undefined => {
-  const text = get(part, "text")
+  const text = get(part, "text");
 
-  if (text !== undefined) return { type: "text", text: asString(text) }
-  const inline = get(part, "inlineData")
+  if (text !== undefined) return { type: "text", text: asString(text) };
+  const inline = get(part, "inlineData");
 
   if (inline !== undefined) {
-    let mimeType = asString(get(inline, "mimeType"))
+    let mimeType = asString(get(inline, "mimeType"));
 
-    if (mimeType === "") mimeType = asString(get(inline, "mime_type"))
+    if (mimeType === "") mimeType = asString(get(inline, "mime_type"));
 
-    return geminiInlineDataToInteractionsContent(mimeType, asString(get(inline, "data")))
+    return geminiInlineDataToInteractionsContent(mimeType, asString(get(inline, "data")));
   }
 
-  const snake = get(part, "inline_data")
+  const snake = get(part, "inline_data");
 
   if (snake !== undefined) {
-    return geminiInlineDataToInteractionsContent(asString(get(snake, "mime_type")), asString(get(snake, "data")))
+    return geminiInlineDataToInteractionsContent(
+      asString(get(snake, "mime_type")),
+      asString(get(snake, "data")),
+    );
   }
 
-  const fileData = geminiPartFileData(part)
+  const fileData = geminiPartFileData(part);
 
-  if (fileData !== undefined) return geminiFileDataToInteractionsContent(fileData)
+  if (fileData !== undefined) return geminiFileDataToInteractionsContent(fileData);
 
-  return undefined
-}
+  return undefined;
+};
 
 /** `interactionsContentPartToGeminiPart`. */
-export const interactionsContentPartToGeminiPart = (part: Json, thought: boolean): JsonObject | undefined => {
-  const text = get(part, "text")
+export const interactionsContentPartToGeminiPart = (
+  part: Json,
+  thought: boolean,
+): JsonObject | undefined => {
+  const text = get(part, "text");
 
-  if (text !== undefined) return geminiTextPartJson(asString(text), thought)
-  const inline = get(part, "inline_data")
+  if (text !== undefined) return geminiTextPartJson(asString(text), thought);
+  const inline = get(part, "inline_data");
 
-  if (inline !== undefined) return geminiInlineDataPartJson(inline)
-  const camel = get(part, "inlineData")
+  if (inline !== undefined) return geminiInlineDataPartJson(inline);
+  const camel = get(part, "inlineData");
 
-  if (camel !== undefined) return geminiInlineDataPartJson(camel)
-  const partType = asString(get(part, "type")).trim().toLowerCase()
+  if (camel !== undefined) return geminiInlineDataPartJson(camel);
+  const partType = asString(get(part, "type")).trim().toLowerCase();
 
   switch (partType) {
     case "image":
     case "audio":
     case "video":
     case "document": {
-      const mime = get(part, "mime_type")
+      const mime = get(part, "mime_type");
 
       if (mime !== undefined || get(part, "mimeType") !== undefined) {
-        let mimeType = asString(mime)
+        let mimeType = asString(mime);
 
-        if (mimeType === "") mimeType = asString(get(part, "mimeType"))
-        const data = asString(get(part, "data"))
+        if (mimeType === "") mimeType = asString(get(part, "mimeType"));
+        const data = asString(get(part, "data"));
 
-        if (data !== "") return geminiInlineDataPartJson({ mime_type: mimeType, data })
+        if (data !== "") return geminiInlineDataPartJson({ mime_type: mimeType, data });
       }
 
       const fileUri = firstNonEmptyString(
         asString(get(part, "file_uri")),
         asString(get(part, "fileUri")),
-        asString(get(part, "uri"))
-      )
+        asString(get(part, "uri")),
+      );
 
       if (fileUri !== "") {
-        let mimeType = asString(get(part, "mime_type"))
+        let mimeType = asString(get(part, "mime_type"));
 
-        if (mimeType === "") mimeType = asString(get(part, "mimeType"))
+        if (mimeType === "") mimeType = asString(get(part, "mimeType"));
 
-        return geminiFileDataPartJson({ mimeType, fileUri })
+        return geminiFileDataPartJson({ mimeType, fileUri });
       }
 
-      const url = get(part, "url")
+      const url = get(part, "url");
 
-      if (url !== undefined) return geminiInlineDataPartFromDataUrl(asString(url))
+      if (url !== undefined) return geminiInlineDataPartFromDataUrl(asString(url));
 
-      return undefined
+      return undefined;
     }
 
     case "image_url":
-      return geminiInlineDataPartFromDataUrl(asString(get(part, "image_url.url")))
+      return geminiInlineDataPartFromDataUrl(asString(get(part, "image_url.url")));
     case "input_audio": {
-      const mimeType = interactionsInputAudioMimeType(asString(get(part, "input_audio.format")))
+      const mimeType = interactionsInputAudioMimeType(asString(get(part, "input_audio.format")));
 
-      return geminiInlineDataPartJson({ mime_type: mimeType, data: asString(get(part, "input_audio.data")) })
+      return geminiInlineDataPartJson({
+        mime_type: mimeType,
+        data: asString(get(part, "input_audio.data")),
+      });
     }
 
     case "file": {
       const file = normalizeOpenAIFileData(
         asString(get(part, "file.filename")),
         "",
-        asString(get(part, "file.file_data"))
-      )
+        asString(get(part, "file.file_data")),
+      );
 
-      return file === undefined ? undefined : geminiInlineDataPartJson({ mime_type: file.mimeType, data: file.data })
+      return file === undefined
+        ? undefined
+        : geminiInlineDataPartJson({ mime_type: file.mimeType, data: file.data });
     }
 
     default:
-      return undefined
+      return undefined;
   }
-}
+};
 
 /** `interactionsThoughtSignature`. */
 export const interactionsThoughtSignature = (part: Json): string => {
-  for (const path of ["thoughtSignature", "thought_signature", "extra_content.google.thought_signature"]) {
-    const signature = asString(get(part, path)).trim()
+  for (const path of [
+    "thoughtSignature",
+    "thought_signature",
+    "extra_content.google.thought_signature",
+  ]) {
+    const signature = asString(get(part, path)).trim();
 
-    if (signature !== "") return signature
+    if (signature !== "") return signature;
   }
 
-  return ""
-}
+  return "";
+};
 
 export const interactionsFunctionPartId = (part: Json): string => {
-  const id = get(part, "id")
+  const id = get(part, "id");
 
-  if (id !== undefined) return asString(id)
-  const callId = get(part, "call_id")
+  if (id !== undefined) return asString(id);
+  const callId = get(part, "call_id");
 
-  return callId === undefined ? "" : asString(callId)
-}
+  return callId === undefined ? "" : asString(callId);
+};
 
 /** `geminiThoughtStepJSON`. */
 export const geminiThoughtStepJson = (sig: string, text: string): JsonObject => {
-  const step: JsonObject = { type: "thought" }
+  const step: JsonObject = { type: "thought" };
 
-  if (sig !== "") step["signature"] = sig
+  if (sig !== "") step["signature"] = sig;
 
-  if (text !== "") step["content"] = [{ text }]
+  if (text !== "") step["content"] = [{ text }];
 
-  return step
-}
+  return step;
+};
 
 /** `geminiPartToInteractionsSteps`. */
 export const geminiPartToInteractionsSteps = (part: Json): JsonObject[] => {
-  const sig = interactionsThoughtSignature(part)
-  const fc = get(part, "functionCall")
+  const sig = interactionsThoughtSignature(part);
+  const fc = get(part, "functionCall");
 
   if (fc !== undefined) {
-    const steps: JsonObject[] = []
+    const steps: JsonObject[] = [];
 
-    if (sig !== "") steps.push(geminiThoughtStepJson(sig, ""))
-    const step: JsonObject = { type: "function_call", name: asString(get(fc, "name")), arguments: {} }
-    const id = get(fc, "id")
-    const callId = get(fc, "call_id")
+    if (sig !== "") steps.push(geminiThoughtStepJson(sig, ""));
+    const step: JsonObject = {
+      type: "function_call",
+      name: asString(get(fc, "name")),
+      arguments: {},
+    };
+    const id = get(fc, "id");
+    const callId = get(fc, "call_id");
 
-    if (id !== undefined) step["call_id"] = asString(id)
-    else if (callId !== undefined) step["call_id"] = asString(callId)
-    const args = get(fc, "args")
+    if (id !== undefined) step["call_id"] = asString(id);
+    else if (callId !== undefined) step["call_id"] = asString(callId);
+    const args = get(fc, "args");
 
-    if (args !== undefined) step["arguments"] = args
-    steps.push(step)
+    if (args !== undefined) step["arguments"] = args;
+    steps.push(step);
 
-    return steps
+    return steps;
   }
 
-  const fr = get(part, "functionResponse")
+  const fr = get(part, "functionResponse");
 
   if (fr !== undefined) {
-    const step: JsonObject = { type: "function_result", name: asString(get(fr, "name")), result: {} }
-    const id = get(fr, "id")
-    const callId = get(fr, "call_id")
+    const step: JsonObject = {
+      type: "function_result",
+      name: asString(get(fr, "name")),
+      result: {},
+    };
+    const id = get(fr, "id");
+    const callId = get(fr, "call_id");
 
-    if (id !== undefined) step["call_id"] = asString(id)
-    else if (callId !== undefined) step["call_id"] = asString(callId)
-    const response = get(fr, "response")
+    if (id !== undefined) step["call_id"] = asString(id);
+    else if (callId !== undefined) step["call_id"] = asString(callId);
+    const response = get(fr, "response");
 
-    if (response !== undefined) step["result"] = response
+    if (response !== undefined) step["result"] = response;
 
-    return [step]
+    return [step];
   }
 
-  const text = get(part, "text")
+  const text = get(part, "text");
 
   const withSignature = (step: JsonObject): JsonObject[] =>
-    sig === "" ? [step] : [step, geminiThoughtStepJson(sig, "")]
+    sig === "" ? [step] : [step, geminiThoughtStepJson(sig, "")];
 
   if (text !== undefined) {
-    if (asBool(get(part, "thought"))) return [geminiThoughtStepJson(sig, asString(text))]
+    if (asBool(get(part, "thought"))) return [geminiThoughtStepJson(sig, asString(text))];
 
-    if (asString(text) === "") return sig === "" ? [] : [geminiThoughtStepJson(sig, "")]
+    if (asString(text) === "") return sig === "" ? [] : [geminiThoughtStepJson(sig, "")];
 
-    return withSignature({ type: "model_output", content: [{ text: asString(text) }] })
+    return withSignature({ type: "model_output", content: [{ text: asString(text) }] });
   }
 
-  const inline = get(part, "inlineData")
+  const inline = get(part, "inlineData");
 
   if (inline !== undefined) {
-    let mimeType = asString(get(inline, "mimeType"))
+    let mimeType = asString(get(inline, "mimeType"));
 
-    if (mimeType === "") mimeType = asString(get(inline, "mime_type"))
+    if (mimeType === "") mimeType = asString(get(inline, "mime_type"));
 
     return withSignature({
       type: "model_output",
-      content: [geminiInlineDataToInteractionsContent(mimeType, asString(get(inline, "data")))]
-    })
+      content: [geminiInlineDataToInteractionsContent(mimeType, asString(get(inline, "data")))],
+    });
   }
 
-  const snake = get(part, "inline_data")
+  const snake = get(part, "inline_data");
 
   if (snake !== undefined) {
     return withSignature({
       type: "model_output",
-      content: [geminiInlineDataToInteractionsContent(asString(get(snake, "mime_type")), asString(get(snake, "data")))]
-    })
+      content: [
+        geminiInlineDataToInteractionsContent(
+          asString(get(snake, "mime_type")),
+          asString(get(snake, "data")),
+        ),
+      ],
+    });
   }
 
-  return sig === "" ? [] : [geminiThoughtStepJson(sig, "")]
-}
+  return sig === "" ? [] : [geminiThoughtStepJson(sig, "")];
+};
 
-export const interactionsGeminiContent = (role: string, parts: Json[]): JsonObject => ({ role, parts })
+export const interactionsGeminiContent = (role: string, parts: Json[]): JsonObject => ({
+  role,
+  parts,
+});
 
 // --- usage -------------------------------------------------------------------------------------------------------------
 
@@ -417,50 +464,64 @@ export const interactionsUsage = (root: Json | undefined): Json | undefined =>
     "metadata.total_usage",
     "metadata.usage",
     "interaction.metadata.total_usage",
-    "interaction.metadata.usage"
-  ])
+    "interaction.metadata.usage",
+  ]);
 
-const firstUsage = (usage: Json, ...paths: string[]): Json | undefined => firstExistingPath(usage, paths)
+const firstUsage = (usage: Json, ...paths: string[]): Json | undefined =>
+  firstExistingPath(usage, paths);
 
-const geminiUsageNode = (root: Json): Json | undefined => get(root, "usageMetadata") ?? get(root, "usage_metadata")
+const geminiUsageNode = (root: Json): Json | undefined =>
+  get(root, "usageMetadata") ?? get(root, "usage_metadata");
 
 /** `setInteractionsUsageFromGemini`. */
 export const setInteractionsUsageFromGemini = (out: Json, path: string, root: Json): Json => {
-  const usage = geminiUsageNode(root)
+  const usage = geminiUsageNode(root);
 
-  if (usage === undefined) return out
-  set(out, `${path}.input_tokens`, asInt(firstUsage(usage, "promptTokenCount", "prompt_token_count")))
-  set(out, `${path}.output_tokens`, asInt(firstUsage(usage, "candidatesTokenCount", "candidates_token_count")))
-  const reasoning = firstUsage(usage, "thoughtsTokenCount", "thoughts_token_count")
+  if (usage === undefined) return out;
+  set(
+    out,
+    `${path}.input_tokens`,
+    asInt(firstUsage(usage, "promptTokenCount", "prompt_token_count")),
+  );
+  set(
+    out,
+    `${path}.output_tokens`,
+    asInt(firstUsage(usage, "candidatesTokenCount", "candidates_token_count")),
+  );
+  const reasoning = firstUsage(usage, "thoughtsTokenCount", "thoughts_token_count");
 
-  if (reasoning !== undefined) set(out, `${path}.reasoning_tokens`, asInt(reasoning))
-  set(out, `${path}.total_tokens`, asInt(firstUsage(usage, "totalTokenCount", "total_token_count")))
-  const cached = get(usage, "cachedContentTokenCount") ?? get(usage, "cached_content_token_count")
+  if (reasoning !== undefined) set(out, `${path}.reasoning_tokens`, asInt(reasoning));
+  set(
+    out,
+    `${path}.total_tokens`,
+    asInt(firstUsage(usage, "totalTokenCount", "total_token_count")),
+  );
+  const cached = get(usage, "cachedContentTokenCount") ?? get(usage, "cached_content_token_count");
 
-  if (cached !== undefined) set(out, `${path}.cached_tokens`, asInt(cached))
+  if (cached !== undefined) set(out, `${path}.cached_tokens`, asInt(cached));
 
-  return out
-}
+  return out;
+};
 
 /** `setInteractionsStreamUsageFromGemini`. */
 export const setInteractionsStreamUsageFromGemini = (out: Json, path: string, root: Json): Json => {
-  const usage = geminiUsageNode(root)
+  const usage = geminiUsageNode(root);
 
-  if (usage === undefined) return out
-  const input = asInt(firstUsage(usage, "promptTokenCount", "prompt_token_count"))
-  const output = asInt(firstUsage(usage, "candidatesTokenCount", "candidates_token_count"))
-  const total = asInt(firstUsage(usage, "totalTokenCount", "total_token_count"))
-  const thoughts = asInt(firstUsage(usage, "thoughtsTokenCount", "thoughts_token_count"))
-  let cached = asInt(get(usage, "cachedContentTokenCount"))
+  if (usage === undefined) return out;
+  const input = asInt(firstUsage(usage, "promptTokenCount", "prompt_token_count"));
+  const output = asInt(firstUsage(usage, "candidatesTokenCount", "candidates_token_count"));
+  const total = asInt(firstUsage(usage, "totalTokenCount", "total_token_count"));
+  const thoughts = asInt(firstUsage(usage, "thoughtsTokenCount", "thoughts_token_count"));
+  let cached = asInt(get(usage, "cachedContentTokenCount"));
 
-  if (cached === 0) cached = asInt(get(usage, "cached_content_token_count"))
-  set(out, `${path}.total_tokens`, total)
-  set(out, `${path}.total_input_tokens`, input)
-  set(out, `${path}.input_tokens_by_modality`, [{ modality: "text", tokens: input }])
-  set(out, `${path}.total_cached_tokens`, cached)
-  set(out, `${path}.total_output_tokens`, output)
-  set(out, `${path}.total_tool_use_tokens`, 0)
-  set(out, `${path}.total_thought_tokens`, thoughts)
+  if (cached === 0) cached = asInt(get(usage, "cached_content_token_count"));
+  set(out, `${path}.total_tokens`, total);
+  set(out, `${path}.total_input_tokens`, input);
+  set(out, `${path}.input_tokens_by_modality`, [{ modality: "text", tokens: input }]);
+  set(out, `${path}.total_cached_tokens`, cached);
+  set(out, `${path}.total_output_tokens`, output);
+  set(out, `${path}.total_tool_use_tokens`, 0);
+  set(out, `${path}.total_thought_tokens`, thoughts);
 
-  return out
-}
+  return out;
+};

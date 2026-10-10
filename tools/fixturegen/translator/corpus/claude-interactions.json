@@ -29,7 +29,11 @@
             "required": ["location"]
           }
         },
-        { "name": "  ", "description": "blank name is skipped", "input_schema": { "type": "object" } },
+        {
+          "name": "  ",
+          "description": "blank name is skipped",
+          "input_schema": { "type": "object" }
+        },
         { "name": "ping", "input_schema": "not an object" },
         {
           "name": "web",
@@ -39,7 +43,9 @@
           "cache_control": { "type": "ephemeral" }
         }
       ],
-      "messages": [{ "role": "user", "content": [{ "type": "text", "text": "今天北京的天气怎么样？" }] }]
+      "messages": [
+        { "role": "user", "content": [{ "type": "text", "text": "今天北京的天气怎么样？" }] }
+      ]
     }
   },
   {
@@ -64,7 +70,11 @@
     "to": "interactions",
     "model": "",
     "stream": false,
-    "request": { "model": "claude-x", "system": "plain system", "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "model": "claude-x",
+      "system": "plain system",
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: system as object",
@@ -72,7 +82,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "system": { "type": "text", "text": "obj system" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "system": { "type": "text", "text": "obj system" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: empty system array is dropped",
@@ -88,7 +101,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "thinking": { "type": "disabled" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "thinking": { "type": "disabled" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: thinking enabled without budget",
@@ -96,7 +112,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "thinking": { "type": "enabled" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "thinking": { "type": "enabled" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: thinking adaptive",
@@ -104,7 +123,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "thinking": { "type": "adaptive" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "thinking": { "type": "adaptive" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: thinking adaptive with effort",
@@ -136,7 +158,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "thinking": { "type": "weird" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "thinking": { "type": "weird" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: thinking effort only",
@@ -144,7 +169,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "output_config": { "effort": "medium" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "output_config": { "effort": "medium" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: thinking effort not a string",
@@ -152,7 +180,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "output_config": { "effort": 3 }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "output_config": { "effort": 3 },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice \"auto\"",
@@ -192,7 +223,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "tool_choice": { "type": "auto" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "tool_choice": { "type": "auto" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice {\"type\":\"any\"}",
@@ -200,7 +234,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "tool_choice": { "type": "any" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "tool_choice": { "type": "any" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice {\"type\":\"required\"}",
@@ -208,7 +245,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "tool_choice": { "type": "required" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "tool_choice": { "type": "required" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice {\"type\":\"tool\"}",
@@ -216,7 +256,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "tool_choice": { "type": "tool" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "tool_choice": { "type": "tool" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice {\"type\":\"none\"}",
@@ -224,7 +267,10 @@
     "to": "interactions",
     "model": "gemini-3.1-flash-lite",
     "stream": false,
-    "request": { "tool_choice": { "type": "none" }, "messages": [{ "role": "user", "content": "hi" }] }
+    "request": {
+      "tool_choice": { "type": "none" },
+      "messages": [{ "role": "user", "content": "hi" }]
+    }
   },
   {
     "name": "request: tool_choice {\"type\":\"tool\",\"name\":\" pick \"}",
@@ -271,7 +317,12 @@
           "role": "assistant",
           "content": [
             { "type": "text", "text": "let me check" },
-            { "type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": { "location": "北京" } }
+            {
+              "type": "tool_use",
+              "id": "toolu_1",
+              "name": "get_weather",
+              "input": { "location": "北京" }
+            }
           ]
         },
         {
@@ -301,7 +352,10 @@
             { "type": "tool_use", "id": "toolu_c", "name": "", "input": {} }
           ]
         },
-        { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_a", "content": "r" }] }
+        {
+          "role": "user",
+          "content": [{ "type": "tool_result", "tool_use_id": "toolu_a", "content": "r" }]
+        }
       ]
     }
   },
@@ -350,8 +404,18 @@
         {
           "role": "user",
           "content": [
-            { "type": "tool_result", "tool_use_id": "t1", "content": "command failed", "is_error": true },
-            { "type": "tool_result", "tool_use_id": "t2", "content": { "value": 4 }, "name": "explicit" },
+            {
+              "type": "tool_result",
+              "tool_use_id": "t1",
+              "content": "command failed",
+              "is_error": true
+            },
+            {
+              "type": "tool_result",
+              "tool_use_id": "t2",
+              "content": { "value": 4 },
+              "name": "explicit"
+            },
             { "type": "tool_result", "tool_use_id": "t3", "content": null },
             { "type": "tool_result", "tool_use_id": "t4" }
           ]
@@ -387,7 +451,9 @@
       "messages": [
         {
           "role": "assistant",
-          "content": [{ "type": "tool_use", "id": "tool_image_1", "name": "screenshot", "input": {} }]
+          "content": [
+            { "type": "tool_use", "id": "tool_image_1", "name": "screenshot", "input": {} }
+          ]
         },
         {
           "role": "user",
@@ -408,10 +474,17 @@
                     "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
                   }
                 },
-                { "type": "image", "source": { "type": "url", "url": "https://example.com/a.png" } },
+                {
+                  "type": "image",
+                  "source": { "type": "url", "url": "https://example.com/a.png" }
+                },
                 {
                   "type": "document",
-                  "source": { "type": "base64", "media_type": "application/pdf", "data": "JVBERi0xLjQK" }
+                  "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": "JVBERi0xLjQK"
+                  }
                 },
                 { "type": "container_upload", "file_id": "file-1" },
                 { "type": "search_result", "title": "t" },
@@ -431,7 +504,12 @@
     "model": "gemini-3.1-flash-lite",
     "stream": false,
     "request": {
-      "messages": [{ "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "t", "content": [] }] }]
+      "messages": [
+        {
+          "role": "user",
+          "content": [{ "type": "tool_result", "tool_use_id": "t", "content": [] }]
+        }
+      ]
     }
   },
   {
@@ -479,14 +557,23 @@
             { "type": "image" }
           ]
         },
-        { "role": "system", "content": [{ "type": "text", "text": "x-anthropic-billing-header: only attribution" }] },
+        {
+          "role": "system",
+          "content": [{ "type": "text", "text": "x-anthropic-billing-header: only attribution" }]
+        },
         { "role": "system", "content": "   " },
         { "role": "system", "content": 5 },
         { "role": "user", "content": "hi" },
-        { "role": "assistant", "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }] },
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
         { "role": "system", "content": "pending" },
         { "role": "system", "content": "pending two" },
-        { "role": "assistant", "content": [{ "type": "tool_use", "id": "x2", "name": "n2", "input": {} }] }
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x2", "name": "n2", "input": {} }]
+        }
       ]
     }
   },
@@ -498,7 +585,10 @@
     "stream": false,
     "request": {
       "messages": [
-        { "role": "assistant", "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }] },
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
         { "role": "system", "content": "note" },
         {
           "role": "user",
@@ -519,7 +609,10 @@
     "stream": false,
     "request": {
       "messages": [
-        { "role": "assistant", "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }] },
+        {
+          "role": "assistant",
+          "content": [{ "type": "tool_use", "id": "x1", "name": "n", "input": {} }]
+        },
         { "role": "system", "content": "note" },
         { "role": "user", "content": "plain" }
       ]
@@ -556,7 +649,12 @@
     "model": "gemini-3.1-flash-lite",
     "stream": false,
     "request": {
-      "messages": [{ "role": "assistant", "content": [{ "type": "thinking", "thinking": "", "signature": "" }] }]
+      "messages": [
+        {
+          "role": "assistant",
+          "content": [{ "type": "thinking", "thinking": "", "signature": "" }]
+        }
+      ]
     }
   },
   {
@@ -581,7 +679,11 @@
             },
             {
               "type": "document",
-              "source": { "type": "base64", "media_type": "application/pdf", "data": "JVBERi0xLjQK" }
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "JVBERi0xLjQK"
+              }
             },
             { "type": "container_upload", "mime_type": "text/plain", "data": "aGk=" },
             {
@@ -589,7 +691,10 @@
               "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
               "source": { "media_type": "image/jpeg" }
             },
-            { "type": "IMAGE", "source": { "type": "base64", "media_type": "image/webp", "data": "UklGRg==" } }
+            {
+              "type": "IMAGE",
+              "source": { "type": "base64", "media_type": "image/webp", "data": "UklGRg==" }
+            }
           ]
         }
       ]
@@ -627,7 +732,10 @@
         { "role": "user", "content": null },
         { "role": "user", "content": { "type": "text", "text": "obj" } },
         { "role": "user", "content": 7 },
-        { "role": "assistant", "content": [{ "type": "text", "text": "z" }, 5, "str", null, { "type": "weird" }] },
+        {
+          "role": "assistant",
+          "content": [{ "type": "text", "text": "z" }, 5, "str", null, { "type": "weird" }]
+        },
         { "role": "user", "content": [] }
       ]
     }
@@ -673,7 +781,9 @@
     "model": "gemini-3.1-flash-lite",
     "stream": false,
     "request": {
-      "messages": [{ "role": "user", "content": [{ "type": "text", "text": "<b>&amp;   \"q\" \\ é 😀</b>" }] }]
+      "messages": [
+        { "role": "user", "content": [{ "type": "text", "text": "<b>&amp;   \"q\" \\ é 😀</b>" }] }
+      ]
     }
   },
   {
@@ -728,7 +838,10 @@
       "messages": [
         { "role": "user", "content": "hello" },
         { "role": "assistant", "content": "hi" },
-        { "role": "user", "content": [{ "type": "document", "source": { "type": "file", "file_id": "file-1" } }] }
+        {
+          "role": "user",
+          "content": [{ "type": "document", "source": { "type": "file", "file_id": "file-1" } }]
+        }
       ]
     }
   },
@@ -776,9 +889,15 @@
     "stream": false,
     "request": {
       "messages": [
-        { "role": "user", "content": [{ "type": "image", "source": { "type": "url", "url": "u" } }] },
+        {
+          "role": "user",
+          "content": [{ "type": "image", "source": { "type": "url", "url": "u" } }]
+        },
         { "role": "assistant", "content": "x" },
-        { "role": "user", "content": [{ "type": "document", "source": { "type": "text", "data": "d" } }] }
+        {
+          "role": "user",
+          "content": [{ "type": "document", "source": { "type": "text", "data": "d" } }]
+        }
       ]
     }
   },
@@ -836,7 +955,11 @@
           "content": [
             {
               "type": "document",
-              "source": { "type": "base64", "media_type": "application/pdf", "data": "JVBERi0xLjQK" }
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "JVBERi0xLjQK"
+              }
             }
           ]
         }
@@ -852,7 +975,10 @@
     "request": {
       "messages": [
         { "role": "user", "content": "q" },
-        { "role": "assistant", "content": [{ "type": "document", "source": { "type": "file", "file_id": "f" } }] }
+        {
+          "role": "assistant",
+          "content": [{ "type": "document", "source": { "type": "file", "file_id": "f" } }]
+        }
       ]
     }
   },
@@ -1200,7 +1326,11 @@
         { "type": "thought", "thought_signature": "T", "content": "plain thought" },
         {
           "type": "model_output",
-          "content": [{ "type": "text", "text": "final" }, { "content": { "text": "nested" } }, { "type": "image" }]
+          "content": [
+            { "type": "text", "text": "final" },
+            { "content": { "text": "nested" } },
+            { "type": "image" }
+          ]
         },
         { "type": "model_output", "content": "string content" },
         { "type": "model_output", "content": { "text": "obj" } },
@@ -1317,7 +1447,9 @@
     "request": { "messages": [{ "role": "user", "content": "hi" }] },
     "responseBody": {
       "id": "o1",
-      "steps": { "a": { "type": "model_output", "content": [{ "type": "text", "text": "from object" }] } }
+      "steps": {
+        "a": { "type": "model_output", "content": [{ "type": "text", "text": "from object" }] }
+      }
     }
   },
   {
@@ -1349,7 +1481,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": {
         "total_input_tokens": 96724,
         "total_output_tokens": 269,
@@ -1369,7 +1503,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "total_input_tokens": 100, "total_output_tokens": 50, "total_cached_tokens": 0 }
     }
   },
@@ -1384,7 +1520,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": {
         "input_tokens": 71,
         "total_input_tokens": 10411,
@@ -1405,7 +1543,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": {
         "input_tokens": 71,
         "total_input_tokens": 10436,
@@ -1426,7 +1566,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "total_input_tokens": 500, "total_output_tokens": 50, "total_cached_tokens": 500 }
     }
   },
@@ -1441,7 +1583,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "total_input_tokens": 50, "total_output_tokens": 50, "total_cached_tokens": 100 }
     }
   },
@@ -1456,7 +1600,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "input_tokens": 71, "output_tokens": 76, "cache_read_input_tokens": 10340 }
     }
   },
@@ -1471,8 +1617,15 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
-      "usage": { "input_tokens": 0, "total_input_tokens": 500, "output_tokens": 30, "cache_read_input_tokens": 500 }
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "input_tokens": 0,
+        "total_input_tokens": 500,
+        "output_tokens": 30,
+        "cache_read_input_tokens": 500
+      }
     }
   },
   {
@@ -1486,7 +1639,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": {
         "total_input_tokens": 10436,
         "output_tokens": 76,
@@ -1506,7 +1661,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "prompt_tokens": 100, "output_tokens": 20, "cached_tokens": 30 }
     }
   },
@@ -1521,8 +1678,15 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
-      "usage": { "total_input_tokens": 40, "total_output_tokens": 5, "cache_read_tokens": 10, "cache_write_tokens": 5 }
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
+      "usage": {
+        "total_input_tokens": 40,
+        "total_output_tokens": 5,
+        "cache_read_tokens": 10,
+        "cache_write_tokens": 5
+      }
     }
   },
   {
@@ -1536,7 +1700,9 @@
       "id": "u",
       "model": "devin/swe-2",
       "status": "completed",
-      "steps": [{ "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }],
+      "steps": [
+        { "type": "model_output", "content": [{ "type": "text", "text": "response text" }] }
+      ],
       "usage": { "total_input_tokens": "12", "output_tokens": "3", "cache_read_input_tokens": -4 }
     }
   },
@@ -1547,6 +1713,9 @@
     "model": "gemini-3.1-flash-lite",
     "stream": false,
     "request": { "messages": [{ "role": "user", "content": "hi" }] },
-    "responseBody": { "id": "m1", "metadata": { "total_usage": { "total_input_tokens": 2, "total_output_tokens": 6 } } }
+    "responseBody": {
+      "id": "m1",
+      "metadata": { "total_usage": { "total_input_tokens": 2, "total_output_tokens": 6 } }
+    }
   }
 ]

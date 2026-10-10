@@ -111,16 +111,16 @@ print(client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "
 ```
 
 ```ts
-import OpenAI from "openai"
+import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "https://proxy.example.com/v1",
   apiKey: "dummy",
   defaultHeaders: {
     "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID!,
-    "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET!
-  }
-})
+    "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET!,
+  },
+});
 ```
 
 ## Anthropic SDKs
@@ -138,16 +138,16 @@ client = Anthropic(
 ```
 
 ```ts
-import Anthropic from "@anthropic-ai/sdk"
+import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
   baseURL: "https://proxy.example.com",
   apiKey: "dummy",
   defaultHeaders: {
     "CF-Access-Client-Id": "...",
-    "CF-Access-Client-Secret": "..."
-  }
-})
+    "CF-Access-Client-Secret": "...",
+  },
+});
 ```
 
 With single-header mode on `x-api-key`, pass the JSON string as `api_key`/`apiKey` and drop the extra headers.
@@ -170,15 +170,15 @@ client = genai.Client(
 ```
 
 ```ts
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
   apiKey: "dummy",
   httpOptions: {
     baseUrl: "https://proxy.example.com",
-    headers: { "CF-Access-Client-Id": "...", "CF-Access-Client-Secret": "..." }
-  }
-})
+    headers: { "CF-Access-Client-Id": "...", "CF-Access-Client-Secret": "..." },
+  },
+});
 ```
 
 ## Browser users

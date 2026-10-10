@@ -2,14 +2,14 @@
  * Thinking pipeline: suffix parsing, per-format extractors, canonical config, central validation, provider
  * appliers, strip rules and reasoning-summary handling. Port of internal/thinking.
  */
-export { applyThinking, type ApplyThinkingOptions, type ApplyThinkingResult } from "./apply.ts"
+export { applyThinking, type ApplyThinkingOptions, type ApplyThinkingResult } from "./apply.ts";
 
 export {
   extractConfigurationUpdateConfig,
   isResponsesFormat,
   stripConfigurationUpdates,
-  stripResponsesEffort
-} from "./configuration-update.ts"
+  stripResponsesEffort,
+} from "./configuration-update.ts";
 
 export {
   convertBudgetToLevel,
@@ -17,10 +17,10 @@ export {
   detectModelCapability,
   hasLevel,
   mapToClaudeEffort,
-  type ModelCapability
-} from "./convert.ts"
+  type ModelCapability,
+} from "./convert.ts";
 
-export { ThinkingError, ThinkingErrorCode, thinkingError } from "./errors.ts"
+export { ThinkingError, ThinkingErrorCode, thinkingError } from "./errors.ts";
 
 export {
   extractClaudeConfig,
@@ -34,14 +34,20 @@ export {
   extractSourceThinkingConfig,
   extractThinkingConfig,
   extractTranslatedReasoningEffort,
-  reasoningEffortFromConfig
-} from "./extract.ts"
+  reasoningEffortFromConfig,
+} from "./extract.ts";
 
-export { getProviderApplier } from "./provider/index.ts"
+export { getProviderApplier } from "./provider/index.ts";
 
-export { stripThinkingConfig } from "./strip.ts"
+export { stripThinkingConfig } from "./strip.ts";
 
-export { parseLevelSuffix, parseNumericSuffix, parseSpecialSuffix, parseSuffix, parseSuffixToConfig } from "./suffix.ts"
+export {
+  parseLevelSuffix,
+  parseNumericSuffix,
+  parseSpecialSuffix,
+  parseSuffix,
+  parseSuffixToConfig,
+} from "./suffix.ts";
 
 export {
   applySummaryConfig,
@@ -55,10 +61,10 @@ export {
   type SummaryConfig,
   type SummaryMode,
   stripInferredClaudeSummaryActivation,
-  UNSPECIFIED_SUMMARY
-} from "./summary.ts"
+  UNSPECIFIED_SUMMARY,
+} from "./summary.ts";
 
-export { getThinkingText } from "./text.ts"
+export { getThinkingText } from "./text.ts";
 
 export {
   autoConfig,
@@ -76,7 +82,13 @@ export {
   type ThinkingConfig,
   type ThinkingMode,
   type ThinkingModelInfo,
-  thinkingIsFullyDisabled
-} from "./types.ts"
+  thinkingIsFullyDisabled,
+} from "./types.ts";
 
-export { clampBudget, clampLevel, isSameProviderFamily, validateConfig, type ValidateResult } from "./validate.ts"
+export {
+  clampBudget,
+  clampLevel,
+  isSameProviderFamily,
+  validateConfig,
+  type ValidateResult,
+} from "./validate.ts";

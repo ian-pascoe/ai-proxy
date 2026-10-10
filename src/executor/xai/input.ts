@@ -7,7 +7,7 @@
  * mergeAdjacentXAIInputReasoningSummaries, sanitizeXAIInputEncryptedContent).
  * All functions mutate the parsed body in place and return it.
  */
-import { goMarshal } from "../../http/json-text.ts"
+import { goMarshal } from "../../http/json-text.ts";
 import {
   asString,
   cloneJson,
@@ -16,119 +16,129 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-  set
-} from "../../json/index.ts"
-import { isValidGrokEncryptedContent } from "../../signature/grok.ts"
-import { hasFunctionToolNamed, qualifyNamespaceToolName } from "./tools.ts"
+  set,
+} from "../../json/index.ts";
+import { isValidGrokEncryptedContent } from "../../signature/grok.ts";
+import { hasFunctionToolNamed, qualifyNamespaceToolName } from "./tools.ts";
 
-const trimmed = (value: Json | undefined, path: string): string => asString(get(value, path)).trim()
+const trimmed = (value: Json | undefined, path: string): string =>
+  asString(get(value, path)).trim();
 
 const inputItems = (body: Json): Json[] | undefined => {
-  const input = get(body, "input")
+  const input = get(body, "input");
 
-  return isJsonArray(input) ? input : undefined
-}
+  return isJsonArray(input) ? input : undefined;
+};
 
 /** `preserveXAIResponsesOutputControls`: OpenAI/Responses clients keep their sampling and output limits. */
-export const preserveOutputControls = (body: Json, source: Json | undefined, from: string): Json => {
-  let maxOutputTokens: Json | undefined
+export const preserveOutputControls = (
+  body: Json,
+  source: Json | undefined,
+  from: string,
+): Json => {
+  let maxOutputTokens: Json | undefined;
 
   switch (from) {
     case "openai":
-      maxOutputTokens = get(source, "max_completion_tokens")
+      maxOutputTokens = get(source, "max_completion_tokens");
 
-      if (maxOutputTokens === undefined || maxOutputTokens === null) maxOutputTokens = get(source, "max_tokens")
-      break
+      if (maxOutputTokens === undefined || maxOutputTokens === null)
+        maxOutputTokens = get(source, "max_tokens");
+      break;
     case "openai-response":
-      maxOutputTokens = get(source, "max_output_tokens")
-      break
+      maxOutputTokens = get(source, "max_output_tokens");
+      break;
     default:
-      return body
+      return body;
   }
 
   if (maxOutputTokens !== undefined && maxOutputTokens !== null)
-    set(body, "max_output_tokens", cloneJson(maxOutputTokens))
+    set(body, "max_output_tokens", cloneJson(maxOutputTokens));
 
   for (const field of ["temperature", "top_p", "top_k"]) {
-    const value = get(source, field)
+    const value = get(source, field);
 
-    if (value !== undefined && value !== null) set(body, field, cloneJson(value))
+    if (value !== undefined && value !== null) set(body, field, cloneJson(value));
   }
 
-  return body
-}
+  return body;
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Custom tool calls
 // ---------------------------------------------------------------------------------------------------------------
 
 const customToolCallArguments = (input: Json | undefined): string => {
-  if (input === undefined) return "{}"
+  if (input === undefined) return "{}";
 
   if (typeof input === "string") {
-    const text = input.trim()
+    const text = input.trim();
 
     try {
-      if (isJsonObject(JSON.parse(text) as Json)) return text
+      if (isJsonObject(JSON.parse(text) as Json)) return text;
     } catch {
       // Not JSON: wrapped below.
     }
 
-    return `{"input":${goMarshal(input)}}`
+    return `{"input":${goMarshal(input)}}`;
   }
 
-  if (isJsonObject(input)) return JSON.stringify(input)
+  if (isJsonObject(input)) return JSON.stringify(input);
 
-  return `{"input":${JSON.stringify(input)}}`
-}
+  return `{"input":${JSON.stringify(input)}}`;
+};
 
 const customToolCallOutput = (output: Json | undefined): string => {
-  if (output === undefined) return ""
+  if (output === undefined) return "";
 
-  return typeof output === "string" ? output : JSON.stringify(output)
-}
+  return typeof output === "string" ? output : JSON.stringify(output);
+};
 
 /** `normalizeXAIInputCustomToolCalls`: replayed custom tool calls become function calls (custom tools are functions). */
 export const normalizeInputCustomToolCalls = (body: Json): Json => {
-  const input = inputItems(body)
+  const input = inputItems(body);
 
-  if (input === undefined) return body
-  let changed = false
-  const items: Json[] = []
+  if (input === undefined) return body;
+  let changed = false;
+  const items: Json[] = [];
 
   for (const item of input) {
     switch (asString(get(item, "type"))) {
       case "custom_tool_call": {
-        const callId = trimmed(item, "call_id")
-        const name = trimmed(item, "name")
-        changed = true
+        const callId = trimmed(item, "call_id");
+        const name = trimmed(item, "name");
+        changed = true;
 
-        if (callId === "" || name === "") break
+        if (callId === "" || name === "") break;
         items.push({
           type: "function_call",
           call_id: callId,
           name,
-          arguments: customToolCallArguments(get(item, "input"))
-        })
-        break
+          arguments: customToolCallArguments(get(item, "input")),
+        });
+        break;
       }
 
       case "custom_tool_call_output": {
-        const callId = trimmed(item, "call_id")
-        changed = true
+        const callId = trimmed(item, "call_id");
+        changed = true;
 
-        if (callId === "") break
-        items.push({ type: "function_call_output", call_id: callId, output: customToolCallOutput(get(item, "output")) })
-        break
+        if (callId === "") break;
+        items.push({
+          type: "function_call_output",
+          call_id: callId,
+          output: customToolCallOutput(get(item, "output")),
+        });
+        break;
       }
 
       default:
-        items.push(item)
+        items.push(item);
     }
   }
 
-  return changed ? set(body, "input", items) : body
-}
+  return changed ? set(body, "input", items) : body;
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Namespace tool calls
@@ -136,199 +146,211 @@ export const normalizeInputCustomToolCalls = (body: Json): Json => {
 
 /** `normalizeXAIInputNamespaceToolCallsWithFold`: replayed namespaced calls follow the flattened/folded tool names. */
 export const normalizeInputNamespaceToolCalls = (body: Json, shouldFold: boolean): Json => {
-  const input = inputItems(body)
+  const input = inputItems(body);
 
-  if (input === undefined) return body
+  if (input === undefined) return body;
 
   for (const item of input) {
-    if (!isJsonObject(item) || asString(item["type"]) !== "function_call") continue
-    const namespaceName = trimmed(item, "namespace")
-    const toolName = trimmed(item, "name")
+    if (!isJsonObject(item) || asString(item["type"]) !== "function_call") continue;
+    const namespaceName = trimmed(item, "namespace");
+    const toolName = trimmed(item, "name");
 
-    if (namespaceName === "") continue
-    const qualified = qualifyNamespaceToolName(namespaceName, toolName)
+    if (namespaceName === "") continue;
+    const qualified = qualifyNamespaceToolName(namespaceName, toolName);
 
     const folded = hasFunctionToolNamed(body, namespaceName)
       ? true
       : hasFunctionToolNamed(body, qualified)
         ? false
-        : shouldFold
+        : shouldFold;
 
     if (folded) {
-      const dispatcherArgs: JsonObject = { name: toolName }
-      const rawArgs = asString(item["arguments"])
+      const dispatcherArgs: JsonObject = { name: toolName };
+      const rawArgs = asString(item["arguments"]);
 
       if (rawArgs !== "") {
         try {
-          dispatcherArgs["arguments"] = JSON.parse(rawArgs) as Json
+          dispatcherArgs["arguments"] = JSON.parse(rawArgs) as Json;
         } catch {
-          dispatcherArgs["arguments"] = rawArgs
+          dispatcherArgs["arguments"] = rawArgs;
         }
       }
 
-      item["name"] = namespaceName
-      item["arguments"] = goMarshal(dispatcherArgs)
-      delete item["namespace"]
-      continue
+      item["name"] = namespaceName;
+      item["arguments"] = goMarshal(dispatcherArgs);
+      delete item["namespace"];
+      continue;
     }
 
-    if (qualified === "") continue
-    item["name"] = qualified
-    delete item["namespace"]
+    if (qualified === "") continue;
+    item["name"] = qualified;
+    delete item["namespace"];
   }
 
-  return body
-}
+  return body;
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Reasoning items
 // ---------------------------------------------------------------------------------------------------------------
 
 const canMergeReasoningSummary = (previous: Json | undefined, current: Json): boolean => {
-  if (asString(get(previous, "type")) !== "reasoning" || asString(get(current, "type")) !== "reasoning") return false
+  if (
+    asString(get(previous, "type")) !== "reasoning" ||
+    asString(get(current, "type")) !== "reasoning"
+  )
+    return false;
 
-  if (!isJsonArray(get(previous, "summary"))) return false
-  const summary = get(current, "summary")
+  if (!isJsonArray(get(previous, "summary"))) return false;
+  const summary = get(current, "summary");
 
-  if (!isJsonArray(summary) || summary.length === 0) return false
+  if (!isJsonArray(summary) || summary.length === 0) return false;
 
-  return isJsonObject(current) && Object.keys(current).every((name) => name === "type" || name === "summary")
-}
+  return (
+    isJsonObject(current) &&
+    Object.keys(current).every((name) => name === "type" || name === "summary")
+  );
+};
 
 /** `mergeAdjacentXAIInputReasoningSummaries`. */
 export const mergeAdjacentReasoningSummaries = (body: Json): Json => {
-  const input = inputItems(body)
+  const input = inputItems(body);
 
-  if (input === undefined) return body
-  let changed = false
-  const items: Json[] = []
+  if (input === undefined) return body;
+  let changed = false;
+  const items: Json[] = [];
 
   for (const item of input) {
-    const previous = items[items.length - 1]
+    const previous = items[items.length - 1];
 
     if (previous !== undefined && canMergeReasoningSummary(previous, item)) {
-      const target = get(previous, "summary")
-      const extra = get(item, "summary")
+      const target = get(previous, "summary");
+      const extra = get(item, "summary");
 
       if (isJsonArray(target) && isJsonArray(extra)) {
-        target.push(...extra)
-        changed = true
-        continue
+        target.push(...extra);
+        changed = true;
+        continue;
       }
     }
 
-    items.push(item)
+    items.push(item);
   }
 
-  return changed ? set(body, "input", items) : body
-}
+  return changed ? set(body, "input", items) : body;
+};
 
 /** `normalizeXAIInputReasoningItems`: null `content`/`encrypted_content` are dropped, adjacent summaries merge. */
 export const normalizeInputReasoningItems = (body: Json): Json => {
-  const input = inputItems(body)
+  const input = inputItems(body);
 
-  if (input === undefined) return body
+  if (input === undefined) return body;
 
   for (const item of input) {
-    if (!isJsonObject(item) || asString(item["type"]) !== "reasoning") continue
+    if (!isJsonObject(item) || asString(item["type"]) !== "reasoning") continue;
 
-    if (item["content"] === null) delete item["content"]
+    if (item["content"] === null) delete item["content"];
 
-    if (item["encrypted_content"] === null) delete item["encrypted_content"]
+    if (item["encrypted_content"] === null) delete item["encrypted_content"];
   }
 
-  return mergeAdjacentReasoningSummaries(body)
-}
+  return mergeAdjacentReasoningSummaries(body);
+};
 
 /**
  * `sanitizeXAIInputEncryptedContent`: reasoning/compaction blobs that are not replay-safe Grok ciphertext are
  * removed (the whole `compaction` item, only the `encrypted_content` of a `reasoning` item).
  */
 export const sanitizeInputEncryptedContent = (body: Json): Json => {
-  const input = inputItems(body)
+  const input = inputItems(body);
 
-  if (input === undefined) return body
-  const items: Json[] = []
-  let changed = false
+  if (input === undefined) return body;
+  const items: Json[] = [];
+  let changed = false;
 
   for (const item of input) {
-    const type = trimmed(item, "type")
+    const type = trimmed(item, "type");
 
-    if ((type !== "reasoning" && type !== "compaction") || !isJsonObject(item) || !("encrypted_content" in item)) {
-      items.push(item)
-      continue
+    if (
+      (type !== "reasoning" && type !== "compaction") ||
+      !isJsonObject(item) ||
+      !("encrypted_content" in item)
+    ) {
+      items.push(item);
+      continue;
     }
 
-    const encrypted = item["encrypted_content"]
+    const encrypted = item["encrypted_content"];
 
     if (typeof encrypted === "string" && isValidGrokEncryptedContent(encrypted)) {
-      items.push(item)
-      continue
+      items.push(item);
+      continue;
     }
 
-    changed = true
+    changed = true;
 
-    if (type === "compaction") continue
-    delete item["encrypted_content"]
-    items.push(item)
+    if (type === "compaction") continue;
+    delete item["encrypted_content"];
+    items.push(item);
   }
 
-  if (!changed) return body
-  set(body, "input", items)
+  if (!changed) return body;
+  set(body, "input", items);
 
-  return mergeAdjacentReasoningSummaries(body)
-}
+  return mergeAdjacentReasoningSummaries(body);
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Image references
 // ---------------------------------------------------------------------------------------------------------------
 
 const normalizeImageRef = (value: Json | undefined): boolean => {
-  if (!isJsonObject(value)) return false
-  const originalUrl = typeof value["url"] === "string" ? value["url"] : ""
-  let url = originalUrl.trim()
-  const imageUrl = value["image_url"]
-  const hasImageUrl = "image_url" in value
+  if (!isJsonObject(value)) return false;
+  const originalUrl = typeof value["url"] === "string" ? value["url"] : "";
+  let url = originalUrl.trim();
+  const imageUrl = value["image_url"];
+  const hasImageUrl = "image_url" in value;
 
   if (url === "") {
-    if (typeof imageUrl === "string") url = imageUrl.trim()
-    else if (isJsonObject(imageUrl) && typeof imageUrl["url"] === "string") url = imageUrl["url"].trim()
+    if (typeof imageUrl === "string") url = imageUrl.trim();
+    else if (isJsonObject(imageUrl) && typeof imageUrl["url"] === "string")
+      url = imageUrl["url"].trim();
   }
 
-  if (url === "") return false
+  if (url === "") return false;
 
-  if (url === originalUrl && !hasImageUrl) return false
-  value["url"] = url
-  delete value["image_url"]
+  if (url === originalUrl && !hasImageUrl) return false;
+  value["url"] = url;
+  delete value["image_url"];
 
-  return true
-}
+  return true;
+};
 
 const normalizeImageRefsIn = (value: Json): void => {
   if (isJsonArray(value)) {
-    for (const child of value) normalizeImageRefsIn(child)
+    for (const child of value) normalizeImageRefsIn(child);
 
-    return
+    return;
   }
 
-  if (!isJsonObject(value)) return
+  if (!isJsonObject(value)) return;
 
   for (const [key, child] of Object.entries(value)) {
-    if (key === "image") normalizeImageRef(child)
+    if (key === "image") normalizeImageRef(child);
     else if ((key === "images" || key === "reference_images") && isJsonArray(child)) {
-      for (const ref of child) normalizeImageRef(ref)
+      for (const ref of child) normalizeImageRef(ref);
     }
 
-    normalizeImageRefsIn(child)
+    normalizeImageRefsIn(child);
   }
-}
+};
 
 /**
  * `normalizeXAIImageRefs`: `{"image":{"image_url":"..."}}` becomes `{"image":{"url":"..."}}` for `image`, `images` and
  * `reference_images` anywhere in the tree (chat content parts `{"type":"image_url",...}` are untouched).
  */
 export const normalizeImageRefs = (body: Json): Json => {
-  normalizeImageRefsIn(body)
+  normalizeImageRefsIn(body);
 
-  return body
-}
+  return body;
+};

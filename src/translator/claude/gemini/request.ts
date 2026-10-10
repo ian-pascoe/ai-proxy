@@ -3,512 +3,543 @@
  *
  * Go source: internal/translator/claude/gemini/claude_gemini_request.go.
  */
-import { asFloat, asInt, get, type Json, type JsonObject } from "../../../json/index.ts"
+import { asFloat, asInt, get, type Json, type JsonObject } from "../../../json/index.ts";
 import {
   applyTranslatedSummaryToClaude,
   convertBudgetToLevel,
   convertLevelToBudget,
   hasLevel,
-  mapToClaudeEffort
-} from "../../../thinking/index.ts"
-import { lookupModelInfo } from "../../model-info.ts"
-import { ClaudeMessageAccumulator } from "../../common/claude-messages.ts"
-import { deriveClaudeUserID } from "../../common/claude-user-id.ts"
-import { sanitizeClaudeFunctionName } from "../../common/claude-util.ts"
-import { exists, isArr, isObj, str, trimmed } from "../../common/gjson.ts"
-import { isGeminiThoughtPart } from "../../common/gemini-parts.ts"
-import { UserTurnDrops } from "../../common/parts.ts"
+  mapToClaudeEffort,
+} from "../../../thinking/index.ts";
+import { lookupModelInfo } from "../../model-info.ts";
+import { ClaudeMessageAccumulator } from "../../common/claude-messages.ts";
+import { deriveClaudeUserID } from "../../common/claude-user-id.ts";
+import { sanitizeClaudeFunctionName } from "../../common/claude-util.ts";
+import { exists, isArr, isObj, str, trimmed } from "../../common/gjson.ts";
+import { isGeminiThoughtPart } from "../../common/gemini-parts.ts";
+import { UserTurnDrops } from "../../common/parts.ts";
 
-const first = (...values: Array<Json | undefined>): Json | undefined => values.find((value) => value !== undefined)
+const first = (...values: Array<Json | undefined>): Json | undefined =>
+  values.find((value) => value !== undefined);
 
 /** `ConvertGeminiRequestToClaude`. */
-export const convertGeminiRequestToClaude = (modelName: string, root: Json, stream: boolean): Json => {
-  const drops = new UserTurnDrops()
+export const convertGeminiRequestToClaude = (
+  modelName: string,
+  root: Json,
+  stream: boolean,
+): Json => {
+  const drops = new UserTurnDrops();
 
   const out: JsonObject = {
     model: "",
     max_tokens: 32000,
     messages: [],
-    metadata: { user_id: deriveClaudeUserID(root) }
-  }
+    metadata: { user_id: deriveClaudeUserID(root) },
+  };
 
-  const accumulator = new ClaudeMessageAccumulator()
+  const accumulator = new ClaudeMessageAccumulator();
 
   const toolIdOf = (value: Json | undefined): string => {
-    const id = trimmed(get(value, "id"))
+    const id = trimmed(get(value, "id"));
 
-    return id !== "" ? id : trimmed(get(value, "call_id"))
-  }
+    return id !== "" ? id : trimmed(get(value, "call_id"));
+  };
 
   // FIFO queue of generated tool ids; Gemini pairs responses to calls sequentially.
-  let pendingToolIds: string[] = []
-  let toolCallCounter = 0
+  let pendingToolIds: string[] = [];
+  let toolCallCounter = 0;
 
   const nextToolId = (): string => {
-    toolCallCounter++
+    toolCallCounter++;
 
-    return `toolu_gemini_${String(toolCallCounter).padStart(16, "0")}`
-  }
+    return `toolu_gemini_${String(toolCallCounter).padStart(16, "0")}`;
+  };
 
-  out.model = modelName
-  const serviceTier = get(root, "service_tier")
+  out.model = modelName;
+  const serviceTier = get(root, "service_tier");
 
-  if (typeof serviceTier === "string") out.service_tier = serviceTier
+  if (typeof serviceTier === "string") out.service_tier = serviceTier;
 
-  const genConfig = get(root, "generationConfig")
+  const genConfig = get(root, "generationConfig");
 
   if (exists(genConfig)) {
-    const maxTokens = get(genConfig, "maxOutputTokens")
+    const maxTokens = get(genConfig, "maxOutputTokens");
 
-    if (exists(maxTokens)) out.max_tokens = asInt(maxTokens)
-    const topP = get(genConfig, "topP")
+    if (exists(maxTokens)) out.max_tokens = asInt(maxTokens);
+    const topP = get(genConfig, "topP");
 
-    if (exists(topP)) out.top_p = asFloat(topP)
-    const stopSeqs = get(genConfig, "stopSequences")
+    if (exists(topP)) out.top_p = asFloat(topP);
+    const stopSeqs = get(genConfig, "stopSequences");
 
-    if (isArr(stopSeqs) && stopSeqs.length > 0) out.stop_sequences = stopSeqs.map((value) => str(value))
+    if (isArr(stopSeqs) && stopSeqs.length > 0)
+      out.stop_sequences = stopSeqs.map((value) => str(value));
 
-    const thinkingConfig = get(genConfig, "thinkingConfig")
+    const thinkingConfig = get(genConfig, "thinkingConfig");
 
     if (isObj(thinkingConfig)) {
-      const mi = lookupModelInfo(modelName, "claude")
-      const supportsAdaptive = (mi?.thinking?.levels?.length ?? 0) > 0
-      const supportsMax = supportsAdaptive && hasLevel(mi?.thinking?.levels, "max")
+      const mi = lookupModelInfo(modelName, "claude");
+      const supportsAdaptive = (mi?.thinking?.levels?.length ?? 0) > 0;
+      const supportsMax = supportsAdaptive && hasLevel(mi?.thinking?.levels, "max");
 
       const setThinking = (type: string): JsonObject => {
-        const current = isObj(out.thinking) ? out.thinking : {}
-        current.type = type
-        delete current.budget_tokens
-        out.thinking = current
+        const current = isObj(out.thinking) ? out.thinking : {};
+        current.type = type;
+        delete current.budget_tokens;
+        out.thinking = current;
 
-        return current
-      }
+        return current;
+      };
 
       const clearEffort = (): void => {
-        if (isObj(out.output_config)) delete out.output_config.effort
-      }
+        if (isObj(out.output_config)) delete out.output_config.effort;
+      };
 
       const setEffort = (effort: string): void => {
-        const config = isObj(out.output_config) ? out.output_config : {}
-        config.effort = effort
-        out.output_config = config
-      }
+        const config = isObj(out.output_config) ? out.output_config : {};
+        config.effort = effort;
+        out.output_config = config;
+      };
 
-      const thinkingLevel = first(get(thinkingConfig, "thinkingLevel"), get(thinkingConfig, "thinking_level"))
+      const thinkingLevel = first(
+        get(thinkingConfig, "thinkingLevel"),
+        get(thinkingConfig, "thinking_level"),
+      );
 
       if (exists(thinkingLevel)) {
-        let level = str(thinkingLevel).trim().toLowerCase()
+        let level = str(thinkingLevel).trim().toLowerCase();
 
         if (supportsAdaptive) {
           if (level === "none") {
-            setThinking("disabled")
-            clearEffort()
+            setThinking("disabled");
+            clearEffort();
           } else if (level !== "") {
-            level = mapToClaudeEffort(level, supportsMax) ?? level
-            setThinking("adaptive")
-            setEffort(level)
+            level = mapToClaudeEffort(level, supportsMax) ?? level;
+            setThinking("adaptive");
+            setEffort(level);
           }
         } else if (level === "none") {
-          setThinking("disabled")
+          setThinking("disabled");
         } else if (level === "auto") {
-          setThinking("enabled")
+          setThinking("enabled");
         } else if (level !== "") {
-          const budget = convertLevelToBudget(level)
+          const budget = convertLevelToBudget(level);
 
           if (budget !== undefined) {
-            const thinking = setThinking("enabled")
-            thinking.budget_tokens = budget
+            const thinking = setThinking("enabled");
+            thinking.budget_tokens = budget;
           }
         }
       } else {
-        const thinkingBudget = first(get(thinkingConfig, "thinkingBudget"), get(thinkingConfig, "thinking_budget"))
+        const thinkingBudget = first(
+          get(thinkingConfig, "thinkingBudget"),
+          get(thinkingConfig, "thinking_budget"),
+        );
 
         if (exists(thinkingBudget)) {
-          const budget = asInt(thinkingBudget)
+          const budget = asInt(thinkingBudget);
 
           if (supportsAdaptive) {
             if (budget === 0) {
-              setThinking("disabled")
-              clearEffort()
+              setThinking("disabled");
+              clearEffort();
             } else {
-              let level = convertBudgetToLevel(budget)
+              let level = convertBudgetToLevel(budget);
 
               if (level !== undefined) {
-                level = mapToClaudeEffort(level, supportsMax) ?? level
-                setThinking("adaptive")
-                setEffort(level)
+                level = mapToClaudeEffort(level, supportsMax) ?? level;
+                setThinking("adaptive");
+                setEffort(level);
               }
             }
           } else if (budget === 0) {
-            setThinking("disabled")
+            setThinking("disabled");
           } else if (budget === -1) {
-            setThinking("enabled")
+            setThinking("enabled");
           } else {
-            const thinking = setThinking("enabled")
-            thinking.budget_tokens = budget
+            const thinking = setThinking("enabled");
+            thinking.budget_tokens = budget;
           }
         }
       }
     }
   }
 
-  const sysInstr = first(get(root, "systemInstruction"), get(root, "system_instruction"))
+  const sysInstr = first(get(root, "systemInstruction"), get(root, "system_instruction"));
 
   if (exists(sysInstr)) {
-    const parts = get(sysInstr, "parts")
+    const parts = get(sysInstr, "parts");
 
     if (isArr(parts)) {
-      let systemText = ""
+      let systemText = "";
 
       for (const part of parts) {
-        if (isGeminiThoughtPart(part)) continue
-        const text = get(part, "text")
+        if (isGeminiThoughtPart(part)) continue;
+        const text = get(part, "text");
 
         if (exists(text)) {
-          if (systemText !== "") systemText += "\n"
-          systemText += str(text)
+          if (systemText !== "") systemText += "\n";
+          systemText += str(text);
         }
       }
 
       if (systemText !== "") {
-        accumulator.append({ role: "user", content: [{ type: "text", text: systemText }] })
-        accumulator.flush()
+        accumulator.append({ role: "user", content: [{ type: "text", text: systemText }] });
+        accumulator.flush();
       }
     }
   }
 
-  const contents = get(root, "contents")
+  const contents = get(root, "contents");
 
   if (isArr(contents)) {
     for (const content of contents) {
-      let role = str(get(content, "role"))
+      let role = str(get(content, "role"));
 
-      if (role === "model") role = "assistant"
+      if (role === "model") role = "assistant";
 
-      if (role === "function" || role === "tool") role = "user"
+      if (role === "function" || role === "tool") role = "user";
 
-      const contentItems: JsonObject[] = []
-      let sendable = 0
-      const parts = get(content, "parts")
+      const contentItems: JsonObject[] = [];
+      let sendable = 0;
+      const parts = get(content, "parts");
 
       if (isArr(parts)) {
         for (const part of parts) {
-          if (isGeminiThoughtPart(part)) continue
+          if (isGeminiThoughtPart(part)) continue;
 
-          const text = get(part, "text")
+          const text = get(part, "text");
 
           if (exists(text)) {
-            contentItems.push({ type: "text", text: str(text) })
+            contentItems.push({ type: "text", text: str(text) });
 
-            if (str(text).trim() !== "") sendable++
-            continue
+            if (str(text).trim() !== "") sendable++;
+            continue;
           }
 
-          const fc = get(part, "functionCall")
+          const fc = get(part, "functionCall");
 
           if (exists(fc) && role === "assistant") {
-            let toolId = toolIdOf(fc)
+            let toolId = toolIdOf(fc);
 
-            if (toolId === "") toolId = nextToolId()
-            pendingToolIds.push(toolId)
-            const toolUse: JsonObject = { type: "tool_use", id: toolId, name: "", input: {} }
-            const name = get(fc, "name")
+            if (toolId === "") toolId = nextToolId();
+            pendingToolIds.push(toolId);
+            const toolUse: JsonObject = { type: "tool_use", id: toolId, name: "", input: {} };
+            const name = get(fc, "name");
 
-            if (exists(name)) toolUse.name = sanitizeClaudeFunctionName(str(name))
-            const args = get(fc, "args")
+            if (exists(name)) toolUse.name = sanitizeClaudeFunctionName(str(name));
+            const args = get(fc, "args");
 
-            if (isObj(args)) toolUse.input = args
-            contentItems.push(toolUse)
-            sendable++
-            continue
+            if (isObj(args)) toolUse.input = args;
+            contentItems.push(toolUse);
+            sendable++;
+            continue;
           }
 
-          const fr = get(part, "functionResponse")
+          const fr = get(part, "functionResponse");
 
           if (exists(fr)) {
-            let toolId: string
-            const customId = toolIdOf(fr)
+            let toolId: string;
+            const customId = toolIdOf(fr);
 
             if (customId !== "") {
-              toolId = customId
-              const idx = pendingToolIds.indexOf(toolId)
+              toolId = customId;
+              const idx = pendingToolIds.indexOf(toolId);
 
-              if (idx >= 0) pendingToolIds = [...pendingToolIds.slice(0, idx), ...pendingToolIds.slice(idx + 1)]
+              if (idx >= 0)
+                pendingToolIds = [
+                  ...pendingToolIds.slice(0, idx),
+                  ...pendingToolIds.slice(idx + 1),
+                ];
             } else if (pendingToolIds.length > 0) {
-              toolId = pendingToolIds[0] as string
-              pendingToolIds = pendingToolIds.slice(1)
+              toolId = pendingToolIds[0] as string;
+              pendingToolIds = pendingToolIds.slice(1);
             } else {
-              toolId = nextToolId()
+              toolId = nextToolId();
             }
 
-            const toolResult: JsonObject = { type: "tool_result", tool_use_id: toolId, content: "" }
-            const result = get(fr, "response.result")
+            const toolResult: JsonObject = {
+              type: "tool_result",
+              tool_use_id: toolId,
+              content: "",
+            };
+            const result = get(fr, "response.result");
 
-            if (exists(result)) toolResult.content = str(result)
+            if (exists(result)) toolResult.content = str(result);
             else {
-              const response = get(fr, "response")
+              const response = get(fr, "response");
 
-              if (exists(response)) toolResult.content = JSON.stringify(response)
+              if (exists(response)) toolResult.content = JSON.stringify(response);
             }
 
-            contentItems.push(toolResult)
-            sendable++
-            continue
+            contentItems.push(toolResult);
+            sendable++;
+            continue;
           }
 
-          const inlineData = first(get(part, "inlineData"), get(part, "inline_data"))
+          const inlineData = first(get(part, "inlineData"), get(part, "inline_data"));
 
           if (exists(inlineData)) {
-            const block = contentPartFromInlineData(inlineData, role === "assistant")
+            const block = contentPartFromInlineData(inlineData, role === "assistant");
 
             if (block !== undefined) {
-              contentItems.push(block)
-              sendable++
-            } else if (role !== "assistant") drops.drop("inlineData")
-            continue
+              contentItems.push(block);
+              sendable++;
+            } else if (role !== "assistant") drops.drop("inlineData");
+            continue;
           }
 
-          const fileData = first(get(part, "fileData"), get(part, "file_data"))
+          const fileData = first(get(part, "fileData"), get(part, "file_data"));
 
           if (exists(fileData)) {
-            const block = contentPartFromFileData(fileData)
+            const block = contentPartFromFileData(fileData);
 
             if (block !== undefined) {
-              contentItems.push(block)
-              sendable++
-            } else if (role !== "assistant") drops.drop("fileData")
+              contentItems.push(block);
+              sendable++;
+            } else if (role !== "assistant") drops.drop("fileData");
           }
         }
       }
 
-      if (role !== "assistant") drops.endTurn(sendable)
+      if (role !== "assistant") drops.endTurn(sendable);
 
-      if (contentItems.length > 0) accumulator.append({ role, content: contentItems })
+      if (contentItems.length > 0) accumulator.append({ role, content: contentItems });
     }
   }
 
-  out.messages = accumulator.messages()
+  out.messages = accumulator.messages();
 
-  const tools = get(root, "tools")
+  const tools = get(root, "tools");
 
   if (isArr(tools)) {
-    const anthropicTools: JsonObject[] = []
+    const anthropicTools: JsonObject[] = [];
 
     for (const tool of tools) {
-      const funcDecls = get(tool, "functionDeclarations")
+      const funcDecls = get(tool, "functionDeclarations");
 
-      if (!isArr(funcDecls)) continue
+      if (!isArr(funcDecls)) continue;
 
       for (const funcDecl of funcDecls) {
         const anthropicTool: JsonObject = {
           name: "",
           description: "",
-          input_schema: { type: "object", properties: {} }
-        }
+          input_schema: { type: "object", properties: {} },
+        };
 
-        const name = get(funcDecl, "name")
+        const name = get(funcDecl, "name");
 
-        if (exists(name)) anthropicTool.name = sanitizeClaudeFunctionName(str(name))
-        const desc = get(funcDecl, "description")
+        if (exists(name)) anthropicTool.name = sanitizeClaudeFunctionName(str(name));
+        const desc = get(funcDecl, "description");
 
-        if (exists(desc)) anthropicTool.description = str(desc)
-        const params = first(get(funcDecl, "parameters"), get(funcDecl, "parametersJsonSchema"))
+        if (exists(desc)) anthropicTool.description = str(desc);
+        const params = first(get(funcDecl, "parameters"), get(funcDecl, "parametersJsonSchema"));
 
-        if (exists(params)) anthropicTool.input_schema = normalizeClaudeToolSchema(params)
-        lowercaseSchemaTypes(anthropicTool)
+        if (exists(params)) anthropicTool.input_schema = normalizeClaudeToolSchema(params);
+        lowercaseSchemaTypes(anthropicTool);
         // Go decodes the tool into a map, so the marshalled object has sorted keys.
-        anthropicTools.push(sortKeysDeep(anthropicTool) as JsonObject)
+        anthropicTools.push(sortKeysDeep(anthropicTool) as JsonObject);
       }
     }
 
-    if (anthropicTools.length > 0) out.tools = anthropicTools
+    if (anthropicTools.length > 0) out.tools = anthropicTools;
   }
 
-  const toolConfig = get(root, "tool_config")
+  const toolConfig = get(root, "tool_config");
 
-  if (exists(toolConfig)) setToolChoice(out, get(toolConfig, "function_calling_config"))
+  if (exists(toolConfig)) setToolChoice(out, get(toolConfig, "function_calling_config"));
   else {
-    const camel = get(root, "toolConfig")
+    const camel = get(root, "toolConfig");
 
-    if (exists(camel)) setToolChoice(out, get(camel, "functionCallingConfig"))
+    if (exists(camel)) setToolChoice(out, get(camel, "functionCallingConfig"));
   }
 
-  out.stream = stream
+  out.stream = stream;
 
-  const result = applyTranslatedSummaryToClaude(out, root, "gemini", modelName, lookupModelInfo) ?? out
-  const refusal = drops.err(result)
+  const result =
+    applyTranslatedSummaryToClaude(out, root, "gemini", modelName, lookupModelInfo) ?? out;
+  const refusal = drops.err(result);
 
-  if (refusal !== undefined) throw refusal
+  if (refusal !== undefined) throw refusal;
 
-  return result
-}
+  return result;
+};
 
 const sortKeysDeep = (value: Json): Json => {
-  if (isArr(value)) return value.map(sortKeysDeep)
+  if (isArr(value)) return value.map(sortKeysDeep);
 
   if (isObj(value)) {
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()
-        .map((key) => [key, sortKeysDeep(value[key] as Json)])
-    )
+        .map((key) => [key, sortKeysDeep(value[key] as Json)]),
+    );
   }
 
-  return value
-}
+  return value;
+};
 
-const SCHEMA = "http://json-schema.org/draft-07/schema#"
+const SCHEMA = "http://json-schema.org/draft-07/schema#";
 
 const normalizeClaudeToolSchema = (parameters: Json): Json => {
-  if (!isObj(parameters)) return parameters
-  const cleaned: JsonObject = { ...parameters }
+  if (!isObj(parameters)) return parameters;
+  const cleaned: JsonObject = { ...parameters };
 
-  if (cleaned.additionalProperties !== false) cleaned.additionalProperties = false
+  if (cleaned.additionalProperties !== false) cleaned.additionalProperties = false;
 
-  if (cleaned.$schema !== SCHEMA) cleaned.$schema = SCHEMA
+  if (cleaned.$schema !== SCHEMA) cleaned.$schema = SCHEMA;
 
-  return cleaned
-}
+  return cleaned;
+};
 
-type Path = Array<string | number>
+type Path = Array<string | number>;
 
 const collectTypePaths = (node: Json, path: Path, paths: Path[]): void => {
   const children: Array<[string | number, Json]> = isArr(node)
     ? node.map((child, index) => [index, child] as [number, Json])
     : isObj(node)
       ? Object.entries(node)
-      : []
+      : [];
 
   for (const [key, child] of children) {
-    const childPath = [...path, key]
+    const childPath = [...path, key];
 
-    if (key === "type") paths.push(childPath)
-    collectTypePaths(child, childPath, paths)
+    if (key === "type") paths.push(childPath);
+    collectTypePaths(child, childPath, paths);
   }
-}
+};
 
 const getAt = (root: Json, path: Path): Json | undefined => {
-  let current: Json | undefined = root
+  let current: Json | undefined = root;
 
   for (const segment of path) {
-    if (isArr(current) && typeof segment === "number") current = current[segment]
-    else if (isObj(current) && Object.hasOwn(current, String(segment))) current = current[String(segment)]
-    else return undefined
+    if (isArr(current) && typeof segment === "number") current = current[segment];
+    else if (isObj(current) && Object.hasOwn(current, String(segment)))
+      current = current[String(segment)];
+    else return undefined;
   }
 
-  return current
-}
+  return current;
+};
 
 /** sjson-like set: a non-container parent along the path is replaced by an object. */
 const setAt = (root: JsonObject, path: Path, value: Json): void => {
-  let current: JsonObject | Json[] = root
+  let current: JsonObject | Json[] = root;
 
   for (let i = 0; i < path.length; i++) {
-    const segment = path[i] as string | number
-    const last = i === path.length - 1
-    const holder = current as Record<string, Json> & Json[]
-    const key = isArr(current) ? (segment as number) : String(segment)
+    const segment = path[i] as string | number;
+    const last = i === path.length - 1;
+    const holder = current as Record<string, Json> & Json[];
+    const key = isArr(current) ? (segment as number) : String(segment);
 
     if (last) {
-      holder[key as never] = value as never
+      holder[key as never] = value as never;
 
-      return
+      return;
     }
 
-    let next = holder[key as never] as Json | undefined
+    let next = holder[key as never] as Json | undefined;
 
     if (!isObj(next) && !isArr(next)) {
-      next = {}
-      holder[key as never] = next as never
+      next = {};
+      holder[key as never] = next as never;
     }
 
-    current = next as JsonObject | Json[]
+    current = next as JsonObject | Json[];
   }
-}
+};
 
 /**
  * `lowercaseClaudeToolSchemaTypes`: every `type` key (any depth) is lower-cased. Non-string values are rewritten
  * as lower-cased JSON text, exactly like the Go path-based rewrite (including its effect on nested paths).
  */
 const lowercaseSchemaTypes = (tool: JsonObject): void => {
-  const paths: Path[] = []
-  collectTypePaths(tool, [], paths)
+  const paths: Path[] = [];
+  collectTypePaths(tool, [], paths);
 
   for (const path of paths) {
-    const value = getAt(tool, path)
-    const lowered = str(value).toLowerCase()
+    const value = getAt(tool, path);
+    const lowered = str(value).toLowerCase();
 
-    if (typeof value === "string" && lowered === value) continue
-    setAt(tool, path, lowered)
+    if (typeof value === "string" && lowered === value) continue;
+    setAt(tool, path, lowered);
   }
-}
+};
 
 const setToolChoice = (out: JsonObject, funcCalling: Json | undefined): void => {
-  if (!exists(funcCalling)) return
-  const mode = get(funcCalling, "mode")
+  if (!exists(funcCalling)) return;
+  const mode = get(funcCalling, "mode");
 
-  if (!exists(mode)) return
+  if (!exists(mode)) return;
 
   switch (str(mode)) {
     case "AUTO":
-      out.tool_choice = { type: "auto" }
-      break
+      out.tool_choice = { type: "auto" };
+      break;
     case "NONE":
-      out.tool_choice = { type: "none" }
-      break
+      out.tool_choice = { type: "none" };
+      break;
     case "ANY": {
-      const allowed = first(get(funcCalling, "allowedFunctionNames"), get(funcCalling, "allowed_function_names"))
+      const allowed = first(
+        get(funcCalling, "allowedFunctionNames"),
+        get(funcCalling, "allowed_function_names"),
+      );
 
       if (isArr(allowed) && allowed.length === 1)
-        out.tool_choice = { type: "tool", name: sanitizeClaudeFunctionName(str(allowed[0])) }
-      else out.tool_choice = { type: "any" }
-      break
+        out.tool_choice = { type: "tool", name: sanitizeClaudeFunctionName(str(allowed[0])) };
+      else out.tool_choice = { type: "any" };
+      break;
     }
   }
-}
+};
 
-const contentPartFromInlineData = (inlineData: Json, keepPlaceholder: boolean): JsonObject | undefined => {
-  let mimeType = str(get(inlineData, "mimeType"))
+const contentPartFromInlineData = (
+  inlineData: Json,
+  keepPlaceholder: boolean,
+): JsonObject | undefined => {
+  let mimeType = str(get(inlineData, "mimeType"));
 
-  if (mimeType === "") mimeType = str(get(inlineData, "mime_type"))
-  const data = str(get(inlineData, "data"))
+  if (mimeType === "") mimeType = str(get(inlineData, "mime_type"));
+  const data = str(get(inlineData, "data"));
 
-  if (mimeType === "" || data === "") return undefined
-  const lower = mimeType.toLowerCase()
+  if (mimeType === "" || data === "") return undefined;
+  const lower = mimeType.toLowerCase();
 
-  if (lower.startsWith("image/")) return { type: "image", source: { type: "base64", media_type: mimeType, data } }
+  if (lower.startsWith("image/"))
+    return { type: "image", source: { type: "base64", media_type: mimeType, data } };
 
   if (lower.startsWith("application/") || lower.startsWith("text/")) {
-    return { type: "document", source: { type: "base64", media_type: mimeType, data } }
+    return { type: "document", source: { type: "base64", media_type: mimeType, data } };
   }
 
-  return keepPlaceholder ? { type: "text", text: `Media content: inline data (Type: ${mimeType})` } : undefined
-}
+  return keepPlaceholder
+    ? { type: "text", text: `Media content: inline data (Type: ${mimeType})` }
+    : undefined;
+};
 
 const contentPartFromFileData = (fileData: Json): JsonObject | undefined => {
-  let fileUri = str(get(fileData, "fileUri"))
+  let fileUri = str(get(fileData, "fileUri"));
 
-  if (fileUri === "") fileUri = str(get(fileData, "file_uri"))
+  if (fileUri === "") fileUri = str(get(fileData, "file_uri"));
 
-  if (fileUri === "") return undefined
-  let mimeType = str(get(fileData, "mimeType"))
+  if (fileUri === "") return undefined;
+  let mimeType = str(get(fileData, "mimeType"));
 
-  if (mimeType === "") mimeType = str(get(fileData, "mime_type"))
-  const lower = mimeType.toLowerCase()
+  if (mimeType === "") mimeType = str(get(fileData, "mime_type"));
+  const lower = mimeType.toLowerCase();
 
-  if (lower.startsWith("image/")) return { type: "image", source: { type: "url", url: fileUri } }
+  if (lower.startsWith("image/")) return { type: "image", source: { type: "url", url: fileUri } };
 
   if (lower.startsWith("application/") || lower.startsWith("text/")) {
-    const source: JsonObject = { type: "url", url: fileUri }
+    const source: JsonObject = { type: "url", url: fileUri };
 
-    if (mimeType !== "") source.media_type = mimeType
+    if (mimeType !== "") source.media_type = mimeType;
 
-    return { type: "document", source }
+    return { type: "document", source };
   }
 
-  let info = `File: ${fileUri}`
+  let info = `File: ${fileUri}`;
 
-  if (mimeType !== "") info += ` (Type: ${mimeType})`
+  if (mimeType !== "") info += ` (Type: ${mimeType})`;
 
-  return { type: "text", text: info }
-}
+  return { type: "text", text: info };
+};

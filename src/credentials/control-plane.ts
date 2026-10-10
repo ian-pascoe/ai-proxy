@@ -1,20 +1,36 @@
-import { DurableObject } from "cloudflare:workers"
-import { Effect, Schema } from "effect"
-import { FetchHttpClient, type HttpClient } from "effect/http"
-import { ConfigStore, decodeStoredConfig, type ConfigSnapshotWire, type PutConfigResult } from "../config/store.ts"
-import type { Config } from "../config/schema.ts"
-import type { JsonObject } from "../json/index.ts"
-import { isTokenPayloadKey } from "./merge.ts"
-import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts"
-import type { Credential } from "./model.ts"
-import { RefreshManager, type RefreshOptions, type RefreshResult, type RunSummary } from "./refresh/index.ts"
-import { type RetryPlan, RetryQuery } from "./selection/retry.ts"
-import { Lease, PickRequest, ReportResult, type PickResult, type ReportOutcome } from "./selection/types.ts"
-import { CredentialStore } from "./store.ts"
-import type { CredentialSummary } from "./summary.ts"
-import type { ModelSource } from "../registry/source.ts"
-import { authIndexOf } from "../management/auth-index.ts"
-import { buildCredentialEntry } from "../management/credential-entry.ts"
+import { DurableObject } from "cloudflare:workers";
+import { Effect, Schema } from "effect";
+import { FetchHttpClient, type HttpClient } from "effect/http";
+import {
+  ConfigStore,
+  decodeStoredConfig,
+  type ConfigSnapshotWire,
+  type PutConfigResult,
+} from "../config/store.ts";
+import type { Config } from "../config/schema.ts";
+import type { JsonObject } from "../json/index.ts";
+import { isTokenPayloadKey } from "./merge.ts";
+import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts";
+import type { Credential } from "./model.ts";
+import {
+  RefreshManager,
+  type RefreshOptions,
+  type RefreshResult,
+  type RunSummary,
+} from "./refresh/index.ts";
+import { type RetryPlan, RetryQuery } from "./selection/retry.ts";
+import {
+  Lease,
+  PickRequest,
+  ReportResult,
+  type PickResult,
+  type ReportOutcome,
+} from "./selection/types.ts";
+import { CredentialStore } from "./store.ts";
+import type { CredentialSummary } from "./summary.ts";
+import type { ModelSource } from "../registry/source.ts";
+import { authIndexOf } from "../management/auth-index.ts";
+import { buildCredentialEntry } from "../management/credential-entry.ts";
 import {
   apiCallToken,
   findCredential,
@@ -22,10 +38,10 @@ import {
   type CredentialMutation,
   type CredentialRef,
   type RefreshAllItem,
-  type RefreshOneResult
-} from "../management/credential-ops.ts"
-import { applyFieldPatch } from "./field-patch.ts"
-import { type DevinStatusSummary, refreshDevinStatuses } from "./devin-status.ts"
+  type RefreshOneResult,
+} from "../management/credential-ops.ts";
+import { applyFieldPatch } from "./field-patch.ts";
+import { type DevinStatusSummary, refreshDevinStatuses } from "./devin-status.ts";
 import {
   type CallbackInput,
   type CallbackResult,
@@ -33,29 +49,37 @@ import {
   type OAuthService,
   type StartInput,
   type StartResult,
-  type StatusResult
-} from "../oauth/service.ts"
-import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts"
+  type StatusResult,
+} from "../oauth/service.ts";
+import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
 
-const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
+const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
-const decodeLease = Schema.decodeUnknownSync(Lease)
+const decodeLease = Schema.decodeUnknownSync(Lease);
 
-const decodeReportResult = Schema.decodeUnknownSync(ReportResult)
+const decodeReportResult = Schema.decodeUnknownSync(ReportResult);
 
-const decodeRetryQuery = Schema.decodeUnknownSync(RetryQuery)
+const decodeRetryQuery = Schema.decodeUnknownSync(RetryQuery);
 
-const PROTECTED_KEYS = new Set(["type", "disabled", "api_key", "dca_token", "dca_expired", "dca_expires_at"])
+const PROTECTED_KEYS = new Set([
+  "type",
+  "disabled",
+  "api_key",
+  "dca_token",
+  "dca_expired",
+  "dca_expires_at",
+]);
 
 /** Keys `patchCredentialMetadata` must not write: token lifecycle, identity of the provider, the disabled flag. */
-const isProtectedMetadataKey = (key: string): boolean => isTokenPayloadKey(key) || PROTECTED_KEYS.has(key)
+const isProtectedMetadataKey = (key: string): boolean =>
+  isTokenPayloadKey(key) || PROTECTED_KEYS.has(key);
 
 /** JSON object as it crosses the RPC boundary (the recursive `JsonObject` is too deep for the RPC stub types). */
-type WireJsonObject = Record<string, Schema.MutableJson>
+type WireJsonObject = Record<string, Schema.MutableJson>;
 
 export type SetDisabledResult =
   | { readonly ok: true }
-  | { readonly ok: false; readonly error: "not_found" | "config_credential" }
+  | { readonly ok: false; readonly error: "not_found" | "config_credential" };
 
 /**
  * Singleton Durable Object (`CONTROL_PLANE.getByName("global")`): the single writer for config, credentials,
@@ -65,30 +89,30 @@ export type SetDisabledResult =
  * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
 export class ControlPlane extends DurableObject<Env> {
-  readonly #config: ConfigStore
-  readonly #pool: CredentialPool
-  readonly #refresh: RefreshManager
-  readonly #oauth: OAuthService
-  #configView: ConfigView | undefined
+  readonly #config: ConfigStore;
+  readonly #pool: CredentialPool;
+  readonly #refresh: RefreshManager;
+  readonly #oauth: OAuthService;
+  #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env)
-    this.#config = new ConfigStore(ctx.storage.sql)
+    super(ctx, env);
+    this.#config = new ConfigStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
       config: () => this.#currentConfig(),
-      decorate: (credential) => this.#refresh.decorate(credential)
-    })
+      decorate: (credential) => this.#refresh.decorate(credential),
+    });
     this.#refresh = new RefreshManager({
       host: this.#pool,
       alarm: {
         set: (at) => ctx.storage.setAlarm(at),
-        clear: () => ctx.storage.deleteAlarm()
+        clear: () => ctx.storage.deleteAlarm(),
       },
       http: FetchHttpClient.layer,
       metaMintUrl: env.META_MINT_URL,
-      workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"]
-    })
+      workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"],
+    });
     this.#oauth = makeOAuthService({
       metaMintUrl: env.META_MINT_URL,
       sessions: new OAuthSessions(new SqliteSessionTable(ctx.storage.sql)),
@@ -98,33 +122,33 @@ export class ControlPlane extends DurableObject<Env> {
           this.#pool.refreshTargets().map(({ credential }) => ({
             id: credential.id,
             type: typeof credential.metadata.type === "string" ? credential.metadata.type : "",
-            metadata: credential.metadata
+            metadata: credential.metadata,
           })),
         save: async (name, metadata) => {
-          const result = this.#pool.upsert(name, metadata, { mergeExisting: false })
+          const result = this.#pool.upsert(name, metadata, { mergeExisting: false });
 
-          if (!result.ok) return { ok: false, message: result.message }
-          await this.#rearm()
+          if (!result.ok) return { ok: false, message: result.message };
+          await this.#rearm();
 
-          return { ok: true }
+          return { ok: true };
         },
         remove: async (id) => {
-          await this.removeCredential(id)
-        }
-      }
-    })
+          await this.removeCredential(id);
+        },
+      },
+    });
   }
 
   /** Decoded config, re-decoded only when the stored version changed. */
   #currentConfig(): ConfigView {
-    const cached = this.#configView
-    const snapshot = this.#config.get(cached?.version)
+    const cached = this.#configView;
+    const snapshot = this.#config.get(cached?.version);
 
-    if (cached !== undefined && snapshot.unchanged) return cached
-    const config: Config = Effect.runSync(decodeStoredConfig(snapshot.document ?? ""))
-    this.#configView = { version: snapshot.version, config }
+    if (cached !== undefined && snapshot.unchanged) return cached;
+    const config: Config = Effect.runSync(decodeStoredConfig(snapshot.document ?? ""));
+    this.#configView = { version: snapshot.version, config };
 
-    return this.#configView
+    return this.#configView;
   }
 
   /**
@@ -132,7 +156,7 @@ export class ControlPlane extends DurableObject<Env> {
    * answer instead of the full document.
    */
   getConfig(sinceVersion?: number): ConfigSnapshotWire {
-    return this.#config.get(sinceVersion)
+    return this.#config.get(sinceVersion);
   }
 
   /**
@@ -140,7 +164,7 @@ export class ControlPlane extends DurableObject<Env> {
    * and version-conflict errors survive the RPC boundary. `expectedVersion` enables optimistic concurrency.
    */
   putConfig(text: string, expectedVersion?: number): PutConfigResult {
-    return this.#config.put(text, expectedVersion)
+    return this.#config.put(text, expectedVersion);
   }
 
   /**
@@ -149,19 +173,19 @@ export class ControlPlane extends DurableObject<Env> {
    * structured result (`ok: false`), not an exception.
    */
   pick(request: PickRequest): PickResult {
-    return this.#pool.pick(decodePickRequest(request))
+    return this.#pool.pick(decodePickRequest(request));
   }
 
   /**
    * Reports the outcome of the attempt that used `lease` (counters, cooldown/quota state machine, session affinity).
    */
   report(lease: Lease, result: ReportResult): ReportOutcome {
-    return this.#pool.report(decodeLease(lease), decodeReportResult(result))
+    return this.#pool.report(decodeLease(lease), decodeReportResult(result));
   }
 
   /** What the model registry needs from every credential (provider, prefix, exclusions, aliases, model state); no secrets. */
   listModelSources(): ModelSource[] {
-    return this.#pool.modelSources()
+    return this.#pool.modelSources();
   }
 
   /**
@@ -169,12 +193,12 @@ export class ControlPlane extends DurableObject<Env> {
    * (`request-retry`, cooldown recovery times, `max-retry-interval`; credentials.md §7.1.)
    */
   planRetry(query: RetryQuery): RetryPlan {
-    return this.#pool.planRetry(decodeRetryQuery(query))
+    return this.#pool.planRetry(decodeRetryQuery(query));
   }
 
   /** All credentials with runtime state; token material is redacted. */
   listCredentials(): CredentialSummary[] {
-    return this.#pool.list()
+    return this.#pool.list();
   }
 
   /**
@@ -184,13 +208,15 @@ export class ControlPlane extends DurableObject<Env> {
   async upsertCredential(
     name: string,
     content: string | JsonObject,
-    options?: { mergeExisting?: boolean }
+    options?: { mergeExisting?: boolean },
   ): Promise<UpsertResult> {
-    const result = this.#pool.upsert(name, content, { mergeExisting: options?.mergeExisting ?? true })
+    const result = this.#pool.upsert(name, content, {
+      mergeExisting: options?.mergeExisting ?? true,
+    });
 
-    if (result.ok) await this.#rearm()
+    if (result.ok) await this.#rearm();
 
-    return result
+    return result;
   }
 
   /**
@@ -200,51 +226,53 @@ export class ControlPlane extends DurableObject<Env> {
   async importAuthFile(
     name: string,
     content: string | JsonObject,
-    options: { readonly mergeExisting?: boolean } = {}
+    options: { readonly mergeExisting?: boolean } = {},
   ): Promise<UpsertResult> {
-    const result = this.#pool.upsert(name, content, { mergeExisting: options.mergeExisting === true })
+    const result = this.#pool.upsert(name, content, {
+      mergeExisting: options.mergeExisting === true,
+    });
 
-    if (result.ok) await this.#rearm()
+    if (result.ok) await this.#rearm();
 
-    return result
+    return result;
   }
 
   /** Removes a stored credential and its runtime state. */
   async removeCredential(id: string): Promise<{ readonly removed: boolean }> {
-    const removed = this.#pool.remove(id)
+    const removed = this.#pool.remove(id);
 
     if (removed) {
-      this.#refresh.forget(id)
-      await this.#rearm()
+      this.#refresh.forget(id);
+      await this.#rearm();
     }
 
-    return { removed }
+    return { removed };
   }
 
   /** Removes several stored credentials; returns the ids that existed. */
   async removeCredentials(ids: ReadonlyArray<string>): Promise<string[]> {
-    const removed: string[] = []
+    const removed: string[] = [];
 
-    for (const id of ids) if ((await this.removeCredential(id)).removed) removed.push(id)
+    for (const id of ids) if ((await this.removeCredential(id)).removed) removed.push(id);
 
-    return removed
+    return removed;
   }
 
   /** Disables or re-enables a stored credential (persisted as `disabled` in its file JSON). */
   async setCredentialDisabled(id: string, disabled: boolean): Promise<SetDisabledResult> {
-    const result = this.#pool.setDisabled(id, disabled)
+    const result = this.#pool.setDisabled(id, disabled);
 
-    if (result !== "ok") return { ok: false, error: result }
-    await this.#rearm()
+    if (result !== "ok") return { ok: false, error: result };
+    await this.#rearm();
 
-    return { ok: true }
+    return { ok: true };
   }
 
   // --- token refresh (refresh/manager.ts) ----------------------------------------------------------------------
 
   /** Durable Object alarm: refreshes due credentials and re-arms the single multiplexed alarm. */
   override async alarm(): Promise<void> {
-    await this.#refresh.onAlarm()
+    await this.#refresh.onAlarm();
   }
 
   /**
@@ -253,14 +281,15 @@ export class ControlPlane extends DurableObject<Env> {
    * the executor retries once with `credential.metadata.access_token`. Never throws: failures are structured.
    */
   refreshNow(credentialId: string, rejectedAccessToken?: string): Promise<RefreshResult> {
-    const options: RefreshOptions = rejectedAccessToken === undefined ? {} : { rejectedAccessToken }
+    const options: RefreshOptions =
+      rejectedAccessToken === undefined ? {} : { rejectedAccessToken };
 
-    return this.#refresh.refreshNow(credentialId, options)
+    return this.#refresh.refreshNow(credentialId, options);
   }
 
   /** Manual refresh (management): ignores the terminal-unauthorized gating. */
   forceRefresh(credentialId: string): Promise<RefreshResult> {
-    return this.#refresh.refreshNow(credentialId, { force: true })
+    return this.#refresh.refreshNow(credentialId, { force: true });
   }
 
   /**
@@ -269,23 +298,23 @@ export class ControlPlane extends DurableObject<Env> {
    * the picked snapshot has no usable `metadata.access_token`.
    */
   ensureFresh(credentialId: string): Promise<RefreshResult> {
-    return this.#refresh.ensureFresh(credentialId)
+    return this.#refresh.ensureFresh(credentialId);
   }
 
   /** Cron safety sweep: refreshes what is overdue and re-arms a lost alarm. */
   sweepRefresh(): Promise<RunSummary> {
-    return this.#refresh.sweep()
+    return this.#refresh.sweep();
   }
 
   /** Cron task `devin-user-status`: `GetUserStatus` profile and quota signals of every stored Devin credential. */
   async refreshDevinStatus(): Promise<DevinStatusSummary> {
     const summary = await Effect.runPromise(
-      refreshDevinStatuses(this.#pool).pipe(Effect.provide(FetchHttpClient.layer))
-    )
+      refreshDevinStatuses(this.#pool).pipe(Effect.provide(FetchHttpClient.layer)),
+    );
 
-    if (summary.refreshed > 0) await this.#rearm()
+    if (summary.refreshed > 0) await this.#rearm();
 
-    return summary
+    return summary;
   }
 
   /**
@@ -295,104 +324,114 @@ export class ControlPlane extends DurableObject<Env> {
    */
   async patchCredentialMetadata(
     credentialId: string,
-    patch: JsonObject
-  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "forbidden_key" }> {
-    const target = this.#pool.refreshTarget(credentialId)
+    patch: JsonObject,
+  ): Promise<
+    { readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "forbidden_key" }
+  > {
+    const target = this.#pool.refreshTarget(credentialId);
 
-    if (target === undefined) return { ok: false, error: "not_found" }
+    if (target === undefined) return { ok: false, error: "not_found" };
 
-    if (Object.keys(patch).some(isProtectedMetadataKey)) return { ok: false, error: "forbidden_key" }
-    const metadata: JsonObject = { ...target.credential.metadata }
+    if (Object.keys(patch).some(isProtectedMetadataKey))
+      return { ok: false, error: "forbidden_key" };
+    const metadata: JsonObject = { ...target.credential.metadata };
 
     for (const [key, value] of Object.entries(patch)) {
-      if (value === null) delete metadata[key]
-      else metadata[key] = value
+      if (value === null) delete metadata[key];
+      else metadata[key] = value;
     }
 
-    this.#pool.commitRefresh(credentialId, { metadata })
-    await this.#rearm()
+    this.#pool.commitRefresh(credentialId, { metadata });
+    await this.#rearm();
 
-    return { ok: true }
+    return { ok: true };
   }
 
   // --- management API (src/management) -------------------------------------------------------------------------
 
   /** Panel entries of all stored auth files (no secrets). Config API keys are not listed. */
   listCredentialEntries(): WireJsonObject[] {
-    const now = Date.now()
+    const now = Date.now();
 
     return this.#pool
       .entries()
       .filter(({ credential }) => credential.source === "file")
-      .map(({ credential, state }) => buildCredentialEntry(credential, state, now))
+      .map(({ credential, state }) => buildCredentialEntry(credential, state, now));
   }
 
   /** The stored auth file verbatim, for download. */
   getCredentialFile(name: string): WireJsonObject | undefined {
-    return this.#pool.refreshTarget(name)?.credential.metadata
+    return this.#pool.refreshTarget(name)?.credential.metadata;
   }
 
   /** Edits fields of a stored auth file (`PATCH /credentials/fields`); see `field-patch.ts`. */
-  async patchCredentialFields(ref: CredentialRef, fields: WireJsonObject): Promise<CredentialMutation> {
-    const target = findCredential(this.#pool.entries(), ref)
+  async patchCredentialFields(
+    ref: CredentialRef,
+    fields: WireJsonObject,
+  ): Promise<CredentialMutation> {
+    const target = findCredential(this.#pool.entries(), ref);
 
     if (target === undefined || target.credential.source !== "file") {
-      return { ok: false, error: "not_found", message: "auth file not found" }
+      return { ok: false, error: "not_found", message: "auth file not found" };
     }
 
-    const patched = applyFieldPatch(target.credential.metadata, fields)
+    const patched = applyFieldPatch(target.credential.metadata, fields);
 
-    if (!patched.ok) return { ok: false, error: "invalid", message: patched.message }
-    this.#pool.commitRefresh(target.credential.id, { metadata: patched.metadata })
-    await this.#rearm()
+    if (!patched.ok) return { ok: false, error: "invalid", message: patched.message };
+    this.#pool.commitRefresh(target.credential.id, { metadata: patched.metadata });
+    await this.#rearm();
 
-    return { ok: true, id: target.credential.id }
+    return { ok: true, id: target.credential.id };
   }
 
   /** Enables/disables a credential addressed by file name and/or `auth_index`. */
-  async setCredentialDisabledByRef(ref: CredentialRef, disabled: boolean): Promise<SetDisabledResult> {
-    const target = findCredential(this.#pool.entries(), ref)
+  async setCredentialDisabledByRef(
+    ref: CredentialRef,
+    disabled: boolean,
+  ): Promise<SetDisabledResult> {
+    const target = findCredential(this.#pool.entries(), ref);
 
-    if (target === undefined) return { ok: false, error: "not_found" }
+    if (target === undefined) return { ok: false, error: "not_found" };
 
-    return await this.setCredentialDisabled(target.credential.id, disabled)
+    return await this.setCredentialDisabled(target.credential.id, disabled);
   }
 
   /** Clears quota/cooldown state (`POST /routing/cooldown/reset`). */
   resetCredentialCooldown(
-    ref: CredentialRef
+    ref: CredentialRef,
   ):
     | { readonly ok: true; readonly authIndex: string; readonly models: ReadonlyArray<string> }
     | { readonly ok: false } {
-    const target = findCredential(this.#pool.entries(), ref)
-    const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id)
+    const target = findCredential(this.#pool.entries(), ref);
+    const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id);
 
     return target === undefined || reset === undefined
       ? { ok: false }
-      : { ok: true, authIndex: authIndexOf(target.credential.id), models: reset.models }
+      : { ok: true, authIndex: authIndexOf(target.credential.id), models: reset.models };
   }
 
   /** Manual refresh of one auth file (`POST /credentials/refresh`). */
   async refreshCredential(ref: CredentialRef): Promise<RefreshOneResult> {
-    const target = findCredential(this.#pool.entries(), ref)
+    const target = findCredential(this.#pool.entries(), ref);
 
-    if (target === undefined || target.credential.source !== "file") return { ok: false, error: "not_found" }
-    const id = target.credential.id
-    const result = await this.#refresh.refreshNow(id, { force: true })
+    if (target === undefined || target.credential.source !== "file")
+      return { ok: false, error: "not_found" };
+    const id = target.credential.id;
+    const result = await this.#refresh.refreshNow(id, { force: true });
 
     if (!result.ok && result.error.code !== "not_refreshable") {
-      return { ok: false, error: "refresh_failed", message: result.error.message }
+      return { ok: false, error: "refresh_failed", message: result.error.message };
     }
 
-    const current = this.#pool.entry(id)
+    const current = this.#pool.entry(id);
 
-    if (current === undefined) return { ok: false, error: "not_found" }
+    if (current === undefined) return { ok: false, error: "not_found" };
 
     return {
       ok: true,
       refreshed: result.ok && result.refreshed,
-      entry: buildCredentialEntry(current.credential, current.state, Date.now())
-    }
+      entry: buildCredentialEntry(current.credential, current.state, Date.now()),
+    };
   }
 
   /** Manual refresh of every refreshable auth file (`all=true`). */
@@ -400,19 +439,20 @@ export class ControlPlane extends DurableObject<Env> {
     const results = await Promise.all(
       this.#pool.refreshTargets().map(async ({ credential }) => ({
         id: credential.id,
-        result: await this.#refresh.refreshNow(credential.id, { force: true })
-      }))
-    )
+        result: await this.#refresh.refreshNow(credential.id, { force: true }),
+      })),
+    );
 
-    const items: RefreshAllItem[] = []
+    const items: RefreshAllItem[] = [];
 
     for (const { id, result } of results) {
-      if (result.ok) items.push({ id, success: true })
+      if (result.ok) items.push({ id, success: true });
       // Credentials without a refresh token are not part of a refresh run.
-      else if (result.error.code !== "not_refreshable") items.push({ id, success: false, error: result.error.message })
+      else if (result.error.code !== "not_refreshable")
+        items.push({ id, success: false, error: result.error.message });
     }
 
-    return items
+    return items;
   }
 
   /**
@@ -420,51 +460,51 @@ export class ControlPlane extends DurableObject<Env> {
    * credential or the API key of a config credential.
    */
   async resolveApiCallToken(authIndex: string): Promise<ApiCallTokenResult> {
-    const target = findCredential(this.#pool.entries(), { authIndex })
+    const target = findCredential(this.#pool.entries(), { authIndex });
 
-    if (target === undefined) return { ok: false, error: "not_found" }
-    let credential: Pick<Credential, "metadata" | "attributes"> = target.credential
+    if (target === undefined) return { ok: false, error: "not_found" };
+    let credential: Pick<Credential, "metadata" | "attributes"> = target.credential;
 
     if (target.credential.source === "file") {
-      const fresh = await this.#refresh.ensureFresh(target.credential.id)
+      const fresh = await this.#refresh.ensureFresh(target.credential.id);
 
-      if (!fresh.ok) return { ok: false, error: "refresh_failed" }
-      credential = fresh.credential
+      if (!fresh.ok) return { ok: false, error: "refresh_failed" };
+      credential = fresh.credential;
     }
 
-    const token = apiCallToken(credential)
+    const token = apiCallToken(credential);
 
-    return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token }
+    return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token };
   }
 
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------
 
   /** Starts a provider login (`GET /oauth/auth-url`): returns the URL to open and the session `state`. */
   oauthStart(input: StartInput): Promise<StartResult> {
-    return this.#runOAuth(this.#oauth.start(input))
+    return this.#runOAuth(this.#oauth.start(input));
   }
 
   /** `GET /oauth/status`: pending/ok/error; for device logins each call advances the upstream poll when due. */
   oauthStatus(state: string): Promise<StatusResult> {
-    return this.#runOAuth(this.#oauth.status(state))
+    return this.#runOAuth(this.#oauth.status(state));
   }
 
   /** Completes a callback login from a pasted/redirected `code` + `state` (management and public browser routes). */
   oauthCallback(input: CallbackInput): Promise<CallbackResult> {
-    return this.#runOAuth(this.#oauth.callback(input))
+    return this.#runOAuth(this.#oauth.callback(input));
   }
 
   /** `DELETE /oauth/session`: cancels a pending login. */
   oauthCancel(state: string): Promise<{ readonly cancelled: boolean }> {
-    return Effect.runPromise(this.#oauth.cancel(state))
+    return Effect.runPromise(this.#oauth.cancel(state));
   }
 
   #runOAuth<A>(effect: Effect.Effect<A, never, HttpClient.HttpClient>): Promise<A> {
-    return Effect.runPromise(effect.pipe(Effect.provide(FetchHttpClient.layer)))
+    return Effect.runPromise(effect.pipe(Effect.provide(FetchHttpClient.layer)));
   }
 
   /** Credential changes move refresh deadlines; a failure to re-arm must never fail the management call. */
   async #rearm(): Promise<void> {
-    await this.#refresh.rearm().catch(() => undefined)
+    await this.#refresh.rearm().catch(() => undefined);
   }
 }

@@ -16,83 +16,83 @@ import type {
   ModelEntry,
   OAuthModelAlias,
   OAuthModelSetting,
-  ThinkingSupport as ConfigThinking
-} from "../config/schema.ts"
-import { matchWildcard, parseModelSuffix } from "../credentials/selection/model-name.ts"
+  ThinkingSupport as ConfigThinking,
+} from "../config/schema.ts";
+import { matchWildcard, parseModelSuffix } from "../credentials/selection/model-name.ts";
 import {
   devinModels,
   type ModelCatalogs,
   lookupStaticModelInfo,
   lookupStaticModelInfoByChannel,
   sectionModels,
-  type Section
-} from "./catalog.ts"
-import { applyAntigravityHints } from "./antigravity-hints.ts"
-import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts"
-import type { ModelSource } from "./source.ts"
+  type Section,
+} from "./catalog.ts";
+import { applyAntigravityHints } from "./antigravity-hints.ts";
+import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts";
+import type { ModelSource } from "./source.ts";
 
-type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export interface AssemblyOptions {
-  readonly config: Pick<Config, "oauth" | "routing">
-  readonly catalogs: ModelCatalogs
+  readonly config: Pick<Config, "oauth" | "routing">;
+  readonly catalogs: ModelCatalogs;
   /** Unix seconds used as `created` of config-defined models (Go uses `time.Now().Unix()`). */
-  readonly nowSeconds: number
+  readonly nowSeconds: number;
 }
 
 export interface AssembledModels {
   /** Registry provider key (executor key). */
-  readonly provider: string
+  readonly provider: string;
   /** Models in registration order; duplicates are kept (they count as separate registrations, like Go). */
-  readonly models: ReadonlyArray<ModelInfo>
+  readonly models: ReadonlyArray<ModelInfo>;
 }
 
 // --- config model builders -----------------------------------------------------------------------------------------
 
 /** `NormalizeThinkingSupport`. */
 export const normalizeThinkingSupport = (
-  raw: ConfigThinking | ThinkingSupport | undefined
+  raw: ConfigThinking | ThinkingSupport | undefined,
 ): ThinkingSupport | undefined => {
-  if (raw === undefined) return undefined
+  if (raw === undefined) return undefined;
 
   const source = raw as {
-    min?: number
-    max?: number
-    "zero-allowed"?: boolean
-    "dynamic-allowed"?: boolean
-    zeroAllowed?: boolean
-    dynamicAllowed?: boolean
-    levels?: readonly string[]
-  }
+    min?: number;
+    max?: number;
+    "zero-allowed"?: boolean;
+    "dynamic-allowed"?: boolean;
+    zeroAllowed?: boolean;
+    dynamicAllowed?: boolean;
+    levels?: readonly string[];
+  };
 
-  const out: Mutable<ThinkingSupport> = {}
+  const out: Mutable<ThinkingSupport> = {};
 
-  if (source.min !== undefined) out.min = source.min
+  if (source.min !== undefined) out.min = source.min;
 
-  if (source.max !== undefined) out.max = source.max
-  let zeroAllowed = source["zero-allowed"] ?? source.zeroAllowed
-  let dynamicAllowed = source["dynamic-allowed"] ?? source.dynamicAllowed
-  const levels: string[] = []
+  if (source.max !== undefined) out.max = source.max;
+  let zeroAllowed = source["zero-allowed"] ?? source.zeroAllowed;
+  let dynamicAllowed = source["dynamic-allowed"] ?? source.dynamicAllowed;
+  const levels: string[] = [];
 
   for (const value of source.levels ?? []) {
-    const level = value.trim().toLowerCase()
+    const level = value.trim().toLowerCase();
 
-    if (level === "") continue
+    if (level === "") continue;
 
-    if (level === "none") zeroAllowed = true
-    else if (level === "auto") dynamicAllowed = true
+    if (level === "none") zeroAllowed = true;
+    else if (level === "auto") dynamicAllowed = true;
 
-    if (!levels.includes(level)) levels.push(level)
+    if (!levels.includes(level)) levels.push(level);
   }
 
-  if (zeroAllowed !== undefined) out.zeroAllowed = zeroAllowed
+  if (zeroAllowed !== undefined) out.zeroAllowed = zeroAllowed;
 
-  if (dynamicAllowed !== undefined) out.dynamicAllowed = dynamicAllowed
+  if (dynamicAllowed !== undefined) out.dynamicAllowed = dynamicAllowed;
 
-  if (levels.length > 0) out.levels = levels
+  if (levels.length > 0) out.levels = levels;
 
-  return out
-}
+  return out;
+};
 
 /** `buildConfiguredModelInfo`. */
 const buildConfiguredModelInfo = (
@@ -101,13 +101,13 @@ const buildConfiguredModelInfo = (
   type: string,
   created: number,
   fallbackDisplayName: string,
-  userDefined: boolean
+  userDefined: boolean,
 ): Mutable<ModelInfo> | undefined => {
-  const name = entry.name.trim()
-  const alias = (entry.alias ?? "").trim() || name
+  const name = entry.name.trim();
+  const alias = (entry.alias ?? "").trim() || name;
 
-  if (alias === "") return undefined
-  const displayName = (entry["display-name"] ?? "").trim() || fallbackDisplayName || alias
+  if (alias === "") return undefined;
+  const displayName = (entry["display-name"] ?? "").trim() || fallbackDisplayName || alias;
 
   const info: Mutable<ModelInfo> = {
     id: alias,
@@ -117,34 +117,34 @@ const buildConfiguredModelInfo = (
     ownedBy,
     type,
     displayName,
-    userDefined
-  }
+    userDefined,
+  };
 
-  const maxContextLength = entry["max-context-length"] ?? 0
+  const maxContextLength = entry["max-context-length"] ?? 0;
 
   if (maxContextLength > 0) {
-    info.contextLength = maxContextLength
-    info.maxContextLength = maxContextLength
+    info.contextLength = maxContextLength;
+    info.maxContextLength = maxContextLength;
   }
 
-  if (entry["is-compat"] === true) info.isCompat = true
+  if (entry["is-compat"] === true) info.isCompat = true;
 
-  return info
-}
+  return info;
+};
 
 /** `modelconfig.ResolveModelInfo(...).Thinking`: static capabilities of the base name, overridden by the config. */
 const resolveThinking = (
   catalogs: ModelCatalogs,
   name: string,
-  support: ConfigThinking | undefined
+  support: ConfigThinking | undefined,
 ): ThinkingSupport | undefined => {
-  const base = parseModelSuffix(name.trim()).modelName.trim()
-  const configured = normalizeThinkingSupport(support)
+  const base = parseModelSuffix(name.trim()).modelName.trim();
+  const configured = normalizeThinkingSupport(support);
 
-  if (configured !== undefined) return configured
+  if (configured !== undefined) return configured;
 
-  return lookupStaticModelInfo(catalogs, base)?.thinking
-}
+  return lookupStaticModelInfo(catalogs, base)?.thinking;
+};
 
 /** `buildConfigModels`: de-duplicated by lower-cased alias. */
 const buildConfigModels = (
@@ -152,341 +152,381 @@ const buildConfigModels = (
   ownedBy: string,
   type: string,
   channel: string,
-  options: AssemblyOptions
+  options: AssemblyOptions,
 ): ModelInfo[] => {
-  const out: ModelInfo[] = []
-  const seen = new Set<string>()
+  const out: ModelInfo[] = [];
+  const seen = new Set<string>();
 
   for (const entry of entries) {
-    const name = entry.name.trim()
-    const info = buildConfiguredModelInfo(entry, ownedBy, type, options.nowSeconds, name, true)
+    const name = entry.name.trim();
+    const info = buildConfiguredModelInfo(entry, ownedBy, type, options.nowSeconds, name, true);
 
-    if (info === undefined) continue
-    const key = info.id.toLowerCase()
+    if (info === undefined) continue;
+    const key = info.id.toLowerCase();
 
-    if (seen.has(key)) continue
-    seen.add(key)
+    if (seen.has(key)) continue;
+    seen.add(key);
 
-    if (entry.thinking !== undefined) info.explicitThinking = true
-    const thinking = resolveThinking(options.catalogs, name, entry.thinking)
+    if (entry.thinking !== undefined) info.explicitThinking = true;
+    const thinking = resolveThinking(options.catalogs, name, entry.thinking);
 
-    if (thinking !== undefined) info.thinking = thinking
-    const native = lookupStaticModelInfoByChannel(options.catalogs, name, channel)?.nativeCapabilities
+    if (thinking !== undefined) info.thinking = thinking;
+    const native = lookupStaticModelInfoByChannel(
+      options.catalogs,
+      name,
+      channel,
+    )?.nativeCapabilities;
 
-    if (native !== undefined) info.nativeCapabilities = structuredClone(native)
-    out.push(info)
+    if (native !== undefined) info.nativeCapabilities = structuredClone(native);
+    out.push(info);
   }
 
-  return out
-}
+  return out;
+};
 
 const normalizeModalities = (raw: ReadonlyArray<string> | undefined): string[] | undefined => {
-  const out: string[] = []
+  const out: string[] = [];
 
   for (const item of raw ?? []) {
-    const modality = item.trim().toLowerCase()
+    const modality = item.trim().toLowerCase();
 
-    if (modality !== "" && !out.includes(modality)) out.push(modality)
+    if (modality !== "" && !out.includes(modality)) out.push(modality);
   }
 
-  return out.length === 0 ? undefined : out
-}
+  return out.length === 0 ? undefined : out;
+};
 
 /** `buildOpenAICompatibilityConfigModels`: aliases may repeat (an internal model pool), nothing is de-duplicated. */
-const buildCompatModels = (entries: ReadonlyArray<ModelEntry>, groupName: string, nowSeconds: number): ModelInfo[] => {
-  const out: ModelInfo[] = []
+const buildCompatModels = (
+  entries: ReadonlyArray<ModelEntry>,
+  groupName: string,
+  nowSeconds: number,
+): ModelInfo[] => {
+  const out: ModelInfo[] = [];
 
   for (const entry of entries) {
-    const image = entry.image === true
-    const type = image ? "openai-image" : "openai-compatibility"
-    const info = buildConfiguredModelInfo(entry, groupName, type, nowSeconds, (entry.alias ?? "").trim(), false)
+    const image = entry.image === true;
+    const type = image ? "openai-image" : "openai-compatibility";
+    const info = buildConfiguredModelInfo(
+      entry,
+      groupName,
+      type,
+      nowSeconds,
+      (entry.alias ?? "").trim(),
+      false,
+    );
 
-    if (info === undefined) continue
-    let support: ConfigThinking | undefined = entry.thinking
+    if (info === undefined) continue;
+    let support: ConfigThinking | undefined = entry.thinking;
 
-    if (support === undefined && !image) support = { levels: ["low", "medium", "high"] }
+    if (support === undefined && !image) support = { levels: ["low", "medium", "high"] };
 
-    if (entry.thinking !== undefined) info.explicitThinking = true
+    if (entry.thinking !== undefined) info.explicitThinking = true;
 
-    if ((entry["input-modalities"] ?? []).length > 0) info.explicitInputModalities = true
-    const thinking = normalizeThinkingSupport(support)
+    if ((entry["input-modalities"] ?? []).length > 0) info.explicitInputModalities = true;
+    const thinking = normalizeThinkingSupport(support);
 
-    if (thinking !== undefined) info.thinking = thinking
-    const input = normalizeModalities(entry["input-modalities"])
+    if (thinking !== undefined) info.thinking = thinking;
+    const input = normalizeModalities(entry["input-modalities"]);
 
-    if (input !== undefined) info.supportedInputModalities = input
-    const output = normalizeModalities(entry["output-modalities"])
+    if (input !== undefined) info.supportedInputModalities = input;
+    const output = normalizeModalities(entry["output-modalities"]);
 
-    if (output !== undefined) info.supportedOutputModalities = output
-    out.push(info)
+    if (output !== undefined) info.supportedOutputModalities = output;
+    out.push(info);
   }
 
-  return out
-}
+  return out;
+};
 
 /** `buildCodexConfigModels`. */
-const buildCodexConfigModels = (entries: ReadonlyArray<ModelEntry>, options: AssemblyOptions): ModelInfo[] => {
+const buildCodexConfigModels = (
+  entries: ReadonlyArray<ModelEntry>,
+  options: AssemblyOptions,
+): ModelInfo[] => {
   if (entries.length === 0) {
     return sectionModels(options.catalogs, "codex-pro").map((model) => ({
       ...model,
-      supportConfigurationUpdate: false
-    }))
+      supportConfigurationUpdate: false,
+    }));
   }
 
-  const models = buildConfigModels(entries, "openai", "openai", "codex", options) as Mutable<ModelInfo>[]
-  const displayNames = new Map<string, string>()
-  const configurationUpdates = new Map<string, boolean>()
-  const seen = new Set<string>()
+  const models = buildConfigModels(
+    entries,
+    "openai",
+    "openai",
+    "codex",
+    options,
+  ) as Mutable<ModelInfo>[];
+  const displayNames = new Map<string, string>();
+  const configurationUpdates = new Map<string, boolean>();
+  const seen = new Set<string>();
 
   for (const entry of entries) {
-    const alias = (entry.alias ?? "").trim() || entry.name.trim()
+    const alias = (entry.alias ?? "").trim() || entry.name.trim();
 
-    if (alias === "") continue
-    const key = alias.toLowerCase()
+    if (alias === "") continue;
+    const key = alias.toLowerCase();
 
-    if (seen.has(key)) continue
-    seen.add(key)
-    configurationUpdates.set(key, entry["support-configuration-update"] === true)
-    const displayName = (entry["display-name"] ?? "").trim()
+    if (seen.has(key)) continue;
+    seen.add(key);
+    configurationUpdates.set(key, entry["support-configuration-update"] === true);
+    const displayName = (entry["display-name"] ?? "").trim();
 
-    if (displayName !== "") displayNames.set(key, displayName)
+    if (displayName !== "") displayNames.set(key, displayName);
   }
 
   for (const model of models) {
-    const key = model.id.toLowerCase()
-    const displayName = displayNames.get(key)
+    const key = model.id.toLowerCase();
+    const displayName = displayNames.get(key);
 
-    if (displayName !== undefined) model.displayName = displayName
-    model.supportConfigurationUpdate = configurationUpdates.get(key) ?? false
+    if (displayName !== undefined) model.displayName = displayName;
+    model.supportConfigurationUpdate = configurationUpdates.get(key) ?? false;
   }
 
-  return models
-}
+  return models;
+};
 
 // --- filters and rewrites ------------------------------------------------------------------------------------------
 
 /** `applyExcludedModels`: case-insensitive wildcard patterns against the lower-cased id. */
-export const applyExcludedModels = (models: ReadonlyArray<ModelInfo>, excluded: ReadonlyArray<string>): ModelInfo[] => {
-  const patterns = excluded.map((item) => item.trim().toLowerCase()).filter((pattern) => pattern !== "")
+export const applyExcludedModels = (
+  models: ReadonlyArray<ModelInfo>,
+  excluded: ReadonlyArray<string>,
+): ModelInfo[] => {
+  const patterns = excluded
+    .map((item) => item.trim().toLowerCase())
+    .filter((pattern) => pattern !== "");
 
-  if (models.length === 0 || patterns.length === 0) return [...models]
+  if (models.length === 0 || patterns.length === 0) return [...models];
 
   return models.filter((model) => {
-    const id = model.id.trim().toLowerCase()
+    const id = model.id.trim().toLowerCase();
 
-    return !patterns.some((pattern) => matchWildcard(pattern, id))
-  })
-}
+    return !patterns.some((pattern) => matchWildcard(pattern, id));
+  });
+};
 
 /** `applyModelPrefixes`: adds `prefix/<id>`; the plain id stays unless `force-model-prefix` is set. */
 export const applyModelPrefixes = (
   models: ReadonlyArray<ModelInfo>,
   prefix: string | undefined,
-  forceModelPrefix: boolean
+  forceModelPrefix: boolean,
 ): ModelInfo[] => {
-  const trimmed = (prefix ?? "").trim()
+  const trimmed = (prefix ?? "").trim();
 
-  if (trimmed === "" || models.length === 0) return [...models]
-  const out: ModelInfo[] = []
-  const seen = new Set<string>()
+  if (trimmed === "" || models.length === 0) return [...models];
+  const out: ModelInfo[] = [];
+  const seen = new Set<string>();
 
   const add = (model: ModelInfo): void => {
-    const id = model.id.trim()
+    const id = model.id.trim();
 
-    if (id === "" || seen.has(id)) return
-    seen.add(id)
-    out.push(model)
-  }
+    if (id === "" || seen.has(id)) return;
+    seen.add(id);
+    out.push(model);
+  };
 
   for (const model of models) {
-    const baseId = model.id.trim()
+    const baseId = model.id.trim();
 
-    if (baseId === "") continue
+    if (baseId === "") continue;
 
-    if (!forceModelPrefix || trimmed === baseId) add(model)
-    const clone = cloneModelInfo(model) as Mutable<ModelInfo>
-    clone.id = `${trimmed}/${baseId}`
+    if (!forceModelPrefix || trimmed === baseId) add(model);
+    const clone = cloneModelInfo(model) as Mutable<ModelInfo>;
+    clone.id = `${trimmed}/${baseId}`;
 
-    if (clone.metadataModelId === undefined || clone.metadataModelId === "") clone.metadataModelId = baseId
-    add(clone)
+    if (clone.metadataModelId === undefined || clone.metadataModelId === "")
+      clone.metadataModelId = baseId;
+    add(clone);
   }
 
-  return out
-}
+  return out;
+};
 
 /** `OAuthModelAliasChannel`: the `oauth.model-alias` / `oauth.settings` key; empty = not applicable. */
 export const oauthModelAliasChannel = (provider: string, authKind: string | undefined): string => {
-  const kind = (authKind ?? "").trim().toLowerCase()
+  const kind = (authKind ?? "").trim().toLowerCase();
 
-  if (kind === "apikey" || kind === "api_key" || kind === "api-key") return ""
-  const key = provider.trim().toLowerCase()
+  if (kind === "apikey" || kind === "api_key" || kind === "api-key") return "";
+  const key = provider.trim().toLowerCase();
 
-  return key === "gemini" ? "" : key
-}
+  return key === "gemini" ? "" : key;
+};
 
 /** `rewriteModelInfoName`. */
 const rewriteName = (name: string, oldId: string, newId: string): string => {
-  const trimmed = name.trim()
-  const from = oldId.trim()
-  const to = newId.trim()
+  const trimmed = name.trim();
+  const from = oldId.trim();
+  const to = newId.trim();
 
-  if (trimmed === "" || from === "" || to === "" || from.toLowerCase() === to.toLowerCase()) return name
+  if (trimmed === "" || from === "" || to === "" || from.toLowerCase() === to.toLowerCase())
+    return name;
 
-  if (trimmed.toLowerCase() === from.toLowerCase()) return to
+  if (trimmed.toLowerCase() === from.toLowerCase()) return to;
 
-  if (trimmed.endsWith(`/${from}`)) return trimmed.slice(0, trimmed.length - from.length) + to
+  if (trimmed.endsWith(`/${from}`)) return trimmed.slice(0, trimmed.length - from.length) + to;
 
-  if (trimmed === `models/${from}`) return `models/${to}`
+  if (trimmed === `models/${from}`) return `models/${to}`;
 
-  return name
-}
+  return name;
+};
 
 /** `oauthModelAliasesForAuth`: per-credential aliases first, then the global channel list, de-duplicated by alias. */
 const aliasesForSource = (
   config: Pick<Config, "oauth">,
   channel: string,
-  perCredential: ReadonlyArray<OAuthModelAlias>
+  perCredential: ReadonlyArray<OAuthModelAlias>,
 ): ReadonlyArray<OAuthModelAlias> => {
-  const global = config.oauth["model-alias"][channel] ?? []
+  const global = config.oauth["model-alias"][channel] ?? [];
 
-  if (global.length === 0) return perCredential
+  if (global.length === 0) return perCredential;
 
-  if (perCredential.length === 0) return global
-  const out: OAuthModelAlias[] = []
-  const seen = new Set<string>()
+  if (perCredential.length === 0) return global;
+  const out: OAuthModelAlias[] = [];
+  const seen = new Set<string>();
 
   for (const entry of [...perCredential, ...global]) {
-    const alias = entry.alias.trim()
+    const alias = entry.alias.trim();
 
-    if (alias === "" || seen.has(alias.toLowerCase())) continue
-    seen.add(alias.toLowerCase())
-    out.push(entry)
+    if (alias === "" || seen.has(alias.toLowerCase())) continue;
+    seen.add(alias.toLowerCase());
+    out.push(entry);
   }
 
-  return out
-}
+  return out;
+};
 
 /** `applyOAuthModelAliasEntries`. */
 export const applyOAuthModelAliasEntries = (
   aliases: ReadonlyArray<OAuthModelAlias>,
-  models: ReadonlyArray<ModelInfo>
+  models: ReadonlyArray<ModelInfo>,
 ): ModelInfo[] => {
   interface Forward {
-    readonly alias: string
-    readonly displayName: string
-    readonly fork: boolean
+    readonly alias: string;
+    readonly displayName: string;
+    readonly fork: boolean;
   }
 
-  const forward = new Map<string, Forward[]>()
+  const forward = new Map<string, Forward[]>();
 
   for (const entry of aliases) {
-    const name = entry.name.trim()
-    const alias = entry.alias.trim()
+    const name = entry.name.trim();
+    const alias = entry.alias.trim();
 
-    if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue
-    const key = name.toLowerCase()
-    const list = forward.get(key) ?? []
-    list.push({ alias, displayName: (entry["display-name"] ?? "").trim(), fork: entry.fork === true })
-    forward.set(key, list)
+    if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue;
+    const key = name.toLowerCase();
+    const list = forward.get(key) ?? [];
+    list.push({
+      alias,
+      displayName: (entry["display-name"] ?? "").trim(),
+      fork: entry.fork === true,
+    });
+    forward.set(key, list);
   }
 
-  if (forward.size === 0) return [...models]
+  if (forward.size === 0) return [...models];
 
-  const out: ModelInfo[] = []
-  const seen = new Set<string>()
+  const out: ModelInfo[] = [];
+  const seen = new Set<string>();
 
   for (const model of models) {
-    const id = model.id.trim()
+    const id = model.id.trim();
 
-    if (id === "") continue
-    const key = id.toLowerCase()
-    const entries = forward.get(key)
+    if (id === "") continue;
+    const key = id.toLowerCase();
+    const entries = forward.get(key);
 
     if (entries === undefined || entries.length === 0) {
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push(model)
-      continue
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(model);
+      continue;
     }
 
-    const keepOriginal = entries.some((entry) => entry.fork)
+    const keepOriginal = entries.some((entry) => entry.fork);
 
     if (keepOriginal && !seen.has(key)) {
-      seen.add(key)
-      out.push(model)
+      seen.add(key);
+      out.push(model);
     }
 
-    let addedAlias = false
+    let addedAlias = false;
 
     for (const entry of entries) {
-      const mappedId = entry.alias.trim()
+      const mappedId = entry.alias.trim();
 
-      if (mappedId === "" || mappedId.toLowerCase() === key) continue
-      const aliasKey = mappedId.toLowerCase()
+      if (mappedId === "" || mappedId.toLowerCase() === key) continue;
+      const aliasKey = mappedId.toLowerCase();
 
-      if (seen.has(aliasKey)) continue
-      seen.add(aliasKey)
-      const clone = cloneModelInfo(model) as Mutable<ModelInfo>
-      clone.id = mappedId
+      if (seen.has(aliasKey)) continue;
+      seen.add(aliasKey);
+      const clone = cloneModelInfo(model) as Mutable<ModelInfo>;
+      clone.id = mappedId;
       clone.metadataModelId =
-        model.metadataModelId !== undefined && model.metadataModelId !== "" ? model.metadataModelId : id
+        model.metadataModelId !== undefined && model.metadataModelId !== ""
+          ? model.metadataModelId
+          : id;
 
-      if (entry.displayName !== "") clone.displayName = entry.displayName
+      if (entry.displayName !== "") clone.displayName = entry.displayName;
 
-      if (clone.name !== undefined && clone.name !== "") clone.name = rewriteName(clone.name, id, mappedId)
-      out.push(clone)
-      addedAlias = true
+      if (clone.name !== undefined && clone.name !== "")
+        clone.name = rewriteName(clone.name, id, mappedId);
+      out.push(clone);
+      addedAlias = true;
     }
 
     if (!keepOriginal && !addedAlias) {
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push(model)
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(model);
     }
   }
 
-  return out
-}
+  return out;
+};
 
 /** `config.ResolveOAuthModelSetting`: an alias match beats a name match; later entries win. */
 const resolveSetting = (
   settings: ReadonlyArray<OAuthModelSetting>,
-  model: ModelInfo
+  model: ModelInfo,
 ): OAuthModelSetting | undefined => {
-  const id = model.id.trim().toLowerCase()
-  const metaId = (model.metadataModelId ?? "").trim().toLowerCase()
-  const name = (model.name ?? "").trim().toLowerCase()
-  let aliasMatch: OAuthModelSetting | undefined
-  let nameMatch: OAuthModelSetting | undefined
+  const id = model.id.trim().toLowerCase();
+  const metaId = (model.metadataModelId ?? "").trim().toLowerCase();
+  const name = (model.name ?? "").trim().toLowerCase();
+  let aliasMatch: OAuthModelSetting | undefined;
+  let nameMatch: OAuthModelSetting | undefined;
 
   for (const entry of settings) {
-    const entryName = entry.name.trim().toLowerCase()
+    const entryName = entry.name.trim().toLowerCase();
 
-    if (entryName === "") continue
-    const entryAlias = (entry.alias ?? "").trim().toLowerCase()
+    if (entryName === "") continue;
+    const entryAlias = (entry.alias ?? "").trim().toLowerCase();
 
-    if (entryAlias !== "" && id !== "" && id === entryAlias) aliasMatch = entry
+    if (entryAlias !== "" && id !== "" && id === entryAlias) aliasMatch = entry;
     else if (
       (entryAlias === "" || entryAlias === id) &&
-      (id === entryName || (metaId !== "" && metaId === entryName) || (name !== "" && name === entryName))
+      (id === entryName ||
+        (metaId !== "" && metaId === entryName) ||
+        (name !== "" && name === entryName))
     ) {
-      nameMatch = entry
+      nameMatch = entry;
     }
   }
 
-  return aliasMatch ?? nameMatch
-}
+  return aliasMatch ?? nameMatch;
+};
 
 /** `applyOAuthSettingEntries`: `max-context-length` overrides the model's context length. */
 const applyOAuthSettings = (
   settings: ReadonlyArray<OAuthModelSetting>,
-  models: ReadonlyArray<ModelInfo>
+  models: ReadonlyArray<ModelInfo>,
 ): ModelInfo[] =>
   models.map((model) => {
-    const length = resolveSetting(settings, model)?.["max-context-length"] ?? 0
+    const length = resolveSetting(settings, model)?.["max-context-length"] ?? 0;
 
-    return length > 0 ? { ...model, contextLength: length, maxContextLength: length } : model
-  })
+    return length > 0 ? { ...model, contextLength: length, maxContextLength: length } : model;
+  });
 
 // --- assembly ------------------------------------------------------------------------------------------------------
 
@@ -496,15 +536,15 @@ const CODEX_TIERS: Readonly<Record<string, Section>> = {
   team: "codex-team",
   business: "codex-team",
   go: "codex-team",
-  free: "codex-free"
-}
+  free: "codex-free",
+};
 
 /** Base list of a non-compat credential, before aliases/settings/prefix; `undefined` = unsupported provider. */
 const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] | undefined => {
-  const { catalogs } = options
-  const provider = source.provider.trim().toLowerCase()
-  const configured = source.models ?? []
-  const excluded = source.excludedModels
+  const { catalogs } = options;
+  const provider = source.provider.trim().toLowerCase();
+  const configured = source.models ?? [];
+  const excluded = source.excludedModels;
 
   switch (provider) {
     case "gemini":
@@ -513,73 +553,76 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
         configured.length > 0
           ? buildConfigModels(configured, "google", "gemini", "gemini", options)
           : sectionModels(catalogs, "gemini"),
-        excluded
-      )
+        excluded,
+      );
     case "vertex":
       return applyExcludedModels(
         configured.length > 0
           ? buildConfigModels(configured, "google", "vertex", "vertex", options)
           : sectionModels(catalogs, "vertex"),
-        excluded
-      )
+        excluded,
+      );
     case "aistudio":
-      return applyExcludedModels(sectionModels(catalogs, "aistudio"), excluded)
+      return applyExcludedModels(sectionModels(catalogs, "aistudio"), excluded);
     case "antigravity":
       return applyExcludedModels(
         applyAntigravityHints(sectionModels(catalogs, "antigravity"), source.antigravityHints),
-        excluded
-      )
+        excluded,
+      );
     case "claude":
       return applyExcludedModels(
         configured.length > 0
           ? buildConfigModels(configured, "anthropic", "claude", "claude", options)
           : sectionModels(catalogs, "claude"),
-        excluded
-      )
+        excluded,
+      );
     case "codex": {
       if (source.authKind === "apikey")
-        return applyExcludedModels(buildCodexConfigModels(configured, options), excluded)
-      const tier = CODEX_TIERS[(source.planType ?? "").toLowerCase()] ?? "codex-pro"
+        return applyExcludedModels(buildCodexConfigModels(configured, options), excluded);
+      const tier = CODEX_TIERS[(source.planType ?? "").toLowerCase()] ?? "codex-pro";
 
-      return applyExcludedModels(sectionModels(catalogs, tier), excluded)
+      return applyExcludedModels(sectionModels(catalogs, tier), excluded);
     }
 
     case "kimi":
     case "kimi-ai":
     case "kimi.ai":
     case "kimi.com":
-      return applyExcludedModels(sectionModels(catalogs, "kimi"), excluded)
+      return applyExcludedModels(sectionModels(catalogs, "kimi"), excluded);
     case "xai":
       return applyExcludedModels(
         configured.length > 0
           ? buildConfigModels(configured, "xai", "xai", "xai", options)
           : sectionModels(catalogs, "xai"),
-        excluded
-      )
+        excluded,
+      );
     case "devin":
-      return applyExcludedModels(devinModels(catalogs), excluded)
+      return applyExcludedModels(devinModels(catalogs), excluded);
     case "meta":
       return applyExcludedModels(
         configured.length > 0
           ? buildConfigModels(configured, "meta", "meta", "meta", options)
           : sectionModels(catalogs, "meta"),
-        excluded
-      )
+        excluded,
+      );
     default:
-      return undefined
+      return undefined;
   }
-}
+};
 
 /** `registerResolvedModelsForAuth`: trims ids and drops blank ones. */
-const finalize = (provider: string, models: ReadonlyArray<ModelInfo>): AssembledModels | undefined => {
+const finalize = (
+  provider: string,
+  models: ReadonlyArray<ModelInfo>,
+): AssembledModels | undefined => {
   const normalized = models.flatMap((model) => {
-    const id = model.id.trim()
+    const id = model.id.trim();
 
-    return id === "" ? [] : [id === model.id ? model : { ...model, id }]
-  })
+    return id === "" ? [] : [id === model.id ? model : { ...model, id }];
+  });
 
-  return normalized.length === 0 ? undefined : { provider, models: normalized }
-}
+  return normalized.length === 0 ? undefined : { provider, models: normalized };
+};
 
 /**
  * The models a credential registers, or `undefined` when it registers none (disabled, unknown provider, or every
@@ -587,36 +630,36 @@ const finalize = (provider: string, models: ReadonlyArray<ModelInfo>): Assembled
  */
 export const assembleCredentialModels = (
   source: ModelSource,
-  options: AssemblyOptions
+  options: AssemblyOptions,
 ): AssembledModels | undefined => {
-  if (source.disabled) return undefined
-  const forcePrefix = options.config.routing["force-model-prefix"]
+  if (source.disabled) return undefined;
+  const forcePrefix = options.config.routing["force-model-prefix"];
 
   if (source.compat) {
-    const models = buildCompatModels(source.models ?? [], source.label, options.nowSeconds)
+    const models = buildCompatModels(source.models ?? [], source.label, options.nowSeconds);
 
-    return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix))
+    return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix));
   }
 
-  const base = baseModels(source, options)
+  const base = baseModels(source, options);
 
-  if (base === undefined || base.length === 0) return undefined
-  const channel = oauthModelAliasChannel(source.provider, source.authKind)
-  let models = base
+  if (base === undefined || base.length === 0) return undefined;
+  const channel = oauthModelAliasChannel(source.provider, source.authKind);
+  let models = base;
 
   if (channel !== "") {
-    const aliases = aliasesForSource(options.config, channel, source.modelAliases)
+    const aliases = aliasesForSource(options.config, channel, source.modelAliases);
 
-    if (aliases.length > 0) models = applyOAuthModelAliasEntries(aliases, models)
+    if (aliases.length > 0) models = applyOAuthModelAliasEntries(aliases, models);
   }
 
-  if (models.length === 0) return undefined
+  if (models.length === 0) return undefined;
 
   if (channel !== "") {
-    const settings = options.config.oauth.settings[channel] ?? []
+    const settings = options.config.oauth.settings[channel] ?? [];
 
-    if (settings.length > 0) models = applyOAuthSettings(settings, models)
+    if (settings.length > 0) models = applyOAuthSettings(settings, models);
   }
 
-  return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix))
-}
+  return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix));
+};

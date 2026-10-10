@@ -10,96 +10,106 @@
  * round-robin rotation of model pools (the conductor slice owns the rotation cursor; candidates are returned in
  * configuration order).
  */
-import type { Config, OpenAICompatGroup } from "../config/schema.ts"
-import { resolveClaudeKeyConfig } from "./claude/credentials.ts"
-import type { CredentialSnapshot } from "./picker.ts"
-import { parseSuffix, preserveSuffix } from "./suffix.ts"
+import type { Config, OpenAICompatGroup } from "../config/schema.ts";
+import { resolveClaudeKeyConfig } from "./claude/credentials.ts";
+import type { CredentialSnapshot } from "./picker.ts";
+import { parseSuffix, preserveSuffix } from "./suffix.ts";
 
-const OPENAI_COMPATIBLE_PREFIX = "openai-compatible-"
+const OPENAI_COMPATIBLE_PREFIX = "openai-compatible-";
 
 /** `util.OpenAICompatibleProviderKey`: `openai-compatible-<lower name>` (already-prefixed names are kept). */
 export const openAICompatibleProviderKey = (name: string): string => {
-  const lower = name.trim().toLowerCase()
+  const lower = name.trim().toLowerCase();
 
-  if (lower === "") return "openai-compatibility"
+  if (lower === "") return "openai-compatibility";
 
-  if (lower === "openai-compatibility" || lower.startsWith(OPENAI_COMPATIBLE_PREFIX)) return lower
+  if (lower === "openai-compatibility" || lower.startsWith(OPENAI_COMPATIBLE_PREFIX)) return lower;
 
-  return OPENAI_COMPATIBLE_PREFIX + lower
-}
+  return OPENAI_COMPATIBLE_PREFIX + lower;
+};
 
 /** `rewriteModelForAuth`: strips `<prefix>/` when it matches the credential's prefix. */
 export const stripCredentialPrefix = (model: string, credential: CredentialSnapshot): string => {
-  const prefix = credential.prefix?.trim() ?? ""
+  const prefix = credential.prefix?.trim() ?? "";
 
-  if (prefix === "" || model === "") return model
-  const needle = `${prefix}/`
+  if (prefix === "" || model === "") return model;
+  const needle = `${prefix}/`;
 
-  return model.startsWith(needle) ? model.slice(needle.length) : model
-}
+  return model.startsWith(needle) ? model.slice(needle.length) : model;
+};
 
 /** The `api-keys.openai-compatibility` entry backing a credential (`config_index`, then name/provider key). */
-export const resolveCompatConfig = (config: Config, credential: CredentialSnapshot): OpenAICompatGroup | undefined => {
-  const groups = config["api-keys"]["openai-compatibility"]
-  const rawIndex = credential.attributes["config_index"]?.trim() ?? ""
+export const resolveCompatConfig = (
+  config: Config,
+  credential: CredentialSnapshot,
+): OpenAICompatGroup | undefined => {
+  const groups = config["api-keys"]["openai-compatibility"];
+  const rawIndex = credential.attributes["config_index"]?.trim() ?? "";
 
   if (rawIndex !== "" && /^\d+$/.test(rawIndex)) {
-    const group = groups[Number(rawIndex)]
+    const group = groups[Number(rawIndex)];
 
-    if (group !== undefined && group.disabled !== true) return group
+    if (group !== undefined && group.disabled !== true) return group;
   }
 
-  const candidates = [credential.attributes["compat_name"], credential.attributes["provider_key"], credential.provider]
+  const candidates = [
+    credential.attributes["compat_name"],
+    credential.attributes["provider_key"],
+    credential.provider,
+  ]
     .map((value) => value?.trim() ?? "")
-    .filter((value) => value !== "")
+    .filter((value) => value !== "");
 
   return groups.find(
     (group) =>
       group.disabled !== true &&
-      candidates.some((candidate) => candidate.toLowerCase() === group.name.trim().toLowerCase())
-  )
-}
+      candidates.some((candidate) => candidate.toLowerCase() === group.name.trim().toLowerCase()),
+  );
+};
 
 /** Whether the credential is a configured OpenAI-compatible key. */
 export const isOpenAICompatCredential = (credential: CredentialSnapshot): boolean =>
-  (credential.attributes["compat_name"] ?? "").trim() !== ""
+  (credential.attributes["compat_name"] ?? "").trim() !== "";
 
 interface AliasEntry {
-  readonly name?: string | undefined
-  readonly alias?: string | undefined
+  readonly name?: string | undefined;
+  readonly alias?: string | undefined;
 }
 
 /** `resolveModelAliasPoolFromConfigModels`: upstream names whose alias matches `[requested, base]`. */
-export const resolveModelAliasPool = (requestedModel: string, models: ReadonlyArray<AliasEntry>): string[] => {
-  const requested = requestedModel.trim()
+export const resolveModelAliasPool = (
+  requestedModel: string,
+  models: ReadonlyArray<AliasEntry>,
+): string[] => {
+  const requested = requestedModel.trim();
 
-  if (requested === "" || models.length === 0) return []
-  const suffix = parseSuffix(requested)
-  const base = suffix.modelName === "" ? requested : suffix.modelName
-  const candidates = base !== requested ? [requested, base] : [requested]
+  if (requested === "" || models.length === 0) return [];
+  const suffix = parseSuffix(requested);
+  const base = suffix.modelName === "" ? requested : suffix.modelName;
+  const candidates = base !== requested ? [requested, base] : [requested];
 
   for (const candidate of candidates) {
-    const out: string[] = []
-    const seen = new Set<string>()
+    const out: string[] = [];
+    const seen = new Set<string>();
 
     for (const model of models) {
-      const name = model.name?.trim() ?? ""
-      const alias = model.alias?.trim() ?? ""
+      const name = model.name?.trim() ?? "";
+      const alias = model.alias?.trim() ?? "";
 
-      if (alias === "" || alias.toLowerCase() !== candidate.toLowerCase()) continue
-      const resolved = preserveSuffix(name !== "" ? name : candidate, suffix)
-      const lower = resolved.toLowerCase()
+      if (alias === "" || alias.toLowerCase() !== candidate.toLowerCase()) continue;
+      const resolved = preserveSuffix(name !== "" ? name : candidate, suffix);
+      const lower = resolved.toLowerCase();
 
-      if (resolved === "" || seen.has(lower)) continue
-      seen.add(lower)
-      out.push(resolved)
+      if (resolved === "" || seen.has(lower)) continue;
+      seen.add(lower);
+      out.push(resolved);
     }
 
-    if (out.length > 0) return out
+    if (out.length > 0) return out;
   }
 
-  return []
-}
+  return [];
+};
 
 /**
  * `executionModelCandidates`: upstream model(s) to try for `routeModel` on this credential, suffix preserved.
@@ -108,25 +118,27 @@ export const resolveModelAliasPool = (requestedModel: string, models: ReadonlyAr
 export const executionModelCandidates = (
   config: Config,
   credential: CredentialSnapshot,
-  routeModel: string
+  routeModel: string,
 ): string[] => {
-  const requested = stripCredentialPrefix(routeModel.trim(), credential)
+  const requested = stripCredentialPrefix(routeModel.trim(), credential);
 
   if (credential.provider === "claude") {
-    const match = resolveClaudeKeyConfig(config, credential)
+    const match = resolveClaudeKeyConfig(config, credential);
 
     const pool =
-      match === undefined ? [] : resolveModelAliasPool(requested, match.entry.models ?? match.group.models ?? [])
+      match === undefined
+        ? []
+        : resolveModelAliasPool(requested, match.entry.models ?? match.group.models ?? []);
 
-    if (pool.length > 0) return pool
+    if (pool.length > 0) return pool;
   }
 
   if (isOpenAICompatCredential(credential)) {
-    const group = resolveCompatConfig(config, credential)
-    const pool = group === undefined ? [] : resolveModelAliasPool(requested, group.models ?? [])
+    const group = resolveCompatConfig(config, credential);
+    const pool = group === undefined ? [] : resolveModelAliasPool(requested, group.models ?? []);
 
-    if (pool.length > 0) return pool
+    if (pool.length > 0) return pool;
   }
 
-  return [requested]
-}
+  return [requested];
+};

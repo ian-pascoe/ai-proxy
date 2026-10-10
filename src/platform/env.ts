@@ -1,4 +1,4 @@
-import { Context, Effect, Option } from "effect"
+import { Context, Effect, Option } from "effect";
 
 /**
  * Cloudflare bindings (`env`) of the current Worker invocation.
@@ -9,15 +9,19 @@ import { Context, Effect, Option } from "effect"
 export class WorkerEnv extends Context.Service<WorkerEnv, Env>()("cliproxy/platform/WorkerEnv") {}
 
 /** Cloudflare `ExecutionContext` (`waitUntil`, `passThroughOnException`) of the current invocation. */
-export class WorkerExecutionContext extends Context.Service<WorkerExecutionContext, ExecutionContext>()(
-  "cliproxy/platform/WorkerExecutionContext"
-) {}
+export class WorkerExecutionContext extends Context.Service<
+  WorkerExecutionContext,
+  ExecutionContext
+>()("cliproxy/platform/WorkerExecutionContext") {}
 
 /** Builds the per-request context passed as the second argument of the web handler. */
-export const requestContext = (env: Env, ctx: ExecutionContext): Context.Context<WorkerEnv | WorkerExecutionContext> =>
-  Context.make(WorkerEnv, env).pipe(Context.add(WorkerExecutionContext, ctx))
+export const requestContext = (
+  env: Env,
+  ctx: ExecutionContext,
+): Context.Context<WorkerEnv | WorkerExecutionContext> =>
+  Context.make(WorkerEnv, env).pipe(Context.add(WorkerExecutionContext, ctx));
 
-const noop = (): void => undefined
+const noop = (): void => undefined;
 
 /**
  * Keeps the invocation alive (`ctx.waitUntil`) until the returned `release` is called. Used for bookkeeping that must
@@ -26,21 +30,23 @@ const noop = (): void => undefined
  * the hold while the request is still live, release it once the work is done. Without an execution context (unit
  * tests, after the invocation ended) this is a no-op.
  */
-export const holdInvocation: Effect.Effect<() => void> = Effect.serviceOption(WorkerExecutionContext).pipe(
+export const holdInvocation: Effect.Effect<() => void> = Effect.serviceOption(
+  WorkerExecutionContext,
+).pipe(
   Effect.map((ctx) => {
-    if (Option.isNone(ctx)) return noop
-    let release: () => void = noop
+    if (Option.isNone(ctx)) return noop;
+    let release: () => void = noop;
 
     const done = new Promise<void>((resolve) => {
-      release = () => resolve()
-    })
+      release = () => resolve();
+    });
 
     try {
-      ctx.value.waitUntil(done)
+      ctx.value.waitUntil(done);
     } catch {
-      return noop
+      return noop;
     }
 
-    return release
-  })
-)
+    return release;
+  }),
+);

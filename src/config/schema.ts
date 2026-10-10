@@ -10,32 +10,35 @@
  * handle missing values. Tri-state Go pointer fields (`*bool`, `*int`) stay optional. Keys keep their kebab-case YAML
  * spelling so the stored document is the same as the YAML/management representation.
  */
-import { Effect, Schema } from "effect"
-import { PayloadConfig } from "./payload/schema.ts"
+import { Effect, Schema } from "effect";
+import { PayloadConfig } from "./payload/schema.ts";
 
 // --- field helpers -------------------------------------------------------------------------------------------------
 
-const flag = (value: boolean) => Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+const flag = (value: boolean) =>
+  Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)));
 
-const text = (value = "") => Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+const text = (value = "") =>
+  Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)));
 
-const whole = (value: number) => Schema.Int.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+const whole = (value: number) =>
+  Schema.Int.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)));
 
 const section = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
   // `{}` is valid because every field of a section carries a decoding default.
-  Schema.Struct(fields).pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never)))
+  Schema.Struct(fields).pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never)));
 
 const list = <S extends Schema.Constraint>(item: S) =>
-  Schema.Array(item).pipe(Schema.withDecodingDefaultKey(Effect.succeed([] as never)))
+  Schema.Array(item).pipe(Schema.withDecodingDefaultKey(Effect.succeed([] as never)));
 
-const optional = Schema.optionalKey
+const optional = Schema.optionalKey;
 
-const Strings = Schema.Array(Schema.String)
+const Strings = Schema.Array(Schema.String);
 
-const StringMap = Schema.Record(Schema.String, Schema.String)
+const StringMap = Schema.Record(Schema.String, Schema.String);
 
 /** Credential weight (internal/credentialweight): any integer, but at most 1,000,000. */
-const Weight = Schema.Int.check(Schema.isLessThanOrEqualTo(1_000_000))
+const Weight = Schema.Int.check(Schema.isLessThanOrEqualTo(1_000_000));
 
 // --- shared pieces -------------------------------------------------------------------------------------------------
 
@@ -44,20 +47,20 @@ export const RequestScopedErrorRule = Schema.Struct({
   match: optional(Strings),
   "match-regexr": optional(Strings),
   /** `stop`, `stop-and-cooldown`, `continue` or `continue-and-cooldown`. */
-  action: optional(Schema.String)
-})
+  action: optional(Schema.String),
+});
 
-export type RequestScopedErrorRule = typeof RequestScopedErrorRule.Type
+export type RequestScopedErrorRule = typeof RequestScopedErrorRule.Type;
 
 export const ThinkingSupport = Schema.Struct({
   min: optional(Schema.Int),
   max: optional(Schema.Int),
   "zero-allowed": optional(Schema.Boolean),
   "dynamic-allowed": optional(Schema.Boolean),
-  levels: optional(Strings)
-})
+  levels: optional(Strings),
+});
 
-export type ThinkingSupport = typeof ThinkingSupport.Type
+export type ThinkingSupport = typeof ThinkingSupport.Type;
 
 /** Model entry of an API-key group (the union of the per-provider Go model structs). */
 export const ModelEntry = Schema.Struct({
@@ -76,19 +79,19 @@ export const ModelEntry = Schema.Struct({
   image: optional(Schema.Boolean),
   "input-modalities": optional(Strings),
   "output-modalities": optional(Strings),
-  "use-max-completion-tokens": optional(Schema.Boolean)
-})
+  "use-max-completion-tokens": optional(Schema.Boolean),
+});
 
-export type ModelEntry = typeof ModelEntry.Type
+export type ModelEntry = typeof ModelEntry.Type;
 
 export const CloakConfig = Schema.Struct({
   mode: optional(Schema.String),
   "strict-mode": optional(Schema.Boolean),
   "sensitive-words": optional(Strings),
-  "cache-user-id": optional(Schema.Boolean)
-})
+  "cache-user-id": optional(Schema.Boolean),
+});
 
-export type CloakConfig = typeof CloakConfig.Type
+export type CloakConfig = typeof CloakConfig.Type;
 
 /** Settings shared by a group and (as overrides) by its keys. A missing key inherits the group value. */
 const sharedKeyFields = {
@@ -100,8 +103,8 @@ const sharedKeyFields = {
   "excluded-models": optional(Strings),
   "disable-cooling": optional(Schema.Boolean),
   "request-retry": optional(Schema.Int),
-  "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule))
-}
+  "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule)),
+};
 
 /** One credential inside an API-key group. */
 export const ApiKeyEntry = Schema.Struct({
@@ -118,26 +121,26 @@ export const ApiKeyEntry = Schema.Struct({
   "alpha-search": optional(Schema.Boolean),
   "disable-codex-cloaking": optional(Schema.Boolean),
   /** Vertex. */
-  interactions: optional(Schema.Boolean)
-})
+  interactions: optional(Schema.Boolean),
+});
 
-export type ApiKeyEntry = typeof ApiKeyEntry.Type
+export type ApiKeyEntry = typeof ApiKeyEntry.Type;
 
 /** `api-keys.<provider>[]` group: one endpoint, shared settings and a list of keys. */
 export const ApiKeyGroup = Schema.Struct({
   name: optional(Schema.String),
   "base-url": optional(Schema.String),
   ...sharedKeyFields,
-  keys: Schema.Array(ApiKeyEntry)
-})
+  keys: Schema.Array(ApiKeyEntry),
+});
 
-export type ApiKeyGroup = typeof ApiKeyGroup.Type
+export type ApiKeyGroup = typeof ApiKeyGroup.Type;
 
 export const OpenAICompatKey = Schema.Struct({
   "api-key": Schema.String,
   weight: optional(Weight),
-  "proxy-url": optional(Schema.String)
-})
+  "proxy-url": optional(Schema.String),
+});
 
 /** `api-keys.openai-compatibility[]` group. */
 export const OpenAICompatGroup = Schema.Struct({
@@ -152,38 +155,44 @@ export const OpenAICompatGroup = Schema.Struct({
   "disable-cooling": optional(Schema.Boolean),
   "request-retry": optional(Schema.Int),
   "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule)),
-  keys: Schema.Array(OpenAICompatKey)
-})
+  keys: Schema.Array(OpenAICompatKey),
+});
 
-export type OpenAICompatGroup = typeof OpenAICompatGroup.Type
+export type OpenAICompatGroup = typeof OpenAICompatGroup.Type;
 
 export const OAuthModelAlias = Schema.Struct({
   name: Schema.String,
   alias: Schema.String,
   fork: optional(Schema.Boolean),
   "display-name": optional(Schema.String),
-  "force-mapping": optional(Schema.Boolean)
-})
+  "force-mapping": optional(Schema.Boolean),
+});
 
-export type OAuthModelAlias = typeof OAuthModelAlias.Type
+export type OAuthModelAlias = typeof OAuthModelAlias.Type;
 
 export const OAuthModelSetting = Schema.Struct({
   name: Schema.String,
   alias: optional(Schema.String),
-  "max-context-length": optional(Schema.Int)
-})
+  "max-context-length": optional(Schema.Int),
+});
 
-export type OAuthModelSetting = typeof OAuthModelSetting.Type
+export type OAuthModelSetting = typeof OAuthModelSetting.Type;
 
 // --- sections ------------------------------------------------------------------------------------------------------
 
 /** `routing.strategy` (aliases `wrr`, `ff`, ... are normalised before decoding). */
-export const RoutingStrategy = Schema.Literals(["round-robin", "weighted-round-robin", "fill-first"])
+export const RoutingStrategy = Schema.Literals([
+  "round-robin",
+  "weighted-round-robin",
+  "fill-first",
+]);
 
-export type RoutingStrategy = typeof RoutingStrategy.Type
+export type RoutingStrategy = typeof RoutingStrategy.Type;
 
 const routing = section({
-  strategy: RoutingStrategy.pipe(Schema.withDecodingDefaultKey(Effect.succeed("round-robin" as const))),
+  strategy: RoutingStrategy.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed("round-robin" as const)),
+  ),
   "session-affinity": flag(false),
   /** Go duration string (`30m`, `1h`); invalid or non-positive values mean 1h (see accessors.ts). */
   "session-affinity-ttl": text("1h"),
@@ -194,16 +203,16 @@ const routing = section({
     /** 0 = try every credential in a round. */
     "max-retry-credentials": whole(0),
     /** Seconds; non-positive never waits for a cooldown. */
-    "max-retry-interval": whole(0)
+    "max-retry-interval": whole(0),
   }),
   cooldown: section({
     "disable-cooling": flag(false),
     /** Persist cooldown state (in the ControlPlane DO on Workers). */
     "save-cooldown-status": flag(false),
     /** 0 = legacy 60 s, negative disables. */
-    "transient-error-cooldown-seconds": whole(0)
-  })
-})
+    "transient-error-cooldown-seconds": whole(0),
+  }),
+});
 
 const requests = section({
   /** Accepted for compatibility; outbound proxies are not available on Workers and the value is ignored. */
@@ -212,10 +221,10 @@ const requests = section({
   "nonstream-keepalive-interval": whole(0),
   streaming: section({
     "keepalive-seconds": whole(0),
-    "bootstrap-retries": whole(0)
+    "bootstrap-retries": whole(0),
   }),
-  payload: PayloadConfig.pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never)))
-})
+  payload: PayloadConfig.pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never))),
+});
 
 const claudeHeaderDefaults = section({
   "user-agent": text(),
@@ -225,8 +234,8 @@ const claudeHeaderDefaults = section({
   arch: text(),
   timeout: text(),
   timezone: text(),
-  "stabilize-device-profile": optional(Schema.Boolean)
-})
+  "stabilize-device-profile": optional(Schema.Boolean),
+});
 
 const upstream = section({
   codex: section({
@@ -236,18 +245,18 @@ const upstream = section({
     /** Go duration or integer seconds; `0`/`none`/`unlimited`/... mean unlimited. */
     "stream-bootstrap-timeout": text("0"),
     "orphan-delegation-compatibility": flag(false),
-    "model-level-cooling": flag(false)
+    "model-level-cooling": flag(false),
   }),
   claude: section({
     "model-level-cooling": flag(false),
     "disable-claude-cloak-mode": flag(false),
     "disable-cloaking-model-list": flag(false),
-    "header-defaults": claudeHeaderDefaults
+    "header-defaults": claudeHeaderDefaults,
   }),
   xai: section({
-    "inject-x-search": flag(false)
-  })
-})
+    "inject-x-search": flag(false),
+  }),
+});
 
 const apiKeys = section({
   gemini: list(ApiKeyGroup),
@@ -257,70 +266,79 @@ const apiKeys = section({
   claude: list(ApiKeyGroup),
   xai: list(ApiKeyGroup),
   meta: list(ApiKeyGroup),
-  "openai-compatibility": list(OpenAICompatGroup)
-})
+  "openai-compatibility": list(OpenAICompatGroup),
+});
 
 const oauth = section({
   "auth-auto-refresh-workers": whole(0),
   /** channel -> aliases */
   "model-alias": Schema.Record(Schema.String, Schema.Array(OAuthModelAlias)).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed({}))
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
   ),
   settings: Schema.Record(Schema.String, Schema.Array(OAuthModelSetting)).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed({}))
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
   ),
-  "excluded-models": Schema.Record(Schema.String, Strings).pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
+  "excluded-models": Schema.Record(Schema.String, Strings).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
+  ),
   "request-scoped-errors": Schema.Record(Schema.String, Schema.Array(RequestScopedErrorRule)).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed({}))
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
   ),
   providers: section({
     codex: section({
       "header-defaults": section({
         "user-agent": text(),
-        "beta-features": text()
-      })
+        "beta-features": text(),
+      }),
     }),
     antigravity: section({
       "sensitive-words": list(Schema.String),
       "antigravity-credits": flag(false),
       /** Go pointer: missing means enabled. */
       "signature-cache-enabled": optional(Schema.Boolean),
-      "signature-bypass-strict": optional(Schema.Boolean)
+      "signature-bypass-strict": optional(Schema.Boolean),
     }),
     devin: section({
-      "sensitive-words": list(Schema.String)
-    })
-  })
-})
+      "sensitive-words": list(Schema.String),
+    }),
+  }),
+});
 
 /** `multimedia.disable-image-generation`: `false`, `true`, `"chat"` or `"passthrough"`. */
-export const DisableImageGeneration = Schema.Union([Schema.Boolean, Schema.Literals(["chat", "passthrough"])])
+export const DisableImageGeneration = Schema.Union([
+  Schema.Boolean,
+  Schema.Literals(["chat", "passthrough"]),
+]);
 
 const multimedia = section({
-  "disable-image-generation": DisableImageGeneration.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  "disable-image-generation": DisableImageGeneration.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(false)),
+  ),
   "gpt-image-2-base-model": text(),
-  "video-result-auth-cache-ttl": text("3h")
-})
+  "video-result-auth-cache-ttl": text("3h"),
+});
 
 const observability = section({
   logs: section({
     debug: flag(false),
-    "request-log": flag(false)
+    "request-log": flag(false),
   }),
   usage: section({
     "usage-statistics-enabled": flag(false),
     /** Clamped to 1..3600 (<= 0 means 60). */
-    "redis-usage-queue-retention-seconds": whole(60)
-  })
-})
+    "redis-usage-queue-retention-seconds": whole(60),
+  }),
+});
 
 export const Config = Schema.Struct({
-  "config-version": Schema.Literal(8).pipe(Schema.withDecodingDefaultKey(Effect.succeed(8 as const))),
+  "config-version": Schema.Literal(8).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(8 as const)),
+  ),
   models: section({
     /** http(s) URL of the general model catalog; empty = official source. File paths are not usable on Workers. */
     catalog: text(),
     "codex-catalog": text(),
-    "devin-catalog": text()
+    "devin-catalog": text(),
   }),
   access: section({
     /** Legacy client API keys (migration only; Cloudflare Access is the real authentication). */
@@ -328,26 +346,26 @@ export const Config = Schema.Struct({
     /** Access user emails allowed to call the management API. */
     "admin-emails": list(Schema.String),
     /** Access service token client ids (`common_name`) allowed to call the management API. */
-    "admin-service-tokens": list(Schema.String)
+    "admin-service-tokens": list(Schema.String),
   }),
   routing,
   requests,
   client: section({
     codex: section({
       "enable-apply-patch": flag(false),
-      "optimize-multi-agent-v2": flag(false)
-    })
+      "optimize-multi-agent-v2": flag(false),
+    }),
   }),
   upstream,
   "api-keys": apiKeys,
   oauth,
   multimedia,
-  observability
-})
+  observability,
+});
 
-export type Config = typeof Config.Type
+export type Config = typeof Config.Type;
 
-export type ConfigEncoded = typeof Config.Encoded
+export type ConfigEncoded = typeof Config.Encoded;
 
 /** The v8 provider family names that may appear under `api-keys`. */
 export const API_KEY_FAMILIES = [
@@ -358,7 +376,7 @@ export const API_KEY_FAMILIES = [
   "claude",
   "xai",
   "meta",
-  "openai-compatibility"
-] as const
+  "openai-compatibility",
+] as const;
 
-export type ApiKeyFamily = (typeof API_KEY_FAMILIES)[number]
+export type ApiKeyFamily = (typeof API_KEY_FAMILIES)[number];

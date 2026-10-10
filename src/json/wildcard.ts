@@ -2,57 +2,57 @@
  * Port of github.com/tidwall/match (used by gjson for wildcard keys and the `%` / `!%` query operators).
  * `*` matches any sequence, `?` any single character (code point), `\c` matches `c` literally.
  */
-type Token = { kind: "star" } | { kind: "any" } | { kind: "lit"; cp: string }
+type Token = { kind: "star" } | { kind: "any" } | { kind: "lit"; cp: string };
 
 const tokenize = (pattern: string): Token[] => {
-  const tokens: Token[] = []
-  const chars = Array.from(pattern)
+  const tokens: Token[] = [];
+  const chars = Array.from(pattern);
 
   for (let i = 0; i < chars.length; i++) {
-    const ch = chars[i] as string
+    const ch = chars[i] as string;
 
     if (ch === "*") {
-      if (tokens.at(-1)?.kind !== "star") tokens.push({ kind: "star" })
+      if (tokens.at(-1)?.kind !== "star") tokens.push({ kind: "star" });
     } else if (ch === "?") {
-      tokens.push({ kind: "any" })
+      tokens.push({ kind: "any" });
     } else if (ch === "\\" && i + 1 < chars.length) {
-      i++
-      tokens.push({ kind: "lit", cp: chars[i] as string })
+      i++;
+      tokens.push({ kind: "lit", cp: chars[i] as string });
     } else {
-      tokens.push({ kind: "lit", cp: ch })
+      tokens.push({ kind: "lit", cp: ch });
     }
   }
 
-  return tokens
-}
+  return tokens;
+};
 
 export const wildcardMatch = (value: string, pattern: string): boolean => {
-  if (pattern === "*") return true
-  const tokens = tokenize(pattern)
-  const chars = Array.from(value)
-  let t = 0
-  let s = 0
-  let starToken = -1
-  let starChar = 0
+  if (pattern === "*") return true;
+  const tokens = tokenize(pattern);
+  const chars = Array.from(value);
+  let t = 0;
+  let s = 0;
+  let starToken = -1;
+  let starChar = 0;
 
   while (s < chars.length) {
-    const token = tokens[t]
+    const token = tokens[t];
 
     if (token !== undefined && token.kind === "star") {
-      starToken = t++
-      starChar = s
+      starToken = t++;
+      starChar = s;
     } else if (token !== undefined && (token.kind === "any" || token.cp === chars[s])) {
-      t++
-      s++
+      t++;
+      s++;
     } else if (starToken >= 0) {
-      t = starToken + 1
-      s = ++starChar
+      t = starToken + 1;
+      s = ++starChar;
     } else {
-      return false
+      return false;
     }
   }
 
-  while (tokens[t]?.kind === "star") t++
+  while (tokens[t]?.kind === "star") t++;
 
-  return t === tokens.length
-}
+  return t === tokens.length;
+};

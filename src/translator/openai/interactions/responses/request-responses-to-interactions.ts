@@ -14,20 +14,27 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-  set
-} from "../../../../json/index.ts"
-import { applyPatchDescription, applyPatchParameters, isApplyPatchCustomTool } from "../../../common/apply-patch.ts"
-import { antigravityToolNameToUpstream } from "../../common/antigravity-tools.ts"
-import { isDevinCodexAppAutomationUpdate, sanitizeDevinToolDescription } from "../../common/devin-tools.ts"
-import { getStr, isArr, str } from "../../common/read.ts"
+  set,
+} from "../../../../json/index.ts";
+import {
+  applyPatchDescription,
+  applyPatchParameters,
+  isApplyPatchCustomTool,
+} from "../../../common/apply-patch.ts";
+import { antigravityToolNameToUpstream } from "../../common/antigravity-tools.ts";
+import {
+  isDevinCodexAppAutomationUpdate,
+  sanitizeDevinToolDescription,
+} from "../../common/devin-tools.ts";
+import { getStr, isArr, str } from "../../common/read.ts";
 import {
   collectResponsesToolDescriptors,
   collectResponsesToolWinners,
   qualifyResponsesNamespaceToolName,
   responsesToolDescriptionOf,
-  responsesToolParametersOf
-} from "../../../common/responses-tools.ts"
-import { UserTurnDrops } from "../../../common/parts.ts"
+  responsesToolParametersOf,
+} from "../../../common/responses-tools.ts";
+import { UserTurnDrops } from "../../../common/parts.ts";
 import {
   firstExisting,
   firstNonEmpty,
@@ -37,354 +44,390 @@ import {
   responsesCustomToolCallToInteractions,
   responsesFunctionCallToInteractions,
   setJsonValue,
-  textStep
-} from "./shared.ts"
+  textStep,
+} from "./shared.ts";
 
 const requestModel = (modelName: string, root: Json): string =>
-  modelName.trim() !== "" ? modelName : getStr(root, "model")
+  modelName.trim() !== "" ? modelName : getStr(root, "model");
 
 /** `responsesInstructionsText`. */
 const responsesInstructionsText = (instructions: Json): string => {
-  if (typeof instructions === "string") return instructions
-  const text = get(instructions, "text")
+  if (typeof instructions === "string") return instructions;
+  const text = get(instructions, "text");
 
-  if (text !== undefined) return str(text)
-  const parts = get(instructions, "content")
+  if (text !== undefined) return str(text);
+  const parts = get(instructions, "content");
 
   if (isArr(parts)) {
-    let out = ""
+    let out = "";
 
     for (const part of parts) {
-      const t = getStr(part, "text")
+      const t = getStr(part, "text");
 
-      if (t !== "") out += t
+      if (t !== "") out += t;
     }
 
-    return out
+    return out;
   }
 
-  return str(instructions)
-}
+  return str(instructions);
+};
 
 const isUnsendableAttachmentType = (partType: string): boolean =>
-  partType === "input_file" || partType === "input_audio" || partType === "input_video"
+  partType === "input_file" || partType === "input_audio" || partType === "input_video";
 
 /** `responsesUserTurnDrops`: only a real user turn can be refused. */
 const userTurnDrops = (role: string, drops: UserTurnDrops): UserTurnDrops | undefined =>
-  role === "" || role === "user" ? drops : undefined
+  role === "" || role === "user" ? drops : undefined;
 
 /** `appendResponsesContentToInteractions`. */
-const appendContent = (step: JsonObject, content: Json | undefined, drops: UserTurnDrops | undefined): JsonObject => {
-  const items: Json[] = []
-  let sendable = 0
+const appendContent = (
+  step: JsonObject,
+  content: Json | undefined,
+  drops: UserTurnDrops | undefined,
+): JsonObject => {
+  const items: Json[] = [];
+  let sendable = 0;
 
   const appendPart = (item: Json): void => {
-    const part = responsesContentPartToInteractions(item)
+    const part = responsesContentPartToInteractions(item);
 
     if (part === undefined) {
-      const partType = getStr(item, "type")
+      const partType = getStr(item, "type");
 
-      if (drops !== undefined && isUnsendableAttachmentType(partType)) drops.drop(partType)
+      if (drops !== undefined && isUnsendableAttachmentType(partType)) drops.drop(partType);
 
-      return
+      return;
     }
 
-    items.push(part)
+    items.push(part);
 
-    if (part.type !== "text" || part.text !== "") sendable++
-  }
+    if (part.type !== "text" || part.text !== "") sendable++;
+  };
 
   if (typeof content === "string") {
-    items.push({ type: "text", text: content })
+    items.push({ type: "text", text: content });
 
-    if (content !== "") sendable++
+    if (content !== "") sendable++;
   } else if (isArr(content)) {
-    for (const item of content) appendPart(item)
+    for (const item of content) appendPart(item);
   } else if (isJsonObject(content)) {
-    appendPart(content)
+    appendPart(content);
   }
 
-  if (drops !== undefined) drops.endTurn(sendable)
+  if (drops !== undefined) drops.endTurn(sendable);
 
-  if (items.length > 0) step.content = items
+  if (items.length > 0) step.content = items;
 
-  return step
-}
+  return step;
+};
 
 /** `responsesFunctionOutputToInteractions`. */
 const functionOutputToInteractions = (
   item: Json,
   namesByCallId: Map<string, string>,
-  forAntigravity: boolean
+  forAntigravity: boolean,
 ): JsonObject => {
-  const out: JsonObject = { type: "function_result", name: "", result: {} }
-  const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"))
-  let name = getStr(item, "name")
-  const ns = getStr(item, "namespace")
+  const out: JsonObject = { type: "function_result", name: "", result: {} };
+  const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"));
+  let name = getStr(item, "name");
+  const ns = getStr(item, "namespace");
 
-  if (ns !== "" && name !== "") name = qualifyResponsesNamespaceToolName(ns, name)
+  if (ns !== "" && name !== "") name = qualifyResponsesNamespaceToolName(ns, name);
 
-  if (name === "" && callId !== "") name = namesByCallId.get(callId) ?? ""
+  if (name === "" && callId !== "") name = namesByCallId.get(callId) ?? "";
 
   if (name !== "") {
-    if (forAntigravity) name = antigravityToolNameToUpstream(name)
-    out.name = name
+    if (forAntigravity) name = antigravityToolNameToUpstream(name);
+    out.name = name;
   }
 
-  if (callId !== "") out.call_id = callId
-  let result = get(item, "output")
+  if (callId !== "") out.call_id = callId;
+  let result = get(item, "output");
 
-  if (result === undefined) result = get(item, "result")
-  setJsonValue(out, "result", result, {})
+  if (result === undefined) result = get(item, "result");
+  setJsonValue(out, "result", result, {});
 
-  return out
-}
+  return out;
+};
 
 const rememberCallName = (item: Json, namesByCallId: Map<string, string>): void => {
-  const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"))
-  let name = getStr(item, "name")
-  const ns = getStr(item, "namespace")
+  const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"));
+  let name = getStr(item, "name");
+  const ns = getStr(item, "namespace");
 
-  if (ns !== "" && name !== "") name = qualifyResponsesNamespaceToolName(ns, name)
+  if (ns !== "" && name !== "") name = qualifyResponsesNamespaceToolName(ns, name);
 
-  if (callId !== "" && name !== "") namesByCallId.set(callId, name)
-}
+  if (callId !== "" && name !== "") namesByCallId.set(callId, name);
+};
 
 /** `responsesInputItemToInteractions`. */
 const inputItemToInteractions = (
   item: Json,
   namesByCallId: Map<string, string>,
   forAntigravity: boolean,
-  drops: UserTurnDrops
+  drops: UserTurnDrops,
 ): JsonObject | undefined => {
-  const type = getStr(item, "type")
+  const type = getStr(item, "type");
 
   switch (type) {
     case "message": {
-      let stepType = "user_input"
-      const role = getStr(item, "role")
-      let turnDrops = userTurnDrops(role, drops)
+      let stepType = "user_input";
+      const role = getStr(item, "role");
+      let turnDrops = userTurnDrops(role, drops);
 
       if (role === "assistant" || role === "model") {
-        stepType = "model_output"
-        turnDrops = undefined
+        stepType = "model_output";
+        turnDrops = undefined;
       }
 
-      return appendContent({ type: stepType, content: [] }, get(item, "content"), turnDrops)
+      return appendContent({ type: stepType, content: [] }, get(item, "content"), turnDrops);
     }
 
     case "function_call":
-      rememberCallName(item, namesByCallId)
+      rememberCallName(item, namesByCallId);
 
-      return responsesFunctionCallToInteractions(item, forAntigravity)
+      return responsesFunctionCallToInteractions(item, forAntigravity);
     case "custom_tool_call":
-      rememberCallName(item, namesByCallId)
+      rememberCallName(item, namesByCallId);
 
-      return responsesCustomToolCallToInteractions(item, forAntigravity)
+      return responsesCustomToolCallToInteractions(item, forAntigravity);
     case "function_call_output":
     case "custom_tool_call_output":
-      return functionOutputToInteractions(item, namesByCallId, forAntigravity)
+      return functionOutputToInteractions(item, namesByCallId, forAntigravity);
     case "input_text":
     case "output_text":
     case "text":
-      return textStep(type === "output_text" ? "model_output" : "user_input", getStr(item, "text"))
+      return textStep(type === "output_text" ? "model_output" : "user_input", getStr(item, "text"));
     case "input_image":
     case "output_image":
     case "input_file":
     case "input_audio":
     case "input_video": {
-      let stepType = "user_input"
-      let turnDrops: UserTurnDrops | undefined
+      let stepType = "user_input";
+      let turnDrops: UserTurnDrops | undefined;
 
-      if (type === "output_image") stepType = "model_output"
-      else turnDrops = drops
+      if (type === "output_image") stepType = "model_output";
+      else turnDrops = drops;
 
-      return appendContent({ type: stepType, content: [] }, item, turnDrops)
+      return appendContent({ type: stepType, content: [] }, item, turnDrops);
     }
 
     default: {
-      const content = get(item, "content")
+      const content = get(item, "content");
 
       if (content !== undefined) {
-        return appendContent({ type: "user_input", content: [] }, content, userTurnDrops(getStr(item, "role"), drops))
+        return appendContent(
+          { type: "user_input", content: [] },
+          content,
+          userTurnDrops(getStr(item, "role"), drops),
+        );
       }
     }
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 /** `setResponsesInputOnInteractions`. */
-const setInput = (out: JsonObject, input: Json, forAntigravity: boolean, drops: UserTurnDrops): void => {
-  const namesByCallId = new Map<string, string>()
-  const items: Json[] = []
+const setInput = (
+  out: JsonObject,
+  input: Json,
+  forAntigravity: boolean,
+  drops: UserTurnDrops,
+): void => {
+  const namesByCallId = new Map<string, string>();
+  const items: Json[] = [];
 
   if (typeof input === "string") {
-    items.push(textStep("user_input", input))
+    items.push(textStep("user_input", input));
   } else if (isArr(input)) {
     for (const item of input) {
-      const converted = inputItemToInteractions(item, namesByCallId, forAntigravity, drops)
+      const converted = inputItemToInteractions(item, namesByCallId, forAntigravity, drops);
 
-      if (converted !== undefined) items.push(converted)
+      if (converted !== undefined) items.push(converted);
     }
   } else if (isJsonObject(input)) {
-    const converted = inputItemToInteractions(input, namesByCallId, forAntigravity, drops)
+    const converted = inputItemToInteractions(input, namesByCallId, forAntigravity, drops);
 
-    if (converted !== undefined) items.push(converted)
+    if (converted !== undefined) items.push(converted);
   }
 
-  if (items.length > 0) out.input = items
-}
+  if (items.length > 0) out.input = items;
+};
 
 /** `appendResponsesToolsToInteractions`. */
-const appendTools = (out: JsonObject, root: Json | undefined, forAntigravity: boolean, forDevin: boolean): void => {
-  if (root === undefined) return
-  const target: Json = isArr(root) ? { tools: root } : root
-  const descriptors = collectResponsesToolDescriptors(target)
+const appendTools = (
+  out: JsonObject,
+  root: Json | undefined,
+  forAntigravity: boolean,
+  forDevin: boolean,
+): void => {
+  if (root === undefined) return;
+  const target: Json = isArr(root) ? { tools: root } : root;
+  const descriptors = collectResponsesToolDescriptors(target);
 
-  if (descriptors.length === 0) return
-  const winners = collectResponsesToolWinners(target)
-  const seen = new Set<string>()
-  const toolItems: Json[] = []
+  if (descriptors.length === 0) return;
+  const winners = collectResponsesToolWinners(target);
+  const seen = new Set<string>();
+  const toolItems: Json[] = [];
 
   for (const descriptor of descriptors) {
-    const winner = winners.get(descriptor.name)
+    const winner = winners.get(descriptor.name);
 
-    if (winner === undefined || winner.order !== descriptor.order) continue
+    if (winner === undefined || winner.order !== descriptor.order) continue;
 
-    if (seen.has(descriptor.name)) continue
-    seen.add(descriptor.name)
+    if (seen.has(descriptor.name)) continue;
+    seen.add(descriptor.name);
 
     if (
       forDevin &&
       (isDevinCodexAppAutomationUpdate(descriptor.namespace, descriptor.localName) ||
         isDevinCodexAppAutomationUpdate("", descriptor.name))
     ) {
-      continue
+      continue;
     }
 
-    const name = forAntigravity ? antigravityToolNameToUpstream(descriptor.name) : descriptor.name
-    const item: JsonObject = { type: "function", name }
-    const applyPatch = isApplyPatchCustomTool(descriptor.tool)
-    let desc = responsesToolDescriptionOf(descriptor.tool)
+    const name = forAntigravity ? antigravityToolNameToUpstream(descriptor.name) : descriptor.name;
+    const item: JsonObject = { type: "function", name };
+    const applyPatch = isApplyPatchCustomTool(descriptor.tool);
+    let desc = responsesToolDescriptionOf(descriptor.tool);
 
-    if (applyPatch) desc = applyPatchDescription(descriptor.tool)
+    if (applyPatch) desc = applyPatchDescription(descriptor.tool);
 
     if (desc !== "") {
       if (forDevin) {
-        desc = sanitizeDevinToolDescription(descriptor.name, desc)
+        desc = sanitizeDevinToolDescription(descriptor.name, desc);
 
         if (descriptor.localName !== "" && descriptor.localName !== descriptor.name) {
-          desc = sanitizeDevinToolDescription(descriptor.localName, desc)
+          desc = sanitizeDevinToolDescription(descriptor.localName, desc);
         }
       }
 
-      item.description = desc
+      item.description = desc;
     }
 
     if (applyPatch) {
-      item.parameters = applyPatchParameters()
+      item.parameters = applyPatchParameters();
     } else if (descriptor.toolType === "custom") {
-      item.parameters = { type: "object", properties: { input: { type: "string" } }, required: ["input"] }
+      item.parameters = {
+        type: "object",
+        properties: { input: { type: "string" } },
+        required: ["input"],
+      };
     } else {
-      const params = responsesToolParametersOf(descriptor.tool)
+      const params = responsesToolParametersOf(descriptor.tool);
 
-      if (params !== undefined) item.parameters = cloneJson(params)
+      if (params !== undefined) item.parameters = cloneJson(params);
     }
 
-    toolItems.push(item)
+    toolItems.push(item);
   }
 
-  if (toolItems.length > 0) out.tools = toolItems
-}
+  if (toolItems.length > 0) out.tools = toolItems;
+};
 
 /** `ConvertOpenAIResponsesRequestToInteractions`. */
-export const convertOpenAIResponsesRequestToInteractions = (modelName: string, body: Json, stream: boolean): Json => {
-  const drops = new UserTurnDrops()
-  const root = body
-  const out: JsonObject = { model: "", input: [] }
-  const model = requestModel(modelName, root)
-  out.model = model
-  const streamField = get(root, "stream")
+export const convertOpenAIResponsesRequestToInteractions = (
+  modelName: string,
+  body: Json,
+  stream: boolean,
+): Json => {
+  const drops = new UserTurnDrops();
+  const root = body;
+  const out: JsonObject = { model: "", input: [] };
+  const model = requestModel(modelName, root);
+  out.model = model;
+  const streamField = get(root, "stream");
 
-  if (streamField !== undefined) out.stream = asBool(streamField)
-  else if (stream) out.stream = true
-  const instructions = get(root, "instructions")
+  if (streamField !== undefined) out.stream = asBool(streamField);
+  else if (stream) out.stream = true;
+  const instructions = get(root, "instructions");
 
-  if (instructions !== undefined) out.system_instruction = responsesInstructionsText(instructions)
-  const previous = firstNonEmpty(getStr(root, "previous_response_id"), getStr(root, "previous_interaction_id"))
+  if (instructions !== undefined) out.system_instruction = responsesInstructionsText(instructions);
+  const previous = firstNonEmpty(
+    getStr(root, "previous_response_id"),
+    getStr(root, "previous_interaction_id"),
+  );
 
-  if (previous !== "") out.previous_interaction_id = previous
-  const environmentId = firstNonEmpty(getStr(root, "environment_id"), getStr(root, "environment.id"))
+  if (previous !== "") out.previous_interaction_id = previous;
+  const environmentId = firstNonEmpty(
+    getStr(root, "environment_id"),
+    getStr(root, "environment.id"),
+  );
 
-  if (environmentId !== "") out.environment_id = environmentId
-  const agentConfig = get(root, "agent_config")
+  if (environmentId !== "") out.environment_id = environmentId;
+  const agentConfig = get(root, "agent_config");
 
-  if (agentConfig !== undefined) out.agent_config = cloneJson(agentConfig)
-  const forAntigravity = isAntigravityModel(model)
-  const forDevin = isDevinModel(model) || !forAntigravity
-  const input = get(root, "input")
+  if (agentConfig !== undefined) out.agent_config = cloneJson(agentConfig);
+  const forAntigravity = isAntigravityModel(model);
+  const forDevin = isDevinModel(model) || !forAntigravity;
+  const input = get(root, "input");
 
-  if (input !== undefined) setInput(out, input, forAntigravity, drops)
-  appendTools(out, root, forAntigravity, forDevin)
+  if (input !== undefined) setInput(out, input, forAntigravity, drops);
+  appendTools(out, root, forAntigravity, forDevin);
 
-  const toolChoice = get(root, "tool_choice")
+  const toolChoice = get(root, "tool_choice");
 
   if (toolChoice !== undefined) {
     if (isJsonObject(toolChoice)) {
-      let tc: Json | undefined = cloneJson(toolChoice)
+      let tc: Json | undefined = cloneJson(toolChoice);
 
       let fnName = firstNonEmpty(
         getStr(toolChoice, "function.name"),
         getStr(toolChoice, "name"),
-        getStr(toolChoice, "custom.name")
-      )
+        getStr(toolChoice, "custom.name"),
+      );
 
       const ns = firstNonEmpty(
         getStr(toolChoice, "namespace"),
         getStr(toolChoice, "function.namespace"),
-        getStr(toolChoice, "custom.namespace")
-      )
+        getStr(toolChoice, "custom.namespace"),
+      );
 
-      if (ns !== "" && fnName !== "") fnName = qualifyResponsesNamespaceToolName(ns, fnName)
+      if (ns !== "" && fnName !== "") fnName = qualifyResponsesNamespaceToolName(ns, fnName);
 
-      if (forDevin && (isDevinCodexAppAutomationUpdate(ns, fnName) || isDevinCodexAppAutomationUpdate("", fnName))) {
-        tc = undefined
+      if (
+        forDevin &&
+        (isDevinCodexAppAutomationUpdate(ns, fnName) || isDevinCodexAppAutomationUpdate("", fnName))
+      ) {
+        tc = undefined;
       }
 
-      if (forAntigravity && fnName !== "") fnName = antigravityToolNameToUpstream(fnName)
+      if (forAntigravity && fnName !== "") fnName = antigravityToolNameToUpstream(fnName);
 
       if (fnName !== "" && tc !== undefined) {
-        if (get(toolChoice, "function.name") !== undefined) set(tc, "function.name", fnName)
-        else if (get(toolChoice, "name") !== undefined) set(tc, "name", fnName)
-        else if (get(toolChoice, "custom.name") !== undefined) set(tc, "custom.name", fnName)
+        if (get(toolChoice, "function.name") !== undefined) set(tc, "function.name", fnName);
+        else if (get(toolChoice, "name") !== undefined) set(tc, "name", fnName);
+        else if (get(toolChoice, "custom.name") !== undefined) set(tc, "custom.name", fnName);
       }
 
-      if (tc !== undefined) set(out, "generation_config.tool_choice", tc)
+      if (tc !== undefined) set(out, "generation_config.tool_choice", tc);
     } else {
-      set(out, "generation_config.tool_choice", cloneJson(toolChoice))
+      set(out, "generation_config.tool_choice", cloneJson(toolChoice));
     }
   }
 
-  const effort = get(root, "reasoning.effort")
+  const effort = get(root, "reasoning.effort");
 
-  if (typeof effort === "string") set(out, "generation_config.thinking_level", effort.trim().toLowerCase())
-  const summary = get(root, "reasoning.summary")
+  if (typeof effort === "string")
+    set(out, "generation_config.thinking_level", effort.trim().toLowerCase());
+  const summary = get(root, "reasoning.summary");
 
-  if (typeof summary === "string") set(out, "generation_config.thinking_summaries", summary)
-  const format = get(root, "response_format") ?? get(root, "text.format")
+  if (typeof summary === "string") set(out, "generation_config.thinking_summaries", summary);
+  const format = get(root, "response_format") ?? get(root, "text.format");
 
-  if (format !== undefined) out.response_format = cloneJson(format)
+  if (format !== undefined) out.response_format = cloneJson(format);
 
   const maxOutputTokens = firstExisting(
     get(root, "max_output_tokens"),
     get(root, "max_tokens"),
-    get(root, "max_completion_tokens")
-  )
+    get(root, "max_completion_tokens"),
+  );
 
   if (isAntigravityModel(model)) {
     if (maxOutputTokens !== undefined && get(root, "agent_config.max_total_tokens") === undefined) {
-      set(out, "agent_config.max_total_tokens", asInt(maxOutputTokens))
+      set(out, "agent_config.max_total_tokens", asInt(maxOutputTokens));
     }
 
     for (const knob of [
@@ -395,32 +438,34 @@ export const convertOpenAIResponsesRequestToInteractions = (modelName: string, b
       "max_output_tokens",
       "presence_penalty",
       "frequency_penalty",
-      "candidate_count"
+      "candidate_count",
     ]) {
-      del(out, `generation_config.${knob}`)
+      del(out, `generation_config.${knob}`);
     }
   } else {
-    if (maxOutputTokens !== undefined) set(out, "generation_config.max_output_tokens", asInt(maxOutputTokens))
-    const temperature = get(root, "temperature")
+    if (maxOutputTokens !== undefined)
+      set(out, "generation_config.max_output_tokens", asInt(maxOutputTokens));
+    const temperature = get(root, "temperature");
 
-    if (temperature !== undefined) set(out, "generation_config.temperature", asFloat(temperature))
-    const topP = get(root, "top_p")
+    if (temperature !== undefined) set(out, "generation_config.temperature", asFloat(temperature));
+    const topP = get(root, "top_p");
 
-    if (topP !== undefined) set(out, "generation_config.top_p", asFloat(topP))
-    const presence = get(root, "presence_penalty")
+    if (topP !== undefined) set(out, "generation_config.top_p", asFloat(topP));
+    const presence = get(root, "presence_penalty");
 
-    if (presence !== undefined) set(out, "generation_config.presence_penalty", asFloat(presence))
-    const frequency = get(root, "frequency_penalty")
+    if (presence !== undefined) set(out, "generation_config.presence_penalty", asFloat(presence));
+    const frequency = get(root, "frequency_penalty");
 
-    if (frequency !== undefined) set(out, "generation_config.frequency_penalty", asFloat(frequency))
-    const stop = get(root, "stop")
+    if (frequency !== undefined)
+      set(out, "generation_config.frequency_penalty", asFloat(frequency));
+    const stop = get(root, "stop");
 
-    if (stop !== undefined) set(out, "generation_config.stop_sequences", cloneJson(stop))
+    if (stop !== undefined) set(out, "generation_config.stop_sequences", cloneJson(stop));
   }
 
-  const err = drops.err(out)
+  const err = drops.err(out);
 
-  if (err !== undefined) throw err
+  if (err !== undefined) throw err;
 
-  return out
-}
+  return out;
+};

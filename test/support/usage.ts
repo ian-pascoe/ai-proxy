@@ -1,8 +1,8 @@
 // Helpers for the usage tests: the D1 schema (the real migration file) and sample records.
-import { env } from "cloudflare:workers"
-import initial from "../../migrations/0001_usage_records.sql?raw"
-import sessions from "../../migrations/0002_usage_sessions.sql?raw"
-import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts"
+import { env } from "cloudflare:workers";
+import initial from "../../migrations/0001_usage_records.sql?raw";
+import sessions from "../../migrations/0002_usage_sessions.sql?raw";
+import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
 const statementsOf = (sql: string): string[] =>
   sql
@@ -11,7 +11,7 @@ const statementsOf = (sql: string): string[] =>
     .join("\n")
     .split(";")
     .map((statement) => statement.trim())
-    .filter((statement) => statement !== "")
+    .filter((statement) => statement !== "");
 
 /**
  * Applies the checked-in migrations to the test D1 database (idempotent) and empties the table. `ALTER TABLE ... ADD
@@ -20,16 +20,16 @@ const statementsOf = (sql: string): string[] =>
 export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Database> => {
   for (const statement of [...statementsOf(initial), ...statementsOf(sessions)]) {
     try {
-      await db.prepare(statement.replace(/^CREATE (TABLE|INDEX)/, "CREATE $1 IF NOT EXISTS")).run()
+      await db.prepare(statement.replace(/^CREATE (TABLE|INDEX)/, "CREATE $1 IF NOT EXISTS")).run();
     } catch (error) {
-      if (!/duplicate column name/i.test(String(error))) throw error
+      if (!/duplicate column name/i.test(String(error))) throw error;
     }
   }
 
-  await db.prepare("DELETE FROM usage_records").run()
+  await db.prepare("DELETE FROM usage_records").run();
 
-  return db
-}
+  return db;
+};
 
 export const sampleRecord = (overrides: Partial<UsageRecord> = {}): UsageRecord => ({
   requestId: crypto.randomUUID(),
@@ -54,8 +54,8 @@ export const sampleRecord = (overrides: Partial<UsageRecord> = {}): UsageRecord 
     reasoningTokens: 12,
     cachedTokens: 40,
     cacheReadTokens: 40,
-    totalTokens: 130
+    totalTokens: 130,
   },
   serviceTier: "auto",
-  ...overrides
-})
+  ...overrides,
+});

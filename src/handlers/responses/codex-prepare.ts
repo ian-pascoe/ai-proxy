@@ -6,16 +6,16 @@
  * prepared once here (available models listed in `spawn_agent`, message encryption removed) so every provider the request
  * is routed to sees readable definitions; executors repeat the idempotent parts they need.
  */
-import { Effect } from "effect"
-import type { HeaderInput } from "../../config/payload/index.ts"
+import { Effect } from "effect";
+import type { HeaderInput } from "../../config/payload/index.ts";
 import {
   codexMultiAgentV2Enabled,
   prepareCodexMultiAgentV2Tools,
-  rewriteCodexOrphanDelegationInputForConfig
-} from "../../executor/helps/codex-multi-agent-v2.ts"
-import type { Json } from "../../json/index.ts"
-import { currentConfig } from "../request.ts"
-import { ModelProviders } from "../model-providers.ts"
+  rewriteCodexOrphanDelegationInputForConfig,
+} from "../../executor/helps/codex-multi-agent-v2.ts";
+import type { Json } from "../../json/index.ts";
+import { currentConfig } from "../request.ts";
+import { ModelProviders } from "../model-providers.ts";
 
 /**
  * Mutates the parsed Responses `body` in place: orphan delegations always (config opt-in), the multi-agent v2 tool
@@ -24,20 +24,20 @@ import { ModelProviders } from "../model-providers.ts"
  */
 export const prepareCodexResponsesRequest = (body: Json, headers: HeaderInput, tools: boolean) =>
   Effect.gen(function* () {
-    const config = yield* Effect.orElseSucceed(currentConfig, () => undefined)
+    const config = yield* Effect.orElseSucceed(currentConfig, () => undefined);
 
-    if (config === undefined) return
+    if (config === undefined) return;
 
     if (tools && codexMultiAgentV2Enabled(headers, config)) {
-      const providers = yield* ModelProviders
+      const providers = yield* ModelProviders;
 
       const source =
         providers.spawnAgentSource === undefined
           ? undefined
-          : yield* Effect.orElseSucceed(providers.spawnAgentSource, () => undefined)
+          : yield* Effect.orElseSucceed(providers.spawnAgentSource, () => undefined);
 
-      prepareCodexMultiAgentV2Tools(headers, body, true, source)
+      prepareCodexMultiAgentV2Tools(headers, body, true, source);
     }
 
-    rewriteCodexOrphanDelegationInputForConfig(headers, body, config)
-  })
+    rewriteCodexOrphanDelegationInputForConfig(headers, body, config);
+  });

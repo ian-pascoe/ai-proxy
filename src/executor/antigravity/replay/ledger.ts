@@ -7,230 +7,254 @@
  * generation so a stale writer that read the older state cannot publish over the delete. Entry bounds (4096 items,
  * 16 MiB) are the Go ones; the 10240-entry cap is replaced by the per-session instance and the TTL sweep.
  */
-import { Effect } from "effect"
-import { asString, get, isJsonArray, type Json, type JsonObject } from "../../../json/index.ts"
+import { Effect } from "effect";
+import { asString, get, isJsonArray, type Json, type JsonObject } from "../../../json/index.ts";
 import {
   type BackendResolver,
   bestEffort,
   fixedBackend,
   makeMemoryBackend,
-  resolveBackend
-} from "../../../session-state/client.ts"
-import type { SessionAddress } from "../../../session-state/protocol.ts"
+  resolveBackend,
+} from "../../../session-state/client.ts";
+import type { SessionAddress } from "../../../session-state/protocol.ts";
 
-export const REPLAY_TTL_MS = 60 * 60 * 1000
+export const REPLAY_TTL_MS = 60 * 60 * 1000;
 
-export const REPLAY_MAX_ITEMS_PER_ENTRY = 4096
+export const REPLAY_MAX_ITEMS_PER_ENTRY = 4096;
 
-export const REPLAY_MAX_BYTES_PER_ENTRY = 16 << 20
+export const REPLAY_MAX_BYTES_PER_ENTRY = 16 << 20;
 
-const MIN_THOUGHT_SIGNATURE_LEN = 16
+const MIN_THOUGHT_SIGNATURE_LEN = 16;
 
-const STORE_NAME = "antigravity-replay"
+const STORE_NAME = "antigravity-replay";
 
-const MAX_MODELS_PER_SESSION = 64
+const MAX_MODELS_PER_SESSION = 64;
 
-const SKIP_VALIDATOR = "skip_thought_signature_validator"
+const SKIP_VALIDATOR = "skip_thought_signature_validator";
 
-const TOMBSTONE = JSON.stringify({ deleted: true })
+const TOMBSTONE = JSON.stringify({ deleted: true });
 
 /** The exact ledger state one request read (`AntigravityReasoningReplaySnapshot`). */
 export interface LedgerSnapshot {
   /** False when the state was never read: writes are then unconditional. */
-  readonly loaded: boolean
+  readonly loaded: boolean;
   /** Generation of the entry or tombstone that was read (0 = absent). */
-  readonly generation: number
+  readonly generation: number;
 }
 
-export const UNLOADED_SNAPSHOT: LedgerSnapshot = { loaded: false, generation: 0 }
+export const UNLOADED_SNAPSHOT: LedgerSnapshot = { loaded: false, generation: 0 };
 
 export interface LedgerRead {
   /** The replayable items; undefined for a miss or a tombstone. */
-  readonly items: ReadonlyArray<Json> | undefined
-  readonly snapshot: LedgerSnapshot
+  readonly items: ReadonlyArray<Json> | undefined;
+  readonly snapshot: LedgerSnapshot;
 }
 
 export interface ReplayLedger {
   /** `GetAntigravityReasoningReplayItemsWithSnapshotRequired` (a hit slides the TTL). */
-  readonly get: (modelName: string, sessionKey: string) => Effect.Effect<LedgerRead>
+  readonly get: (modelName: string, sessionKey: string) => Effect.Effect<LedgerRead>;
   /** `ReplaceAntigravityReasoningReplayItemsIfUnchanged`: false when another request changed the state. */
   readonly replaceIfUnchanged: (
     modelName: string,
     sessionKey: string,
     snapshot: LedgerSnapshot,
-    items: ReadonlyArray<Json>
-  ) => Effect.Effect<boolean>
+    items: ReadonlyArray<Json>,
+  ) => Effect.Effect<boolean>;
   /** `DeleteAntigravityReasoningReplayItemsIfUnchanged`. */
   readonly deleteIfUnchanged: (
     modelName: string,
     sessionKey: string,
-    snapshot: LedgerSnapshot
-  ) => Effect.Effect<boolean>
+    snapshot: LedgerSnapshot,
+  ) => Effect.Effect<boolean>;
 }
 
-const numberOf = (value: Json | undefined): number | undefined => (typeof value === "number" ? value : undefined)
+const numberOf = (value: Json | undefined): number | undefined =>
+  typeof value === "number" ? value : undefined;
 
 const normalizeThoughtSignature = (item: Json): JsonObject | undefined => {
-  let signature = asString(get(item, "thoughtSignature")).trim()
+  let signature = asString(get(item, "thoughtSignature")).trim();
 
-  if (signature === "") signature = asString(get(item, "thought_signature")).trim()
+  if (signature === "") signature = asString(get(item, "thought_signature")).trim();
 
-  if (signature === "" || signature === SKIP_VALIDATOR || signature.length < MIN_THOUGHT_SIGNATURE_LEN) return undefined
-  const out: JsonObject = { type: "thought_signature", thoughtSignature: signature }
-  const contentIndex = numberOf(get(item, "contentIndex"))
+  if (
+    signature === "" ||
+    signature === SKIP_VALIDATOR ||
+    signature.length < MIN_THOUGHT_SIGNATURE_LEN
+  )
+    return undefined;
+  const out: JsonObject = { type: "thought_signature", thoughtSignature: signature };
+  const contentIndex = numberOf(get(item, "contentIndex"));
 
-  if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex)
-  const partIndex = numberOf(get(item, "partIndex"))
+  if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex);
+  const partIndex = numberOf(get(item, "partIndex"));
 
-  if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex)
-  const targetKind = asString(get(item, "targetKind")).trim()
+  if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex);
+  const targetKind = asString(get(item, "targetKind")).trim();
 
-  if (targetKind === "text" || targetKind === "thought") out["targetKind"] = targetKind
-  const targetHash = asString(get(item, "targetHash")).trim()
+  if (targetKind === "text" || targetKind === "thought") out["targetKind"] = targetKind;
+  const targetHash = asString(get(item, "targetHash")).trim();
 
-  if (targetHash !== "") out["targetHash"] = targetHash
-  const occurrence = numberOf(get(item, "targetOccurrence"))
+  if (targetHash !== "") out["targetHash"] = targetHash;
+  const occurrence = numberOf(get(item, "targetOccurrence"));
 
-  if (occurrence !== undefined && Math.trunc(occurrence) >= 0) out["targetOccurrence"] = Math.trunc(occurrence)
-  const contextHash = asString(get(item, "contextHash")).trim()
+  if (occurrence !== undefined && Math.trunc(occurrence) >= 0)
+    out["targetOccurrence"] = Math.trunc(occurrence);
+  const contextHash = asString(get(item, "contextHash")).trim();
 
-  if (contextHash !== "") out["contextHash"] = contextHash
+  if (contextHash !== "") out["contextHash"] = contextHash;
 
-  return out
-}
+  return out;
+};
 
 const normalizeFunctionCallPart = (item: Json): JsonObject | undefined => {
-  let callId = asString(get(item, "call_id")).trim()
+  let callId = asString(get(item, "call_id")).trim();
 
-  if (callId === "") callId = asString(get(item, "id")).trim()
-  let name = asString(get(item, "name")).trim()
-  let args = get(item, "args")
+  if (callId === "") callId = asString(get(item, "id")).trim();
+  let name = asString(get(item, "name")).trim();
+  let args = get(item, "args");
 
   if (name === "" || args === undefined) {
-    const call = get(item, "functionCall")
+    const call = get(item, "functionCall");
 
     if (call !== undefined) {
-      if (callId === "") callId = asString(get(call, "id")).trim()
+      if (callId === "") callId = asString(get(call, "id")).trim();
 
-      if (name === "") name = asString(get(call, "name")).trim()
+      if (name === "") name = asString(get(call, "name")).trim();
 
-      if (args === undefined) args = get(call, "args")
+      if (args === undefined) args = get(call, "args");
     }
   }
 
-  if (name === "" || args === undefined) return undefined
-  const out: JsonObject = { type: "function_call_part" }
+  if (name === "" || args === undefined) return undefined;
+  const out: JsonObject = { type: "function_call_part" };
 
-  if (callId !== "") out["call_id"] = callId
-  out["name"] = name
-  out["args"] = args
-  const signature = asString(get(item, "thoughtSignature")).trim()
+  if (callId !== "") out["call_id"] = callId;
+  out["name"] = name;
+  out["args"] = args;
+  const signature = asString(get(item, "thoughtSignature")).trim();
 
-  if (signature !== "" && signature !== SKIP_VALIDATOR) out["thoughtSignature"] = signature
-  const contentIndex = numberOf(get(item, "contentIndex"))
+  if (signature !== "" && signature !== SKIP_VALIDATOR) out["thoughtSignature"] = signature;
+  const contentIndex = numberOf(get(item, "contentIndex"));
 
-  if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex)
-  const partIndex = numberOf(get(item, "partIndex"))
+  if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex);
+  const partIndex = numberOf(get(item, "partIndex"));
 
-  if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex)
-  const occurrence = numberOf(get(item, "targetOccurrence"))
+  if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex);
+  const occurrence = numberOf(get(item, "targetOccurrence"));
 
-  if (occurrence !== undefined && Math.trunc(occurrence) >= 0) out["targetOccurrence"] = Math.trunc(occurrence)
-  const contextHash = asString(get(item, "contextHash")).trim()
+  if (occurrence !== undefined && Math.trunc(occurrence) >= 0)
+    out["targetOccurrence"] = Math.trunc(occurrence);
+  const contextHash = asString(get(item, "contextHash")).trim();
 
-  if (contextHash !== "") out["contextHash"] = contextHash
+  if (contextHash !== "") out["contextHash"] = contextHash;
 
-  return out
-}
+  return out;
+};
 
 /** `normalizeAntigravityReasoningReplayItems`: undefined when over the bounds or nothing is replayable. */
 export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undefined => {
-  if (items.length > REPLAY_MAX_ITEMS_PER_ENTRY) return undefined
-  const normalized: Json[] = []
-  let totalBytes = 0
+  if (items.length > REPLAY_MAX_ITEMS_PER_ENTRY) return undefined;
+  const normalized: Json[] = [];
+  let totalBytes = 0;
 
   for (const item of items) {
-    let out: JsonObject | undefined
+    let out: JsonObject | undefined;
 
     switch (asString(get(item, "type")).trim()) {
       case "thought_signature":
-        out = normalizeThoughtSignature(item)
-        break
+        out = normalizeThoughtSignature(item);
+        break;
       case "function_call_part":
-        out = normalizeFunctionCallPart(item)
-        break
+        out = normalizeFunctionCallPart(item);
+        break;
     }
 
-    if (out === undefined) continue
-    totalBytes += JSON.stringify(out).length
+    if (out === undefined) continue;
+    totalBytes += JSON.stringify(out).length;
 
-    if (totalBytes > REPLAY_MAX_BYTES_PER_ENTRY) return undefined
-    normalized.push(out)
+    if (totalBytes > REPLAY_MAX_BYTES_PER_ENTRY) return undefined;
+    normalized.push(out);
   }
 
-  return normalized.length > 0 ? normalized : undefined
-}
+  return normalized.length > 0 ? normalized : undefined;
+};
 
-const addressOf = (sessionKey: string): SessionAddress => ({ store: STORE_NAME, scope: "", session: sessionKey.trim() })
+const addressOf = (sessionKey: string): SessionAddress => ({
+  store: STORE_NAME,
+  scope: "",
+  session: sessionKey.trim(),
+});
 
 const parseEntry = (text: string | undefined): Json[] | undefined => {
-  if (text === undefined) return undefined
+  if (text === undefined) return undefined;
 
   try {
-    const parsed: unknown = JSON.parse(text)
+    const parsed: unknown = JSON.parse(text);
 
-    if (!isJsonArray(parsed as Json)) return undefined
+    if (!isJsonArray(parsed as Json)) return undefined;
 
-    return parsed as Json[]
+    return parsed as Json[];
   } catch {
-    return undefined
+    return undefined;
   }
-}
+};
 
 const cacheKey = (modelName: string, sessionKey: string): string =>
-  modelName.trim() === "" || sessionKey.trim() === "" ? "" : modelName.trim()
+  modelName.trim() === "" || sessionKey.trim() === "" ? "" : modelName.trim();
 
-export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveBackend()): ReplayLedger => ({
+export const makeSessionStateReplayLedger = (
+  backend: BackendResolver = resolveBackend(),
+): ReplayLedger => ({
   get: (modelName, sessionKey) => {
-    const key = cacheKey(modelName, sessionKey)
+    const key = cacheKey(modelName, sessionKey);
 
-    if (key === "") return Effect.succeed({ items: undefined, snapshot: UNLOADED_SNAPSHOT })
+    if (key === "") return Effect.succeed({ items: undefined, snapshot: UNLOADED_SNAPSHOT });
 
     return bestEffort(
       "antigravity replay get",
       { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead,
       Effect.gen(function* () {
-        const state = yield* backend
-        const [result] = yield* state.run(addressOf(sessionKey), [{ op: "get", key, extendTtlMs: REPLAY_TTL_MS }])
+        const state = yield* backend;
+        const [result] = yield* state.run(addressOf(sessionKey), [
+          { op: "get", key, extendTtlMs: REPLAY_TTL_MS },
+        ]);
 
-        if (result?.status !== "ok") return { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead
-        const snapshot: LedgerSnapshot = { loaded: true, generation: result.generation }
-        const stored = parseEntry(result.value)
+        if (result?.status !== "ok")
+          return { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead;
+        const snapshot: LedgerSnapshot = { loaded: true, generation: result.generation };
+        const stored = parseEntry(result.value);
 
-        if (stored === undefined || stored.length === 0 || stored.length > REPLAY_MAX_ITEMS_PER_ENTRY) {
-          return { items: undefined, snapshot } satisfies LedgerRead
+        if (
+          stored === undefined ||
+          stored.length === 0 ||
+          stored.length > REPLAY_MAX_ITEMS_PER_ENTRY
+        ) {
+          return { items: undefined, snapshot } satisfies LedgerRead;
         }
 
-        const normalized = normalizeReplayItems(stored)
+        const normalized = normalizeReplayItems(stored);
 
         return {
-          items: normalized !== undefined && normalized.length === stored.length ? normalized : undefined,
-          snapshot
-        } satisfies LedgerRead
-      })
-    )
+          items:
+            normalized !== undefined && normalized.length === stored.length
+              ? normalized
+              : undefined,
+          snapshot,
+        } satisfies LedgerRead;
+      }),
+    );
   },
   replaceIfUnchanged: (modelName, sessionKey, snapshot, items) => {
-    const key = cacheKey(modelName, sessionKey)
-    const normalized = key === "" ? undefined : normalizeReplayItems(items)
+    const key = cacheKey(modelName, sessionKey);
+    const normalized = key === "" ? undefined : normalizeReplayItems(items);
 
-    if (normalized === undefined) return Effect.succeed(false)
+    if (normalized === undefined) return Effect.succeed(false);
 
     return bestEffort(
       "antigravity replay replace",
       false,
       Effect.gen(function* () {
-        const state = yield* backend
+        const state = yield* backend;
 
         const [result] = yield* state.run(addressOf(sessionKey), [
           {
@@ -239,24 +263,24 @@ export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveB
             value: JSON.stringify(normalized),
             ttlMs: REPLAY_TTL_MS,
             maxEntries: MAX_MODELS_PER_SESSION,
-            ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {})
-          }
-        ])
+            ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {}),
+          },
+        ]);
 
-        return result?.status === "ok"
-      })
-    )
+        return result?.status === "ok";
+      }),
+    );
   },
   deleteIfUnchanged: (modelName, sessionKey, snapshot) => {
-    const key = cacheKey(modelName, sessionKey)
+    const key = cacheKey(modelName, sessionKey);
 
-    if (key === "") return Effect.succeed(false)
+    if (key === "") return Effect.succeed(false);
 
     return bestEffort(
       "antigravity replay delete",
       false,
       Effect.gen(function* () {
-        const state = yield* backend
+        const state = yield* backend;
 
         const [result] = yield* state.run(addressOf(sessionKey), [
           {
@@ -265,19 +289,19 @@ export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveB
             value: TOMBSTONE,
             ttlMs: REPLAY_TTL_MS,
             maxEntries: MAX_MODELS_PER_SESSION,
-            ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {})
-          }
-        ])
+            ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {}),
+          },
+        ]);
 
-        return result?.status === "ok"
-      })
-    )
-  }
-})
+        return result?.status === "ok";
+      }),
+    );
+  },
+});
 
 /** In-memory ledger for tests (`now` is injectable). */
 export const makeInMemoryReplayLedger = (now?: () => number): ReplayLedger =>
-  makeSessionStateReplayLedger(fixedBackend(makeMemoryBackend(now)))
+  makeSessionStateReplayLedger(fixedBackend(makeMemoryBackend(now)));
 
 /** Default ledger: the `SessionState` Durable Object when bound, else per isolate. */
-export const defaultReplayLedger: ReplayLedger = makeSessionStateReplayLedger()
+export const defaultReplayLedger: ReplayLedger = makeSessionStateReplayLedger();

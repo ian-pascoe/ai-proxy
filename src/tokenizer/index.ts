@@ -1,5 +1,10 @@
-export { BpeCodec } from "./bpe.ts"
+export { BpeCodec } from "./bpe.ts";
 
-export { type EncodingName, encodingForCodexModel, encodingForModel, getCodec } from "./encodings.ts"
+export {
+  type EncodingName,
+  encodingForCodexModel,
+  encodingForModel,
+  getCodec,
+} from "./encodings.ts";
 
-export { goTrimSpace } from "./text.ts"
+export { goTrimSpace } from "./text.ts";

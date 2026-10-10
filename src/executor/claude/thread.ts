@@ -8,91 +8,104 @@
  * entries, oldest evicted); here they live in the `SessionState` Durable Object, one instance per caller scope with the
  * same 1024-entry bound, and expire after 7 days.
  */
-import { Effect } from "effect"
-import type { Json, JsonObject } from "../../json/index.ts"
-import { isArr, isObj, str } from "../../translator/common/gjson.ts"
+import { Effect } from "effect";
+import type { Json, JsonObject } from "../../json/index.ts";
+import { isArr, isObj, str } from "../../translator/common/gjson.ts";
 import {
   type BackendResolver,
   bestEffort,
   fixedBackend,
   makeMemoryBackend,
-  resolveBackend
-} from "../../session-state/client.ts"
-import type { SessionAddress, StateOp } from "../../session-state/protocol.ts"
-import { ExecutionError } from "../errors.ts"
+  resolveBackend,
+} from "../../session-state/client.ts";
+import type { SessionAddress, StateOp } from "../../session-state/protocol.ts";
+import { ExecutionError } from "../errors.ts";
 
-const STORE_NAME = "claude-tool-aliases"
+const STORE_NAME = "claude-tool-aliases";
 
-const ENTRY_LIMIT = 1024
+const ENTRY_LIMIT = 1024;
 
-const TTL_MS = 7 * 24 * 3_600_000
+const TTL_MS = 7 * 24 * 3_600_000;
 
 export const THREAD_NOT_FOUND_MESSAGE =
-  "No thread state was found for the requested previous_message_id. Replay the full conversation with thread create to start a new Thread."
+  "No thread state was found for the requested previous_message_id. Replay the full conversation with thread create to start a new Thread.";
 
 /** `newClaudeThreadNotFoundError`: a request-scoped 404 with Anthropic's error body. */
 export const threadNotFoundError = (): ExecutionError =>
   new ExecutionError({
     status: 404,
-    message: JSON.stringify({ type: "error", error: { type: "not_found_error", message: THREAD_NOT_FOUND_MESSAGE } }),
+    message: JSON.stringify({
+      type: "error",
+      error: { type: "not_found_error", message: THREAD_NOT_FOUND_MESSAGE },
+    }),
     requestScoped: true,
-    direct: true
-  })
+    direct: true,
+  });
 
 /** `claudeOAuthToolAliasKeys`: the previous message and (once known) the new message of the thread. */
 export const threadAliasKeys = (body: JsonObject, messageId: string): string[] => {
-  const keys: string[] = []
-  const previous = str(isObj(body.thread) ? body.thread.previous_message_id : undefined)
+  const keys: string[] = [];
+  const previous = str(isObj(body.thread) ? body.thread.previous_message_id : undefined);
 
-  if (previous !== "") keys.push(`message:${previous}`)
+  if (previous !== "") keys.push(`message:${previous}`);
 
-  if (messageId !== "") keys.push(`message:${messageId}`)
+  if (messageId !== "") keys.push(`message:${messageId}`);
 
-  return keys
-}
+  return keys;
+};
 
 /** `claudeThreadContinuationNeedsAliasState`: a `continue` turn that sends no tool definitions itself. */
 export const threadContinuationNeedsAliasState = (body: JsonObject): boolean => {
-  const thread = body.thread
+  const thread = body.thread;
 
-  if (!isObj(thread) || str(thread.type) !== "continue") return false
-  const previous = thread.previous_message_id
+  if (!isObj(thread) || str(thread.type) !== "continue") return false;
+  const previous = thread.previous_message_id;
 
-  if (previous === undefined || str(previous) === "") return false
+  if (previous === undefined || str(previous) === "") return false;
 
-  return !isArr(body.tools) || body.tools.length === 0
-}
+  return !isArr(body.tools) || body.tools.length === 0;
+};
 
 export interface ToolAliasStore {
   /** The aliases saved for the first of `keys` that exists (`alias -> client tool name`). */
   readonly load: (
     callerScope: string,
-    keys: ReadonlyArray<string>
-  ) => Effect.Effect<ReadonlyMap<string, string> | undefined>
+    keys: ReadonlyArray<string>,
+  ) => Effect.Effect<ReadonlyMap<string, string> | undefined>;
   readonly save: (
     callerScope: string,
     keys: ReadonlyArray<string>,
-    aliases: ReadonlyMap<string, string>
-  ) => Effect.Effect<void>
+    aliases: ReadonlyMap<string, string>,
+  ) => Effect.Effect<void>;
 }
 
-const addressOf = (callerScope: string): SessionAddress => ({ store: STORE_NAME, scope: callerScope, session: "state" })
+const addressOf = (callerScope: string): SessionAddress => ({
+  store: STORE_NAME,
+  scope: callerScope,
+  session: "state",
+});
 
 const parseAliases = (text: string | undefined): ReadonlyMap<string, string> | undefined => {
-  if (text === undefined) return undefined
+  if (text === undefined) return undefined;
 
   try {
-    const parsed = JSON.parse(text) as Json
+    const parsed = JSON.parse(text) as Json;
 
-    if (!isObj(parsed)) return undefined
+    if (!isObj(parsed)) return undefined;
 
-    return new Map(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+    return new Map(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
   } catch {
-    return undefined
+    return undefined;
   }
-}
+};
 
-export const makeSessionStateToolAliasStore = (backend: BackendResolver = resolveBackend()): ToolAliasStore => ({
+export const makeSessionStateToolAliasStore = (
+  backend: BackendResolver = resolveBackend(),
+): ToolAliasStore => ({
   load: (callerScope, keys) =>
     keys.length === 0
       ? Effect.succeed(undefined)
@@ -100,24 +113,24 @@ export const makeSessionStateToolAliasStore = (backend: BackendResolver = resolv
           "claude tool alias load",
           undefined,
           Effect.gen(function* () {
-            const ops: StateOp[] = keys.map((key) => ({ op: "get", key }))
-            const results = yield* (yield* backend).run(addressOf(callerScope), ops)
+            const ops: StateOp[] = keys.map((key) => ({ op: "get", key }));
+            const results = yield* (yield* backend).run(addressOf(callerScope), ops);
 
             for (const result of results) {
-              if (result.status !== "ok" || result.value === undefined) continue
-              const aliases = parseAliases(result.value)
+              if (result.status !== "ok" || result.value === undefined) continue;
+              const aliases = parseAliases(result.value);
 
-              if (aliases !== undefined) return aliases
+              if (aliases !== undefined) return aliases;
             }
 
-            return undefined
-          })
+            return undefined;
+          }),
         ),
   save: (callerScope, keys, aliases) => {
-    const targets = keys.filter((key) => key !== "")
+    const targets = keys.filter((key) => key !== "");
 
-    if (targets.length === 0) return Effect.void
-    const value = JSON.stringify(Object.fromEntries(aliases))
+    if (targets.length === 0) return Effect.void;
+    const value = JSON.stringify(Object.fromEntries(aliases));
 
     return bestEffort(
       "claude tool alias save",
@@ -128,15 +141,15 @@ export const makeSessionStateToolAliasStore = (backend: BackendResolver = resolv
           key,
           value,
           ttlMs: TTL_MS,
-          maxEntries: ENTRY_LIMIT
-        }))
+          maxEntries: ENTRY_LIMIT,
+        }));
 
-        yield* (yield* backend).run(addressOf(callerScope), ops)
-      })
-    )
-  }
-})
+        yield* (yield* backend).run(addressOf(callerScope), ops);
+      }),
+    );
+  },
+});
 
 /** In-memory store for tests (`now` is injectable). */
 export const makeMemoryToolAliasStore = (now?: () => number): ToolAliasStore =>
-  makeSessionStateToolAliasStore(fixedBackend(makeMemoryBackend(now)))
+  makeSessionStateToolAliasStore(fixedBackend(makeMemoryBackend(now)));

@@ -1,11 +1,15 @@
 // `ForAPIKey` scoping (oauth_scope_executor.go) and the executor registry wiring of the Kimi/Meta/Devin providers.
-import { Effect } from "effect"
-import { describe, expect, it } from "vitest"
-import { makeDevinExecutor } from "../src/executor/devin/executor.ts"
-import { configForApiKey, scopeContext, withApiKeyScope } from "../src/executor/helps/oauth-scope.ts"
-import { makeExecutorRegistry } from "../src/executor/registry.ts"
-import type { ExecutionContext, ProviderExecutor } from "../src/executor/types.ts"
-import { credential, harness, loadConfig } from "./support/executor-run.ts"
+import { Effect } from "effect";
+import { describe, expect, it } from "vitest";
+import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
+import {
+  configForApiKey,
+  scopeContext,
+  withApiKeyScope,
+} from "../src/executor/helps/oauth-scope.ts";
+import { makeExecutorRegistry } from "../src/executor/registry.ts";
+import type { ExecutionContext, ProviderExecutor } from "../src/executor/types.ts";
+import { credential, harness, loadConfig } from "./support/executor-run.ts";
 
 const YAML = `
 oauth:
@@ -18,72 +22,82 @@ oauth:
 upstream:
   claude:
     model-level-cooling: true
-`
+`;
 
 describe("configForApiKey", () => {
   it("zeroes the OAuth-only provider settings and leaves everything else", async () => {
-    const config = await loadConfig(YAML)
-    expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua")
-    const scoped = configForApiKey(config)
-    expect(scoped.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("")
-    expect(scoped.oauth.providers.devin["sensitive-words"]).toEqual([])
-    expect(scoped.upstream.claude["model-level-cooling"]).toBe(true)
+    const config = await loadConfig(YAML);
+    expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua");
+    const scoped = configForApiKey(config);
+    expect(scoped.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("");
+    expect(scoped.oauth.providers.devin["sensitive-words"]).toEqual([]);
+    expect(scoped.upstream.claude["model-level-cooling"]).toBe(true);
     // The shared snapshot is never modified.
-    expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua")
-  })
+    expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua");
+  });
 
   it("only scopes API-key credentials", async () => {
-    const config = await loadConfig(YAML)
-    const usage = (await harness(credential("meta"), () => new Response(""))).usage
-    const base = { config, usage }
-    expect(scopeContext({ ...base, credential: credential("meta", { kind: "oauth" }) }).config).toBe(config)
+    const config = await loadConfig(YAML);
+    const usage = (await harness(credential("meta"), () => new Response(""))).usage;
+    const base = { config, usage };
     expect(
-      scopeContext({ ...base, credential: credential("meta", { kind: "apikey" }) }).config.oauth.providers.codex[
-        "header-defaults"
-      ]["user-agent"]
-    ).toBe("")
-  })
-})
+      scopeContext({ ...base, credential: credential("meta", { kind: "oauth" }) }).config,
+    ).toBe(config);
+    expect(
+      scopeContext({ ...base, credential: credential("meta", { kind: "apikey" }) }).config.oauth
+        .providers.codex["header-defaults"]["user-agent"],
+    ).toBe("");
+  });
+});
 
 describe("withApiKeyScope", () => {
-  const seen: ExecutionContext[] = []
+  const seen: ExecutionContext[] = [];
 
   const probe: ProviderExecutor = {
     identifier: "probe",
-    execute: (context) => Effect.sync(() => (seen.push(context), { payload: "", headers: new Headers() })),
+    execute: (context) =>
+      Effect.sync(() => (seen.push(context), { payload: "", headers: new Headers() })),
     executeStream: () => Effect.die("unused"),
-    countTokens: () => Effect.die("unused")
-  }
+    countTokens: () => Effect.die("unused"),
+  };
 
   it("wraps the providers whose Go executors implement ForAPIKey (not Devin)", async () => {
-    const config = await loadConfig(YAML)
-    const usage = (await harness(credential("meta"), () => new Response(""))).usage
+    const config = await loadConfig(YAML);
+    const usage = (await harness(credential("meta"), () => new Response(""))).usage;
 
-    for (const provider of ["codex", "claude", "meta", "kimi", "kimi-ai", "xai", "openai-compatible-x"]) {
-      seen.length = 0
+    for (const provider of [
+      "codex",
+      "claude",
+      "meta",
+      "kimi",
+      "kimi-ai",
+      "xai",
+      "openai-compatible-x",
+    ]) {
+      seen.length = 0;
       await Effect.runPromise(
         withApiKeyScope(provider, probe).execute(
           { config, usage, credential: credential(provider, { kind: "apikey" }) },
           { model: "m", payload: {} },
-          {} as never
-        ) as Effect.Effect<unknown>
-      )
-      expect(seen[0]?.config.oauth.providers.devin["sensitive-words"]).toEqual([])
+          {} as never,
+        ) as Effect.Effect<unknown>,
+      );
+      expect(seen[0]?.config.oauth.providers.devin["sensitive-words"]).toEqual([]);
     }
 
-    const devin = makeDevinExecutor()
-    expect(withApiKeyScope("devin", devin)).toBe(devin)
-  })
-})
+    const devin = makeDevinExecutor();
+    expect(withApiKeyScope("devin", devin)).toBe(devin);
+  });
+});
 
 describe("executor registry", () => {
   it("serves Kimi (both domains), Meta and Devin", () => {
-    const registry = makeExecutorRegistry()
-    expect(registry.get("kimi")?.identifier).toBe("kimi")
-    expect(registry.get("kimi-ai")?.identifier).toBe("kimi")
-    expect(registry.get("meta")?.identifier).toBe("meta")
-    expect(registry.get("devin")?.identifier).toBe("devin")
-    expect(registry.get("devin")).toBe(registry.get("DEVIN"))
-    expect(registry.get("unknown")).toBeUndefined()
-  })
-})
+    const registry = makeExecutorRegistry();
+    expect(registry.get("kimi")?.identifier).toBe("kimi");
+    expect(registry.get("kimi-ai")?.identifier).toBe("kimi");
+    expect(registry.get("meta")?.identifier).toBe("meta");
+    expect(registry.get("devin")?.identifier).toBe("devin");
+    expect(registry.get("devin")).toBe(registry.get("DEVIN"));
+    expect(registry.get("unknown")).toBeUndefined();
+  });
+});

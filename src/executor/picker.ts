@@ -17,109 +17,109 @@
  *  - `planRetry` answers whether another retry round is worthwhile and how long to wait first.
  *  - Snapshots must be treated as read-only; secrets in `attributes`/`metadata` must never be logged.
  */
-import { Context, type Effect } from "effect"
-import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts"
-import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts"
-import type { LcpPrepared } from "../session-routing/canonical.ts"
-import type { WorkerEnv } from "../platform/env.ts"
-import type { ExecutionError } from "./errors.ts"
+import { Context, type Effect } from "effect";
+import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
+import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts";
+import type { LcpPrepared } from "../session-routing/canonical.ts";
+import type { WorkerEnv } from "../platform/env.ts";
+import type { ExecutionError } from "./errors.ts";
 
 /** Read-only view of one credential (Go `cliproxyauth.Auth`). */
 export interface CredentialSnapshot {
   /** Stable credential id (never derived from a secret in clear text). */
-  readonly id: string
+  readonly id: string;
   /** Provider / executor key, e.g. `claude`, `codex`, `gemini`, `openai-compatible-openrouter`. */
-  readonly provider: string
+  readonly provider: string;
   /** `apikey` for configured keys, `oauth` for login credentials. */
-  readonly kind: "apikey" | "oauth"
+  readonly kind: "apikey" | "oauth";
   /** Account label for logs and usage (e.g. compat entry name, email). */
-  readonly label?: string
+  readonly label?: string;
   /** Model namespace prefix (`team-a` in `team-a/gpt-5`); stripped before execution. */
-  readonly prefix?: string
+  readonly prefix?: string;
   /** Bumped when token/key material changes (a refresh); results are reported against it. */
-  readonly credentialVersion?: number
+  readonly credentialVersion?: number;
   /**
    * String attributes as in Go: `base_url`, `api_key`, `compat_name`, `provider_key`, `config_index`, `priority`,
    * `weight`, `header:<Name>` (custom upstream headers), ...
    */
-  readonly attributes: Readonly<Record<string, string>>
+  readonly attributes: Readonly<Record<string, string>>;
   /** Provider metadata (OAuth tokens, account ids, `disable_cooling`, `request_retry`, ...). */
-  readonly metadata: Readonly<Record<string, unknown>>
+  readonly metadata: Readonly<Record<string, unknown>>;
 }
 
 /** Session identity extracted by the handler (see `handlers/session.ts`). */
 export interface PickSession {
-  readonly id: string
-  readonly parentId?: string
-  readonly isFork?: boolean
+  readonly id: string;
+  readonly parentId?: string;
+  readonly isFork?: boolean;
 }
 
 export interface PickRequest {
   /** Candidate providers in preference order (from model resolution). */
-  readonly providers: ReadonlyArray<string>
+  readonly providers: ReadonlyArray<string>;
   /** Route model as resolved by the handler: may carry a credential prefix and a `(thinking)` suffix. */
-  readonly model: string
+  readonly model: string;
   /** Caller isolation scope (`AccessPrincipal.callerScope`). */
-  readonly callerScope: string
+  readonly callerScope: string;
   /** Session identity for affinity/stickiness, when the request carries one. */
-  readonly session?: PickSession
+  readonly session?: PickSession;
   /** Conversation fingerprints for the LCP matcher (requests without an explicit `session`). */
-  readonly lcp?: LcpPrepared
+  readonly lcp?: LcpPrepared;
   /** Derived content-hash / message-hash identity, used when the LCP matcher does not apply. */
-  readonly fallbackSession?: PickSession
+  readonly fallbackSession?: PickSession;
   /** Credentials already tried in this retry round. */
-  readonly excludedIds?: ReadonlyArray<string>
+  readonly excludedIds?: ReadonlyArray<string>;
   /** Zero-based retry round (credentials whose own `request-retry` is below it are skipped). */
-  readonly retryRound?: number
+  readonly retryRound?: number;
   /** `routing.retry.request-retry`; per-credential `request_retry` overrides it. */
-  readonly requestRetry?: number
+  readonly requestRetry?: number;
   /** Require this credential (e.g. video retrieval bound to the creating credential). */
-  readonly pinnedId?: string
+  readonly pinnedId?: string;
   /** Select as if for this model while executing `model` (Interactions agents, Go `auth_selection_model`). */
-  readonly selectionModel?: string
+  readonly selectionModel?: string;
   /** Exclude free-plan credentials (Codex image tools). */
-  readonly disallowFreeAuth?: boolean
+  readonly disallowFreeAuth?: boolean;
   /** Downstream WebSocket request: prefer Codex credentials with `websockets=true`. */
-  readonly preferWebsockets?: boolean
+  readonly preferWebsockets?: boolean;
   /** Antigravity credits fallback: cooling credentials stay selectable (credits are billed outside the model quota). */
-  readonly ignoreCooldown?: boolean
+  readonly ignoreCooldown?: boolean;
 }
 
 /** Routing of the requested model through the picked credential. */
 export interface PickedRoute {
-  readonly requestedModel: string
+  readonly requestedModel: string;
   /** The model without this credential's prefix. */
-  readonly routeModel: string
+  readonly routeModel: string;
   /** Upstream models to try in order (alias pools are rotated and exclude cooling models); never empty. */
-  readonly upstreamModels: ReadonlyArray<string>
+  readonly upstreamModels: ReadonlyArray<string>;
   /** Model name clients should see in responses (the request, or the configured alias with `force-mapping`). */
-  readonly originalAlias: string
-  readonly forceMapping: boolean
+  readonly originalAlias: string;
+  readonly forceMapping: boolean;
   /** Key under which cooldown state for the selection is tracked. */
-  readonly stateModel: string
+  readonly stateModel: string;
   /** Several upstream models share the alias: each attempt is reported under its upstream model. */
-  readonly pooled: boolean
+  readonly pooled: boolean;
 }
 
 export interface PickResult {
-  readonly credential: CredentialSnapshot
-  readonly route: PickedRoute
+  readonly credential: CredentialSnapshot;
+  readonly route: PickedRoute;
   /** Opaque lease to pass back to `report`. */
-  readonly lease: Lease
+  readonly lease: Lease;
   /** Lease id for logs. */
-  readonly leaseId: string
+  readonly leaseId: string;
   /** The session identity the LCP matcher settled on (usage `session_id`/`parent_session_id`). */
-  readonly session?: ResolvedSession
+  readonly session?: ResolvedSession;
 }
 
 /** Outcome of one upstream attempt (the wire type of `ControlPlane.report`). */
-export type AttemptResult = ReportResult
+export type AttemptResult = ReportResult;
 
 export class CredentialPicker extends Context.Service<
   CredentialPicker,
   {
-    readonly pick: (request: PickRequest) => Effect.Effect<PickResult, ExecutionError, WorkerEnv>
-    readonly report: (lease: Lease, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>
-    readonly planRetry: (query: RetryQuery) => Effect.Effect<RetryPlan, never, WorkerEnv>
+    readonly pick: (request: PickRequest) => Effect.Effect<PickResult, ExecutionError, WorkerEnv>;
+    readonly report: (lease: Lease, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>;
+    readonly planRetry: (query: RetryQuery) => Effect.Effect<RetryPlan, never, WorkerEnv>;
   }
 >()("cliproxy/executor/CredentialPicker") {}

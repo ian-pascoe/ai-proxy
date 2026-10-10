@@ -4,8 +4,8 @@
  * Go source: internal/registry/devin_models.go (`ValidateDevinModelsJSON`, `sanitizeAndValidateDevinModels`,
  * `aggregateDevinModels`, `splitDevinModelID`, `cleanDevinDisplayName`, `WithDevinBuiltins`).
  */
-import { Schema } from "effect"
-import { fromWire, type ModelInfo, type ThinkingSupport, WireModel } from "./model-info.ts"
+import { Schema } from "effect";
+import { fromWire, type ModelInfo, type ThinkingSupport, WireModel } from "./model-info.ts";
 
 const COMPOUND_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string; readd?: string }> = [
   { suffix: "-low-fast", effort: "low" },
@@ -23,8 +23,8 @@ const COMPOUND_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string; readd?:
   { suffix: "-thinking-1m", effort: "", readd: "-1m" },
   { suffix: "-thinking", effort: "" },
   { suffix: "-max-1m", effort: "max", readd: "-1m" },
-  { suffix: "-none-1m", effort: "none", readd: "-1m" }
-]
+  { suffix: "-none-1m", effort: "none", readd: "-1m" },
+];
 
 const SIMPLE_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string }> = [
   { suffix: "-none", effort: "none" },
@@ -33,8 +33,8 @@ const SIMPLE_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string }> = [
   { suffix: "-medium", effort: "medium" },
   { suffix: "-high", effort: "high" },
   { suffix: "-xhigh", effort: "xhigh" },
-  { suffix: "-max", effort: "max" }
-]
+  { suffix: "-max", effort: "max" },
+];
 
 const UPPER_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string }> = [
   { suffix: "_NONE", effort: "none" },
@@ -44,8 +44,8 @@ const UPPER_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string }> = [
   { suffix: "_HIGH", effort: "high" },
   { suffix: "_XHIGH", effort: "xhigh" },
   { suffix: "_MAX", effort: "max" },
-  { suffix: "_THINKING", effort: "high" }
-]
+  { suffix: "_THINKING", effort: "high" },
+];
 
 const DISPLAY_NAME_SUFFIXES: ReadonlyArray<string> = [
   " Low Fast",
@@ -73,8 +73,8 @@ const DISPLAY_NAME_SUFFIXES: ReadonlyArray<string> = [
   " None",
   " Minimal",
   " Thinking",
-  " Fast"
-]
+  " Fast",
+];
 
 const LEVEL_ORDER: Readonly<Record<string, number>> = {
   none: 0,
@@ -85,201 +85,221 @@ const LEVEL_ORDER: Readonly<Record<string, number>> = {
   xhigh: 5,
   max: 6,
   fast: 7,
-  priority: 8
-}
+  priority: 8,
+};
 
 /** Splits a lower-cased, unprefixed id into its base model and reasoning effort. */
 export const splitDevinModelId = (cleanId: string): { base: string; effort: string } => {
-  if (cleanId === "swe-1-6-slow") return { base: cleanId, effort: "" }
+  if (cleanId === "swe-1-6-slow") return { base: cleanId, effort: "" };
 
-  if (cleanId === "swe-1-6-fast") return { base: "swe-1-6", effort: "" }
-  const upper = cleanId.toUpperCase()
+  if (cleanId === "swe-1-6-fast") return { base: "swe-1-6", effort: "" };
+  const upper = cleanId.toUpperCase();
 
   for (const { suffix, effort } of UPPER_SUFFIXES) {
-    if (upper.endsWith(suffix)) return { base: cleanId.slice(0, cleanId.length - suffix.length), effort }
+    if (upper.endsWith(suffix))
+      return { base: cleanId.slice(0, cleanId.length - suffix.length), effort };
   }
 
   for (const { suffix, effort, readd } of COMPOUND_SUFFIXES) {
     if (cleanId.endsWith(suffix))
-      return { base: cleanId.slice(0, cleanId.length - suffix.length) + (readd ?? ""), effort }
+      return { base: cleanId.slice(0, cleanId.length - suffix.length) + (readd ?? ""), effort };
   }
 
   for (const { suffix, effort } of SIMPLE_SUFFIXES) {
-    if (cleanId.endsWith(suffix)) return { base: cleanId.slice(0, cleanId.length - suffix.length), effort }
+    if (cleanId.endsWith(suffix))
+      return { base: cleanId.slice(0, cleanId.length - suffix.length), effort };
   }
 
-  return { base: cleanId, effort: "" }
-}
+  return { base: cleanId, effort: "" };
+};
 
 const cleanDisplayName = (name: string): string => {
-  let trimmed = name.trim()
+  let trimmed = name.trim();
 
   for (;;) {
-    const lower = trimmed.toLowerCase()
-    const suffix = DISPLAY_NAME_SUFFIXES.find((candidate) => lower.endsWith(candidate.toLowerCase()))
+    const lower = trimmed.toLowerCase();
+    const suffix = DISPLAY_NAME_SUFFIXES.find((candidate) =>
+      lower.endsWith(candidate.toLowerCase()),
+    );
 
-    if (suffix === undefined) return trimmed
-    trimmed = trimmed.slice(0, trimmed.length - suffix.length).trim()
+    if (suffix === undefined) return trimmed;
+    trimmed = trimmed.slice(0, trimmed.length - suffix.length).trim();
   }
-}
+};
 
-type Mutable<T> = { -readonly [K in keyof T]: T[K] }
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 interface Aggregate {
-  readonly model: Mutable<ModelInfo>
-  readonly levels: Set<string>
+  readonly model: Mutable<ModelInfo>;
+  readonly levels: Set<string>;
 }
 
 const appendUnique = (target: string[], values: readonly string[] | undefined): void => {
-  for (const value of values ?? []) if (!target.includes(value)) target.push(value)
-}
+  for (const value of values ?? []) if (!target.includes(value)) target.push(value);
+};
 
 /** `aggregateDevinModels`: one entry per base model with the union of its effort variants as thinking levels. */
 export const aggregateDevinModels = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => {
-  const order: string[] = []
-  const aggregated = new Map<string, Aggregate>()
+  const order: string[] = [];
+  const aggregated = new Map<string, Aggregate>();
 
   for (const model of models) {
     const cleanId = model.id
       .trim()
       .replace(/^devin\//, "")
-      .toLowerCase()
+      .toLowerCase();
 
-    const split = splitDevinModelId(cleanId)
-    const baseId = split.base === "" ? cleanId : split.base
-    const namespacedBase = `devin/${baseId}`
-    const isBase = baseId === cleanId
+    const split = splitDevinModelId(cleanId);
+    const baseId = split.base === "" ? cleanId : split.base;
+    const namespacedBase = `devin/${baseId}`;
+    const isBase = baseId === cleanId;
 
-    let entry = aggregated.get(namespacedBase)
+    let entry = aggregated.get(namespacedBase);
 
     if (entry === undefined) {
-      const clone = structuredClone(model) as Mutable<ModelInfo>
-      const cleaned = cleanDisplayName(model.displayName ?? "")
-      const next = { ...clone, id: namespacedBase } as Mutable<ModelInfo>
-      const displayName = cleaned === "" ? model.displayName : cleaned
+      const clone = structuredClone(model) as Mutable<ModelInfo>;
+      const cleaned = cleanDisplayName(model.displayName ?? "");
+      const next = { ...clone, id: namespacedBase } as Mutable<ModelInfo>;
+      const displayName = cleaned === "" ? model.displayName : cleaned;
 
-      if (displayName === undefined || displayName === "") delete next.displayName
-      else next.displayName = displayName
-      entry = { model: next, levels: new Set() }
-      aggregated.set(namespacedBase, entry)
-      order.push(namespacedBase)
+      if (displayName === undefined || displayName === "") delete next.displayName;
+      else next.displayName = displayName;
+      entry = { model: next, levels: new Set() };
+      aggregated.set(namespacedBase, entry);
+      order.push(namespacedBase);
     }
 
-    const target = entry.model
+    const target = entry.model;
 
     if (isBase) {
       if (model.displayName !== undefined && model.displayName !== "")
-        target.displayName = cleanDisplayName(model.displayName)
+        target.displayName = cleanDisplayName(model.displayName);
 
-      if (model.ownedBy !== "") target.ownedBy = model.ownedBy
+      if (model.ownedBy !== "") target.ownedBy = model.ownedBy;
     }
 
-    if ((model.contextLength ?? 0) > (target.contextLength ?? 0)) target.contextLength = model.contextLength as number
+    if ((model.contextLength ?? 0) > (target.contextLength ?? 0))
+      target.contextLength = model.contextLength as number;
 
     if ((model.maxCompletionTokens ?? 0) > (target.maxCompletionTokens ?? 0))
-      target.maxCompletionTokens = model.maxCompletionTokens as number
+      target.maxCompletionTokens = model.maxCompletionTokens as number;
 
     if ((model.inputTokenLimit ?? 0) > (target.inputTokenLimit ?? 0))
-      target.inputTokenLimit = model.inputTokenLimit as number
+      target.inputTokenLimit = model.inputTokenLimit as number;
 
     if ((model.outputTokenLimit ?? 0) > (target.outputTokenLimit ?? 0))
-      target.outputTokenLimit = model.outputTokenLimit as number
+      target.outputTokenLimit = model.outputTokenLimit as number;
 
     for (const key of [
       "supportedInputModalities",
       "supportedOutputModalities",
-      "supportedGenerationMethods"
+      "supportedGenerationMethods",
     ] as const) {
-      if ((model[key] ?? []).length === 0) continue
-      const merged = [...(target[key] ?? [])]
-      appendUnique(merged, model[key])
-      target[key] = merged
+      if ((model[key] ?? []).length === 0) continue;
+      const merged = [...(target[key] ?? [])];
+      appendUnique(merged, model[key]);
+      target[key] = merged;
     }
 
-    for (const level of model.thinking?.levels ?? []) if (level !== "" && level !== "priority") entry.levels.add(level)
+    for (const level of model.thinking?.levels ?? [])
+      if (level !== "" && level !== "priority") entry.levels.add(level);
 
-    if (split.effort !== "" && split.effort !== "priority") entry.levels.add(split.effort)
+    if (split.effort !== "" && split.effort !== "priority") entry.levels.add(split.effort);
   }
 
   return order.map((id) => {
-    const { model, levels } = aggregated.get(id) as Aggregate
+    const { model, levels } = aggregated.get(id) as Aggregate;
 
     if (levels.size > 0) {
-      const rank = (level: string) => LEVEL_ORDER[level] ?? 99
-      const sorted = [...levels].toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))
-      model.thinking = { levels: sorted } satisfies ThinkingSupport
+      const rank = (level: string) => LEVEL_ORDER[level] ?? 99;
+      const sorted = [...levels].toSorted(
+        (a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0),
+      );
+      model.thinking = { levels: sorted } satisfies ThinkingSupport;
     }
 
-    if (model.type === "") model.type = "devin"
+    if (model.type === "") model.type = "devin";
 
-    if (model.object === "") model.object = "model"
+    if (model.object === "") model.object = "model";
 
-    if ((model.supportedInputModalities ?? []).length === 0) model.supportedInputModalities = ["text"]
+    if ((model.supportedInputModalities ?? []).length === 0)
+      model.supportedInputModalities = ["text"];
 
-    if ((model.supportedOutputModalities ?? []).length === 0) model.supportedOutputModalities = ["text"]
+    if ((model.supportedOutputModalities ?? []).length === 0)
+      model.supportedOutputModalities = ["text"];
 
-    if (!model.inputTokenLimit && model.contextLength) model.inputTokenLimit = model.contextLength
+    if (!model.inputTokenLimit && model.contextLength) model.inputTokenLimit = model.contextLength;
 
-    if (!model.outputTokenLimit && model.maxCompletionTokens) model.outputTokenLimit = model.maxCompletionTokens
+    if (!model.outputTokenLimit && model.maxCompletionTokens)
+      model.outputTokenLimit = model.maxCompletionTokens;
 
     if ((model.supportedGenerationMethods ?? []).length === 0)
-      model.supportedGenerationMethods = ["generateContent", "countTokens"]
+      model.supportedGenerationMethods = ["generateContent", "countTokens"];
 
-    return model
-  })
-}
+    return model;
+  });
+};
 
-export type CatalogResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string }
+export type CatalogResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: string };
 
 const Envelope = Schema.Struct({
   devin: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel)))),
-  models: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel))))
-})
+  models: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel)))),
+});
 
-const RawList = Schema.Array(Schema.NullOr(WireModel))
+const RawList = Schema.Array(Schema.NullOr(WireModel));
 
 /** `sanitizeAndValidateDevinModels`: namespaces and lower-cases ids, rejects nulls/empties/duplicates, aggregates. */
-const sanitize = (models: ReadonlyArray<typeof WireModel.Type | null>): CatalogResult<ModelInfo[]> => {
-  const seen = new Set<string>()
-  const out: ModelInfo[] = []
+const sanitize = (
+  models: ReadonlyArray<typeof WireModel.Type | null>,
+): CatalogResult<ModelInfo[]> => {
+  const seen = new Set<string>();
+  const out: ModelInfo[] = [];
 
   for (const [index, wire] of models.entries()) {
-    if (wire === null) return { ok: false, error: `model at index ${index} is null` }
-    let id = wire.id.trim()
+    if (wire === null) return { ok: false, error: `model at index ${index} is null` };
+    let id = wire.id.trim();
 
-    if (id === "") return { ok: false, error: `model at index ${index} has empty id` }
+    if (id === "") return { ok: false, error: `model at index ${index} has empty id` };
 
-    if (!id.toLowerCase().startsWith("devin/")) id = `devin/${id}`
-    id = id.toLowerCase()
+    if (!id.toLowerCase().startsWith("devin/")) id = `devin/${id}`;
+    id = id.toLowerCase();
 
-    if (seen.has(id)) return { ok: false, error: `duplicate model id: ${JSON.stringify(id)}` }
-    seen.add(id)
-    out.push({ ...fromWire(wire), id })
+    if (seen.has(id)) return { ok: false, error: `duplicate model id: ${JSON.stringify(id)}` };
+    seen.add(id);
+    out.push({ ...fromWire(wire), id });
   }
 
-  return { ok: true, value: aggregateDevinModels(out) }
-}
+  return { ok: true, value: aggregateDevinModels(out) };
+};
 
 /** `ValidateDevinModelsJSON`: accepts `{"devin":[...]}`, `{"models":[...]}` or a bare array. */
 export const parseDevinCatalog = (parsed: unknown): CatalogResult<ModelInfo[]> => {
-  if (parsed === null || parsed === undefined) return { ok: false, error: "empty Devin models payload" }
+  if (parsed === null || parsed === undefined)
+    return { ok: false, error: "empty Devin models payload" };
 
   if (Array.isArray(parsed)) {
-    const list = Schema.decodeUnknownResult(RawList)(parsed)
+    const list = Schema.decodeUnknownResult(RawList)(parsed);
 
-    if (list._tag === "Success" && list.success.length > 0) return sanitize(list.success)
+    if (list._tag === "Success" && list.success.length > 0) return sanitize(list.success);
   } else if (typeof parsed === "object") {
-    const envelope = Schema.decodeUnknownResult(Envelope)(parsed)
+    const envelope = Schema.decodeUnknownResult(Envelope)(parsed);
 
     if (envelope._tag === "Success") {
-      const candidates = (envelope.success.devin ?? []).length > 0 ? envelope.success.devin : envelope.success.models
+      const candidates =
+        (envelope.success.devin ?? []).length > 0
+          ? envelope.success.devin
+          : envelope.success.models;
 
-      if (candidates !== undefined && candidates !== null && candidates.length > 0) return sanitize(candidates)
+      if (candidates !== undefined && candidates !== null && candidates.length > 0)
+        return sanitize(candidates);
     }
   }
 
   return {
     ok: false,
-    error: "invalid Devin models JSON: expected non-empty 'devin'/'models' array or model list"
-  }
-}
+    error: "invalid Devin models JSON: expected non-empty 'devin'/'models' array or model list",
+  };
+};

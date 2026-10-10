@@ -4,37 +4,37 @@
  * applied on every deploy) and the Cloudflare Access application, policies and service tokens in front of it.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
-import * as Alchemy from "alchemy"
-import * as Cloudflare from "alchemy/Cloudflare"
-import * as Effect from "effect/Effect"
-import { type AccessWiring, provisionAccess } from "./infra/access.ts"
-import { readSettings } from "./infra/settings.ts"
+import * as Alchemy from "alchemy";
+import * as Cloudflare from "alchemy/Cloudflare";
+import * as Effect from "effect/Effect";
+import { type AccessWiring, provisionAccess } from "./infra/access.ts";
+import { readSettings } from "./infra/settings.ts";
 
 /** Runtime compatibility of the Worker; keep in sync with vitest.config.ts and worker-configuration.d.ts. */
-export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] }
+export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
 /** Model catalog refresh, credential refresh sweep and usage retention (src/scheduled.ts). */
-export const CRONS = ["0 */3 * * *"]
+export const CRONS = ["0 */3 * * *"];
 
 // Remote state in the account (`Cloudflare.state()`, shared by every machine and CI) unless ALCHEMY_STATE=local,
 // which keeps it under .alchemy/ (handy for `alchemy dev` without a Cloudflare login).
-const state = process.env["ALCHEMY_STATE"] === "local" ? Alchemy.localState() : Cloudflare.state()
+const state = process.env["ALCHEMY_STATE"] === "local" ? Alchemy.localState() : Cloudflare.state();
 
 export default Alchemy.Stack(
   "cliproxy",
   { providers: Cloudflare.providers(), state },
   Effect.gen(function* () {
-    const dev = yield* Alchemy.ALCHEMY_DEV
-    const settings = yield* readSettings(dev)
+    const dev = yield* Alchemy.ALCHEMY_DEV;
+    const settings = yield* readSettings(dev);
 
-    const cache = yield* Cloudflare.KV.Namespace("Cache")
-    const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" })
+    const cache = yield* Cloudflare.KV.Namespace("Cache");
+    const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
 
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
     // loopback request an admin. Deployed Workers never get it and require the Access JWT.
     const access: AccessWiring = dev
       ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
-      : yield* provisionAccess(settings)
+      : yield* provisionAccess(settings);
 
     const worker = yield* Cloudflare.Worker("Proxy", {
       main: "./src/index.ts",
@@ -57,14 +57,14 @@ export default Alchemy.Stack(
         ACCESS_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
         USAGE_RETENTION_DAYS: settings.usageRetentionDays,
-        META_MINT_URL: settings.metaMintUrl
-      }
-    })
+        META_MINT_URL: settings.metaMintUrl,
+      },
+    });
 
     return {
       url: worker.url,
       accessAud: access.aud,
-      serviceTokens: access.serviceTokenClientIds
-    }
-  })
-)
+      serviceTokens: access.serviceTokenClientIds,
+    };
+  }),
+);

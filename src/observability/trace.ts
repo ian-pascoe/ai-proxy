@@ -11,32 +11,35 @@
  * Deviation: requests that never selected a credential (validation errors, unknown models, ...) answer with the bare
  * request id instead of no header, so every proxied response can be correlated with the logs.
  */
-import { Clock, Context, Effect, Exit } from "effect"
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
-import { authIndexOf } from "../management/auth-index.ts"
+import { Clock, Context, Effect, Exit } from "effect";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { authIndexOf } from "../management/auth-index.ts";
 
-export const CPA_TRACE_ID_HEADER = "X-CPA-TRACE-ID"
+export const CPA_TRACE_ID_HEADER = "X-CPA-TRACE-ID";
 
 /** Mutable state of one inbound request, written by the pipeline and read by the middleware. */
 export interface RequestTraceState {
   /** Inbound request id (also the usage `trace_id`). */
-  readonly requestId: string
+  readonly requestId: string;
   /** Latest `X-CPA-TRACE-ID` value (set once a credential was selected). */
-  traceId: string | undefined
+  traceId: string | undefined;
   /** Access principal id (`user:<email>` / `service:<id>`), set by the pipeline. */
-  principal: string | undefined
+  principal: string | undefined;
   /** Stable index of the last selected credential. */
-  authIndex: string | undefined
+  authIndex: string | undefined;
   /** Number of upstream attempts started. */
-  attempts: number
-  provider: string | undefined
-  model: string | undefined
+  attempts: number;
+  provider: string | undefined;
+  model: string | undefined;
 }
 
 /** The trace of the current request; `undefined` outside the Worker's router (tests, scheduled jobs). */
-export const RequestTrace = Context.Reference<RequestTraceState | undefined>("cliproxy/observability/RequestTrace", {
-  defaultValue: () => undefined
-})
+export const RequestTrace = Context.Reference<RequestTraceState | undefined>(
+  "cliproxy/observability/RequestTrace",
+  {
+    defaultValue: () => undefined,
+  },
+);
 
 export const newTraceState = (): RequestTraceState => ({
   requestId: crypto.randomUUID(),
@@ -45,15 +48,15 @@ export const newTraceState = (): RequestTraceState => ({
   authIndex: undefined,
   attempts: 0,
   provider: undefined,
-  model: undefined
-})
+  model: undefined,
+});
 
-const pad = (value: number): string => String(value).padStart(2, "0")
+const pad = (value: number): string => String(value).padStart(2, "0");
 
 /** `FormatCPATraceID`: `yyyyMMddHHmmss-<auth index>-<request id>` (UTC). */
 export const formatTraceId = (selectedAt: number, authIndex: string, requestId: string): string => {
-  if (authIndex === "" || requestId === "") return ""
-  const date = new Date(selectedAt)
+  if (authIndex === "" || requestId === "") return "";
+  const date = new Date(selectedAt);
 
   const stamp =
     String(date.getUTCFullYear()) +
@@ -61,39 +64,39 @@ export const formatTraceId = (selectedAt: number, authIndex: string, requestId: 
     pad(date.getUTCDate()) +
     pad(date.getUTCHours()) +
     pad(date.getUTCMinutes()) +
-    pad(date.getUTCSeconds())
+    pad(date.getUTCSeconds());
 
-  return `${stamp}-${authIndex}-${requestId}`
-}
+  return `${stamp}-${authIndex}-${requestId}`;
+};
 
 /** Records a credential selection on the request's trace (no-op outside the router). */
 export const noteSelection = (credentialId: string, provider: string, model: string) =>
   Effect.gen(function* () {
-    const trace = yield* RequestTrace
+    const trace = yield* RequestTrace;
 
-    if (trace === undefined) return
-    const authIndex = authIndexOf(credentialId)
-    trace.authIndex = authIndex
-    trace.attempts += 1
-    trace.provider = provider
-    trace.model = model
-    trace.traceId = formatTraceId(yield* Clock.currentTimeMillis, authIndex, trace.requestId)
-  })
+    if (trace === undefined) return;
+    const authIndex = authIndexOf(credentialId);
+    trace.authIndex = authIndex;
+    trace.attempts += 1;
+    trace.provider = provider;
+    trace.model = model;
+    trace.traceId = formatTraceId(yield* Clock.currentTimeMillis, authIndex, trace.requestId);
+  });
 
 /** Annotates the request's trace with the caller (no-op outside the router). */
 export const notePrincipal = (principalId: string) =>
   Effect.gen(function* () {
-    const trace = yield* RequestTrace
+    const trace = yield* RequestTrace;
 
-    if (trace !== undefined && principalId !== "") trace.principal = principalId
-  })
+    if (trace !== undefined && principalId !== "") trace.principal = principalId;
+  });
 
 const logFields = (
   trace: RequestTraceState,
   method: string,
   path: string,
   status: number,
-  latencyMs: number
+  latencyMs: number,
 ): Record<string, unknown> => ({
   requestId: trace.requestId,
   method,
@@ -104,14 +107,14 @@ const logFields = (
   ...(trace.provider === undefined ? {} : { provider: trace.provider }),
   ...(trace.model === undefined ? {} : { model: trace.model }),
   ...(trace.authIndex === undefined ? {} : { authIndex: trace.authIndex }),
-  ...(trace.attempts === 0 ? {} : { attempts: trace.attempts })
-})
+  ...(trace.attempts === 0 ? {} : { attempts: trace.attempts }),
+});
 
 const logRequest = (fields: Record<string, unknown>, status: number) => {
-  const log = status >= 500 ? Effect.logError : status >= 400 ? Effect.logWarning : Effect.logInfo
+  const log = status >= 500 ? Effect.logError : status >= 400 ? Effect.logWarning : Effect.logInfo;
 
-  return log("request").pipe(Effect.annotateLogs(fields))
-}
+  return log("request").pipe(Effect.annotateLogs(fields));
+};
 
 /**
  * Global middleware: gives every request a trace state, sets `X-CPA-TRACE-ID` on the response and logs one structured
@@ -122,28 +125,40 @@ const logRequest = (fields: Record<string, unknown>, status: number) => {
 export const TraceLayer = HttpRouter.middleware()(
   (app) =>
     Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest
-      const trace = newTraceState()
-      const startedAt = yield* Clock.currentTimeMillis
-      const exit = yield* Effect.exit(Effect.provideService(app, RequestTrace, trace))
-      const latencyMs = Math.max(0, (yield* Clock.currentTimeMillis) - startedAt)
-      const path = new URL(request.originalUrl, "http://localhost").pathname
+      const request = yield* HttpServerRequest.HttpServerRequest;
+      const trace = newTraceState();
+      const startedAt = yield* Clock.currentTimeMillis;
+      const exit = yield* Effect.exit(Effect.provideService(app, RequestTrace, trace));
+      const latencyMs = Math.max(0, (yield* Clock.currentTimeMillis) - startedAt);
+      const path = new URL(request.originalUrl, "http://localhost").pathname;
       // Like Go, health probes are not logged.
-      const quiet = path === "/healthz"
+      const quiet = path === "/healthz";
 
       if (Exit.isFailure(exit)) {
-        if (!quiet) yield* logRequest({ ...logFields(trace, request.method, path, 0, latencyMs), failed: true }, 400)
+        if (!quiet)
+          yield* logRequest(
+            { ...logFields(trace, request.method, path, 0, latencyMs), failed: true },
+            400,
+          );
 
-        return yield* exit
+        return yield* exit;
       }
 
-      const response = exit.value
+      const response = exit.value;
 
-      if (!quiet) yield* logRequest(logFields(trace, request.method, path, response.status, latencyMs), response.status)
+      if (!quiet)
+        yield* logRequest(
+          logFields(trace, request.method, path, response.status, latencyMs),
+          response.status,
+        );
 
       return quiet
         ? response
-        : HttpServerResponse.setHeader(response, CPA_TRACE_ID_HEADER, trace.traceId ?? trace.requestId)
+        : HttpServerResponse.setHeader(
+            response,
+            CPA_TRACE_ID_HEADER,
+            trace.traceId ?? trace.requestId,
+          );
     }),
-  { global: true }
-)
+  { global: true },
+);

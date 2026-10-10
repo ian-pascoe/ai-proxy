@@ -9,153 +9,166 @@
  * (`state.toolInputError`, 502 for the caller). Divergence: a patch-enabled stream that ends without its
  * `message_stop` is detected through `state.finalizeToolInput` only once a line was translated.
  */
-import { asBool, asFloat, asInt, get, type Json, type JsonObject, tryParseJson } from "../../../../json/index.ts"
+import {
+  asBool,
+  asFloat,
+  asInt,
+  get,
+  type Json,
+  type JsonObject,
+  tryParseJson,
+} from "../../../../json/index.ts";
 import {
   ApplyPatchCallState,
   applyPatchFailure,
   applyPatchInputDelta,
   applyPatchInputDone,
-  isApplyPatchCustomTool
-} from "../../../common/apply-patch.ts"
-import { claudeMessagesJSONToSSE } from "../../../common/claude-native-response.ts"
-import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts"
-import type { ResponseContext, ResponseTransform } from "../../../registry.ts"
+  isApplyPatchCustomTool,
+} from "../../../common/apply-patch.ts";
+import { claudeMessagesJSONToSSE } from "../../../common/claude-native-response.ts";
+import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts";
+import type { ResponseContext, ResponseTransform } from "../../../registry.ts";
 import {
   ClaudeToolNames,
   CLAUDE_RESPONSES_REDACTED_THINKING_PREFIX,
   splitResponsesQualifiedFunctionCall,
   type ToolDescriptor,
   responsesToolWinners,
-  unwrapCustomToolInput
-} from "./tools.ts"
+  unwrapCustomToolInput,
+} from "./tools.ts";
 import {
   buildResponsesWebSearchCallItem,
   CLAUDE_WEB_SEARCH_TOOL_NAME,
   claudeWebSearchQuery,
   claudeWebSearchResultsToResponses,
-  responsesWebSearchCallID
-} from "./web-search.ts"
+  responsesWebSearchCallID,
+} from "./web-search.ts";
 
 interface WebSearchItem {
-  toolUseId: string
-  outputIndex: number
-  inputBuf: string
-  results: Json | undefined
-  emitted: boolean
-  status: string
+  toolUseId: string;
+  outputIndex: number;
+  inputBuf: string;
+  results: Json | undefined;
+  emitted: boolean;
+  status: string;
 }
 
 interface MessageItem {
-  id: string
-  outputIndex: number
-  text: string
-  annotations: Json[]
-  status: string
+  id: string;
+  outputIndex: number;
+  text: string;
+  annotations: Json[];
+  status: string;
 }
 
 interface ReasoningItem {
-  id: string
-  outputIndex: number
-  text: string
-  signature: string
-  status: string
+  id: string;
+  outputIndex: number;
+  text: string;
+  signature: string;
+  status: string;
 }
 
 interface UsageTokens {
-  inputTokens: number
-  outputTokens: number
-  cacheCreationInputTokens: number
-  cacheReadInputTokens: number
-  hasUsage: boolean
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+  hasUsage: boolean;
 }
 
 const mergeUsage = (u: UsageTokens, usage: Json | undefined): void => {
-  if (!exists(usage)) return
-  u.hasUsage = true
-  const input = get(usage, "input_tokens")
+  if (!exists(usage)) return;
+  u.hasUsage = true;
+  const input = get(usage, "input_tokens");
 
-  if (exists(input)) u.inputTokens = asInt(input)
-  const output = get(usage, "output_tokens")
+  if (exists(input)) u.inputTokens = asInt(input);
+  const output = get(usage, "output_tokens");
 
-  if (exists(output)) u.outputTokens = asInt(output)
-  const creation = get(usage, "cache_creation_input_tokens")
+  if (exists(output)) u.outputTokens = asInt(output);
+  const creation = get(usage, "cache_creation_input_tokens");
 
-  if (exists(creation)) u.cacheCreationInputTokens = asInt(creation)
-  const read = get(usage, "cache_read_input_tokens")
+  if (exists(creation)) u.cacheCreationInputTokens = asInt(creation);
+  const read = get(usage, "cache_read_input_tokens");
 
-  if (exists(read)) u.cacheReadInputTokens = asInt(read)
-}
+  if (exists(read)) u.cacheReadInputTokens = asInt(read);
+};
 
 const newUsage = (): UsageTokens => ({
   inputTokens: 0,
   outputTokens: 0,
   cacheCreationInputTokens: 0,
   cacheReadInputTokens: 0,
-  hasUsage: false
-})
+  hasUsage: false,
+});
 
 const responsesUsage = (
-  u: UsageTokens
+  u: UsageTokens,
 ): { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens: number } => {
-  const cachedTokens = u.cacheReadInputTokens
-  const inputTokens = u.inputTokens + u.cacheCreationInputTokens + cachedTokens
+  const cachedTokens = u.cacheReadInputTokens;
+  const inputTokens = u.inputTokens + u.cacheCreationInputTokens + cachedTokens;
 
-  return { inputTokens, outputTokens: u.outputTokens, totalTokens: inputTokens + u.outputTokens, cachedTokens }
-}
+  return {
+    inputTokens,
+    outputTokens: u.outputTokens,
+    totalTokens: inputTokens + u.outputTokens,
+    cachedTokens,
+  };
+};
 
 /** Go `claudeToResponsesState` (minus the apply_patch bridge). */
 interface State {
-  toolWinners: Map<string, ToolDescriptor>
-  toolNames: ClaudeToolNames
-  funcItemAdded: Map<number, boolean>
-  funcArgsSent: Map<number, number>
-  funcBlockStopped: Map<number, boolean>
+  toolWinners: Map<string, ToolDescriptor>;
+  toolNames: ClaudeToolNames;
+  funcItemAdded: Map<number, boolean>;
+  funcArgsSent: Map<number, number>;
+  funcBlockStopped: Map<number, boolean>;
   /** Claude block index -> `apply_patch` decoder of a freeform patch call. */
-  applyPatchCalls: Map<number, ApplyPatchCallState>
-  funcInputSnapshot: Map<number, string>
-  funcInputSnapshotErrors: Map<number, string>
-  funcIdentityConflicts: Map<number, boolean>
+  applyPatchCalls: Map<number, ApplyPatchCallState>;
+  funcInputSnapshot: Map<number, string>;
+  funcInputSnapshotErrors: Map<number, string>;
+  funcIdentityConflicts: Map<number, boolean>;
   /** First retained `apply_patch` failure; later lines produce nothing. */
-  toolInputError: string | undefined
-  completedEmitted: boolean
-  seq: number
-  responseId: string
-  createdAt: number
-  nextOutputIndex: number
-  currentMsgId: string
-  currentFcId: string
-  inTextBlock: boolean
-  inFuncBlock: boolean
-  messageOpen: boolean
-  contentPartOpen: boolean
-  messageOutputIndex: number
-  funcArgsBuf: Map<number, string>
-  funcArgsDone: Map<number, boolean>
-  funcItemDone: Map<number, boolean>
-  funcItemStatus: Map<number, string>
-  funcNames: Map<number, string>
-  funcCallIds: Map<number, string>
-  funcCustom: Map<number, boolean>
-  funcOutputIndices: Map<number, number>
-  textBuf: string
-  messageAnnotations: Json[]
-  messageItems: MessageItem[]
-  reasoningActive: boolean
-  reasoningDeltasDone: boolean
-  reasoningItemId: string
-  reasoningBuf: string
-  reasoningSignature: string
-  reasoningIndex: number
-  reasoningItems: ReasoningItem[]
-  webSearchByBlock: Map<number, WebSearchItem>
-  webSearchByToolId: Map<string, WebSearchItem>
-  webSearchItems: WebSearchItem[]
-  stopReason: string
-  usage: UsageTokens
+  toolInputError: string | undefined;
+  completedEmitted: boolean;
+  seq: number;
+  responseId: string;
+  createdAt: number;
+  nextOutputIndex: number;
+  currentMsgId: string;
+  currentFcId: string;
+  inTextBlock: boolean;
+  inFuncBlock: boolean;
+  messageOpen: boolean;
+  contentPartOpen: boolean;
+  messageOutputIndex: number;
+  funcArgsBuf: Map<number, string>;
+  funcArgsDone: Map<number, boolean>;
+  funcItemDone: Map<number, boolean>;
+  funcItemStatus: Map<number, string>;
+  funcNames: Map<number, string>;
+  funcCallIds: Map<number, string>;
+  funcCustom: Map<number, boolean>;
+  funcOutputIndices: Map<number, number>;
+  textBuf: string;
+  messageAnnotations: Json[];
+  messageItems: MessageItem[];
+  reasoningActive: boolean;
+  reasoningDeltasDone: boolean;
+  reasoningItemId: string;
+  reasoningBuf: string;
+  reasoningSignature: string;
+  reasoningIndex: number;
+  reasoningItems: ReasoningItem[];
+  webSearchByBlock: Map<number, WebSearchItem>;
+  webSearchByToolId: Map<string, WebSearchItem>;
+  webSearchItems: WebSearchItem[];
+  stopReason: string;
+  usage: UsageTokens;
 }
 
 const newState = (request: Json | undefined): State => {
-  const winners = responsesToolWinners(request)
+  const winners = responsesToolWinners(request);
 
   return {
     toolWinners: winners,
@@ -202,147 +215,167 @@ const newState = (request: Json | undefined): State => {
     webSearchByToolId: new Map(),
     webSearchItems: [],
     stopReason: "",
-    usage: newUsage()
-  }
-}
+    usage: newUsage(),
+  };
+};
 
 /** Carrier for the reasoning item's encrypted_content (signature, or redacted_thinking data behind a marker). */
 const reasoningCarrier = (block: Json | undefined): string => {
   if (str(get(block, "type")) === "redacted_thinking") {
-    const data = get(block, "data")
+    const data = get(block, "data");
 
-    return exists(data) && str(data) !== "" ? CLAUDE_RESPONSES_REDACTED_THINKING_PREFIX + str(data) : ""
+    return exists(data) && str(data) !== ""
+      ? CLAUDE_RESPONSES_REDACTED_THINKING_PREFIX + str(data)
+      : "";
   }
 
-  const signature = get(block, "signature")
+  const signature = get(block, "signature");
 
-  return exists(signature) ? str(signature) : ""
-}
+  return exists(signature) ? str(signature) : "";
+};
 
 const incompleteDetails = (stopReason: string): { details: Json } | undefined => {
   switch (stopReason.trim().toLowerCase()) {
     case "max_tokens":
-      return { details: { reason: "max_output_tokens" } }
+      return { details: { reason: "max_output_tokens" } };
     case "pause_turn":
-      return { details: null }
+      return { details: null };
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 const outputStatus = (stopReason: string): string =>
-  incompleteDetails(stopReason) !== undefined ? "incomplete" : "completed"
+  incompleteDetails(stopReason) !== undefined ? "incomplete" : "completed";
 
 const terminalState = (
-  stopReason: string
+  stopReason: string,
 ): { eventType: string; status: string; details: { details: Json } | undefined } => {
-  const details = incompleteDetails(stopReason)
+  const details = incompleteDetails(stopReason);
 
   return details !== undefined
     ? { eventType: "response.incomplete", status: "incomplete", details }
-    : { eventType: "response.completed", status: "completed", details: undefined }
-}
+    : { eventType: "response.completed", status: "completed", details: undefined };
+};
 
 /** `pickRequestJSON`: the original request when it is valid JSON, else the translated one. */
 const pickRequest = (original: Json | undefined, translated: Json | undefined): Json | undefined =>
-  original ?? translated
+  original ?? translated;
 
 const requestModelName = (original: Json | undefined, translated: Json | undefined): string => {
   for (const raw of [original, translated]) {
     for (const path of ["model", "request.model"]) {
-      const model = get(raw, path)
+      const model = get(raw, path);
 
-      if (isStr(model) && model.trim() !== "") return model
+      if (isStr(model) && model.trim() !== "") return model;
     }
   }
 
-  return ""
-}
+  return "";
+};
 
-const emit = (event: string, payload: JsonObject): string => `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`
+const emit = (event: string, payload: JsonObject): string =>
+  `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
 
 const sortKeysDeep = (value: Json): Json => {
-  if (isArr(value)) return value.map(sortKeysDeep)
+  if (isArr(value)) return value.map(sortKeysDeep);
 
   if (isObj(value)) {
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()
-        .map((key) => [key, sortKeysDeep(value[key] as Json)])
-    )
+        .map((key) => [key, sortKeysDeep(value[key] as Json)]),
+    );
   }
 
-  return value
-}
+  return value;
+};
 
 /** `SetResponsesToolCallIdentity` through `splitResponsesQualifiedFunctionCallFromRequest`. */
-const applyNamespaceFields = (item: JsonObject, request: Json | undefined, qualifiedName: string): void => {
-  const { name, namespace } = splitResponsesQualifiedFunctionCall(request, qualifiedName)
-  item.name = name
+const applyNamespaceFields = (
+  item: JsonObject,
+  request: Json | undefined,
+  qualifiedName: string,
+): void => {
+  const { name, namespace } = splitResponsesQualifiedFunctionCall(request, qualifiedName);
+  item.name = name;
 
-  if (namespace !== "") item.namespace = namespace
-  else delete item.namespace
-}
+  if (namespace !== "") item.namespace = namespace;
+  else delete item.namespace;
+};
 
-const allocateOutputIndex = (st: State): number => st.nextOutputIndex++
+const allocateOutputIndex = (st: State): number => st.nextOutputIndex++;
 
 const messageOutputIndex = (st: State): number => {
-  if (st.messageOutputIndex < 0) st.messageOutputIndex = allocateOutputIndex(st)
+  if (st.messageOutputIndex < 0) st.messageOutputIndex = allocateOutputIndex(st);
 
-  return st.messageOutputIndex
-}
+  return st.messageOutputIndex;
+};
 
 const functionOutputIndex = (st: State, blockIndex: number): number => {
-  const existing = st.funcOutputIndices.get(blockIndex)
+  const existing = st.funcOutputIndices.get(blockIndex);
 
-  if (existing !== undefined) return existing
-  const index = allocateOutputIndex(st)
-  st.funcOutputIndices.set(blockIndex, index)
+  if (existing !== undefined) return existing;
+  const index = allocateOutputIndex(st);
+  st.funcOutputIndices.set(blockIndex, index);
 
-  return index
-}
+  return index;
+};
 
 const renderWebSearch = (item: WebSearchItem): JsonObject =>
-  buildResponsesWebSearchCallItem(item.toolUseId, claudeWebSearchQuery(item.inputBuf), item.results)
+  buildResponsesWebSearchCallItem(
+    item.toolUseId,
+    claudeWebSearchQuery(item.inputBuf),
+    item.results,
+  );
 
-const finalizeWebSearch = (st: State, item: WebSearchItem, status: string, nextSeq: () => number): string[] => {
-  if (item.emitted) return []
-  item.emitted = true
-  item.status = status
-  const rendered = renderWebSearch(item)
-  rendered.status = status
+const finalizeWebSearch = (
+  st: State,
+  item: WebSearchItem,
+  status: string,
+  nextSeq: () => number,
+): string[] => {
+  if (item.emitted) return [];
+  item.emitted = true;
+  item.status = status;
+  const rendered = renderWebSearch(item);
+  rendered.status = status;
 
   return [
     emit("response.output_item.done", {
       type: "response.output_item.done",
       sequence_number: nextSeq(),
       output_index: item.outputIndex,
-      item: rendered
-    })
-  ]
-}
+      item: rendered,
+    }),
+  ];
+};
 
 /** `isApplyPatch`: the original request's winning declaration, not the sanitised upstream name. */
 const isApplyPatch = (st: State, name: string): boolean => {
-  const descriptor = st.toolWinners.get(st.toolNames.identity(name))
+  const descriptor = st.toolWinners.get(st.toolNames.identity(name));
 
-  return descriptor !== undefined && descriptor.toolType === "custom" && isApplyPatchCustomTool(descriptor.tool)
-}
+  return (
+    descriptor !== undefined &&
+    descriptor.toolType === "custom" &&
+    isApplyPatchCustomTool(descriptor.tool)
+  );
+};
 
 /** `validateApplyPatchSnapshots`: equivalent JSON spellings pass, one patch input never silently replaces another. */
 const validateApplyPatchSnapshots = (previous: string, current: string): string | undefined => {
-  const call = new ApplyPatchCallState("", "", "", "", 0)
+  const call = new ApplyPatchCallState("", "", "", "", 0);
 
   if (previous !== "") {
-    const finished = call.finishArguments(previous)
+    const finished = call.finishArguments(previous);
 
-    if ("error" in finished) return finished.error
+    if ("error" in finished) return finished.error;
   }
 
-  const finished = call.finishArguments(current)
+  const finished = call.finishArguments(current);
 
-  return "error" in finished ? finished.error : undefined
-}
+  return "error" in finished ? finished.error : undefined;
+};
 
 /**
  * `finishClaudeApplyPatchArguments`: complete streamed JSON is a complete snapshot, not a prefix a later snapshot may
@@ -351,68 +384,69 @@ const validateApplyPatchSnapshots = (previous: string, current: string): string 
 const finishClaudeApplyPatchArguments = (
   call: ApplyPatchCallState,
   args: string,
-  snapshot: string
+  snapshot: string,
 ): { readonly tail: string; readonly input: string } | { readonly error: string } => {
-  if (snapshot === "") return call.finishArguments(args)
+  if (snapshot === "") return call.finishArguments(args);
 
   if (tryParseJson(args) !== undefined) {
-    const finished = call.finishArguments(args)
+    const finished = call.finishArguments(args);
 
-    if ("error" in finished) return finished
+    if ("error" in finished) return finished;
   }
 
-  return call.finishArguments(snapshot)
-}
+  return call.finishArguments(snapshot);
+};
 
-const CONFLICTING_IDENTITY = "conflicting apply_patch call identity"
+const CONFLICTING_IDENTITY = "conflicting apply_patch call identity";
 
 /** `failToolInput`: retains the first failure and emits one terminal `response.failed`. */
 const failToolInput = (st: State, error: string, nextSeq: () => number): string[] => {
-  if (st.toolInputError !== undefined) return []
-  st.toolInputError = error
+  if (st.toolInputError !== undefined) return [];
+  st.toolInputError = error;
 
-  return [emit("response.failed", applyPatchFailure(st.responseId, nextSeq()) as JsonObject)]
-}
+  return [emit("response.failed", applyPatchFailure(st.responseId, nextSeq()) as JsonObject)];
+};
 
 const emitFuncItem = (
   st: State,
   idx: number,
   request: Json | undefined,
   force: boolean,
-  nextSeq: () => number
+  nextSeq: () => number,
 ): string[] => {
-  if (st.funcItemAdded.get(idx) === true || st.toolInputError !== undefined) return []
-  let name = st.funcNames.get(idx) ?? ""
-  let callId = st.funcCallIds.get(idx) ?? ""
+  if (st.funcItemAdded.get(idx) === true || st.toolInputError !== undefined) return [];
+  let name = st.funcNames.get(idx) ?? "";
+  let callId = st.funcCallIds.get(idx) ?? "";
 
   if (force && name === "" && st.toolWinners.size === 1) {
     for (const identity of st.toolWinners.keys()) {
       if (isApplyPatch(st, identity)) {
-        name = st.toolNames.claudeName(identity)
-        st.funcNames.set(idx, name)
+        name = st.toolNames.claudeName(identity);
+        st.funcNames.set(idx, name);
       }
     }
   }
 
   if (isApplyPatch(st, name)) {
-    if (st.funcIdentityConflicts.get(idx) === true) return failToolInput(st, CONFLICTING_IDENTITY, nextSeq)
-    const snapshotError = st.funcInputSnapshotErrors.get(idx)
+    if (st.funcIdentityConflicts.get(idx) === true)
+      return failToolInput(st, CONFLICTING_IDENTITY, nextSeq);
+    const snapshotError = st.funcInputSnapshotErrors.get(idx);
 
-    if (snapshotError !== undefined) return failToolInput(st, snapshotError, nextSeq)
+    if (snapshotError !== undefined) return failToolInput(st, snapshotError, nextSeq);
   }
 
-  if (!force && (name === "" || callId === "")) return []
+  if (!force && (name === "" || callId === "")) return [];
 
   if (callId === "") {
-    callId = `call_${st.responseId}_${idx}`
-    st.funcCallIds.set(idx, callId)
+    callId = `call_${st.responseId}_${idx}`;
+    st.funcCallIds.set(idx, callId);
   }
 
-  const descriptor = st.toolWinners.get(st.toolNames.identity(name))
-  const custom = descriptor?.toolType === "custom"
-  st.funcCustom.set(idx, custom)
-  const outputIndex = functionOutputIndex(st, idx)
-  let item: JsonObject
+  const descriptor = st.toolWinners.get(st.toolNames.identity(name));
+  const custom = descriptor?.toolType === "custom";
+  st.funcCustom.set(idx, custom);
+  const outputIndex = functionOutputIndex(st, idx);
+  let item: JsonObject;
 
   if (custom) {
     item = {
@@ -421,8 +455,8 @@ const emitFuncItem = (
       status: "in_progress",
       input: "",
       call_id: callId,
-      name: ""
-    }
+      name: "",
+    };
 
     if (isApplyPatch(st, name) && descriptor !== undefined) {
       st.applyPatchCalls.set(
@@ -432,9 +466,9 @@ const emitFuncItem = (
           callId,
           descriptor.direct ? descriptor.name : descriptor.childName,
           descriptor.namespace,
-          outputIndex
-        )
-      )
+          outputIndex,
+        ),
+      );
     }
   } else {
     item = {
@@ -443,49 +477,49 @@ const emitFuncItem = (
       status: "in_progress",
       arguments: "",
       call_id: callId,
-      name: ""
-    }
+      name: "",
+    };
   }
 
-  applyNamespaceFields(item, request, name)
-  st.funcItemAdded.set(idx, true)
+  applyNamespaceFields(item, request, name);
+  st.funcItemAdded.set(idx, true);
 
   return [
     emit("response.output_item.added", {
       type: "response.output_item.added",
       sequence_number: nextSeq(),
       output_index: outputIndex,
-      item
-    })
-  ]
-}
+      item,
+    }),
+  ];
+};
 
 const emitPendingFuncArgs = (st: State, idx: number, nextSeq: () => number): string[] => {
-  if (st.funcItemAdded.get(idx) !== true || st.toolInputError !== undefined) return []
-  const buf = st.funcArgsBuf.get(idx)
-  const sent = st.funcArgsSent.get(idx) ?? 0
+  if (st.funcItemAdded.get(idx) !== true || st.toolInputError !== undefined) return [];
+  const buf = st.funcArgsBuf.get(idx);
+  const sent = st.funcArgsSent.get(idx) ?? 0;
 
-  if (buf === undefined || buf.length <= sent) return []
-  const fragment = buf.slice(sent)
-  st.funcArgsSent.set(idx, buf.length)
+  if (buf === undefined || buf.length <= sent) return [];
+  const fragment = buf.slice(sent);
+  st.funcArgsSent.set(idx, buf.length);
 
   if (st.funcCustom.get(idx) === true) {
     // Only the `apply_patch` bridge streams freeform input; other custom tools deliver it at completion.
-    const patchCall = st.applyPatchCalls.get(idx)
+    const patchCall = st.applyPatchCalls.get(idx);
 
-    if (patchCall === undefined) return []
-    const pushed = patchCall.pushArguments(fragment)
+    if (patchCall === undefined) return [];
+    const pushed = patchCall.pushArguments(fragment);
 
-    if ("error" in pushed) return failToolInput(st, pushed.error, nextSeq)
+    if ("error" in pushed) return failToolInput(st, pushed.error, nextSeq);
 
     return pushed.text === ""
       ? []
       : [
           emit(
             "response.custom_tool_call_input.delta",
-            applyPatchInputDelta(patchCall, pushed.text, nextSeq()) as JsonObject
-          )
-        ]
+            applyPatchInputDelta(patchCall, pushed.text, nextSeq()) as JsonObject,
+          ),
+        ];
   }
 
   return [
@@ -494,96 +528,110 @@ const emitPendingFuncArgs = (st: State, idx: number, nextSeq: () => number): str
       sequence_number: nextSeq(),
       item_id: `fc_${st.funcCallIds.get(idx) ?? ""}`,
       output_index: functionOutputIndex(st, idx),
-      delta: fragment
-    })
-  ]
-}
+      delta: fragment,
+    }),
+  ];
+};
 
 const finalizeFuncItem = (
   st: State,
   idx: number,
   request: Json | undefined,
   status: string,
-  nextSeq: () => number
+  nextSeq: () => number,
 ): string[] => {
-  if (st.funcItemDone.get(idx) === true || st.toolInputError !== undefined) return []
-  const out = emitFuncItem(st, idx, request, true, nextSeq)
-  out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+  if (st.funcItemDone.get(idx) === true || st.toolInputError !== undefined) return [];
+  const out = emitFuncItem(st, idx, request, true, nextSeq);
+  out.push(...emitPendingFuncArgs(st, idx, nextSeq));
 
-  if (st.toolInputError !== undefined) return out
-  st.funcItemDone.set(idx, true)
-  st.funcItemStatus.set(idx, status)
+  if (st.toolInputError !== undefined) return out;
+  st.funcItemDone.set(idx, true);
+  st.funcItemStatus.set(idx, status);
 
-  const outputIndex = functionOutputIndex(st, idx)
-  const buf = st.funcArgsBuf.get(idx) ?? ""
-  let args = buf.length > 0 ? buf : ""
-  const custom = st.funcCustom.get(idx) === true
+  const outputIndex = functionOutputIndex(st, idx);
+  const buf = st.funcArgsBuf.get(idx) ?? "";
+  let args = buf.length > 0 ? buf : "";
+  const custom = st.funcCustom.get(idx) === true;
 
-  if (!custom && args === "" && status === "completed") args = "{}"
-  let callId = st.funcCallIds.get(idx) ?? ""
+  if (!custom && args === "" && status === "completed") args = "{}";
+  let callId = st.funcCallIds.get(idx) ?? "";
 
-  if (callId === "") callId = st.currentFcId
-  const name = st.funcNames.get(idx) ?? ""
+  if (callId === "") callId = st.currentFcId;
+  const name = st.funcNames.get(idx) ?? "";
 
   if (custom) {
-    let input: string
-    const patchCall = st.applyPatchCalls.get(idx)
+    let input: string;
+    const patchCall = st.applyPatchCalls.get(idx);
 
     if (patchCall !== undefined) {
-      const finished = finishClaudeApplyPatchArguments(patchCall, args, st.funcInputSnapshot.get(idx) ?? "")
+      const finished = finishClaudeApplyPatchArguments(
+        patchCall,
+        args,
+        st.funcInputSnapshot.get(idx) ?? "",
+      );
 
-      if ("error" in finished) return [...out, ...failToolInput(st, finished.error, nextSeq)]
-      input = finished.input
+      if ("error" in finished) return [...out, ...failToolInput(st, finished.error, nextSeq)];
+      input = finished.input;
 
       if (finished.tail !== "") {
         out.push(
           emit(
             "response.custom_tool_call_input.delta",
-            applyPatchInputDelta(patchCall, finished.tail, nextSeq()) as JsonObject
-          )
-        )
+            applyPatchInputDelta(patchCall, finished.tail, nextSeq()) as JsonObject,
+          ),
+        );
       }
     } else {
-      input = unwrapCustomToolInput(args)
+      input = unwrapCustomToolInput(args);
     }
 
     if (st.funcArgsDone.get(idx) !== true) {
-      st.funcArgsDone.set(idx, true)
+      st.funcArgsDone.set(idx, true);
       out.push(
         patchCall !== undefined
-          ? emit("response.custom_tool_call_input.done", applyPatchInputDone(patchCall, input, nextSeq()) as JsonObject)
+          ? emit(
+              "response.custom_tool_call_input.done",
+              applyPatchInputDone(patchCall, input, nextSeq()) as JsonObject,
+            )
           : emit("response.custom_tool_call_input.done", {
               type: "response.custom_tool_call_input.done",
               sequence_number: nextSeq(),
               item_id: `ctc_${callId}`,
               output_index: outputIndex,
-              input
-            })
-      )
+              input,
+            }),
+      );
     }
 
-    const item: JsonObject = { id: `ctc_${callId}`, type: "custom_tool_call", status, input, call_id: callId, name: "" }
-    applyNamespaceFields(item, request, name)
+    const item: JsonObject = {
+      id: `ctc_${callId}`,
+      type: "custom_tool_call",
+      status,
+      input,
+      call_id: callId,
+      name: "",
+    };
+    applyNamespaceFields(item, request, name);
     out.push(
       emit("response.output_item.done", {
         type: "response.output_item.done",
         sequence_number: nextSeq(),
         output_index: outputIndex,
-        item
-      })
-    )
+        item,
+      }),
+    );
   } else {
     if (st.funcArgsDone.get(idx) !== true) {
-      st.funcArgsDone.set(idx, true)
+      st.funcArgsDone.set(idx, true);
       out.push(
         emit("response.function_call_arguments.done", {
           type: "response.function_call_arguments.done",
           sequence_number: nextSeq(),
           item_id: `fc_${callId}`,
           output_index: outputIndex,
-          arguments: args
-        })
-      )
+          arguments: args,
+        }),
+      );
     }
 
     const item: JsonObject = {
@@ -592,29 +640,29 @@ const finalizeFuncItem = (
       status,
       arguments: args,
       call_id: callId,
-      name: ""
-    }
+      name: "",
+    };
 
-    applyNamespaceFields(item, request, name)
+    applyNamespaceFields(item, request, name);
     out.push(
       emit("response.output_item.done", {
         type: "response.output_item.done",
         sequence_number: nextSeq(),
         output_index: outputIndex,
-        item
-      })
-    )
+        item,
+      }),
+    );
   }
 
-  st.inFuncBlock = false
+  st.inFuncBlock = false;
 
-  return out
-}
+  return out;
+};
 
 const finalizeReasoningDeltas = (st: State, nextSeq: () => number): string[] => {
-  if (!st.reasoningActive || st.reasoningDeltasDone) return []
-  st.reasoningDeltasDone = true
-  const full = st.reasoningBuf
+  if (!st.reasoningActive || st.reasoningDeltasDone) return [];
+  st.reasoningDeltasDone = true;
+  const full = st.reasoningBuf;
 
   return [
     emit("response.reasoning_summary_text.done", {
@@ -623,7 +671,7 @@ const finalizeReasoningDeltas = (st: State, nextSeq: () => number): string[] => 
       item_id: st.reasoningItemId,
       output_index: st.reasoningIndex,
       summary_index: 0,
-      text: full
+      text: full,
     }),
     emit("response.reasoning_summary_part.done", {
       type: "response.reasoning_summary_part.done",
@@ -631,15 +679,15 @@ const finalizeReasoningDeltas = (st: State, nextSeq: () => number): string[] => 
       item_id: st.reasoningItemId,
       output_index: st.reasoningIndex,
       summary_index: 0,
-      part: { type: "summary_text", text: full }
-    })
-  ]
-}
+      part: { type: "summary_text", text: full },
+    }),
+  ];
+};
 
 const finalizeReasoningItem = (st: State, status: string, nextSeq: () => number): string[] => {
-  if (!st.reasoningActive && st.reasoningItemId === "") return []
-  const out = finalizeReasoningDeltas(st, nextSeq)
-  const full = st.reasoningBuf
+  if (!st.reasoningActive && st.reasoningItemId === "") return [];
+  const out = finalizeReasoningDeltas(st, nextSeq);
+  const full = st.reasoningBuf;
   out.push(
     emit("response.output_item.done", {
       type: "response.output_item.done",
@@ -650,33 +698,33 @@ const finalizeReasoningItem = (st: State, status: string, nextSeq: () => number)
         type: "reasoning",
         status,
         encrypted_content: st.reasoningSignature,
-        summary: [{ type: "summary_text", text: full }]
-      }
-    })
-  )
+        summary: [{ type: "summary_text", text: full }],
+      },
+    }),
+  );
   st.reasoningItems.push({
     id: st.reasoningItemId,
     outputIndex: st.reasoningIndex,
     text: full,
     signature: st.reasoningSignature,
-    status
-  })
-  st.reasoningActive = false
-  st.reasoningItemId = ""
-  st.reasoningBuf = ""
-  st.reasoningSignature = ""
-  st.reasoningIndex = -1
+    status,
+  });
+  st.reasoningActive = false;
+  st.reasoningItemId = "";
+  st.reasoningBuf = "";
+  st.reasoningSignature = "";
+  st.reasoningIndex = -1;
 
-  return out
-}
+  return out;
+};
 
 const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] => {
-  if (!st.messageOpen) return []
-  const fullText = st.textBuf
-  const outputIndex = messageOutputIndex(st)
-  const status = outputStatus(st.stopReason)
-  const annotations = sortKeysDeep(st.messageAnnotations) as Json[]
-  const out: string[] = []
+  if (!st.messageOpen) return [];
+  const fullText = st.textBuf;
+  const outputIndex = messageOutputIndex(st);
+  const status = outputStatus(st.stopReason);
+  const annotations = sortKeysDeep(st.messageAnnotations) as Json[];
+  const out: string[] = [];
   out.push(
     emit("response.output_text.done", {
       type: "response.output_text.done",
@@ -685,9 +733,9 @@ const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] =>
       output_index: outputIndex,
       content_index: 0,
       text: fullText,
-      logprobs: []
-    })
-  )
+      logprobs: [],
+    }),
+  );
   out.push(
     emit("response.content_part.done", {
       type: "response.content_part.done",
@@ -699,10 +747,10 @@ const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] =>
         type: "output_text",
         annotations: annotations.length > 0 ? annotations : [],
         logprobs: [],
-        text: fullText
-      }
-    })
-  )
+        text: fullText,
+      },
+    }),
+  );
   out.push(
     emit("response.output_item.done", {
       type: "response.output_item.done",
@@ -713,147 +761,153 @@ const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] =>
         type: "message",
         status,
         content: [
-          { type: "output_text", annotations: annotations.length > 0 ? annotations : [], logprobs: [], text: fullText }
+          {
+            type: "output_text",
+            annotations: annotations.length > 0 ? annotations : [],
+            logprobs: [],
+            text: fullText,
+          },
         ],
-        role: "assistant"
-      }
-    })
-  )
+        role: "assistant",
+      },
+    }),
+  );
   st.messageItems.push({
     id: st.currentMsgId,
     outputIndex,
     text: fullText,
     annotations: [...st.messageAnnotations],
-    status
-  })
-  st.inTextBlock = false
-  st.messageOpen = false
-  st.contentPartOpen = false
-  st.currentMsgId = ""
-  st.messageOutputIndex = -1
-  st.textBuf = ""
-  st.messageAnnotations = []
+    status,
+  });
+  st.inTextBlock = false;
+  st.messageOpen = false;
+  st.contentPartOpen = false;
+  st.currentMsgId = "";
+  st.messageOutputIndex = -1;
+  st.textBuf = "";
+  st.messageAnnotations = [];
 
-  return out
-}
+  return out;
+};
 
 /** Request fields echoed into the response object (Go key order). */
 const echoRequestFields = (target: JsonObject, req: Json | undefined): void => {
-  if (!exists(req)) return
-  const has = (key: string): Json | undefined => get(req, key)
+  if (!exists(req)) return;
+  const has = (key: string): Json | undefined => get(req, key);
 
   const v = (key: string, convert: (value: Json | undefined) => Json): void => {
-    const value = has(key)
+    const value = has(key);
 
-    if (exists(value)) target[key] = convert(value)
-  }
+    if (exists(value)) target[key] = convert(value);
+  };
 
-  v("instructions", str)
-  v("max_output_tokens", asInt)
-  v("max_tool_calls", asInt)
-  v("model", str)
-  v("parallel_tool_calls", asBool)
-  v("previous_response_id", str)
-  v("prompt_cache_key", str)
-  v("reasoning", (value) => sortKeysDeep(value as Json))
-  v("safety_identifier", str)
-  v("service_tier", str)
-  v("store", asBool)
-  v("temperature", asFloat)
-  v("text", (value) => sortKeysDeep(value as Json))
-  v("tool_choice", (value) => sortKeysDeep(value as Json))
-  v("tools", (value) => sortKeysDeep(value as Json))
-  v("top_logprobs", asInt)
-  v("top_p", asFloat)
-  v("truncation", str)
-  v("user", (value) => sortKeysDeep(value as Json))
-  v("metadata", (value) => sortKeysDeep(value as Json))
-}
+  v("instructions", str);
+  v("max_output_tokens", asInt);
+  v("max_tool_calls", asInt);
+  v("model", str);
+  v("parallel_tool_calls", asBool);
+  v("previous_response_id", str);
+  v("prompt_cache_key", str);
+  v("reasoning", (value) => sortKeysDeep(value as Json));
+  v("safety_identifier", str);
+  v("service_tier", str);
+  v("store", asBool);
+  v("temperature", asFloat);
+  v("text", (value) => sortKeysDeep(value as Json));
+  v("tool_choice", (value) => sortKeysDeep(value as Json));
+  v("tools", (value) => sortKeysDeep(value as Json));
+  v("top_logprobs", asInt);
+  v("top_p", asFloat);
+  v("truncation", str);
+  v("user", (value) => sortKeysDeep(value as Json));
+  v("metadata", (value) => sortKeysDeep(value as Json));
+};
 
 /** `ConvertClaudeResponseToOpenAIResponses`. */
 export const convertClaudeResponseToOpenAIResponses = (
   context: ResponseContext,
-  line: string
+  line: string,
 ): ReadonlyArray<string> => {
-  const out = convertStreamLine(context, line)
-  const st = context.state.value as State
+  const out = convertStreamLine(context, line);
+  const st = context.state.value as State;
 
-  if (st.toolInputError !== undefined) context.state.toolInputError = st.toolInputError
-  context.state.finalizeToolInput ??= () => finalizeToolInput(context, st)
+  if (st.toolInputError !== undefined) context.state.toolInputError = st.toolInputError;
+  context.state.finalizeToolInput ??= () => finalizeToolInput(context, st);
 
-  return out
-}
+  return out;
+};
 
 /** `FinalizeToolInput`: a patch-enabled stream that ends before `message_stop` fails instead of completing. */
 const finalizeToolInput = (context: ResponseContext, st: State): ReadonlyArray<string> => {
-  if (st.toolInputError !== undefined || st.completedEmitted) return []
+  if (st.toolInputError !== undefined || st.completedEmitted) return [];
 
-  if (![...st.toolWinners.keys()].some((name) => isApplyPatch(st, name))) return []
-  st.toolInputError = "upstream apply_patch stream ended before protocol completion"
-  context.state.toolInputError = st.toolInputError
-  st.seq++
+  if (![...st.toolWinners.keys()].some((name) => isApplyPatch(st, name))) return [];
+  st.toolInputError = "upstream apply_patch stream ended before protocol completion";
+  context.state.toolInputError = st.toolInputError;
+  st.seq++;
 
-  return [emit("response.failed", applyPatchFailure(st.responseId, st.seq) as JsonObject)]
-}
+  return [emit("response.failed", applyPatchFailure(st.responseId, st.seq) as JsonObject)];
+};
 
 const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArray<string> => {
-  const modelName = context.model
-  context.state.value ??= newState(pickRequest(context.originalRequest, context.translatedRequest))
-  const st = context.state.value as State
+  const modelName = context.model;
+  context.state.value ??= newState(pickRequest(context.originalRequest, context.translatedRequest));
+  const st = context.state.value as State;
 
-  if (st.completedEmitted || st.toolInputError !== undefined) return []
+  if (st.completedEmitted || st.toolInputError !== undefined) return [];
 
-  if (!line.startsWith("data:")) return []
-  const root = tryParseJson(line.slice(5).trim())
-  const request = pickRequest(context.originalRequest, context.translatedRequest)
-  const ev = str(get(root, "type"))
-  let out: string[] = []
-  const nextSeq = (): number => ++st.seq
+  if (!line.startsWith("data:")) return [];
+  const root = tryParseJson(line.slice(5).trim());
+  const request = pickRequest(context.originalRequest, context.translatedRequest);
+  const ev = str(get(root, "type"));
+  let out: string[] = [];
+  const nextSeq = (): number => ++st.seq;
 
   switch (ev) {
     case "message_start": {
-      const msg = get(root, "message")
+      const msg = get(root, "message");
 
-      if (!exists(msg)) break
-      st.responseId = str(get(msg, "id"))
-      st.createdAt = Math.floor(Date.now() / 1000)
-      st.textBuf = ""
-      st.messageAnnotations = []
-      st.messageItems = []
-      st.reasoningBuf = ""
-      st.reasoningActive = false
-      st.reasoningDeltasDone = false
-      st.nextOutputIndex = 0
-      st.inTextBlock = false
-      st.inFuncBlock = false
-      st.messageOpen = false
-      st.contentPartOpen = false
-      st.currentMsgId = ""
-      st.currentFcId = ""
-      st.messageOutputIndex = -1
-      st.reasoningItemId = ""
-      st.reasoningSignature = ""
-      st.reasoningIndex = -1
-      st.reasoningItems = []
-      st.stopReason = ""
-      st.funcItemAdded = new Map()
-      st.funcArgsSent = new Map()
-      st.funcBlockStopped = new Map()
-      st.applyPatchCalls = new Map()
-      st.funcInputSnapshot = new Map()
-      st.funcInputSnapshotErrors = new Map()
-      st.funcIdentityConflicts = new Map()
-      st.funcArgsBuf = new Map()
-      st.funcArgsDone = new Map()
-      st.funcItemDone = new Map()
-      st.funcItemStatus = new Map()
-      st.funcNames = new Map()
-      st.funcCallIds = new Map()
-      st.funcCustom = new Map()
-      st.funcOutputIndices = new Map()
-      st.usage = newUsage()
-      mergeUsage(st.usage, get(msg, "usage"))
-      const requestModel = requestModelName(context.originalRequest, context.translatedRequest) || modelName
+      if (!exists(msg)) break;
+      st.responseId = str(get(msg, "id"));
+      st.createdAt = Math.floor(Date.now() / 1000);
+      st.textBuf = "";
+      st.messageAnnotations = [];
+      st.messageItems = [];
+      st.reasoningBuf = "";
+      st.reasoningActive = false;
+      st.reasoningDeltasDone = false;
+      st.nextOutputIndex = 0;
+      st.inTextBlock = false;
+      st.inFuncBlock = false;
+      st.messageOpen = false;
+      st.contentPartOpen = false;
+      st.currentMsgId = "";
+      st.currentFcId = "";
+      st.messageOutputIndex = -1;
+      st.reasoningItemId = "";
+      st.reasoningSignature = "";
+      st.reasoningIndex = -1;
+      st.reasoningItems = [];
+      st.stopReason = "";
+      st.funcItemAdded = new Map();
+      st.funcArgsSent = new Map();
+      st.funcBlockStopped = new Map();
+      st.applyPatchCalls = new Map();
+      st.funcInputSnapshot = new Map();
+      st.funcInputSnapshotErrors = new Map();
+      st.funcIdentityConflicts = new Map();
+      st.funcArgsBuf = new Map();
+      st.funcArgsDone = new Map();
+      st.funcItemDone = new Map();
+      st.funcItemStatus = new Map();
+      st.funcNames = new Map();
+      st.funcCallIds = new Map();
+      st.funcCustom = new Map();
+      st.funcOutputIndices = new Map();
+      st.usage = newUsage();
+      mergeUsage(st.usage, get(msg, "usage"));
+      const requestModel =
+        requestModelName(context.originalRequest, context.translatedRequest) || modelName;
 
       const created: JsonObject = {
         type: "response.created",
@@ -865,56 +919,69 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
           status: "in_progress",
           background: false,
           error: null,
-          output: []
-        }
-      }
+          output: [],
+        },
+      };
 
-      if (requestModel !== "") (created.response as JsonObject).model = requestModel
-      out.push(emit("response.created", created))
+      if (requestModel !== "") (created.response as JsonObject).model = requestModel;
+      out.push(emit("response.created", created));
 
       const inProgress: JsonObject = {
         type: "response.in_progress",
         sequence_number: nextSeq(),
-        response: { id: st.responseId, object: "response", created_at: st.createdAt, status: "in_progress", output: [] }
-      }
+        response: {
+          id: st.responseId,
+          object: "response",
+          created_at: st.createdAt,
+          status: "in_progress",
+          output: [],
+        },
+      };
 
-      if (requestModel !== "") (inProgress.response as JsonObject).model = requestModel
-      out.push(emit("response.in_progress", inProgress))
-      break
+      if (requestModel !== "") (inProgress.response as JsonObject).model = requestModel;
+      out.push(emit("response.in_progress", inProgress));
+      break;
     }
 
     case "content_block_start": {
-      const cb = get(root, "content_block")
+      const cb = get(root, "content_block");
 
-      if (!exists(cb)) return out
-      const idx = asInt(get(root, "index"))
-      const typ = str(get(cb, "type"))
+      if (!exists(cb)) return out;
+      const idx = asInt(get(root, "index"));
+      const typ = str(get(cb, "type"));
 
-      if (typ !== "text") out.push(...finalizeAssistantMessage(st, nextSeq))
+      if (typ !== "text") out.push(...finalizeAssistantMessage(st, nextSeq));
 
-      if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, "completed", nextSeq))
+      if (st.reasoningActive || st.reasoningItemId !== "")
+        out.push(...finalizeReasoningItem(st, "completed", nextSeq));
 
       for (const prevIdx of st.funcCallIds.keys()) {
         if (st.funcItemDone.get(prevIdx) !== true && prevIdx !== idx) {
           // Patch calls may interleave; a new block is not a completion snapshot for a still-open (or unnamed) call.
-          const prevName = st.funcNames.get(prevIdx) ?? ""
+          const prevName = st.funcNames.get(prevIdx) ?? "";
 
-          if ((isApplyPatch(st, prevName) || prevName === "") && st.funcBlockStopped.get(prevIdx) !== true) continue
-          out.push(...finalizeFuncItem(st, prevIdx, request, "completed", nextSeq))
+          if (
+            (isApplyPatch(st, prevName) || prevName === "") &&
+            st.funcBlockStopped.get(prevIdx) !== true
+          )
+            continue;
+          out.push(...finalizeFuncItem(st, prevIdx, request, "completed", nextSeq));
 
-          if (st.toolInputError !== undefined) return out
+          if (st.toolInputError !== undefined) return out;
         }
       }
 
       for (const item of st.webSearchItems) {
-        if (!item.emitted && item.results !== undefined) out.push(...finalizeWebSearch(st, item, "completed", nextSeq))
+        if (!item.emitted && item.results !== undefined)
+          out.push(...finalizeWebSearch(st, item, "completed", nextSeq));
       }
 
       if (typ === "text") {
-        st.inTextBlock = true
-        const outputIndex = messageOutputIndex(st)
+        st.inTextBlock = true;
+        const outputIndex = messageOutputIndex(st);
 
-        if (st.currentMsgId === "") st.currentMsgId = `msg_${st.responseId}_${st.messageItems.length}`
+        if (st.currentMsgId === "")
+          st.currentMsgId = `msg_${st.responseId}_${st.messageItems.length}`;
 
         if (!st.messageOpen) {
           out.push(
@@ -922,10 +989,16 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
               type: "response.output_item.added",
               sequence_number: nextSeq(),
               output_index: outputIndex,
-              item: { id: st.currentMsgId, type: "message", status: "in_progress", content: [], role: "assistant" }
-            })
-          )
-          st.messageOpen = true
+              item: {
+                id: st.currentMsgId,
+                type: "message",
+                status: "in_progress",
+                content: [],
+                role: "assistant",
+              },
+            }),
+          );
+          st.messageOpen = true;
         }
 
         if (!st.contentPartOpen) {
@@ -936,75 +1009,83 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
               item_id: st.currentMsgId,
               output_index: outputIndex,
               content_index: 0,
-              part: { type: "output_text", annotations: [], logprobs: [], text: "" }
-            })
-          )
-          st.contentPartOpen = true
+              part: { type: "output_text", annotations: [], logprobs: [], text: "" },
+            }),
+          );
+          st.contentPartOpen = true;
         }
       } else if (typ === "tool_use") {
-        st.inFuncBlock = true
-        const callId = str(get(cb, "id"))
-        const name = str(get(cb, "name"))
-        const oldId = st.funcCallIds.get(idx) ?? ""
-        const oldName = st.funcNames.get(idx) ?? ""
+        st.inFuncBlock = true;
+        const callId = str(get(cb, "id"));
+        const name = str(get(cb, "name"));
+        const oldId = st.funcCallIds.get(idx) ?? "";
+        const oldName = st.funcNames.get(idx) ?? "";
 
         // Pending identity evidence must survive later matching updates.
-        if (callId !== "" && oldId !== "" && callId !== oldId) st.funcIdentityConflicts.set(idx, true)
+        if (callId !== "" && oldId !== "" && callId !== oldId)
+          st.funcIdentityConflicts.set(idx, true);
 
         if (isApplyPatch(st, oldName) || isApplyPatch(st, name)) {
           if (
             st.funcIdentityConflicts.get(idx) === true ||
-            (name !== "" && oldName !== "" && st.toolNames.identity(name) !== st.toolNames.identity(oldName))
+            (name !== "" &&
+              oldName !== "" &&
+              st.toolNames.identity(name) !== st.toolNames.identity(oldName))
           ) {
-            return [...out, ...failToolInput(st, CONFLICTING_IDENTITY, nextSeq)]
+            return [...out, ...failToolInput(st, CONFLICTING_IDENTITY, nextSeq)];
           }
         }
 
         if (st.funcItemAdded.get(idx) !== true) {
-          if (callId !== "" || oldId === "") st.funcCallIds.set(idx, callId)
+          if (callId !== "" || oldId === "") st.funcCallIds.set(idx, callId);
         }
 
-        if (name !== "" && st.funcItemAdded.get(idx) !== true) st.funcNames.set(idx, name)
-        st.currentFcId = st.funcCallIds.get(idx) ?? ""
-        functionOutputIndex(st, idx)
+        if (name !== "" && st.funcItemAdded.get(idx) !== true) st.funcNames.set(idx, name);
+        st.currentFcId = st.funcCallIds.get(idx) ?? "";
+        functionOutputIndex(st, idx);
 
-        if (!st.funcArgsBuf.has(idx)) st.funcArgsBuf.set(idx, "")
+        if (!st.funcArgsBuf.has(idx)) st.funcArgsBuf.set(idx, "");
         // An empty start input is a Claude placeholder, not an arguments fragment; populated snapshots are evidence.
-        const startInput = get(cb, "input")
+        const startInput = get(cb, "input");
 
         if (exists(startInput) && (!isObj(startInput) || Object.keys(startInput).length > 0)) {
-          const rawInput = JSON.stringify(startInput)
-          const snapshotError = validateApplyPatchSnapshots(st.funcInputSnapshot.get(idx) ?? "", rawInput)
+          const rawInput = JSON.stringify(startInput);
+          const snapshotError = validateApplyPatchSnapshots(
+            st.funcInputSnapshot.get(idx) ?? "",
+            rawInput,
+          );
 
           if (snapshotError !== undefined && !st.funcInputSnapshotErrors.has(idx)) {
-            st.funcInputSnapshotErrors.set(idx, snapshotError)
+            st.funcInputSnapshotErrors.set(idx, snapshotError);
           }
 
           // Item completion does not seal the response: compare late snapshots against the finished decoder.
           if (st.funcItemDone.get(idx) === true) {
-            const patchCall = st.applyPatchCalls.get(idx)
+            const patchCall = st.applyPatchCalls.get(idx);
 
             if (patchCall !== undefined) {
-              const finished = patchCall.finishArguments(rawInput)
+              const finished = patchCall.finishArguments(rawInput);
 
-              if ("error" in finished) return [...out, ...failToolInput(st, finished.error, nextSeq)]
+              if ("error" in finished)
+                return [...out, ...failToolInput(st, finished.error, nextSeq)];
             }
           }
 
-          st.funcInputSnapshot.set(idx, rawInput)
+          st.funcInputSnapshot.set(idx, rawInput);
         }
 
         if (isApplyPatch(st, st.funcNames.get(idx) ?? "")) {
-          const snapshotError = st.funcInputSnapshotErrors.get(idx)
+          const snapshotError = st.funcInputSnapshotErrors.get(idx);
 
-          if (snapshotError !== undefined) return [...out, ...failToolInput(st, snapshotError, nextSeq)]
+          if (snapshotError !== undefined)
+            return [...out, ...failToolInput(st, snapshotError, nextSeq)];
         }
 
-        out.push(...emitFuncItem(st, idx, request, false, nextSeq))
-        out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+        out.push(...emitFuncItem(st, idx, request, false, nextSeq));
+        out.push(...emitPendingFuncArgs(st, idx, nextSeq));
       } else if (typ === "server_tool_use") {
         if (str(get(cb, "name")) === CLAUDE_WEB_SEARCH_TOOL_NAME) {
-          const toolUseId = str(get(cb, "id"))
+          const toolUseId = str(get(cb, "id"));
 
           const item: WebSearchItem = {
             toolUseId,
@@ -1012,12 +1093,12 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
             inputBuf: "",
             results: undefined,
             emitted: false,
-            status: ""
-          }
+            status: "",
+          };
 
-          st.webSearchByBlock.set(idx, item)
-          st.webSearchByToolId.set(toolUseId, item)
-          st.webSearchItems.push(item)
+          st.webSearchByBlock.set(idx, item);
+          st.webSearchByToolId.set(toolUseId, item);
+          st.webSearchItems.push(item);
           out.push(
             emit("response.output_item.added", {
               type: "response.output_item.added",
@@ -1027,22 +1108,23 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
                 id: responsesWebSearchCallID(item.toolUseId),
                 type: "web_search_call",
                 status: "in_progress",
-                action: { type: "search", query: "" }
-              }
-            })
-          )
+                action: { type: "search", query: "" },
+              },
+            }),
+          );
         }
       } else if (typ === "web_search_tool_result") {
-        const item = st.webSearchByToolId.get(str(get(cb, "tool_use_id")))
+        const item = st.webSearchByToolId.get(str(get(cb, "tool_use_id")));
 
-        if (item !== undefined) item.results = claudeWebSearchResultsToResponses(get(cb, "content"))
+        if (item !== undefined)
+          item.results = claudeWebSearchResultsToResponses(get(cb, "content"));
       } else if (typ === "thinking" || typ === "redacted_thinking") {
-        st.reasoningActive = true
-        st.reasoningDeltasDone = false
-        st.reasoningIndex = allocateOutputIndex(st)
-        st.reasoningBuf = ""
-        st.reasoningSignature = reasoningCarrier(cb)
-        st.reasoningItemId = `rs_${st.responseId}_${idx}`
+        st.reasoningActive = true;
+        st.reasoningDeltasDone = false;
+        st.reasoningIndex = allocateOutputIndex(st);
+        st.reasoningBuf = "";
+        st.reasoningSignature = reasoningCarrier(cb);
+        st.reasoningItemId = `rs_${st.responseId}_${idx}`;
         out.push(
           emit("response.output_item.added", {
             type: "response.output_item.added",
@@ -1053,8 +1135,8 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
               type: "reasoning",
               status: "in_progress",
               encrypted_content: st.reasoningSignature,
-              summary: []
-            }
+              summary: [],
+            },
           }),
           emit("response.reasoning_summary_part.added", {
             type: "response.reasoning_summary_part.added",
@@ -1062,22 +1144,22 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
             item_id: st.reasoningItemId,
             output_index: st.reasoningIndex,
             summary_index: 0,
-            part: { type: "summary_text", text: "" }
-          })
-        )
+            part: { type: "summary_text", text: "" },
+          }),
+        );
       }
 
-      break
+      break;
     }
 
     case "content_block_delta": {
-      const d = get(root, "delta")
+      const d = get(root, "delta");
 
-      if (!exists(d)) return out
-      const dt = str(get(d, "type"))
+      if (!exists(d)) return out;
+      const dt = str(get(d, "type"));
 
       if (dt === "text_delta") {
-        const t = get(d, "text")
+        const t = get(d, "text");
 
         if (exists(t)) {
           out.push(
@@ -1088,32 +1170,32 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
               output_index: messageOutputIndex(st),
               content_index: 0,
               delta: str(t),
-              logprobs: []
-            })
-          )
-          st.textBuf += str(t)
+              logprobs: [],
+            }),
+          );
+          st.textBuf += str(t);
         }
       } else if (dt === "input_json_delta") {
-        const idx = asInt(get(root, "index"))
-        const item = st.webSearchByBlock.get(idx)
-        const pj = get(d, "partial_json")
+        const idx = asInt(get(root, "index"));
+        const item = st.webSearchByBlock.get(idx);
+        const pj = get(d, "partial_json");
 
         if (item !== undefined) {
-          if (exists(pj)) item.inputBuf += str(pj)
+          if (exists(pj)) item.inputBuf += str(pj);
 
-          return []
+          return [];
         }
 
         if (exists(pj)) {
-          st.funcArgsBuf.set(idx, (st.funcArgsBuf.get(idx) ?? "") + str(pj))
-          out.push(...emitPendingFuncArgs(st, idx, nextSeq))
+          st.funcArgsBuf.set(idx, (st.funcArgsBuf.get(idx) ?? "") + str(pj));
+          out.push(...emitPendingFuncArgs(st, idx, nextSeq));
         }
       } else if (dt === "thinking_delta") {
         if (st.reasoningActive) {
-          const t = get(d, "thinking")
+          const t = get(d, "thinking");
 
           if (exists(t)) {
-            st.reasoningBuf += str(t)
+            st.reasoningBuf += str(t);
             out.push(
               emit("response.reasoning_summary_text.delta", {
                 type: "response.reasoning_summary_text.delta",
@@ -1121,66 +1203,67 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
                 item_id: st.reasoningItemId,
                 output_index: st.reasoningIndex,
                 summary_index: 0,
-                delta: str(t)
-              })
-            )
+                delta: str(t),
+              }),
+            );
           }
         }
       } else if (dt === "signature_delta") {
         if (st.reasoningActive) {
-          const signature = get(d, "signature")
+          const signature = get(d, "signature");
 
-          if (exists(signature) && str(signature) !== "") st.reasoningSignature = str(signature)
+          if (exists(signature) && str(signature) !== "") st.reasoningSignature = str(signature);
         }
 
-        return []
+        return [];
       } else if (dt === "citations_delta") {
-        const citation = get(d, "citation")
+        const citation = get(d, "citation");
 
-        if (exists(citation) && citation !== null) st.messageAnnotations.push(citation)
+        if (exists(citation) && citation !== null) st.messageAnnotations.push(citation);
 
-        return []
+        return [];
       }
 
-      break
+      break;
     }
 
     case "content_block_stop":
-      st.funcBlockStopped.set(asInt(get(root, "index")), true)
+      st.funcBlockStopped.set(asInt(get(root, "index")), true);
 
-      if (st.inTextBlock) st.inTextBlock = false
-      else if (st.inFuncBlock) st.inFuncBlock = false
-      else if (st.reasoningActive) out.push(...finalizeReasoningDeltas(st, nextSeq))
+      if (st.inTextBlock) st.inTextBlock = false;
+      else if (st.inFuncBlock) st.inFuncBlock = false;
+      else if (st.reasoningActive) out.push(...finalizeReasoningDeltas(st, nextSeq));
 
-      return out
+      return out;
     case "message_delta": {
-      mergeUsage(st.usage, get(root, "usage"))
-      const stopReason = get(root, "delta.stop_reason")
+      mergeUsage(st.usage, get(root, "usage"));
+      const stopReason = get(root, "delta.stop_reason");
 
-      if (exists(stopReason)) st.stopReason = str(stopReason)
+      if (exists(stopReason)) st.stopReason = str(stopReason);
 
-      return []
+      return [];
     }
 
     case "message_stop": {
-      const toolStatus = outputStatus(st.stopReason)
+      const toolStatus = outputStatus(st.stopReason);
 
-      if (st.reasoningActive || st.reasoningItemId !== "") out.push(...finalizeReasoningItem(st, toolStatus, nextSeq))
-      out.push(...finalizeAssistantMessage(st, nextSeq))
+      if (st.reasoningActive || st.reasoningItemId !== "")
+        out.push(...finalizeReasoningItem(st, toolStatus, nextSeq));
+      out.push(...finalizeAssistantMessage(st, nextSeq));
 
       for (const idx of st.funcCallIds.keys()) {
         if (st.funcItemDone.get(idx) !== true) {
-          out.push(...finalizeFuncItem(st, idx, request, toolStatus, nextSeq))
+          out.push(...finalizeFuncItem(st, idx, request, toolStatus, nextSeq));
 
-          if (st.toolInputError !== undefined) return out
+          if (st.toolInputError !== undefined) return out;
         }
       }
 
       for (const item of st.webSearchItems) {
-        if (!item.emitted) out.push(...finalizeWebSearch(st, item, toolStatus, nextSeq))
+        if (!item.emitted) out.push(...finalizeWebSearch(st, item, toolStatus, nextSeq));
       }
 
-      const { eventType, status: responseStatus, details } = terminalState(st.stopReason)
+      const { eventType, status: responseStatus, details } = terminalState(st.stopReason);
 
       const response: JsonObject = {
         id: st.responseId,
@@ -1188,15 +1271,15 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
         created_at: st.createdAt,
         status: responseStatus,
         background: false,
-        error: null
-      }
+        error: null,
+      };
 
-      const completed: JsonObject = { type: eventType, sequence_number: nextSeq(), response }
+      const completed: JsonObject = { type: eventType, sequence_number: nextSeq(), response };
 
-      if (details !== undefined) response.incomplete_details = details.details
-      echoRequestFields(response, request)
+      if (details !== undefined) response.incomplete_details = details.details;
+      echoRequestFields(response, request);
 
-      const output: Json[] = []
+      const output: Json[] = [];
 
       for (const reasoning of st.reasoningItems) {
         output[reasoning.outputIndex] = {
@@ -1204,8 +1287,8 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
           type: "reasoning",
           status: reasoning.status === "" ? "completed" : reasoning.status,
           encrypted_content: reasoning.signature,
-          summary: [{ type: "summary_text", text: reasoning.text }]
-        }
+          summary: [{ type: "summary_text", text: reasoning.text }],
+        };
       }
 
       for (const message of st.messageItems) {
@@ -1218,42 +1301,43 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
               type: "output_text",
               annotations: message.annotations.length > 0 ? sortKeysDeep(message.annotations) : [],
               logprobs: [],
-              text: message.text
-            }
+              text: message.text,
+            },
           ],
-          role: "assistant"
-        }
+          role: "assistant",
+        };
       }
 
       for (const item of st.webSearchItems) {
-        const rendered = renderWebSearch(item)
-        rendered.status = item.status === "" ? "completed" : item.status
-        output[item.outputIndex] = rendered
+        const rendered = renderWebSearch(item);
+        rendered.status = item.status === "" ? "completed" : item.status;
+        output[item.outputIndex] = rendered;
       }
 
       for (const idx of [...st.funcArgsBuf.keys()].toSorted((a, b) => a - b)) {
-        const funcStatus = st.funcItemStatus.get(idx) || "completed"
-        const custom = st.funcCustom.get(idx) === true
-        let args = !custom && funcStatus === "completed" ? "{}" : ""
-        const buf = st.funcArgsBuf.get(idx) ?? ""
+        const funcStatus = st.funcItemStatus.get(idx) || "completed";
+        const custom = st.funcCustom.get(idx) === true;
+        let args = !custom && funcStatus === "completed" ? "{}" : "";
+        const buf = st.funcArgsBuf.get(idx) ?? "";
 
-        if (buf.length > 0) args = buf
-        let callId = st.funcCallIds.get(idx) ?? ""
-        const name = st.funcNames.get(idx) ?? ""
+        if (buf.length > 0) args = buf;
+        let callId = st.funcCallIds.get(idx) ?? "";
+        const name = st.funcNames.get(idx) ?? "";
 
-        if (callId === "" && st.currentFcId !== "") callId = st.currentFcId
-        let item: JsonObject
+        if (callId === "" && st.currentFcId !== "") callId = st.currentFcId;
+        let item: JsonObject;
 
         if (custom) {
-          const patchCall = st.applyPatchCalls.get(idx)
+          const patchCall = st.applyPatchCalls.get(idx);
           item = {
             id: `ctc_${callId}`,
             type: "custom_tool_call",
             status: funcStatus,
-            input: patchCall !== undefined ? patchCall.decoder.input() : unwrapCustomToolInput(args),
+            input:
+              patchCall !== undefined ? patchCall.decoder.input() : unwrapCustomToolInput(args),
             call_id: callId,
-            name: ""
-          }
+            name: "",
+          };
         } else {
           item = {
             id: `fc_${callId}`,
@@ -1261,80 +1345,86 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
             status: funcStatus,
             arguments: args,
             call_id: callId,
-            name: ""
-          }
+            name: "",
+          };
         }
 
-        applyNamespaceFields(item, request, name)
-        output[st.funcOutputIndices.get(idx) ?? 0] = item
+        applyNamespaceFields(item, request, name);
+        output[st.funcOutputIndices.get(idx) ?? 0] = item;
       }
 
-      if (output.length > 0) response.output = output
+      if (output.length > 0) response.output = output;
 
-      const reasoningLength = st.reasoningItems.reduce((sum, reasoning) => sum + utf8Length(reasoning.text), 0)
-      const reasoningTokens = Math.trunc(reasoningLength / 4)
+      const reasoningLength = st.reasoningItems.reduce(
+        (sum, reasoning) => sum + utf8Length(reasoning.text),
+        0,
+      );
+      const reasoningTokens = Math.trunc(reasoningLength / 4);
 
       if (st.usage.hasUsage || reasoningTokens > 0) {
-        const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(st.usage)
+        const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(st.usage);
 
         const usage: JsonObject = {
           input_tokens: inputTokens,
           input_tokens_details: { cached_tokens: cachedTokens },
           output_tokens: outputTokens,
-          output_tokens_details: { reasoning_tokens: reasoningTokens }
-        }
+          output_tokens_details: { reasoning_tokens: reasoningTokens },
+        };
 
-        if (totalTokens > 0 || st.usage.hasUsage) usage.total_tokens = totalTokens
-        response.usage = usage
+        if (totalTokens > 0 || st.usage.hasUsage) usage.total_tokens = totalTokens;
+        response.usage = usage;
       }
 
-      st.completedEmitted = true
-      out.push(emit(eventType, completed))
-      break
+      st.completedEmitted = true;
+      out.push(emit(eventType, completed));
+      break;
     }
   }
 
-  return out
-}
+  return out;
+};
 
-const utf8Length = (text: string): number => new TextEncoder().encode(text).length
+const utf8Length = (text: string): number => new TextEncoder().encode(text).length;
 
 interface OutputItem {
-  outputIndex: number
-  itemType: string
-  id: string
-  callId: string
-  name: string
-  text: string
-  signature: string
-  annotations: Json[]
-  args: string
-  inputSnapshot: string
-  results: Json | undefined
+  outputIndex: number;
+  itemType: string;
+  id: string;
+  callId: string;
+  name: string;
+  text: string;
+  signature: string;
+  annotations: Json[];
+  args: string;
+  inputSnapshot: string;
+  results: Json | undefined;
 }
 
 /** `ConvertClaudeResponseToOpenAIResponsesNonStream`. */
-export const convertClaudeResponseToOpenAIResponsesNonStream = (context: ResponseContext, body: string): string => {
-  const [raw, nativeModel] = claudeMessagesJSONToSSE(body)
-  const chunks: string[] = []
+export const convertClaudeResponseToOpenAIResponsesNonStream = (
+  context: ResponseContext,
+  body: string,
+): string => {
+  const [raw, nativeModel] = claudeMessagesJSONToSSE(body);
+  const chunks: string[] = [];
 
   for (const rawLine of raw.split("\n")) {
-    const line = rawLine.replace(/\r+$/u, "")
+    const line = rawLine.replace(/\r+$/u, "");
 
-    if (line.startsWith("data:")) chunks.push(line.slice(5))
+    if (line.startsWith("data:")) chunks.push(line.slice(5));
   }
 
-  const reqJson = pickRequest(context.originalRequest, context.translatedRequest)
-  const st = newState(reqJson)
-  context.state.value = st
+  const reqJson = pickRequest(context.originalRequest, context.translatedRequest);
+  const st = newState(reqJson);
+  context.state.value = st;
 
   /** A retained `apply_patch` failure: the failed response body, and the caller sees a translation failure. */
   const failNonStream = (error: string): string => {
-    st.toolInputError = error
-    context.state.toolInputError = error
+    st.toolInputError = error;
+    context.state.toolInputError = error;
 
-    return JSON.stringify(get(applyPatchFailure(responseId, 0), "response"))
-  }
+    return JSON.stringify(get(applyPatchFailure(responseId, 0), "response"));
+  };
 
   const out: JsonObject = {
     id: "",
@@ -1350,21 +1440,21 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
       input_tokens_details: { cached_tokens: 0 },
       output_tokens: 0,
       output_tokens_details: {},
-      total_tokens: 0
-    }
-  }
+      total_tokens: 0,
+    },
+  };
 
-  let responseId = ""
-  let createdAt = 0
-  let stopReason = ""
-  const usageTokens = newUsage()
-  const blockToItem = new Map<number, OutputItem>()
-  const webSearchByToolId = new Map<string, OutputItem>()
-  const outputItems: OutputItem[] = []
-  let nextOutputIndex = 0
-  let messageCount = 0
-  let activeMessageItem: OutputItem | undefined
-  let pendingAnnotations: Json[] = []
+  let responseId = "";
+  let createdAt = 0;
+  let stopReason = "";
+  const usageTokens = newUsage();
+  const blockToItem = new Map<number, OutputItem>();
+  const webSearchByToolId = new Map<string, OutputItem>();
+  const outputItems: OutputItem[] = [];
+  let nextOutputIndex = 0;
+  let messageCount = 0;
+  let activeMessageItem: OutputItem | undefined;
+  let pendingAnnotations: Json[] = [];
 
   const newOutputItem = (itemType: string, blockIndex: number): OutputItem => {
     const item: OutputItem = {
@@ -1378,76 +1468,77 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
       annotations: [],
       args: "",
       inputSnapshot: "",
-      results: undefined
-    }
+      results: undefined,
+    };
 
-    outputItems.push(item)
-    blockToItem.set(blockIndex, item)
+    outputItems.push(item);
+    blockToItem.set(blockIndex, item);
 
-    return item
-  }
+    return item;
+  };
 
   for (const ch of chunks) {
-    const root = tryParseJson(ch.trim())
-    const ev = str(get(root, "type"))
+    const root = tryParseJson(ch.trim());
+    const ev = str(get(root, "type"));
 
-    if (ev === "message_stop") break
+    if (ev === "message_stop") break;
 
     switch (ev) {
       case "message_start": {
-        const msg = get(root, "message")
+        const msg = get(root, "message");
 
         if (exists(msg)) {
-          responseId = str(get(msg, "id"))
-          createdAt = Math.floor(Date.now() / 1000)
-          mergeUsage(usageTokens, get(msg, "usage"))
+          responseId = str(get(msg, "id"));
+          createdAt = Math.floor(Date.now() / 1000);
+          mergeUsage(usageTokens, get(msg, "usage"));
         }
 
-        break
+        break;
       }
 
       case "content_block_start": {
-        const cb = get(root, "content_block")
+        const cb = get(root, "content_block");
 
-        if (!exists(cb)) break
-        const idx = asInt(get(root, "index"))
-        const typ = str(get(cb, "type"))
+        if (!exists(cb)) break;
+        const idx = asInt(get(root, "index"));
+        const typ = str(get(cb, "type"));
 
-        if (typ !== "text") activeMessageItem = undefined
+        if (typ !== "text") activeMessageItem = undefined;
 
         switch (typ) {
           case "text": {
-            let item = activeMessageItem
+            let item = activeMessageItem;
 
             if (item === undefined) {
-              item = newOutputItem("message", idx)
-              item.id = `msg_${responseId}_${messageCount}`
-              messageCount++
+              item = newOutputItem("message", idx);
+              item.id = `msg_${responseId}_${messageCount}`;
+              messageCount++;
             } else {
-              blockToItem.set(idx, item)
+              blockToItem.set(idx, item);
             }
 
             if (pendingAnnotations.length > 0) {
-              item.annotations.push(...pendingAnnotations)
-              pendingAnnotations = []
+              item.annotations.push(...pendingAnnotations);
+              pendingAnnotations = [];
             }
 
-            activeMessageItem = item
-            break
+            activeMessageItem = item;
+            break;
           }
 
           case "tool_use": {
-            let itemType = "function_call"
-            const toolName = str(get(cb, "name"))
+            let itemType = "function_call";
+            const toolName = str(get(cb, "name"));
 
             if (st.toolWinners.get(st.toolNames.identity(toolName))?.toolType === "custom")
-              itemType = "custom_tool_call"
-            let item = blockToItem.get(idx)
+              itemType = "custom_tool_call";
+            let item = blockToItem.get(idx);
 
-            if (item === undefined) item = newOutputItem(itemType, idx)
-            const callId = str(get(cb, "id"))
+            if (item === undefined) item = newOutputItem(itemType, idx);
+            const callId = str(get(cb, "id"));
 
-            if (callId !== "" && item.callId !== "" && callId !== item.callId) st.funcIdentityConflicts.set(idx, true)
+            if (callId !== "" && item.callId !== "" && callId !== item.callId)
+              st.funcIdentityConflicts.set(idx, true);
 
             if (isApplyPatch(st, item.name) || isApplyPatch(st, toolName)) {
               if (
@@ -1456,86 +1547,89 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
                   item.name !== "" &&
                   st.toolNames.identity(toolName) !== st.toolNames.identity(item.name))
               ) {
-                return failNonStream(CONFLICTING_IDENTITY)
+                return failNonStream(CONFLICTING_IDENTITY);
               }
             }
 
             if (toolName !== "") {
-              item.name = toolName
-              item.itemType = itemType
+              item.name = toolName;
+              item.itemType = itemType;
             }
 
-            if (callId !== "") item.callId = callId
-            const startInput = get(cb, "input")
+            if (callId !== "") item.callId = callId;
+            const startInput = get(cb, "input");
 
             if (exists(startInput) && (!isObj(startInput) || Object.keys(startInput).length > 0)) {
-              const rawInput = JSON.stringify(startInput)
-              const snapshotError = validateApplyPatchSnapshots(item.inputSnapshot, rawInput)
+              const rawInput = JSON.stringify(startInput);
+              const snapshotError = validateApplyPatchSnapshots(item.inputSnapshot, rawInput);
 
               if (snapshotError !== undefined && !st.funcInputSnapshotErrors.has(idx)) {
-                st.funcInputSnapshotErrors.set(idx, snapshotError)
+                st.funcInputSnapshotErrors.set(idx, snapshotError);
               }
 
-              item.inputSnapshot = rawInput
+              item.inputSnapshot = rawInput;
             }
 
             if (isApplyPatch(st, item.name)) {
-              const snapshotError = st.funcInputSnapshotErrors.get(idx)
+              const snapshotError = st.funcInputSnapshotErrors.get(idx);
 
-              if (snapshotError !== undefined) return failNonStream(snapshotError)
+              if (snapshotError !== undefined) return failNonStream(snapshotError);
             }
 
-            item.id = item.itemType === "custom_tool_call" ? `ctc_${item.callId}` : `fc_${item.callId}`
-            break
+            item.id =
+              item.itemType === "custom_tool_call" ? `ctc_${item.callId}` : `fc_${item.callId}`;
+            break;
           }
 
           case "server_tool_use": {
-            if (str(get(cb, "name")) !== CLAUDE_WEB_SEARCH_TOOL_NAME) break
-            const toolUseId = str(get(cb, "id"))
-            const item = newOutputItem("web_search_call", idx)
-            item.id = responsesWebSearchCallID(toolUseId)
-            item.callId = toolUseId
-            webSearchByToolId.set(toolUseId, item)
-            const input = get(cb, "input")
+            if (str(get(cb, "name")) !== CLAUDE_WEB_SEARCH_TOOL_NAME) break;
+            const toolUseId = str(get(cb, "id"));
+            const item = newOutputItem("web_search_call", idx);
+            item.id = responsesWebSearchCallID(toolUseId);
+            item.callId = toolUseId;
+            webSearchByToolId.set(toolUseId, item);
+            const input = get(cb, "input");
 
-            if (isObj(input) && claudeWebSearchQuery(JSON.stringify(input)) !== "") item.args += JSON.stringify(input)
-            break
+            if (isObj(input) && claudeWebSearchQuery(JSON.stringify(input)) !== "")
+              item.args += JSON.stringify(input);
+            break;
           }
 
           case "web_search_tool_result": {
-            const item = webSearchByToolId.get(str(get(cb, "tool_use_id")))
+            const item = webSearchByToolId.get(str(get(cb, "tool_use_id")));
 
-            if (item !== undefined) item.results = claudeWebSearchResultsToResponses(get(cb, "content"))
-            break
+            if (item !== undefined)
+              item.results = claudeWebSearchResultsToResponses(get(cb, "content"));
+            break;
           }
 
           case "thinking":
           case "redacted_thinking": {
-            const item = newOutputItem("reasoning", idx)
-            item.id = `rs_${responseId}_${idx}`
-            item.signature = reasoningCarrier(cb)
-            break
+            const item = newOutputItem("reasoning", idx);
+            item.id = `rs_${responseId}_${idx}`;
+            item.signature = reasoningCarrier(cb);
+            break;
           }
         }
 
-        break
+        break;
       }
 
       case "content_block_delta": {
-        const d = get(root, "delta")
+        const d = get(root, "delta");
 
-        if (!exists(d)) break
-        const item = blockToItem.get(asInt(get(root, "index")))
+        if (!exists(d)) break;
+        const item = blockToItem.get(asInt(get(root, "index")));
 
         switch (str(get(d, "type"))) {
           case "text_delta":
             if (item !== undefined && item.itemType === "message") {
-              const t = get(d, "text")
+              const t = get(d, "text");
 
-              if (exists(t)) item.text += str(t)
+              if (exists(t)) item.text += str(t);
             }
 
-            break
+            break;
           case "input_json_delta":
             if (
               item !== undefined &&
@@ -1543,70 +1637,73 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
                 item.itemType === "custom_tool_call" ||
                 item.itemType === "web_search_call")
             ) {
-              const pj = get(d, "partial_json")
+              const pj = get(d, "partial_json");
 
-              if (exists(pj)) item.args += str(pj)
+              if (exists(pj)) item.args += str(pj);
             }
 
-            break
+            break;
           case "thinking_delta":
             if (item !== undefined && item.itemType === "reasoning") {
-              const t = get(d, "thinking")
+              const t = get(d, "thinking");
 
-              if (exists(t)) item.text += str(t)
+              if (exists(t)) item.text += str(t);
             }
 
-            break
+            break;
           case "signature_delta":
             if (item !== undefined && item.itemType === "reasoning") {
-              const signature = get(d, "signature")
+              const signature = get(d, "signature");
 
-              if (exists(signature) && str(signature) !== "") item.signature = str(signature)
+              if (exists(signature) && str(signature) !== "") item.signature = str(signature);
             }
 
-            break
+            break;
           case "citations_delta": {
-            const citation = get(d, "citation")
+            const citation = get(d, "citation");
 
             if (exists(citation) && citation !== null) {
-              if (item !== undefined && item.itemType === "message") item.annotations.push(citation)
-              else if (activeMessageItem !== undefined) activeMessageItem.annotations.push(citation)
-              else pendingAnnotations.push(citation)
+              if (item !== undefined && item.itemType === "message")
+                item.annotations.push(citation);
+              else if (activeMessageItem !== undefined)
+                activeMessageItem.annotations.push(citation);
+              else pendingAnnotations.push(citation);
             }
 
-            break
+            break;
           }
         }
 
-        break
+        break;
       }
 
       case "message_delta": {
-        mergeUsage(usageTokens, get(root, "usage"))
-        const value = get(root, "delta.stop_reason")
+        mergeUsage(usageTokens, get(root, "usage"));
+        const value = get(root, "delta.stop_reason");
 
-        if (exists(value)) stopReason = str(value)
-        break
+        if (exists(value)) stopReason = str(value);
+        break;
       }
     }
   }
 
-  const { status: responseStatus, details } = terminalState(stopReason)
-  out.id = responseId
-  out.created_at = createdAt
-  out.status = responseStatus
+  const { status: responseStatus, details } = terminalState(stopReason);
+  out.id = responseId;
+  out.created_at = createdAt;
+  out.status = responseStatus;
 
-  if (details !== undefined) out.incomplete_details = details.details
-  echoRequestFields(out, reqJson)
+  if (details !== undefined) out.incomplete_details = details.details;
+  echoRequestFields(out, reqJson);
 
-  if (nativeModel !== "") out.model = nativeModel
+  if (nativeModel !== "") out.model = nativeModel;
 
-  const outputs: JsonObject[] = []
-  let failure: string | undefined
+  const outputs: JsonObject[] = [];
+  let failure: string | undefined;
   outputItems.forEach((outputItem, i) => {
-    if (failure !== undefined) return
-    const itemStatus = responseStatus === "incomplete" && i === outputItems.length - 1 ? "incomplete" : "completed"
-    let item: JsonObject | undefined
+    if (failure !== undefined) return;
+    const itemStatus =
+      responseStatus === "incomplete" && i === outputItems.length - 1 ? "incomplete" : "completed";
+    let item: JsonObject | undefined;
 
     switch (outputItem.itemType) {
       case "reasoning":
@@ -1615,17 +1712,17 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
           type: "reasoning",
           status: itemStatus,
           encrypted_content: outputItem.signature,
-          summary: [{ type: "summary_text", text: outputItem.text }]
-        }
-        break
+          summary: [{ type: "summary_text", text: outputItem.text }],
+        };
+        break;
       case "web_search_call":
         item = buildResponsesWebSearchCallItem(
           outputItem.callId,
           claudeWebSearchQuery(outputItem.args),
-          outputItem.results
-        )
-        item.status = itemStatus
-        break
+          outputItem.results,
+        );
+        item.status = itemStatus;
+        break;
       case "message":
         item = {
           id: outputItem.id,
@@ -1634,38 +1731,43 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
           content: [
             {
               type: "output_text",
-              annotations: outputItem.annotations.length > 0 ? sortKeysDeep(outputItem.annotations) : [],
+              annotations:
+                outputItem.annotations.length > 0 ? sortKeysDeep(outputItem.annotations) : [],
               logprobs: [],
-              text: outputItem.text
-            }
+              text: outputItem.text,
+            },
           ],
-          role: "assistant"
-        }
-        break
+          role: "assistant",
+        };
+        break;
       case "custom_tool_call": {
-        let input: string
+        let input: string;
 
         if (isApplyPatch(st, outputItem.name)) {
-          const patchCall = new ApplyPatchCallState("", "", "", "", 0)
-          const pushed = patchCall.pushArguments(outputItem.args)
+          const patchCall = new ApplyPatchCallState("", "", "", "", 0);
+          const pushed = patchCall.pushArguments(outputItem.args);
 
           if ("error" in pushed) {
-            failure = failNonStream(pushed.error)
+            failure = failNonStream(pushed.error);
 
-            return
+            return;
           }
 
-          const finished = finishClaudeApplyPatchArguments(patchCall, outputItem.args, outputItem.inputSnapshot)
+          const finished = finishClaudeApplyPatchArguments(
+            patchCall,
+            outputItem.args,
+            outputItem.inputSnapshot,
+          );
 
           if ("error" in finished) {
-            failure = failNonStream(finished.error)
+            failure = failNonStream(finished.error);
 
-            return
+            return;
           }
 
-          input = finished.input
+          input = finished.input;
         } else {
-          input = unwrapCustomToolInput(outputItem.args)
+          input = unwrapCustomToolInput(outputItem.args);
         }
 
         item = {
@@ -1674,61 +1776,62 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (context: Respons
           status: itemStatus,
           input,
           call_id: outputItem.callId,
-          name: ""
-        }
-        applyNamespaceFields(item, reqJson, outputItem.name)
-        break
+          name: "",
+        };
+        applyNamespaceFields(item, reqJson, outputItem.name);
+        break;
       }
 
       case "function_call": {
-        let args = outputItem.args
+        let args = outputItem.args;
 
-        if (args === "" && itemStatus === "completed") args = "{}"
+        if (args === "" && itemStatus === "completed") args = "{}";
         item = {
           id: outputItem.id,
           type: "function_call",
           status: itemStatus,
           arguments: args,
           call_id: outputItem.callId,
-          name: ""
-        }
-        applyNamespaceFields(item, reqJson, outputItem.name)
-        break
+          name: "",
+        };
+        applyNamespaceFields(item, reqJson, outputItem.name);
+        break;
       }
     }
 
-    if (item !== undefined) outputs.push(item)
-  })
+    if (item !== undefined) outputs.push(item);
+  });
 
-  if (failure !== undefined) return failure
+  if (failure !== undefined) return failure;
 
-  if (outputs.length > 0) out.output = outputs
+  if (outputs.length > 0) out.output = outputs;
 
-  const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(usageTokens)
-  const usage = out.usage as JsonObject
+  const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(usageTokens);
+  const usage = out.usage as JsonObject;
 
-  if (inputTokens !== 0) usage.input_tokens = inputTokens
+  if (inputTokens !== 0) usage.input_tokens = inputTokens;
 
-  if (cachedTokens !== 0) (usage.input_tokens_details as JsonObject).cached_tokens = cachedTokens
+  if (cachedTokens !== 0) (usage.input_tokens_details as JsonObject).cached_tokens = cachedTokens;
 
-  if (outputTokens !== 0) usage.output_tokens = outputTokens
+  if (outputTokens !== 0) usage.output_tokens = outputTokens;
 
-  if (totalTokens !== 0) usage.total_tokens = totalTokens
+  if (totalTokens !== 0) usage.total_tokens = totalTokens;
 
   const reasoningLength = outputItems
     .filter((item) => item.itemType === "reasoning")
-    .reduce((sum, item) => sum + utf8Length(item.text), 0)
+    .reduce((sum, item) => sum + utf8Length(item.text), 0);
 
   if (reasoningLength > 0) {
-    const reasoningTokens = Math.trunc(reasoningLength / 4)
+    const reasoningTokens = Math.trunc(reasoningLength / 4);
 
-    if (reasoningTokens > 0) (usage.output_tokens_details as JsonObject).reasoning_tokens = reasoningTokens
+    if (reasoningTokens > 0)
+      (usage.output_tokens_details as JsonObject).reasoning_tokens = reasoningTokens;
   }
 
-  return JSON.stringify(out)
-}
+  return JSON.stringify(out);
+};
 
 export const claudeToOpenAIResponsesResponse: ResponseTransform = {
   stream: convertClaudeResponseToOpenAIResponses,
-  nonStream: convertClaudeResponseToOpenAIResponsesNonStream
-}
+  nonStream: convertClaudeResponseToOpenAIResponsesNonStream,
+};

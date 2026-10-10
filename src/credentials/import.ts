@@ -5,8 +5,8 @@
  * (`synthesizeFileAuths`: skipped files, provider type), sdk/auth/filestore.go. Docs: credentials.md §2-3.
  * A file is one flat JSON object that is kept verbatim as credential metadata (unknown keys are preserved).
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
-import { parseWeightValue } from "./weight.ts"
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { parseWeightValue } from "./weight.ts";
 
 /** Legacy dashed spellings -> canonical snake_case (`CanonicalCredentialMetadataKey`). */
 const KEY_ALIASES: Readonly<Record<string, string>> = {
@@ -19,22 +19,22 @@ const KEY_ALIASES: Readonly<Record<string, string>> = {
   "proxy-url": "proxy_url",
   "request-retry": "request_retry",
   "request-scoped-errors": "request_scoped_errors",
-  "tool-prefix-disabled": "tool_prefix_disabled"
-}
+  "tool-prefix-disabled": "tool_prefix_disabled",
+};
 
-export const canonicalMetadataKey = (key: string): string => KEY_ALIASES[key] ?? key
+export const canonicalMetadataKey = (key: string): string => KEY_ALIASES[key] ?? key;
 
 /** Renames legacy keys in place; an explicitly present canonical key wins. */
 export const normalizeCredentialMetadata = (metadata: JsonObject): void => {
   for (const key of Object.keys(metadata)) {
-    const canonical = canonicalMetadataKey(key)
+    const canonical = canonicalMetadataKey(key);
 
-    if (canonical === key) continue
+    if (canonical === key) continue;
 
-    if (!Object.hasOwn(metadata, canonical)) metadata[canonical] = metadata[key] as Json
-    delete metadata[key]
+    if (!Object.hasOwn(metadata, canonical)) metadata[canonical] = metadata[key] as Json;
+    delete metadata[key];
   }
-}
+};
 
 export type ImportFailureReason =
   | "invalid_name"
@@ -43,32 +43,38 @@ export type ImportFailureReason =
   | "empty"
   | "missing_type"
   | "unsupported_type"
-  | "invalid_weight"
+  | "invalid_weight";
 
 export type ParsedAuthFile =
-  | { readonly ok: true; readonly id: string; readonly provider: string; readonly metadata: JsonObject }
-  | { readonly ok: false; readonly reason: ImportFailureReason; readonly message: string }
+  | {
+      readonly ok: true;
+      readonly id: string;
+      readonly provider: string;
+      readonly metadata: JsonObject;
+    }
+  | { readonly ok: false; readonly reason: ImportFailureReason; readonly message: string };
 
 /** Gemini-CLI OAuth was removed upstream: such files are ignored entirely. */
-const IGNORED_TYPES = new Set(["gemini", "gemini-cli"])
+const IGNORED_TYPES = new Set(["gemini", "gemini-cli"]);
 
-const MAX_ID_LENGTH = 256
+const MAX_ID_LENGTH = 256;
 
 /** Credential ids for files are relative paths: no traversal, no empty segments. */
 export const normalizeCredentialId = (name: string): string | undefined => {
-  const cleaned = name.trim().replace(/\\/g, "/").replace(/^\/+/, "")
+  const cleaned = name.trim().replace(/\\/g, "/").replace(/^\/+/, "");
 
-  if (cleaned === "" || cleaned.length > MAX_ID_LENGTH) return undefined
-  const segments = cleaned.split("/")
+  if (cleaned === "" || cleaned.length > MAX_ID_LENGTH) return undefined;
+  const segments = cleaned.split("/");
 
-  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) return undefined
+  if (segments.some((segment) => segment === "" || segment === "." || segment === ".."))
+    return undefined;
 
   // Control characters would corrupt logs and management output.
   // oxlint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(cleaned)) return undefined
+  if (/[\u0000-\u001f\u007f]/.test(cleaned)) return undefined;
 
-  return cleaned
-}
+  return cleaned;
+};
 
 /**
  * Parses and validates one auth file (`name` is the relative file name, `content` the JSON text or parsed object).
@@ -76,41 +82,49 @@ export const normalizeCredentialId = (name: string): string | undefined => {
  * file with an invalid `weight` is rejected.
  */
 export const parseAuthFile = (name: string, content: string | JsonObject): ParsedAuthFile => {
-  const id = normalizeCredentialId(name)
+  const id = normalizeCredentialId(name);
 
-  if (id === undefined) return { ok: false, reason: "invalid_name", message: "invalid credential file name" }
+  if (id === undefined)
+    return { ok: false, reason: "invalid_name", message: "invalid credential file name" };
 
-  let parsed: unknown = content
+  let parsed: unknown = content;
 
   if (typeof content === "string") {
-    if (content.trim() === "") return { ok: false, reason: "empty", message: "auth file is empty" }
+    if (content.trim() === "") return { ok: false, reason: "empty", message: "auth file is empty" };
 
     try {
-      parsed = JSON.parse(content)
+      parsed = JSON.parse(content);
     } catch {
-      return { ok: false, reason: "invalid_json", message: "auth file is not valid JSON" }
+      return { ok: false, reason: "invalid_json", message: "auth file is not valid JSON" };
     }
   }
 
-  if (!isJsonObject(parsed)) return { ok: false, reason: "not_object", message: "auth file must be a JSON object" }
-  const metadata = structuredClone(parsed)
+  if (!isJsonObject(parsed))
+    return { ok: false, reason: "not_object", message: "auth file must be a JSON object" };
+  const metadata = structuredClone(parsed);
 
-  if (Object.keys(metadata).length === 0) return { ok: false, reason: "empty", message: "auth file is empty" }
-  normalizeCredentialMetadata(metadata)
+  if (Object.keys(metadata).length === 0)
+    return { ok: false, reason: "empty", message: "auth file is empty" };
+  normalizeCredentialMetadata(metadata);
 
   if (Object.hasOwn(metadata, "weight")) {
-    const weight = parseWeightValue(metadata.weight)
+    const weight = parseWeightValue(metadata.weight);
 
-    if (!weight.ok) return { ok: false, reason: "invalid_weight", message: `invalid weight: ${weight.message}` }
+    if (!weight.ok)
+      return { ok: false, reason: "invalid_weight", message: `invalid weight: ${weight.message}` };
   }
 
-  const type = typeof metadata.type === "string" ? metadata.type.trim().toLowerCase() : ""
+  const type = typeof metadata.type === "string" ? metadata.type.trim().toLowerCase() : "";
 
-  if (type === "") return { ok: false, reason: "missing_type", message: 'auth file has no "type"' }
+  if (type === "") return { ok: false, reason: "missing_type", message: 'auth file has no "type"' };
 
   if (IGNORED_TYPES.has(type)) {
-    return { ok: false, reason: "unsupported_type", message: `auth type "${type}" is no longer supported` }
+    return {
+      ok: false,
+      reason: "unsupported_type",
+      message: `auth type "${type}" is no longer supported`,
+    };
   }
 
-  return { ok: true, id, provider: type, metadata }
-}
+  return { ok: true, id, provider: type, metadata };
+};

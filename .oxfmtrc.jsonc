@@ -1,10 +1,5 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "semi": false,
-  "singleQuote": false,
-  "printWidth": 120,
-  "trailingComma": "none",
-  "sortPackageJson": false,
   "ignorePatterns": [
     ".repos",
     // Vendored oxlint plugin (tools/oxlint/anti-slop/UPSTREAM.md), kept in its upstream formatting
@@ -25,6 +20,6 @@
     "tools/fixturegen/translator/corpus/gemini-*.json",
     "tools/fixturegen/translator/corpus/interactions-interactions.json",
     // Antigravity corpus requests are compact on purpose (raw JSON text embedded verbatim by Go).
-    "tools/fixturegen/translator/corpus/antigravity-*.json"
-  ]
+    "tools/fixturegen/translator/corpus/antigravity-*.json",
+  ],
 }

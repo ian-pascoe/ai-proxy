@@ -1,98 +1,128 @@
 /**
  * Management-facing credential views (never contain token material) and executor snapshots (do).
  */
-import type { Schema } from "effect"
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts"
-import type { RecentBucket } from "./cooldown/recent-requests.ts"
-import { accessTokenExpiry } from "./expiry.ts"
-import { type Credential, type CredentialError, type CredentialState, executorKey } from "./model.ts"
-import type { CredentialSnapshot } from "./selection/types.ts"
+import type { Schema } from "effect";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import type { RecentBucket } from "./cooldown/recent-requests.ts";
+import { accessTokenExpiry } from "./expiry.ts";
+import {
+  type Credential,
+  type CredentialError,
+  type CredentialState,
+  executorKey,
+} from "./model.ts";
+import type { CredentialSnapshot } from "./selection/types.ts";
 
-const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|private[_-]?key|authorization|cookie|session_id|dca/i
+const SECRET_KEY =
+  /token|secret|password|passwd|api[_-]?key|private[_-]?key|authorization|cookie|session_id|dca/i;
 
-const SAFE_KEYS = new Set(["token_type", "token_endpoint", "dca_expired", "dca_expires_at"])
+const SAFE_KEYS = new Set(["token_type", "token_endpoint", "dca_expired", "dca_expires_at"]);
 
-const SECRET_ATTRIBUTES = new Set(["api_key"])
+const SECRET_ATTRIBUTES = new Set(["api_key"]);
 
 /** Last four characters only, so a key is recognisable without being usable. */
 export const maskSecret = (value: string): string =>
-  value.length <= 8 ? "[redacted]" : `[redacted]…${value.slice(-4)}`
+  value.length <= 8 ? "[redacted]" : `[redacted]…${value.slice(-4)}`;
 
 const redactValue = (value: Json): Json => {
-  if (Array.isArray(value)) return value.map(redactValue)
+  if (Array.isArray(value)) return value.map(redactValue);
 
-  if (isJsonObject(value)) return redactMetadata(value)
+  if (isJsonObject(value)) return redactMetadata(value);
 
-  return value
-}
+  return value;
+};
 
 /** Copy of auth-file metadata with every secret-looking value replaced. */
 export const redactMetadata = (metadata: JsonObject): JsonObject => {
-  const out: JsonObject = {}
+  const out: JsonObject = {};
 
   for (const [key, value] of Object.entries(metadata)) {
     if (SECRET_KEY.test(key) && !SAFE_KEYS.has(key)) {
-      out[key] = typeof value === "string" && value !== "" ? maskSecret(value) : value === null ? null : "[redacted]"
+      out[key] =
+        typeof value === "string" && value !== ""
+          ? maskSecret(value)
+          : value === null
+            ? null
+            : "[redacted]";
     } else {
-      out[key] = redactValue(value)
+      out[key] = redactValue(value);
     }
   }
 
-  return out
-}
+  return out;
+};
 
 export interface CredentialSummary {
-  readonly id: string
-  readonly provider: string
-  readonly executor: string
-  readonly source: Credential["source"]
-  readonly authKind?: Credential["authKind"]
-  readonly label: string
-  readonly prefix?: string
-  readonly disabled: boolean
-  readonly priority: number
-  readonly weight: number
-  readonly attributes: Readonly<Record<string, string>>
-  readonly headerNames: ReadonlyArray<string>
-  readonly excludedModels: ReadonlyArray<string>
+  readonly id: string;
+  readonly provider: string;
+  readonly executor: string;
+  readonly source: Credential["source"];
+  readonly authKind?: Credential["authKind"];
+  readonly label: string;
+  readonly prefix?: string;
+  readonly disabled: boolean;
+  readonly priority: number;
+  readonly weight: number;
+  readonly attributes: Readonly<Record<string, string>>;
+  readonly headerNames: ReadonlyArray<string>;
+  readonly excludedModels: ReadonlyArray<string>;
   /** Redacted auth-file JSON. */
-  readonly metadata: Readonly<Record<string, Schema.MutableJson>>
-  readonly credentialVersion: number
+  readonly metadata: Readonly<Record<string, Schema.MutableJson>>;
+  readonly credentialVersion: number;
   /** Access-token expiry (epoch ms) when known. */
-  readonly expiresAt?: number
-  readonly status: CredentialState["status"]
-  readonly statusMessage?: string
-  readonly unavailable: boolean
-  readonly nextRetryAfter: number
-  readonly quota: { readonly exceeded: boolean; readonly reason?: string; readonly nextRecoverAt: number }
-  readonly lastError?: CredentialError
-  readonly success: number
-  readonly failed: number
+  readonly expiresAt?: number;
+  readonly status: CredentialState["status"];
+  readonly statusMessage?: string;
+  readonly unavailable: boolean;
+  readonly nextRetryAfter: number;
+  readonly quota: {
+    readonly exceeded: boolean;
+    readonly reason?: string;
+    readonly nextRecoverAt: number;
+  };
+  readonly lastError?: CredentialError;
+  readonly success: number;
+  readonly failed: number;
   /** Raw recent-requests ring (see `recentRequestsSnapshot`), when any request was reported. */
-  readonly recentRequests?: ReadonlyArray<RecentBucket>
+  readonly recentRequests?: ReadonlyArray<RecentBucket>;
   readonly modelStates: Readonly<
-    Record<string, { readonly unavailable: boolean; readonly nextRetryAfter: number; readonly statusMessage?: string }>
-  >
-  readonly createdAt: number
-  readonly updatedAt: number
+    Record<
+      string,
+      {
+        readonly unavailable: boolean;
+        readonly nextRetryAfter: number;
+        readonly statusMessage?: string;
+      }
+    >
+  >;
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
-export const summarizeCredential = (credential: Credential, state: CredentialState): CredentialSummary => {
-  const attributes: Record<string, string> = {}
+export const summarizeCredential = (
+  credential: Credential,
+  state: CredentialState,
+): CredentialSummary => {
+  const attributes: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(credential.attributes)) {
-    attributes[key] = SECRET_ATTRIBUTES.has(key) ? maskSecret(value) : value
+    attributes[key] = SECRET_ATTRIBUTES.has(key) ? maskSecret(value) : value;
   }
 
-  const expiresAt = accessTokenExpiry(credential.metadata, state.rejectedAccessToken)
-  const modelStates: Record<string, { unavailable: boolean; nextRetryAfter: number; statusMessage?: string }> = {}
+  const expiresAt = accessTokenExpiry(credential.metadata, state.rejectedAccessToken);
+  const modelStates: Record<
+    string,
+    { unavailable: boolean; nextRetryAfter: number; statusMessage?: string }
+  > = {};
 
   for (const [model, modelState] of Object.entries(state.modelStates)) {
     modelStates[model] = {
       unavailable: modelState.unavailable,
       nextRetryAfter: modelState.nextRetryAfter,
-      ...(modelState.statusMessage === undefined ? {} : { statusMessage: modelState.statusMessage })
-    }
+      ...(modelState.statusMessage === undefined
+        ? {}
+        : { statusMessage: modelState.statusMessage }),
+    };
   }
 
   return {
@@ -119,7 +149,7 @@ export const summarizeCredential = (credential: Credential, state: CredentialSta
     quota: {
       exceeded: state.quota.exceeded,
       ...(state.quota.reason === undefined ? {} : { reason: state.quota.reason }),
-      nextRecoverAt: state.quota.nextRecoverAt
+      nextRecoverAt: state.quota.nextRecoverAt,
     },
     ...(state.lastError === undefined ? {} : { lastError: state.lastError }),
     success: state.success,
@@ -127,15 +157,21 @@ export const summarizeCredential = (credential: Credential, state: CredentialSta
     ...(state.recentRequests === undefined ? {} : { recentRequests: state.recentRequests }),
     modelStates,
     createdAt: credential.createdAt,
-    updatedAt: credential.updatedAt
-  }
-}
+    updatedAt: credential.updatedAt,
+  };
+};
 
-const stringField = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "")
+const stringField = (value: Json | undefined): string =>
+  typeof value === "string" ? value.trim() : "";
 
 /** Credential plus resolved executor key and base URL: the data an executor needs to call the upstream. */
 export const toSnapshot = (credential: Credential): CredentialSnapshot => {
-  const baseUrl = credential.attributes.base_url?.trim() || stringField(credential.metadata.base_url)
+  const baseUrl =
+    credential.attributes.base_url?.trim() || stringField(credential.metadata.base_url);
 
-  return { ...credential, ...(baseUrl === "" ? {} : { baseUrl }), executor: executorKey(credential) }
-}
+  return {
+    ...credential,
+    ...(baseUrl === "" ? {} : { baseUrl }),
+    executor: executorKey(credential),
+  };
+};

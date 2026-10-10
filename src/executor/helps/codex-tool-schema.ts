@@ -9,36 +9,36 @@
  *  - {@link normalizeCodexToolIntegerTypes}: `number` -> `integer` for the numeric fields of the Codex CLI's own
  *    tools; part of the payload barrier for Codex clients targeting non-Codex executors (see `payload.ts`).
  */
-import { sortKeys } from "../../http/json-text.ts"
-import { asString, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts"
-import type { HeaderInput } from "../../config/payload/index.ts"
+import { sortKeys } from "../../http/json-text.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
+import type { HeaderInput } from "../../config/payload/index.ts";
 import {
   hasUnsupportedUnicodePropertyEscape,
   SCHEMA_MAP_KEYWORDS,
-  SCHEMA_VALUE_KEYWORDS
-} from "../../translator/common/schema.ts"
+  SCHEMA_VALUE_KEYWORDS,
+} from "../../translator/common/schema.ts";
 
 /** Minimum union branches before a pure-constant union is rewritten into an enum. */
-const COMPLEX_UNION_BRANCH_THRESHOLD = 8
+const COMPLEX_UNION_BRANCH_THRESHOLD = 8;
 
 const headerValue = (headers: HeaderInput | undefined, name: string): string => {
-  if (headers === undefined) return ""
+  if (headers === undefined) return "";
 
-  if (headers instanceof Headers) return (headers.get(name) ?? "").trim()
+  if (headers instanceof Headers) return (headers.get(name) ?? "").trim();
 
   for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() !== name.toLowerCase() || value === undefined) continue
-    const values = typeof value === "string" ? [value] : value
+    if (key.toLowerCase() !== name.toLowerCase() || value === undefined) continue;
+    const values = typeof value === "string" ? [value] : value;
 
-    for (const entry of values) if (entry.trim() !== "") return entry.trim()
+    for (const entry of values) if (entry.trim() !== "") return entry.trim();
   }
 
-  return ""
-}
+  return "";
+};
 
 /** `IsCodexUserAgent`: the `User-Agent` contains `codex`. */
 export const isCodexUserAgent = (headers: HeaderInput | undefined): boolean =>
-  headerValue(headers, "User-Agent").toLowerCase().includes("codex")
+  headerValue(headers, "User-Agent").toLowerCase().includes("codex");
 
 // ---------------------------------------------------------------------------------------------------------------
 // Schema simplification
@@ -46,192 +46,195 @@ export const isCodexUserAgent = (headers: HeaderInput | undefined): boolean =>
 
 /** `stripIncompatiblePatterns`: schema-aware removal of unsupported `pattern`s; true when something was removed. */
 const stripIncompatiblePatterns = (value: Json | undefined): boolean => {
-  let changed = false
+  let changed = false;
 
   if (isJsonArray(value)) {
-    for (const item of value) if (stripIncompatiblePatterns(item)) changed = true
+    for (const item of value) if (stripIncompatiblePatterns(item)) changed = true;
 
-    return changed
+    return changed;
   }
 
-  if (!isJsonObject(value)) return false
-  const pattern = value["pattern"]
+  if (!isJsonObject(value)) return false;
+  const pattern = value["pattern"];
 
   if (typeof pattern === "string" && hasUnsupportedUnicodePropertyEscape(pattern)) {
-    delete value["pattern"]
-    changed = true
+    delete value["pattern"];
+    changed = true;
   }
 
-  const patternProperties = value["patternProperties"]
+  const patternProperties = value["patternProperties"];
 
   if (isJsonObject(patternProperties)) {
     for (const key of Object.keys(patternProperties)) {
       if (hasUnsupportedUnicodePropertyEscape(key)) {
-        delete patternProperties[key]
-        changed = true
+        delete patternProperties[key];
+        changed = true;
       } else if (stripIncompatiblePatterns(patternProperties[key])) {
-        changed = true
+        changed = true;
       }
     }
   }
 
   for (const mapKey of SCHEMA_MAP_KEYWORDS) {
-    if (mapKey === "patternProperties") continue
-    const sub = value[mapKey]
+    if (mapKey === "patternProperties") continue;
+    const sub = value[mapKey];
 
-    if (isJsonObject(sub)) for (const child of Object.values(sub)) if (stripIncompatiblePatterns(child)) changed = true
+    if (isJsonObject(sub))
+      for (const child of Object.values(sub)) if (stripIncompatiblePatterns(child)) changed = true;
   }
 
   for (const valueKey of SCHEMA_VALUE_KEYWORDS) {
-    const sub = value[valueKey]
+    const sub = value[valueKey];
 
-    if ((isJsonObject(sub) || isJsonArray(sub)) && stripIncompatiblePatterns(sub)) changed = true
+    if ((isJsonObject(sub) || isJsonArray(sub)) && stripIncompatiblePatterns(sub)) changed = true;
   }
 
-  return changed
-}
+  return changed;
+};
 
 /** `canonicalJSONValueKey`: scalar const values only. */
 const canonicalValueKey = (value: Json | undefined): string | undefined => {
   switch (typeof value) {
     case "string":
-      return `s:${value}`
+      return `s:${value}`;
     case "number":
-      return `n:${value}`
+      return `n:${value}`;
     case "boolean":
-      return `b:${value}`
+      return `b:${value}`;
     default:
-      return value === null ? "null" : undefined
+      return value === null ? "null" : undefined;
   }
-}
+};
 
 /** `isPureConstBranch`: an object with `const` and nothing but `description`/`title`. */
-const pureConstBranch = (branch: Json): { readonly key: string; readonly value: Json } | undefined => {
-  if (!isJsonObject(branch)) return undefined
-  const constant = branch["const"]
+const pureConstBranch = (
+  branch: Json,
+): { readonly key: string; readonly value: Json } | undefined => {
+  if (!isJsonObject(branch)) return undefined;
+  const constant = branch["const"];
 
-  if (constant === undefined) return undefined
+  if (constant === undefined) return undefined;
 
   for (const key of Object.keys(branch))
-    if (key !== "const" && key !== "description" && key !== "title") return undefined
-  const key = canonicalValueKey(constant)
+    if (key !== "const" && key !== "description" && key !== "title") return undefined;
+  const key = canonicalValueKey(constant);
 
-  return key === undefined ? undefined : { key, value: constant }
-}
+  return key === undefined ? undefined : { key, value: constant };
+};
 
 const equalCanonicalSets = (a: readonly string[], b: readonly string[]): boolean => {
-  if (a.length !== b.length) return false
-  const setA = new Set(a)
+  if (a.length !== b.length) return false;
+  const setA = new Set(a);
 
-  return setA.size === a.length && b.every((value) => setA.has(value))
-}
+  return setA.size === a.length && b.every((value) => setA.has(value));
+};
 
 /** `normalizeCodexPropertySchema`: true when the property object was rewritten in place. */
 const normalizePropertySchema = (prop: Json): boolean => {
-  if (!isJsonObject(prop)) return false
-  const hasOneOf = prop["oneOf"] !== undefined
-  const hasAnyOf = prop["anyOf"] !== undefined
+  if (!isJsonObject(prop)) return false;
+  const hasOneOf = prop["oneOf"] !== undefined;
+  const hasAnyOf = prop["anyOf"] !== undefined;
 
   // Both present: leave untouched to preserve compound constraints.
-  if (hasOneOf === hasAnyOf) return false
-  const unionName = hasOneOf ? "oneOf" : "anyOf"
-  const union = prop[unionName]
+  if (hasOneOf === hasAnyOf) return false;
+  const unionName = hasOneOf ? "oneOf" : "anyOf";
+  const union = prop[unionName];
 
-  if (!isJsonArray(union) || union.length < COMPLEX_UNION_BRANCH_THRESHOLD) return false
+  if (!isJsonArray(union) || union.length < COMPLEX_UNION_BRANCH_THRESHOLD) return false;
 
-  const keys: string[] = []
-  const values: Json[] = []
-  const seen = new Set<string>()
+  const keys: string[] = [];
+  const values: Json[] = [];
+  const seen = new Set<string>();
 
   for (const branch of union) {
-    const pure = pureConstBranch(branch)
+    const pure = pureConstBranch(branch);
 
     // A duplicate value would violate oneOf exclusivity: keep the original schema.
-    if (pure === undefined || seen.has(pure.key)) return false
-    seen.add(pure.key)
-    keys.push(pure.key)
-    values.push(pure.value)
+    if (pure === undefined || seen.has(pure.key)) return false;
+    seen.add(pure.key);
+    keys.push(pure.key);
+    values.push(pure.value);
   }
 
-  if (values.length === 0) return false
+  if (values.length === 0) return false;
 
-  const existingEnum = prop["enum"]
+  const existingEnum = prop["enum"];
 
   if (isJsonArray(existingEnum)) {
-    const existingKeys: string[] = []
+    const existingKeys: string[] = [];
 
     for (const value of existingEnum) {
-      const key = canonicalValueKey(value)
+      const key = canonicalValueKey(value);
 
-      if (key === undefined) return false
-      existingKeys.push(key)
+      if (key === undefined) return false;
+      existingKeys.push(key);
     }
 
-    if (!equalCanonicalSets(existingKeys, keys)) return false
-    delete prop[unionName]
+    if (!equalCanonicalSets(existingKeys, keys)) return false;
+    delete prop[unionName];
 
-    return true
+    return true;
   }
 
-  prop["enum"] = values
-  delete prop[unionName]
+  prop["enum"] = values;
+  delete prop[unionName];
 
-  return true
-}
+  return true;
+};
 
 /** `normalizeCodexParameters`: true when `params` changed. */
 const normalizeParameters = (params: Json, owner: { parameters: Json }): boolean => {
-  let changed = false
+  let changed = false;
 
   if (stripIncompatiblePatterns(params)) {
     // Go re-encodes the schema through a map: keys come out sorted.
-    owner.parameters = sortKeys(params) as Json
-    params = owner.parameters
-    changed = true
+    owner.parameters = sortKeys(params) as Json;
+    params = owner.parameters;
+    changed = true;
   }
 
-  const properties = get(params, "properties")
+  const properties = get(params, "properties");
 
   if (isJsonObject(properties)) {
     for (const name of Object.keys(properties)) {
-      if (normalizePropertySchema(properties[name] as Json)) changed = true
+      if (normalizePropertySchema(properties[name] as Json)) changed = true;
     }
   }
 
-  return changed
-}
+  return changed;
+};
 
 const normalizeToolList = (tools: Json | undefined): boolean => {
-  if (!isJsonArray(tools)) return false
-  let changed = false
+  if (!isJsonArray(tools)) return false;
+  let changed = false;
 
   for (const tool of tools) {
-    if (!isJsonObject(tool)) continue
-    const toolType = asString(tool["type"])
+    if (!isJsonObject(tool)) continue;
+    const toolType = asString(tool["type"]);
 
     if (toolType === "namespace") {
-      if (normalizeToolList(tool["tools"])) changed = true
-      continue
+      if (normalizeToolList(tool["tools"])) changed = true;
+      continue;
     }
 
-    if (toolType !== "function" && toolType !== "custom") continue
-    const params = tool["parameters"]
+    if (toolType !== "function" && toolType !== "custom") continue;
+    const params = tool["parameters"];
 
-    if (!isJsonObject(params)) continue
-    const owner = tool as { parameters: Json }
+    if (!isJsonObject(params)) continue;
+    const owner = tool as { parameters: Json };
 
-    if (normalizeParameters(params, owner)) changed = true
+    if (normalizeParameters(params, owner)) changed = true;
   }
 
-  return changed
-}
+  return changed;
+};
 
 /** `NormalizeCodexToolSchemas`; mutates and returns `body`. */
 export const normalizeCodexToolSchemas = <T extends Json>(body: T): T => {
-  normalizeToolList(get(body, "tools"))
+  normalizeToolList(get(body, "tools"));
 
-  return body
-}
+  return body;
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // number -> integer for Codex CLI tools
@@ -251,7 +254,7 @@ const CODEX_CLIENT_TOOL_INTEGER_FIELDS: Readonly<Record<string, readonly string[
     "participants",
     "timeout_ms",
     "barrier.properties.participants",
-    "barrier.properties.timeout_ms"
+    "barrier.properties.timeout_ms",
   ],
   create_goal: ["token_budget"],
   get_channels: ["limit"],
@@ -278,138 +281,142 @@ const CODEX_CLIENT_TOOL_INTEGER_FIELDS: Readonly<Record<string, readonly string[
     "click.items.properties.id",
     "screenshot.items.properties.pageno",
     "weather.items.properties.duration",
-    "sports.items.properties.num_games"
-  ]
-}
+    "sports.items.properties.num_games",
+  ],
+};
 
 const matchCodexTargetTool = (toolName: string): readonly string[] => {
-  let base = toolName.trim()
+  let base = toolName.trim();
 
-  if (base.startsWith("functions__")) base = base.slice("functions__".length)
-  else if (base.startsWith("collab__")) base = base.slice("collab__".length)
+  if (base.startsWith("functions__")) base = base.slice("functions__".length);
+  else if (base.startsWith("collab__")) base = base.slice("collab__".length);
 
   switch (base) {
     case "multi_agent_v1__wait_agent":
     case "collaboration__wait_agent":
-      base = "wait_agent"
-      break
+      base = "wait_agent";
+      break;
     case "collaboration__get_channels":
     case "collaboration__list_threads":
     case "collaboration__search_posts":
     case "collaboration__read_thread":
     case "collaboration__read_post":
-      base = base.slice("collaboration__".length)
-      break
+      base = base.slice("collaboration__".length);
+      break;
   }
 
-  return CODEX_CLIENT_TOOL_INTEGER_FIELDS[base] ?? []
-}
+  return CODEX_CLIENT_TOOL_INTEGER_FIELDS[base] ?? [];
+};
 
 const normalizeFieldTypes = (params: Json, fields: readonly string[]): boolean => {
-  if (fields.length === 0 || !isJsonObject(get(params, "properties"))) return false
-  let changed = false
+  if (fields.length === 0 || !isJsonObject(get(params, "properties"))) return false;
+  let changed = false;
 
   for (const field of fields) {
-    const prop = get(params, `properties.${field}`)
+    const prop = get(params, `properties.${field}`);
 
-    if (prop === undefined) continue
-    const type = get(prop, "type")
+    if (prop === undefined) continue;
+    const type = get(prop, "type");
 
-    if (type === undefined) continue
-    const typePath = `properties.${field}.type`
+    if (type === undefined) continue;
+    const typePath = `properties.${field}.type`;
 
     if (type === "number") {
-      set(params, typePath, "integer")
-      changed = true
+      set(params, typePath, "integer");
+      changed = true;
     } else if (isJsonArray(type)) {
-      let hasNumber = false
-      const seen = new Set<string>()
-      const next: string[] = []
+      let hasNumber = false;
+      const seen = new Set<string>();
+      const next: string[] = [];
 
       for (const item of type) {
-        let text = asString(item)
+        let text = asString(item);
 
         if (text === "number") {
-          hasNumber = true
-          text = "integer"
+          hasNumber = true;
+          text = "integer";
         }
 
         if (!seen.has(text)) {
-          seen.add(text)
-          next.push(text)
+          seen.add(text);
+          next.push(text);
         }
       }
 
       if (hasNumber) {
-        set(params, typePath, next)
-        changed = true
+        set(params, typePath, next);
+        changed = true;
       }
     }
   }
 
-  return changed
-}
+  return changed;
+};
 
 const normalizeIntegerTypesInTool = (tool: Json, namespace: string): boolean => {
-  if (!isJsonObject(tool)) return false
+  if (!isJsonObject(tool)) return false;
 
   if (asString(tool["type"]) === "namespace") {
-    if (namespace !== "") return false
-    const name = asString(tool["name"])
+    if (namespace !== "") return false;
+    const name = asString(tool["name"]);
 
-    return name === "" ? false : normalizeIntegerTypesInArray(tool["tools"], name)
+    return name === "" ? false : normalizeIntegerTypesInArray(tool["tools"], name);
   }
 
   for (const key of ["function_declarations", "functionDeclarations"]) {
-    const declarations = tool[key]
+    const declarations = tool[key];
 
-    if (isJsonArray(declarations)) return normalizeIntegerTypesInArray(declarations, namespace)
+    if (isJsonArray(declarations)) return normalizeIntegerTypesInArray(declarations, namespace);
   }
 
-  let toolName = asString(tool["name"])
-  let params = tool["parameters"]
+  let toolName = asString(tool["name"]);
+  let params = tool["parameters"];
 
   if (!isJsonObject(params)) {
-    const fnParams = get(tool, "function.parameters")
+    const fnParams = get(tool, "function.parameters");
 
     if (isJsonObject(fnParams)) {
-      params = fnParams
+      params = fnParams;
 
-      if (toolName === "") toolName = asString(get(tool, "function.name"))
+      if (toolName === "") toolName = asString(get(tool, "function.name"));
     } else if (isJsonObject(tool["input_schema"])) {
-      params = tool["input_schema"]
+      params = tool["input_schema"];
     } else if (isJsonObject(tool["parametersJsonSchema"])) {
-      params = tool["parametersJsonSchema"]
+      params = tool["parametersJsonSchema"];
     } else {
-      return false
+      return false;
     }
   }
 
-  if (namespace !== "") toolName = `${namespace}__${toolName}`
+  if (namespace !== "") toolName = `${namespace}__${toolName}`;
 
-  return normalizeFieldTypes(params, matchCodexTargetTool(toolName))
-}
+  return normalizeFieldTypes(params, matchCodexTargetTool(toolName));
+};
 
 const normalizeIntegerTypesInArray = (tools: Json | undefined, namespace: string): boolean => {
-  if (!isJsonArray(tools)) return false
-  let changed = false
+  if (!isJsonArray(tools)) return false;
+  let changed = false;
 
-  for (const tool of tools) if (normalizeIntegerTypesInTool(tool, namespace)) changed = true
+  for (const tool of tools) if (normalizeIntegerTypesInTool(tool, namespace)) changed = true;
 
-  return changed
-}
+  return changed;
+};
 
 /** `NormalizeCodexToolIntegerTypes`; mutates and returns `body` (no-op unless the client is a Codex client). */
-export const normalizeCodexToolIntegerTypes = <T extends Json>(body: T, headers: HeaderInput | undefined): T => {
-  if (!isCodexUserAgent(headers)) return body
-  normalizeIntegerTypesInArray(get(body, "tools"), "")
-  const input = get(body, "input")
+export const normalizeCodexToolIntegerTypes = <T extends Json>(
+  body: T,
+  headers: HeaderInput | undefined,
+): T => {
+  if (!isCodexUserAgent(headers)) return body;
+  normalizeIntegerTypesInArray(get(body, "tools"), "");
+  const input = get(body, "input");
 
   if (isJsonArray(input)) {
     for (const item of input) {
-      if (asString(get(item, "type")) === "additional_tools") normalizeIntegerTypesInArray(get(item, "tools"), "")
+      if (asString(get(item, "type")) === "additional_tools")
+        normalizeIntegerTypesInArray(get(item, "tools"), "");
     }
   }
 
-  return body
-}
+  return body;
+};

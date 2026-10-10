@@ -7,147 +7,153 @@
  * internal/misc/antigravity_version.go (user agents). Docs: config-management-oauth.md §3.2.3.
  * Deviation: the client version is the Go fallback (`2.9.1`); the Hub manifest is not polled on Workers.
  */
-import { Effect } from "effect"
-import { type HttpClient, HttpClientRequest } from "effect/http"
+import { Effect } from "effect";
+import { type HttpClient, HttpClientRequest } from "effect/http";
 import {
   ANTIGRAVITY_CLIENT_ID,
   ANTIGRAVITY_CLIENT_SECRET,
-  ANTIGRAVITY_TOKEN_URL
-} from "../../credentials/refresh/antigravity.ts"
-import { isJsonObject, type JsonObject } from "../../json/index.ts"
-import { encodeQuery } from "../encoding.ts"
-import { call, parseJsonObject, rfc3339, seconds, str } from "./http.ts"
-import { type CallbackFlow, type FlowFailure, flowFailure } from "./types.ts"
+  ANTIGRAVITY_TOKEN_URL,
+} from "../../credentials/refresh/antigravity.ts";
+import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { encodeQuery } from "../encoding.ts";
+import { call, parseJsonObject, rfc3339, seconds, str } from "./http.ts";
+import { type CallbackFlow, type FlowFailure, flowFailure } from "./types.ts";
 
-export const ANTIGRAVITY_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+export const ANTIGRAVITY_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
-export const ANTIGRAVITY_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo?alt=json"
+export const ANTIGRAVITY_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo?alt=json";
 
-export const ANTIGRAVITY_API_ENDPOINT = "https://cloudcode-pa.googleapis.com"
+export const ANTIGRAVITY_API_ENDPOINT = "https://cloudcode-pa.googleapis.com";
 
-export const ANTIGRAVITY_DAILY_API_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com"
+export const ANTIGRAVITY_DAILY_API_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com";
 
-export const ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback"
+export const ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback";
 
-const API_VERSION = "v1internal"
+const API_VERSION = "v1internal";
 
-const CLIENT_VERSION = "2.9.1"
+const CLIENT_VERSION = "2.9.1";
 
-const SHORT_USER_AGENT = `antigravity/hub/${CLIENT_VERSION} darwin/arm64`
+const SHORT_USER_AGENT = `antigravity/hub/${CLIENT_VERSION} darwin/arm64`;
 
-const NODE_USER_AGENT = `${SHORT_USER_AGENT} google-api-nodejs-client/10.3.0`
+const NODE_USER_AGENT = `${SHORT_USER_AGENT} google-api-nodejs-client/10.3.0`;
 
-const GOOG_API_CLIENT = "gl-node/22.21.1"
+const GOOG_API_CLIENT = "gl-node/22.21.1";
 
-const ONBOARD_ATTEMPTS = 5
+const ONBOARD_ATTEMPTS = 5;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/cclog",
-  "https://www.googleapis.com/auth/experimentsandconfigs"
-]
+  "https://www.googleapis.com/auth/experimentsandconfigs",
+];
 
 export const antigravityFileName = (email: string): string =>
-  email.trim() === "" ? "antigravity.json" : `antigravity-${email.trim()}.json`
+  email.trim() === "" ? "antigravity.json" : `antigravity-${email.trim()}.json`;
 
 /** `extractCloudaicompanionProject`: a string or `{id}` under one of three keys. */
 const extractProject = (data: JsonObject): string => {
   for (const key of ["cloudaicompanionProject", "projectId", "project"]) {
-    const value = data[key]
+    const value = data[key];
 
-    if (typeof value === "string" && value.trim() !== "") return value.trim()
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
 
-    if (isJsonObject(value) && str(value.id) !== "") return str(value.id)
+    if (isJsonObject(value) && str(value.id) !== "") return str(value.id);
   }
 
-  return ""
-}
+  return "";
+};
 
 /** `defaultAntigravityTierID`: the default allowed tier, else the current tier, else `free-tier`. */
 const defaultTierId = (loadResponse: JsonObject): string => {
-  const tiers = loadResponse.allowedTiers
+  const tiers = loadResponse.allowedTiers;
 
   if (Array.isArray(tiers)) {
     for (const tier of tiers) {
-      if (isJsonObject(tier) && tier.isDefault === true && str(tier.id) !== "") return str(tier.id)
+      if (isJsonObject(tier) && tier.isDefault === true && str(tier.id) !== "") return str(tier.id);
     }
   }
 
-  const current = loadResponse.currentTier
+  const current = loadResponse.currentTier;
 
-  if (isJsonObject(current) && str(current.id) !== "") return str(current.id)
+  if (isJsonObject(current) && str(current.id) !== "") return str(current.id);
 
-  return "free-tier"
-}
+  return "free-tier";
+};
 
 const jsonPost = (
   url: string,
   accessToken: string,
   userAgent: string,
   body: unknown,
-  extra: Record<string, string> = {}
+  extra: Record<string, string> = {},
 ) =>
   HttpClientRequest.post(url).pipe(
     HttpClientRequest.setHeaders({
       authorization: `Bearer ${accessToken}`,
       accept: "*/*",
       "user-agent": userAgent,
-      ...extra
+      ...extra,
     }),
-    HttpClientRequest.bodyJsonUnsafe(body)
-  )
+    HttpClientRequest.bodyJsonUnsafe(body),
+  );
 
 /** `OnboardUser`: polls `onboardUser` (2 s apart, 5 attempts) until the operation is done. */
-const onboardUser = (accessToken: string, tierId: string): Effect.Effect<string, FlowFailure, HttpClient.HttpClient> =>
+const onboardUser = (
+  accessToken: string,
+  tierId: string,
+): Effect.Effect<string, FlowFailure, HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const url = `${ANTIGRAVITY_DAILY_API_ENDPOINT}/${API_VERSION}:onboardUser`
+    const url = `${ANTIGRAVITY_DAILY_API_ENDPOINT}/${API_VERSION}:onboardUser`;
 
     const body = {
       tier_id: tierId,
-      metadata: { ide_type: "ANTIGRAVITY", ide_version: CLIENT_VERSION, ide_name: "antigravity" }
-    }
+      metadata: { ide_type: "ANTIGRAVITY", ide_version: CLIENT_VERSION, ide_name: "antigravity" },
+    };
 
     for (let attempt = 1; attempt <= ONBOARD_ATTEMPTS; attempt++) {
       const reply = yield* call(
-        jsonPost(url, accessToken, NODE_USER_AGENT, body, { "x-goog-api-client": GOOG_API_CLIENT })
-      )
+        jsonPost(url, accessToken, NODE_USER_AGENT, body, { "x-goog-api-client": GOOG_API_CLIENT }),
+      );
 
-      if (reply.status !== 200) return yield* flowFailure(`onboardUser failed with status ${reply.status}`)
-      const data = parseJsonObject(reply.text)
+      if (reply.status !== 200)
+        return yield* flowFailure(`onboardUser failed with status ${reply.status}`);
+      const data = parseJsonObject(reply.text);
 
-      if (data === undefined) return yield* flowFailure("onboardUser: decode response failed")
+      if (data === undefined) return yield* flowFailure("onboardUser: decode response failed");
 
       if (data.done === true) {
-        const project = isJsonObject(data.response) ? extractProject(data.response) : ""
+        const project = isJsonObject(data.response) ? extractProject(data.response) : "";
 
-        return project === "" ? yield* flowFailure("no project_id in response") : project
+        return project === "" ? yield* flowFailure("no project_id in response") : project;
       }
 
-      yield* Effect.sleep("2 seconds")
+      yield* Effect.sleep("2 seconds");
     }
 
-    return yield* flowFailure(`onboard user did not complete after ${ONBOARD_ATTEMPTS} attempts`)
-  })
+    return yield* flowFailure(`onboard user did not complete after ${ONBOARD_ATTEMPTS} attempts`);
+  });
 
 /** `FetchProjectID`: `loadCodeAssist`, falling back to onboarding the user. Non-fatal for the login. */
 export const fetchProjectId = (accessToken: string) =>
   Effect.gen(function* () {
-    const url = `${ANTIGRAVITY_API_ENDPOINT}/${API_VERSION}:loadCodeAssist`
-    const reply = yield* call(jsonPost(url, accessToken, SHORT_USER_AGENT, { metadata: { ideType: "ANTIGRAVITY" } }))
+    const url = `${ANTIGRAVITY_API_ENDPOINT}/${API_VERSION}:loadCodeAssist`;
+    const reply = yield* call(
+      jsonPost(url, accessToken, SHORT_USER_AGENT, { metadata: { ideType: "ANTIGRAVITY" } }),
+    );
 
     if (reply.status < 200 || reply.status >= 300) {
-      return yield* flowFailure(`loadCodeAssist failed with status ${reply.status}`)
+      return yield* flowFailure(`loadCodeAssist failed with status ${reply.status}`);
     }
 
-    const data = parseJsonObject(reply.text)
+    const data = parseJsonObject(reply.text);
 
-    if (data === undefined) return yield* flowFailure("loadCodeAssist: decode response failed")
-    const project = extractProject(data)
+    if (data === undefined) return yield* flowFailure("loadCodeAssist: decode response failed");
+    const project = extractProject(data);
 
-    return project !== "" ? project : yield* onboardUser(accessToken, defaultTierId(data))
-  })
+    return project !== "" ? project : yield* onboardUser(accessToken, defaultTierId(data));
+  });
 
 export const antigravityFlow = (): CallbackFlow => ({
   kind: "callback",
@@ -164,13 +170,13 @@ export const antigravityFlow = (): CallbackFlow => ({
         redirect_uri: ANTIGRAVITY_REDIRECT_URI,
         response_type: "code",
         scope: SCOPES.join(" "),
-        state
+        state,
       })}`,
-      data: {}
+      data: {},
     }),
   complete: ({ code, now }) =>
     Effect.gen(function* () {
-      if (code.trim() === "") return yield* flowFailure("Authentication failed: code not found")
+      if (code.trim() === "") return yield* flowFailure("Authentication failed: code not found");
 
       const exchange = HttpClientRequest.post(ANTIGRAVITY_TOKEN_URL).pipe(
         HttpClientRequest.bodyUrlParams({
@@ -178,31 +184,43 @@ export const antigravityFlow = (): CallbackFlow => ({
           client_id: ANTIGRAVITY_CLIENT_ID,
           client_secret: ANTIGRAVITY_CLIENT_SECRET,
           redirect_uri: ANTIGRAVITY_REDIRECT_URI,
-          grant_type: "authorization_code"
-        })
-      )
+          grant_type: "authorization_code",
+        }),
+      );
 
-      const tokenReply = yield* call(exchange, "Failed to exchange token")
-      const tokens = tokenReply.status >= 200 && tokenReply.status < 300 ? parseJsonObject(tokenReply.text) : undefined
-      const accessToken = str(tokens?.access_token)
+      const tokenReply = yield* call(exchange, "Failed to exchange token");
+      const tokens =
+        tokenReply.status >= 200 && tokenReply.status < 300
+          ? parseJsonObject(tokenReply.text)
+          : undefined;
+      const accessToken = str(tokens?.access_token);
 
-      if (tokens === undefined || accessToken === "") return yield* flowFailure("Failed to exchange token")
+      if (tokens === undefined || accessToken === "")
+        return yield* flowFailure("Failed to exchange token");
 
       const infoReply = yield* call(
         HttpClientRequest.get(ANTIGRAVITY_USERINFO_URL).pipe(
-          HttpClientRequest.setHeaders({ authorization: `Bearer ${accessToken}`, "user-agent": SHORT_USER_AGENT })
+          HttpClientRequest.setHeaders({
+            authorization: `Bearer ${accessToken}`,
+            "user-agent": SHORT_USER_AGENT,
+          }),
         ),
-        "Failed to fetch user info"
-      )
+        "Failed to fetch user info",
+      );
 
-      const email = infoReply.status >= 200 && infoReply.status < 300 ? str(parseJsonObject(infoReply.text)?.email) : ""
+      const email =
+        infoReply.status >= 200 && infoReply.status < 300
+          ? str(parseJsonObject(infoReply.text)?.email)
+          : "";
 
-      if (email === "") return yield* flowFailure("Failed to fetch user info")
+      if (email === "") return yield* flowFailure("Failed to fetch user info");
 
       // Project discovery must never fail the login.
-      const projectId = yield* fetchProjectId(accessToken).pipe(Effect.catch(() => Effect.succeed("")))
+      const projectId = yield* fetchProjectId(accessToken).pipe(
+        Effect.catch(() => Effect.succeed("")),
+      );
 
-      const expiresIn = Math.trunc(seconds(tokens.expires_in))
+      const expiresIn = Math.trunc(seconds(tokens.expires_in));
 
       const metadata: JsonObject = {
         type: "antigravity",
@@ -211,11 +229,11 @@ export const antigravityFlow = (): CallbackFlow => ({
         expires_in: expiresIn,
         timestamp: now,
         expired: rfc3339(now + expiresIn * 1000),
-        email
-      }
+        email,
+      };
 
-      if (projectId !== "") metadata.project_id = projectId
+      if (projectId !== "") metadata.project_id = projectId;
 
-      return { fileName: antigravityFileName(email), metadata }
-    })
-})
+      return { fileName: antigravityFileName(email), metadata };
+    }),
+});

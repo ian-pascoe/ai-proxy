@@ -14,46 +14,47 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-  set
-} from "../../json/index.ts"
-import { parseOpenAIUsage } from "../../usage/record.ts"
-import type { ExecutorOptions, ExecutorRequest } from "../types.ts"
+  set,
+} from "../../json/index.ts";
+import { parseOpenAIUsage } from "../../usage/record.ts";
+import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
 import {
   expandCompactionCapsules,
   hasResponsesCompactionItem,
   hasResponsesCompactionTrigger,
   prepareCompactionSummaryPayload,
-  recognizedCompactionCapsule
-} from "../helps/compaction.ts"
+  recognizedCompactionCapsule,
+} from "../helps/compaction.ts";
 
 /** `dropForeignClaudeCompactionItems`: compaction items without a CPA capsule are dropped (Go logs a warning). */
 export const dropForeignCompactionItems = (payload: Json | undefined): Json | undefined => {
-  const input = get(payload, "input")
+  const input = get(payload, "input");
 
-  if (payload === undefined || !isJsonArray(input)) return payload
+  if (payload === undefined || !isJsonArray(input)) return payload;
 
   const kept = input.filter(
     (item) =>
       !(
         asString(get(item, "type")) === "compaction" &&
         !recognizedCompactionCapsule(asString(get(item, "encrypted_content")))
-      )
-  )
+      ),
+  );
 
-  if (kept.length === input.length) return payload
-  const out = cloneJson(payload)
-  set(out, "input", kept)
+  if (kept.length === input.length) return payload;
+  const out = cloneJson(payload);
+  set(out, "input", kept);
 
-  return out
-}
+  return out;
+};
 
 const expandPayload = async (payload: Json | undefined): Promise<Json | undefined> => {
-  const filtered = dropForeignCompactionItems(payload)
+  const filtered = dropForeignCompactionItems(payload);
 
-  if (filtered !== undefined && hasResponsesCompactionItem(filtered)) return expandCompactionCapsules(filtered)
+  if (filtered !== undefined && hasResponsesCompactionItem(filtered))
+    return expandCompactionCapsules(filtered);
 
-  return filtered
-}
+  return filtered;
+};
 
 /**
  * `expandClaudeResponsesCompaction`: sealed compaction items of the request and of the original request become
@@ -61,99 +62,111 @@ const expandPayload = async (payload: Json | undefined): Promise<Json | undefine
  */
 export const expandClaudeResponsesCompaction = async (
   request: ExecutorRequest,
-  options: ExecutorOptions
+  options: ExecutorOptions,
 ): Promise<{ readonly request: ExecutorRequest; readonly options: ExecutorOptions }> => {
-  const payload = await expandPayload(request.payload)
-  const original = await expandPayload(options.originalRequest)
+  const payload = await expandPayload(request.payload);
+  const original = await expandPayload(options.originalRequest);
 
   return {
-    request: payload === request.payload || payload === undefined ? request : { ...request, payload },
-    options: original === options.originalRequest ? options : { ...options, originalRequest: original }
-  }
-}
+    request:
+      payload === request.payload || payload === undefined ? request : { ...request, payload },
+    options:
+      original === options.originalRequest ? options : { ...options, originalRequest: original },
+  };
+};
 
 /** `claudeResponsesCompactionRequested`. */
-export const claudeCompactionRequested = (request: ExecutorRequest, options: ExecutorOptions): boolean =>
+export const claudeCompactionRequested = (
+  request: ExecutorRequest,
+  options: ExecutorOptions,
+): boolean =>
   options.alt === "responses/compact" ||
   hasResponsesCompactionTrigger(request.payload) ||
-  hasResponsesCompactionTrigger(options.originalRequest)
+  hasResponsesCompactionTrigger(options.originalRequest);
 
 /** `claudeCompactionSourcePayload`. */
-export const claudeCompactionSourcePayload = (request: ExecutorRequest, options: ExecutorOptions): Json => {
-  let payload: Json = request.payload
+export const claudeCompactionSourcePayload = (
+  request: ExecutorRequest,
+  options: ExecutorOptions,
+): Json => {
+  let payload: Json = request.payload;
 
-  if (!hasResponsesCompactionTrigger(payload) && hasResponsesCompactionTrigger(options.originalRequest)) {
-    payload = options.originalRequest as Json
+  if (
+    !hasResponsesCompactionTrigger(payload) &&
+    hasResponsesCompactionTrigger(options.originalRequest)
+  ) {
+    payload = options.originalRequest as Json;
   }
 
   if ((payload === undefined || payload === null) && options.originalRequest !== undefined) {
-    payload = options.originalRequest
+    payload = options.originalRequest;
   }
 
-  return payload
-}
+  return payload;
+};
 
 /** `prepareClaudeCompactionSummaryPayload`: keeps the tool definitions Claude needs to accept `tool_use` history. */
 export const prepareClaudeCompactionSummaryPayload = (payload: Json): Json => {
-  const tools = get(payload, "tools")
-  const additionalTools = get(payload, "additional_tools")
-  const out = prepareCompactionSummaryPayload(payload)
+  const tools = get(payload, "tools");
+  const additionalTools = get(payload, "additional_tools");
+  const out = prepareCompactionSummaryPayload(payload);
 
-  if (tools !== undefined) set(out, "tools", cloneJson(tools))
+  if (tools !== undefined) set(out, "tools", cloneJson(tools));
 
-  if (additionalTools !== undefined) set(out, "additional_tools", cloneJson(additionalTools))
+  if (additionalTools !== undefined) set(out, "additional_tools", cloneJson(additionalTools));
 
-  return out
-}
+  return out;
+};
 
-const rawText = (value: Json | undefined): string => (value === undefined ? "" : JSON.stringify(value))
+const rawText = (value: Json | undefined): string =>
+  value === undefined ? "" : JSON.stringify(value);
 
-const textBlock = (text: string): JsonObject => ({ type: "text", text })
+const textBlock = (text: string): JsonObject => ({ type: "text", text });
 
 /** `flattenClaudeToolBlocksForCompaction`: tool blocks become text so Anthropic accepts orphan tool history. */
 export const flattenClaudeToolBlocksForCompaction = (body: JsonObject): JsonObject => {
-  const messages = body["messages"]
+  const messages = body["messages"];
 
-  if (!isJsonArray(messages)) return body
-  let changed = false
+  if (!isJsonArray(messages)) return body;
+  let changed = false;
 
   const rewritten = messages.map((message) => {
-    const content = get(message, "content")
+    const content = get(message, "content");
 
-    if (!isJsonArray(content) || !isJsonObject(message)) return message
-    let messageChanged = false
+    if (!isJsonArray(content) || !isJsonObject(message)) return message;
+    let messageChanged = false;
 
     const parts = content.map((part): Json => {
       switch (asString(get(part, "type"))) {
         case "tool_use":
-          messageChanged = true
+          messageChanged = true;
 
           return textBlock(
-            `Tool call ${asString(get(part, "name"))} (${asString(get(part, "id"))}): ${rawText(get(part, "input"))}`
-          )
+            `Tool call ${asString(get(part, "name"))} (${asString(get(part, "id"))}): ${rawText(get(part, "input"))}`,
+          );
         case "tool_result": {
-          messageChanged = true
-          const result = get(part, "content")
-          const resultText = typeof result === "string" ? result : rawText(result)
+          messageChanged = true;
+          const result = get(part, "content");
+          const resultText = typeof result === "string" ? result : rawText(result);
 
-          return textBlock(`Tool result ${asString(get(part, "tool_use_id"))}: ${resultText}`)
+          return textBlock(`Tool result ${asString(get(part, "tool_use_id"))}: ${resultText}`);
         }
 
         default:
-          return part
+          return part;
       }
-    })
+    });
 
-    if (!messageChanged) return message
-    changed = true
+    if (!messageChanged) return message;
+    changed = true;
 
-    return { ...message, content: parts }
-  })
+    return { ...message, content: parts };
+  });
 
-  if (changed) body["messages"] = rewritten
+  if (changed) body["messages"] = rewritten;
 
-  return body
-}
+  return body;
+};
 
 /**
  * `finalizeClaudeCompactionSummaryBody`: runs after built-in translation and before the payload rules. With tool
@@ -161,62 +174,82 @@ export const flattenClaudeToolBlocksForCompaction = (body: JsonObject): JsonObje
  * without them the tool history is flattened.
  */
 export const finalizeClaudeCompactionSummaryBody = (body: JsonObject): JsonObject => {
-  const tools = body["tools"]
+  const tools = body["tools"];
 
   if (isJsonArray(tools) && tools.length > 0) {
-    body["tool_choice"] = { type: "none" }
+    body["tool_choice"] = { type: "none" };
 
-    return body
+    return body;
   }
 
-  return flattenClaudeToolBlocksForCompaction(body)
-}
+  return flattenClaudeToolBlocksForCompaction(body);
+};
 
 /** `claudeCompactionResponsesUsage`: input includes cache creation and read; `cached` is the cache read. */
 export const claudeCompactionUsage = (
   payload: Json | undefined,
-  rawBody: string
-): { readonly input: number; readonly output: number; readonly total: number; readonly cached: number } => {
-  const usage = get(payload, "usage")
+  rawBody: string,
+): {
+  readonly input: number;
+  readonly output: number;
+  readonly total: number;
+  readonly cached: number;
+} => {
+  const usage = get(payload, "usage");
 
   if (usage === undefined) {
-    const parsed = parseOpenAIUsage(rawBody)
+    const parsed = parseOpenAIUsage(rawBody);
 
-    return { input: parsed.inputTokens, output: parsed.outputTokens, total: parsed.totalTokens, cached: 0 }
+    return {
+      input: parsed.inputTokens,
+      output: parsed.outputTokens,
+      total: parsed.totalTokens,
+      cached: 0,
+    };
   }
 
-  const cached = asInt(get(usage, "cache_read_input_tokens"))
-  const input = asInt(get(usage, "input_tokens")) + asInt(get(usage, "cache_creation_input_tokens")) + cached
-  const output = asInt(get(usage, "output_tokens"))
+  const cached = asInt(get(usage, "cache_read_input_tokens"));
+  const input =
+    asInt(get(usage, "input_tokens")) + asInt(get(usage, "cache_creation_input_tokens")) + cached;
+  const output = asInt(get(usage, "output_tokens"));
 
-  return { input, output, total: input + output, cached }
-}
+  return { input, output, total: input + output, cached };
+};
 
 /** `patchClaudeCompactionStreamUsage`: rewrites the usage of one `event:/data:` frame. */
 export const patchClaudeCompactionStreamUsage = (
   chunk: string,
-  usage: { readonly input: number; readonly output: number; readonly total: number; readonly cached: number }
+  usage: {
+    readonly input: number;
+    readonly output: number;
+    readonly total: number;
+    readonly cached: number;
+  },
 ): string => {
-  const prefix = "data: "
-  const index = chunk.indexOf(prefix)
+  const prefix = "data: ";
+  const index = chunk.indexOf(prefix);
 
-  if (index < 0) return chunk
-  let data: Json
+  if (index < 0) return chunk;
+  let data: Json;
 
   try {
-    data = JSON.parse(chunk.slice(index + prefix.length).trim()) as Json
+    data = JSON.parse(chunk.slice(index + prefix.length).trim()) as Json;
   } catch {
-    return chunk
+    return chunk;
   }
 
   const path =
-    get(data, "response.usage") !== undefined ? "response.usage" : get(data, "usage") !== undefined ? "usage" : ""
+    get(data, "response.usage") !== undefined
+      ? "response.usage"
+      : get(data, "usage") !== undefined
+        ? "usage"
+        : "";
 
-  if (path === "") return chunk
-  set(data, `${path}.input_tokens`, usage.input)
-  set(data, `${path}.output_tokens`, usage.output)
-  set(data, `${path}.total_tokens`, usage.total)
-  set(data, `${path}.input_tokens_details.cached_tokens`, usage.cached)
+  if (path === "") return chunk;
+  set(data, `${path}.input_tokens`, usage.input);
+  set(data, `${path}.output_tokens`, usage.output);
+  set(data, `${path}.total_tokens`, usage.total);
+  set(data, `${path}.input_tokens_details.cached_tokens`, usage.cached);
 
-  return `${chunk.slice(0, index)}${prefix}${JSON.stringify(data)}\n\n`
-}
+  return `${chunk.slice(0, index)}${prefix}${JSON.stringify(data)}\n\n`;
+};

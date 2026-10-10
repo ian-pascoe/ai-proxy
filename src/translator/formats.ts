@@ -8,8 +8,8 @@ export const Formats = {
   Gemini: "gemini",
   Interactions: "interactions",
   Codex: "codex",
-  Antigravity: "antigravity"
-} as const
+  Antigravity: "antigravity",
+} as const;
 
 /**
  * Entry protocols without translators: the handler passes them as `sourceFormat` and the executor handles them
@@ -19,8 +19,8 @@ export const EntryOnlyFormats = {
   OpenAIImage: "openai-image",
   OpenAIVideo: "openai-video",
   OpenAISpeech: "openai-speech",
-  CodexAlphaSearch: "codex-alpha-search"
-} as const
+  CodexAlphaSearch: "codex-alpha-search",
+} as const;
 
 /** Any format id; unknown ids are allowed (the registry falls back to passthrough). */
-export type Format = string
+export type Format = string;

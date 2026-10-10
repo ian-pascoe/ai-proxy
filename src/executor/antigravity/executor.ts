@@ -13,38 +13,60 @@
  *
  * Deviations from Go (see ARCHITECTURE.md "Antigravity provider"): no per-credential HTTP pools or proxies, and the short quota cooldown / credits state live in KV `CACHE`.
  */
-import { derivedAntigravitySessionId } from "./derived-session.ts"
-import { translateRequestForExecutor } from "../helps/translate.ts"
-import { Clock, Effect, Option, Stream } from "effect"
-import { HttpClient, type HttpClientError, HttpClientRequest, type HttpClientResponse } from "effect/http"
-import { buildSensitiveWordMatcher } from "../claude/cloaking.ts"
-import type { Config } from "../../config/schema.ts"
-import { asInt, del, get, isJsonArray, isJsonObject, type Json, set, tryParseJson } from "../../json/index.ts"
-import { splitLines } from "../../http/sse.ts"
-import { fetchProjectId } from "../../oauth/flows/antigravity.ts"
-import { WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts"
-import { isolateSignatureCache, type MemorySignatureCache, withSignatureContext } from "../../signature/cache.ts"
-import { flushSignatureWrites, makeKvSignatureStore, prefetchSignatures } from "../../signature/store.ts"
-import { thinkingTextsNeedingCachedSignatures } from "../../translator/antigravity/claude/request.ts"
-import { builtinTranslators } from "../../translator/builtin.ts"
-import { Formats } from "../../translator/formats.ts"
-import { withModelInfoLookup } from "../../translator/model-info.ts"
+import { derivedAntigravitySessionId } from "./derived-session.ts";
+import { translateRequestForExecutor } from "../helps/translate.ts";
+import { Clock, Effect, Option, Stream } from "effect";
+import {
+  HttpClient,
+  type HttpClientError,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/http";
+import { buildSensitiveWordMatcher } from "../claude/cloaking.ts";
+import type { Config } from "../../config/schema.ts";
+import {
+  asInt,
+  del,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  set,
+  tryParseJson,
+} from "../../json/index.ts";
+import { splitLines } from "../../http/sse.ts";
+import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
+import { WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts";
+import {
+  isolateSignatureCache,
+  type MemorySignatureCache,
+  withSignatureContext,
+} from "../../signature/cache.ts";
+import {
+  flushSignatureWrites,
+  makeKvSignatureStore,
+  prefetchSignatures,
+} from "../../signature/store.ts";
+import { thinkingTextsNeedingCachedSignatures } from "../../translator/antigravity/claude/request.ts";
+import { builtinTranslators } from "../../translator/builtin.ts";
+import { Formats } from "../../translator/formats.ts";
+import { withModelInfoLookup } from "../../translator/model-info.ts";
 import {
   makeTranslationState,
   type RequestEnvelope,
   type ResponseContext,
-  type TranslatorRegistry
-} from "../../translator/registry.ts"
-import { isGeminiTokenEvent } from "../../usage/ttft.ts"
-import { parseAntigravityStreamUsage, parseAntigravityUsage } from "../../usage/parsers.ts"
-import { responseModelOf } from "../../usage/record.ts"
-import { ExecutionError } from "../errors.ts"
-import { ensureResponsesUsageDetails } from "../codex/output.ts"
-import { applyCustomHeaders } from "../helps/custom-headers.ts"
-import { finalizePayload } from "../helps/payload.ts"
-import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts"
-import { parseSuffix } from "../suffix.ts"
-import { Thinking } from "../thinking.ts"
+  type TranslatorRegistry,
+} from "../../translator/registry.ts";
+import { isGeminiTokenEvent } from "../../usage/ttft.ts";
+import { parseAntigravityStreamUsage, parseAntigravityUsage } from "../../usage/parsers.ts";
+import { responseModelOf } from "../../usage/record.ts";
+import { ExecutionError } from "../errors.ts";
+import { ensureResponsesUsageDetails } from "../codex/output.ts";
+import { applyCustomHeaders } from "../helps/custom-headers.ts";
+import { finalizePayload } from "../helps/payload.ts";
+import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts";
+import { parseSuffix } from "../suffix.ts";
+import { Thinking } from "../thinking.ts";
 import {
   type ExecutionContext,
   type ExecutorOptions,
@@ -52,14 +74,14 @@ import {
   type ExecutorResponse,
   type ProviderExecutor,
   responseFormatOf,
-  type StreamResult
-} from "../types.ts"
+  type StreamResult,
+} from "../types.ts";
 import {
   ensureBoundaryUserContent,
   ensureLeadingUserContent,
   sanitizeGeminiRequestSignatures,
-  validateRequestSignatures
-} from "./content.ts"
+  validateRequestSignatures,
+} from "./content.ts";
 import {
   buildCompactionResponse,
   buildCompactionStreamChunks,
@@ -69,13 +91,17 @@ import {
   hasResponsesCompactionTrigger,
   prepareCompactionSummaryPayload,
   responsesSummaryUsage,
-  sealCompaction
-} from "../helps/compaction.ts"
-import { resolveGroundingUrlsInPayload, shouldResolveGroundingUrls } from "./grounding.ts"
-import { creditsEnabled, injectEnabledCreditTypes, probeCredits } from "./credits.ts"
-import { NO_REPLAY_SCOPE, type ReplayAccumulator, type ReplayScope } from "./replay/accumulator.ts"
-import { defaultReplayLedger, type ReplayLedger } from "./replay/ledger.ts"
-import { clearReplayOnInvalidSignature, makeAccumulator, prepareReplayPayload } from "./replay/prepare.ts"
+  sealCompaction,
+} from "../helps/compaction.ts";
+import { resolveGroundingUrlsInPayload, shouldResolveGroundingUrls } from "./grounding.ts";
+import { creditsEnabled, injectEnabledCreditTypes, probeCredits } from "./credits.ts";
+import { NO_REPLAY_SCOPE, type ReplayAccumulator, type ReplayScope } from "./replay/accumulator.ts";
+import { defaultReplayLedger, type ReplayLedger } from "./replay/ledger.ts";
+import {
+  clearReplayOnInvalidSignature,
+  makeAccumulator,
+  prepareReplayPayload,
+} from "./replay/prepare.ts";
 import {
   ANTIGRAVITY_COUNT_TOKENS_PATH,
   ANTIGRAVITY_GENERATE_PATH,
@@ -83,124 +109,141 @@ import {
   configuredUserAgent,
   geminiToAntigravity,
   requestBaseUrl,
-  shapeRequestPayload
-} from "./envelope.ts"
-import { antigravityStatusError, decideAntigravity429, hasExplicitCreditsBalanceExhaustedReason } from "./errors.ts"
-import { type AntigravityState, antigravityStateFor } from "./state.ts"
-import { convertStreamToNonStream, JsonAssembler, UsageFilter } from "./stream.ts"
-import { antigravityRequestUserAgent, currentAntigravityVersion } from "./version.ts"
+  shapeRequestPayload,
+} from "./envelope.ts";
+import {
+  antigravityStatusError,
+  decideAntigravity429,
+  hasExplicitCreditsBalanceExhaustedReason,
+} from "./errors.ts";
+import { type AntigravityState, antigravityStateFor } from "./state.ts";
+import { convertStreamToNonStream, JsonAssembler, UsageFilter } from "./stream.ts";
+import { antigravityRequestUserAgent, currentAntigravityVersion } from "./version.ts";
 
-export const ANTIGRAVITY_IDENTIFIER = "antigravity"
+export const ANTIGRAVITY_IDENTIFIER = "antigravity";
 
 const transportError = (error: HttpClientError.HttpClientError) =>
-  new ExecutionError({ status: 500, message: `upstream request failed: ${error.reason._tag}`, cause: error })
+  new ExecutionError({
+    status: 500,
+    message: `upstream request failed: ${error.reason._tag}`,
+    cause: error,
+  });
 
 const requestError = (envelope: RequestEnvelope) =>
   new ExecutionError({
     status: envelope.error?.status ?? 400,
     message: envelope.error?.message ?? "invalid request",
-    requestScoped: true
-  })
+    requestScoped: true,
+  });
 
 /** `antigravityCoolingDisabled`. */
 const coolingDisabled = (context: ExecutionContext): boolean => {
-  const flag = context.credential.metadata["disable_cooling"]
+  const flag = context.credential.metadata["disable_cooling"];
 
   return (
     flag === true ||
     (typeof flag === "string" && flag.toLowerCase() === "true") ||
     context.config.routing.cooldown["disable-cooling"]
-  )
-}
+  );
+};
 
 /** Models served through a streaming upstream request and aggregated for non-stream callers. */
 export const aggregatesStream = (baseModel: string): boolean =>
   baseModel.toLowerCase().includes("claude") ||
   baseModel.includes("gemini-3-pro") ||
-  baseModel.includes("gemini-3.1-flash-image")
+  baseModel.includes("gemini-3.1-flash-image");
 
 interface PreparedRequest {
-  readonly url: string
-  readonly headers: Record<string, string>
-  readonly body: Json
-  readonly baseModel: string
+  readonly url: string;
+  readonly headers: Record<string, string>;
+  readonly body: Json;
+  readonly baseModel: string;
   /** Translated (pre-envelope) request handed to the response translators. */
-  readonly translated: Json
-  readonly useCredits: boolean
+  readonly translated: Json;
+  readonly useCredits: boolean;
   /** Reasoning replay of Gemini models: the scope (with the ledger snapshot read) and the response accumulator. */
-  readonly replayScope: ReplayScope
-  readonly replay: ReplayAccumulator | undefined
+  readonly replayScope: ReplayScope;
+  readonly replay: ReplayAccumulator | undefined;
 }
 
 interface Attempt {
-  readonly context: ExecutionContext
-  readonly request: ExecutorRequest
-  readonly options: ExecutorOptions
-  readonly state: AntigravityState
-  readonly kv: KVNamespace | undefined
-  readonly signatures: MemorySignatureCache
-  readonly waitUntil: ((promise: Promise<unknown>) => void) | undefined
-  readonly accessToken: string
+  readonly context: ExecutionContext;
+  readonly request: ExecutorRequest;
+  readonly options: ExecutorOptions;
+  readonly state: AntigravityState;
+  readonly kv: KVNamespace | undefined;
+  readonly signatures: MemorySignatureCache;
+  readonly waitUntil: ((promise: Promise<unknown>) => void) | undefined;
+  readonly accessToken: string;
   /** `project_id` of the credential (discovered through `loadCodeAssist` when the stored one is missing). */
-  readonly project: string
+  readonly project: string;
 }
 
 export interface AntigravityExecutorOptions {
-  readonly translators?: TranslatorRegistry
+  readonly translators?: TranslatorRegistry;
   /** Gemini reasoning replay ledger (defaults to the `SessionState` Durable Object, per-isolate memory without it). */
-  readonly replayLedger?: ReplayLedger
+  readonly replayLedger?: ReplayLedger;
 }
 
-export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {}): ProviderExecutor => {
-  const registry = settings.translators ?? builtinTranslators
-  const to = Formats.Antigravity
-  const ledger = settings.replayLedger ?? defaultReplayLedger
+export const makeAntigravityExecutor = (
+  settings: AntigravityExecutorOptions = {},
+): ProviderExecutor => {
+  const registry = settings.translators ?? builtinTranslators;
+  const to = Formats.Antigravity;
+  const ledger = settings.replayLedger ?? defaultReplayLedger;
 
   const resolve = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv))
-    const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext))
+    const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv));
+    const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext));
 
     const accessToken =
       typeof context.credential.metadata["access_token"] === "string"
         ? (context.credential.metadata["access_token"] as string).trim()
-        : ""
+        : "";
 
     if (accessToken === "") {
-      return yield* new ExecutionError({ status: 401, message: "missing access token", credentialScoped: true })
+      return yield* new ExecutionError({
+        status: 401,
+        message: "missing access token",
+        credentialScoped: true,
+      });
     }
 
     // `PrepareRequestAuth`: a credential without `project_id` (discovery failed at login) is completed here.
     let project =
       typeof context.credential.metadata["project_id"] === "string"
         ? (context.credential.metadata["project_id"] as string).trim()
-        : ""
+        : "";
 
     if (project === "") {
-      const discovered = yield* fetchProjectId(accessToken).pipe(Effect.result)
+      const discovered = yield* fetchProjectId(accessToken).pipe(Effect.result);
 
       if (discovered._tag === "Failure" || discovered.success.trim() === "") {
-        const cause = discovered._tag === "Failure" ? `: ${discovered.failure.message}` : ""
+        const cause = discovered._tag === "Failure" ? `: ${discovered.failure.message}` : "";
 
         return yield* new ExecutionError({
           status: 400,
           message: `antigravity auth missing project_id${cause}`,
-          requestScoped: true
-        })
+          requestScoped: true,
+        });
       }
 
-      project = discovered.success.trim()
+      project = discovered.success.trim();
 
       if (env !== undefined) {
         yield* Effect.tryPromise(
           async () =>
-            await env.CONTROL_PLANE.getByName("global").patchCredentialMetadata(context.credential.id, {
-              project_id: project
-            })
-        ).pipe(Effect.ignore)
+            await env.CONTROL_PLANE.getByName("global").patchCredentialMetadata(
+              context.credential.id,
+              {
+                project_id: project,
+              },
+            ),
+        ).pipe(Effect.ignore);
       }
     }
 
@@ -212,124 +255,145 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       state: antigravityStateFor(env),
       kv: env?.CACHE,
       signatures: isolateSignatureCache(),
-      waitUntil: typeof ctx?.waitUntil === "function" ? (promise) => ctx.waitUntil(promise) : undefined,
-      accessToken
-    } satisfies Attempt
-  })
+      waitUntil:
+        typeof ctx?.waitUntil === "function" ? (promise) => ctx.waitUntil(promise) : undefined,
+      accessToken,
+    } satisfies Attempt;
+  });
 
   const signatureSettings = (config: Config) => ({
     cacheEnabled: config.oauth.providers.antigravity["signature-cache-enabled"] ?? true,
-    bypassStrictMode: config.oauth.providers.antigravity["signature-bypass-strict"] ?? false
-  })
+    bypassStrictMode: config.oauth.providers.antigravity["signature-bypass-strict"] ?? false,
+  });
 
   /** Runs one synchronous translator call with the attempt's signature cache, settings and model lookup. */
   const translating = <T>(attempt: Attempt, run: () => T): T =>
-    withSignatureContext({ cache: attempt.signatures, settings: signatureSettings(attempt.context.config) }, () =>
-      withModelInfoLookup(attempt.request.modelLookup, run)
-    )
+    withSignatureContext(
+      { cache: attempt.signatures, settings: signatureSettings(attempt.context.config) },
+      () => withModelInfoLookup(attempt.request.modelLookup, run),
+    );
 
   const persistSignatures = (attempt: Attempt): Effect.Effect<void> => {
-    const store = attempt.kv === undefined ? undefined : makeKvSignatureStore(attempt.kv)
+    const store = attempt.kv === undefined ? undefined : makeKvSignatureStore(attempt.kv);
 
-    if (store === undefined) return Effect.void
-    const flush = flushSignatureWrites(attempt.signatures, store)
+    if (store === undefined) return Effect.void;
+    const flush = flushSignatureWrites(attempt.signatures, store);
 
     if (attempt.waitUntil !== undefined) {
-      attempt.waitUntil(flush)
+      attempt.waitUntil(flush);
 
-      return Effect.void
+      return Effect.void;
     }
 
-    return Effect.promise(() => flush)
-  }
+    return Effect.promise(() => flush);
+  };
 
   const userAgent = (attempt: Attempt) =>
     Effect.gen(function* () {
-      const version = yield* currentAntigravityVersion(attempt.kv, yield* Clock.currentTimeMillis)
-      const credential = attempt.context.credential
+      const version = yield* currentAntigravityVersion(attempt.kv, yield* Clock.currentTimeMillis);
+      const credential = attempt.context.credential;
 
-      return antigravityRequestUserAgent(configuredUserAgent(credential.attributes, credential.metadata), version)
-    })
+      return antigravityRequestUserAgent(
+        configuredUserAgent(credential.attributes, credential.metadata),
+        version,
+      );
+    });
 
   const headersFor = (attempt: Attempt, agent: string): Record<string, string> => {
     // Whitelist: only the headers the native client sends (plus the credential's own `header:*` attributes).
     const headers: Record<string, string> = {
       "content-type": "application/json",
       authorization: `Bearer ${attempt.accessToken}`,
-      "user-agent": agent
-    }
+      "user-agent": agent,
+    };
 
-    applyCustomHeaders(headers, attempt.context.credential, attempt.options.headers, attempt.options.metadata.sessionId)
+    applyCustomHeaders(
+      headers,
+      attempt.context.credential,
+      attempt.options.headers,
+      attempt.options.metadata.sessionId,
+    );
 
-    return headers
-  }
+    return headers;
+  };
 
   /** Short quota cooldown (`antigravityIsInShortCooldownRequired`): answers 429 so the conductor switches auth. */
   const checkShortCooldown = (attempt: Attempt, baseModel: string) =>
     Effect.gen(function* () {
-      const { context, options, state } = attempt
+      const { context, options, state } = attempt;
 
-      if (coolingDisabled(context)) return
-      const bypass = options.metadata.antigravityCredits === true && creditsEnabled(context.config)
+      if (coolingDisabled(context)) return;
+      const bypass = options.metadata.antigravityCredits === true && creditsEnabled(context.config);
 
-      if (bypass) return
-      const now = yield* Clock.currentTimeMillis
-      const remaining = yield* Effect.promise(() => state.shortCooldownRemaining(context.credential.id, baseModel, now))
+      if (bypass) return;
+      const now = yield* Clock.currentTimeMillis;
+      const remaining = yield* Effect.promise(() =>
+        state.shortCooldownRemaining(context.credential.id, baseModel, now),
+      );
 
       if (remaining > 0) {
         return yield* new ExecutionError({
           status: 429,
           message: `auth in short cooldown, ${Math.ceil(remaining / 1000)}s remaining`,
-          retryAfterMs: remaining
-        })
+          retryAfterMs: remaining,
+        });
       }
-    })
+    });
 
   /** `maybeRefreshAntigravityCreditsHint`: best-effort balance probe in the background. */
-  const maybeRefreshCredits = (attempt: Attempt, agent: string): Effect.Effect<void, never, HttpClient.HttpClient> =>
+  const maybeRefreshCredits = (
+    attempt: Attempt,
+    agent: string,
+  ): Effect.Effect<void, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
-      const { context, state } = attempt
+      const { context, state } = attempt;
 
-      if (!creditsEnabled(context.config) || coolingDisabled(context)) return
-      const now = yield* Clock.currentTimeMillis
+      if (!creditsEnabled(context.config) || coolingDisabled(context)) return;
+      const now = yield* Clock.currentTimeMillis;
 
-      if ((yield* Effect.promise(() => state.credits(context.credential.id))) !== undefined) return
+      if ((yield* Effect.promise(() => state.credits(context.credential.id))) !== undefined) return;
 
-      if (!(yield* Effect.promise(() => state.claimCreditsRefresh(context.credential.id, now)))) return
-      const client = yield* HttpClient.HttpClient
+      if (!(yield* Effect.promise(() => state.claimCreditsRefresh(context.credential.id, now))))
+        return;
+      const client = yield* HttpClient.HttpClient;
 
       const probe = probeCredits(context.credential, attempt.accessToken, agent, state, now).pipe(
-        Effect.provideService(HttpClient.HttpClient, client)
-      )
+        Effect.provideService(HttpClient.HttpClient, client),
+      );
 
-      if (attempt.waitUntil !== undefined) attempt.waitUntil(Effect.runPromise(probe))
-    })
+      if (attempt.waitUntil !== undefined) attempt.waitUntil(Effect.runPromise(probe));
+    });
 
   /** Request preparation shared by generate, stream and aggregate modes (`Execute`/`ExecuteStream`). */
   const prepare = Effect.fnUntraced(function* (
     attempt: Attempt,
     mode: "generate" | "stream" | "aggregate",
-    agent: string
+    agent: string,
   ) {
-    const { context, request, options } = attempt
-    const thinking = yield* Thinking
-    const baseModel = parseSuffix(request.model).modelName
-    const from = options.sourceFormat
-    const stream = mode === "stream"
-    const upstreamStream = mode !== "generate"
+    const { context, request, options } = attempt;
+    const thinking = yield* Thinking;
+    const baseModel = parseSuffix(request.model).modelName;
+    const from = options.sourceFormat;
+    const stream = mode === "stream";
+    const upstreamStream = mode !== "generate";
     // Claude-format clients carry thinking blocks whose signatures are validated against the upstream's rules.
-    const source = structuredClone(options.originalRequest ?? request.payload)
-    const original = validateRequestSignatures(baseModel, from, source)
+    const source = structuredClone(options.originalRequest ?? request.payload);
+    const original = validateRequestSignatures(baseModel, from, source);
 
     const texts =
       from === Formats.Claude
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
-        : []
+        : [];
 
     if (texts.length > 0 && attempt.kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(attempt.signatures, makeKvSignatureStore(attempt.kv as KVNamespace), baseModel, texts)
-      )
+        prefetchSignatures(
+          attempt.signatures,
+          makeKvSignatureStore(attempt.kv as KVNamespace),
+          baseModel,
+          texts,
+        ),
+      );
     }
 
     const translateWith = (body: Json, streamFlag: boolean) =>
@@ -343,18 +407,18 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
             model: baseModel,
             stream: streamFlag,
             body: structuredClone(body),
-            ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo })
+            ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo }),
           },
           thinking.summary,
-          { headers: options.headers, config: context.config }
-        )
-      )
+          { headers: options.headers, config: context.config },
+        ),
+      );
 
-    const translated = translateWith(original, upstreamStream)
+    const translated = translateWith(original, upstreamStream);
 
-    if (translated.error !== undefined) return yield* requestError(translated)
+    if (translated.error !== undefined) return yield* requestError(translated);
     // Baseline of the payload rules: the translation before thinking and shaping.
-    const originalTranslatedBody = structuredClone(translated.body)
+    const originalTranslatedBody = structuredClone(translated.body);
 
     let body = yield* thinking.apply({
       body: translated.body,
@@ -365,40 +429,48 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       source: original,
       configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
       modelInfo: request.modelInfo,
-      lookupModelInfo: request.modelLookup
-    })
+      lookupModelInfo: request.modelLookup,
+    });
 
-    const words = context.config.oauth.providers.antigravity["sensitive-words"]
-    body = obfuscateSystemInstruction(body, words)
-    body = sanitizeGeminiRequestSignatures(baseModel, body)
+    const words = context.config.oauth.providers.antigravity["sensitive-words"];
+    body = obfuscateSystemInstruction(body, words);
+    body = sanitizeGeminiRequestSignatures(baseModel, body);
 
-    if (stream) del(body, "request.stream")
-    const effort = get(body, "request.generationConfig.thinkingConfig.thinkingLevel")
-    context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
+    if (stream) del(body, "request.stream");
+    const effort = get(body, "request.generationConfig.thinkingConfig.thinkingLevel");
+    context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined);
 
-    const useCredits = options.metadata.antigravityCredits === true && creditsEnabled(context.config)
+    const useCredits =
+      options.metadata.antigravityCredits === true && creditsEnabled(context.config);
 
-    if (useCredits) injectEnabledCreditTypes(body)
+    if (useCredits) injectEnabledCreditTypes(body);
     // Gemini reasoning replay (signatures and native function calls of earlier turns), then the boundary turns.
-    const replay = yield* prepareReplayPayload(ledger, baseModel, request, options, body)
-    body = ensureBoundaryUserContent(baseModel, replay.payload)
-    const accumulator = makeAccumulator(replay.scope, body)
+    const replay = yield* prepareReplayPayload(ledger, baseModel, request, options, body);
+    body = ensureBoundaryUserContent(baseModel, replay.payload);
+    const accumulator = makeAccumulator(replay.scope, body);
 
-    const project = attempt.project
-    const derivedSession = derivedAntigravitySessionId(options.metadata.derivedSessionId ?? "")
-    body = geminiToAntigravity(baseModel, body, project, derivedSession, yield* Clock.currentTimeMillis)
-    const translatedForResponse = structuredClone(body)
-    body = shapeRequestPayload(baseModel, body)
+    const project = attempt.project;
+    const derivedSession = derivedAntigravitySessionId(options.metadata.derivedSessionId ?? "");
+    body = geminiToAntigravity(
+      baseModel,
+      body,
+      project,
+      derivedSession,
+      yield* Clock.currentTimeMillis,
+    );
+    const translatedForResponse = structuredClone(body);
+    body = shapeRequestPayload(baseModel, body);
 
-    const alt = options.alt === "responses/compact" ? "" : options.alt
-    const base = requestBaseUrl(context.credential.attributes, context.credential.metadata)
-    let url = base + (upstreamStream ? ANTIGRAVITY_STREAM_PATH : ANTIGRAVITY_GENERATE_PATH)
+    const alt = options.alt === "responses/compact" ? "" : options.alt;
+    const base = requestBaseUrl(context.credential.attributes, context.credential.metadata);
+    let url = base + (upstreamStream ? ANTIGRAVITY_STREAM_PATH : ANTIGRAVITY_GENERATE_PATH);
 
-    if (upstreamStream) url += alt === "" ? "?alt=sse" : `?$alt=${encodeURIComponent(alt)}`
-    else if (alt !== "") url += `?$alt=${encodeURIComponent(alt)}`
+    if (upstreamStream) url += alt === "" ? "?alt=sse" : `?$alt=${encodeURIComponent(alt)}`;
+    else if (alt !== "") url += `?$alt=${encodeURIComponent(alt)}`;
 
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
-    const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+    const requestedModel =
+      options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 
     const finalBody = finalizePayload(
       context.config,
@@ -411,10 +483,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         root: "request",
         requestPath: options.metadata.requestPath,
         headers: options.headers,
-        original: originalTranslatedBody
+        original: originalTranslatedBody,
       },
-      body
-    )
+      body,
+    );
 
     return {
       url,
@@ -424,34 +496,37 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       translated: translatedForResponse,
       useCredits,
       replayScope: replay.scope,
-      replay: accumulator
-    } satisfies PreparedRequest
-  })
+      replay: accumulator,
+    } satisfies PreparedRequest;
+  });
 
   const send = Effect.fnUntraced(function* (attempt: Attempt, prepared: PreparedRequest) {
-    const { context, state } = attempt
-    const client = yield* HttpClient.HttpClient
+    const { context, state } = attempt;
+    const client = yield* HttpClient.HttpClient;
 
     const request = HttpClientRequest.post(prepared.url).pipe(
       HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json"),
-      HttpClientRequest.setHeaders(prepared.headers)
-    )
+      HttpClientRequest.setHeaders(prepared.headers),
+    );
 
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(request)
-      .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+      .pipe(
+        Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+        Effect.mapError(transportError),
+      );
 
-    context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+    context.usage.markFirstByte(yield* Clock.currentTimeMillis);
 
-    if (response.status >= 200 && response.status < 300) return response
+    if (response.status >= 200 && response.status < 300) return response;
 
-    const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
-    context.usage.fail(response.status, text)
-    yield* clearReplayOnInvalidSignature(ledger, prepared.replayScope, response.status, text)
+    const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+    context.usage.fail(response.status, text);
+    yield* clearReplayOnInvalidSignature(ledger, prepared.replayScope, response.status, text);
 
     if (response.status === 429) {
-      const decision = decideAntigravity429(text)
-      const now = yield* Clock.currentTimeMillis
+      const decision = decideAntigravity429(text);
+      const now = yield* Clock.currentTimeMillis;
 
       if (
         decision.kind === "short_cooldown_switch_auth" &&
@@ -459,28 +534,37 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         !coolingDisabled(context)
       ) {
         yield* Effect.promise(() =>
-          state.markShortCooldown(context.credential.id, prepared.baseModel, decision.retryAfterMs as number, now)
-        )
+          state.markShortCooldown(
+            context.credential.id,
+            prepared.baseModel,
+            decision.retryAfterMs as number,
+            now,
+          ),
+        );
       } else if (
         decision.kind === "full_quota_exhausted" &&
         prepared.useCredits &&
         hasExplicitCreditsBalanceExhaustedReason(text) &&
         !coolingDisabled(context)
       ) {
-        yield* Effect.promise(() => state.markCreditsExhausted(context.credential.id, now))
+        yield* Effect.promise(() => state.markCreditsExhausted(context.credential.id, now));
       }
     }
 
-    return yield* antigravityStatusError(response.status, text, new Headers(response.headers))
-  })
+    return yield* antigravityStatusError(response.status, text, new Headers(response.headers));
+  });
 
-  const responseContext = (attempt: Attempt, prepared: PreparedRequest, alt: string | undefined): ResponseContext => ({
+  const responseContext = (
+    attempt: Attempt,
+    prepared: PreparedRequest,
+    alt: string | undefined,
+  ): ResponseContext => ({
     model: attempt.request.model,
     originalRequest: attempt.options.originalRequest ?? attempt.request.payload,
     translatedRequest: prepared.translated,
     state: makeTranslationState(),
-    ...(alt === undefined ? {} : { alt })
-  })
+    ...(alt === undefined ? {} : { alt }),
+  });
 
   const finishSuccess = (attempt: Attempt, prepared: PreparedRequest): Effect.Effect<void> =>
     prepared.useCredits
@@ -490,99 +574,107 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
               creditAmount: 1,
               minCreditAmount: 1,
               paidTierId: "",
-              updatedAt: Date.now()
+              updatedAt: Date.now(),
             })
-            .then(() => undefined)
+            .then(() => undefined),
         )
-      : Effect.void
+      : Effect.void;
 
   /** `resolveWebSearchGroundingURLs`: Vertex Search redirect URLs of web-search answers become their targets. */
   const resolveGrounding = (attempt: Attempt, prepared: PreparedRequest, payload: string) =>
     shouldResolveGroundingUrls(
       attempt.options.sourceFormat,
       attempt.options.originalRequest ?? attempt.request.payload,
-      prepared.translated
+      prepared.translated,
     )
       ? resolveGroundingUrlsInPayload(payload)
-      : Effect.succeed(payload)
+      : Effect.succeed(payload);
 
   /** Non-stream translation of an aggregated or plain upstream body. */
   const translateBody = (attempt: Attempt, prepared: PreparedRequest, upstreamText: string) =>
     Effect.gen(function* () {
-      const { context, options } = attempt
-      const text = yield* resolveGrounding(attempt, prepared, upstreamText)
-      const parsed = tryParseJson(text)
-      context.usage.observeResponseModel(responseModelOf(parsed))
-      const responseFormat = responseFormatOf(options)
-      const ctx = responseContext(attempt, prepared, options.alt)
-      const out = translating(attempt, () => registry.translateNonStream(responseFormat, to, ctx, text))
-      yield* persistSignatures(attempt)
+      const { context, options } = attempt;
+      const text = yield* resolveGrounding(attempt, prepared, upstreamText);
+      const parsed = tryParseJson(text);
+      context.usage.observeResponseModel(responseModelOf(parsed));
+      const responseFormat = responseFormatOf(options);
+      const ctx = responseContext(attempt, prepared, options.alt);
+      const out = translating(attempt, () =>
+        registry.translateNonStream(responseFormat, to, ctx, text),
+      );
+      yield* persistSignatures(attempt);
 
       if (out === undefined || out === "") {
-        return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
+        return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE });
       }
 
-      context.usage.publish(parseAntigravityUsage(text))
+      context.usage.publish(parseAntigravityUsage(text));
 
-      return responseFormat === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out
-    })
+      return responseFormat === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out;
+    });
 
   const executeGenerate = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const attempt = yield* resolve(context, request, options)
-    const baseModel = parseSuffix(request.model).modelName
-    yield* checkShortCooldown(attempt, baseModel)
-    const agent = yield* userAgent(attempt)
-    yield* maybeRefreshCredits(attempt, agent)
-    const aggregate = aggregatesStream(baseModel)
-    const prepared = yield* prepare(attempt, aggregate ? "aggregate" : "generate", agent)
-    const response = yield* send(attempt, prepared)
-    yield* finishSuccess(attempt, prepared)
+    const attempt = yield* resolve(context, request, options);
+    const baseModel = parseSuffix(request.model).modelName;
+    yield* checkShortCooldown(attempt, baseModel);
+    const agent = yield* userAgent(attempt);
+    yield* maybeRefreshCredits(attempt, agent);
+    const aggregate = aggregatesStream(baseModel);
+    const prepared = yield* prepare(attempt, aggregate ? "aggregate" : "generate", agent);
+    const response = yield* send(attempt, prepared);
+    yield* finishSuccess(attempt, prepared);
 
     if (!aggregate) {
-      const text = yield* response.text.pipe(Effect.mapError(transportError))
+      const text = yield* response.text.pipe(Effect.mapError(transportError));
 
       // `cacheAntigravityReasoningReplayFromResponse`
       if (prepared.replay !== undefined) {
-        const parsed = tryParseJson(text)
+        const parsed = tryParseJson(text);
 
-        if (parsed !== undefined) prepared.replay.observePayload(parsed)
-        yield* prepared.replay.commit(ledger)
+        if (parsed !== undefined) prepared.replay.observePayload(parsed);
+        yield* prepared.replay.commit(ledger);
       }
 
-      const payload = yield* translateBody(attempt, prepared, text)
+      const payload = yield* translateBody(attempt, prepared, text);
 
-      return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
+      return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse;
     }
 
     // Claude, Gemini 3 Pro and image models only stream upstream: the SSE is merged into one response.
-    const filter = new UsageFilter()
-    const lines = yield* splitLines(response.stream).pipe(Stream.mapError(transportError), Stream.runCollect)
-    const payloads: string[] = []
+    const filter = new UsageFilter();
+    const lines = yield* splitLines(response.stream).pipe(
+      Stream.mapError(transportError),
+      Stream.runCollect,
+    );
+    const payloads: string[] = [];
 
     for (const line of lines) {
-      prepared.replay?.observeLine(line)
-      const payload = jsonPayloadOf(filter.filter(line))
+      prepared.replay?.observeLine(line);
+      const payload = jsonPayloadOf(filter.filter(line));
 
-      if (payload !== undefined) payloads.push(payload)
+      if (payload !== undefined) payloads.push(payload);
     }
 
-    if (prepared.replay !== undefined) yield* prepared.replay.commit(ledger)
-    const merged = JSON.stringify(convertStreamToNonStream(payloads))
-    const payload = yield* translateBody(attempt, prepared, merged)
+    if (prepared.replay !== undefined) yield* prepared.replay.commit(ledger);
+    const merged = JSON.stringify(convertStreamToNonStream(payloads));
+    const payload = yield* translateBody(attempt, prepared, merged);
 
-    return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
-  })
+    return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse;
+  });
 
   /**
    * Sealed compaction items of the request (and the original request, falling back to the expanded request) become
    * developer context before anything else; an unreadable capsule is a request-scoped 400.
    */
-  const expandCompaction = Effect.fnUntraced(function* (request: ExecutorRequest, options: ExecutorOptions) {
-    if (!hasResponsesCompactionItem(request.payload)) return { request, options }
+  const expandCompaction = Effect.fnUntraced(function* (
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+  ) {
+    if (!hasResponsesCompactionItem(request.payload)) return { request, options };
 
     const payload = yield* Effect.tryPromise({
       try: () => expandCompactionCapsules(request.payload),
@@ -590,38 +682,49 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         new ExecutionError({
           status: 400,
           message: error instanceof Error ? error.message : String(error),
-          requestScoped: true
-        })
-    })
+          requestScoped: true,
+        }),
+    });
 
     const original =
       options.originalRequest === undefined
         ? undefined
-        : yield* Effect.promise(() => expandCompactionCapsules(options.originalRequest as Json).catch(() => payload))
+        : yield* Effect.promise(() =>
+            expandCompactionCapsules(options.originalRequest as Json).catch(() => payload),
+          );
 
     return {
       request: { ...request, payload },
-      options: original === undefined ? options : { ...options, originalRequest: original }
-    }
-  })
+      options: original === undefined ? options : { ...options, originalRequest: original },
+    };
+  });
 
-  const compactionRequested = (request: ExecutorRequest, options: ExecutorOptions, alt: boolean): boolean =>
+  const compactionRequested = (
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+    alt: boolean,
+  ): boolean =>
     (alt && options.alt === "responses/compact") ||
     hasResponsesCompactionTrigger(request.payload) ||
-    hasResponsesCompactionTrigger(options.originalRequest)
+    hasResponsesCompactionTrigger(options.originalRequest);
 
   /** `executeCompaction` (shared by the stream variant): non-stream summary turn sealed into a capsule. */
   const executeCompaction = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const baseModel = parseSuffix(request.model).modelName
+    const baseModel = parseSuffix(request.model).modelName;
 
     const source =
-      request.payload === undefined && options.originalRequest !== undefined ? options.originalRequest : request.payload
+      request.payload === undefined && options.originalRequest !== undefined
+        ? options.originalRequest
+        : request.payload;
 
-    const summaryRequest: ExecutorRequest = { ...request, payload: prepareCompactionSummaryPayload(source) }
+    const summaryRequest: ExecutorRequest = {
+      ...request,
+      payload: prepareCompactionSummaryPayload(source),
+    };
 
     const summaryOptions: ExecutorOptions = {
       ...options,
@@ -629,36 +732,41 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       stream: false,
       originalRequest: undefined,
       sourceFormat: Formats.OpenAIResponse,
-      responseFormat: Formats.OpenAIResponse
-    }
+      responseFormat: Formats.OpenAIResponse,
+    };
 
-    const summary = yield* executeGenerate(context, summaryRequest, summaryOptions)
-    const parsed = tryParseJson(summary.payload)
+    const summary = yield* executeGenerate(context, summaryRequest, summaryOptions);
+    const parsed = tryParseJson(summary.payload);
 
     const text = yield* Effect.try({
       try: () => extractSummaryText(parsed as Json),
-      catch: (error) => new ExecutionError({ status: 500, message: `extract summary: ${(error as Error).message}` })
-    })
+      catch: (error) =>
+        new ExecutionError({
+          status: 500,
+          message: `extract summary: ${(error as Error).message}`,
+        }),
+    });
 
     const capsule = yield* Effect.tryPromise({
       try: () => sealCompaction(text, baseModel),
-      catch: (error) => new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` })
-    })
+      catch: (error) =>
+        new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` }),
+    });
 
-    const usage = responsesSummaryUsage(parsed as Json, summary.payload)
+    const usage = responsesSummaryUsage(parsed as Json, summary.payload);
 
-    return { baseModel, capsule, usage, headers: summary.headers }
-  })
+    return { baseModel, capsule, usage, headers: summary.headers };
+  });
 
   const execute = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const expanded = yield* expandCompaction(request, options)
+    const expanded = yield* expandCompaction(request, options);
 
     if (compactionRequested(expanded.request, expanded.options, true)) {
-      const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+      const sealed = yield* executeCompaction(context, expanded.request, expanded.options);
 
       const body = buildCompactionResponse(
         sealed.baseModel,
@@ -666,32 +774,32 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         sealed.usage.input,
         sealed.usage.output,
         sealed.usage.total,
-        Date.now()
-      )
+        Date.now(),
+      );
 
-      return { payload: JSON.stringify(body), headers: sealed.headers } satisfies ExecutorResponse
+      return { payload: JSON.stringify(body), headers: sealed.headers } satisfies ExecutorResponse;
     }
 
-    return yield* executeGenerate(context, expanded.request, expanded.options)
-  })
+    return yield* executeGenerate(context, expanded.request, expanded.options);
+  });
 
   const executeStream = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
     if (options.alt === "responses/compact") {
       return yield* new ExecutionError({
         status: 400,
         message: "streaming not supported for /responses/compact",
-        requestScoped: true
-      })
+        requestScoped: true,
+      });
     }
 
-    const expanded = yield* expandCompaction(request, options)
+    const expanded = yield* expandCompaction(request, options);
 
     if (compactionRequested(expanded.request, expanded.options, false)) {
-      const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+      const sealed = yield* executeCompaction(context, expanded.request, expanded.options);
 
       const chunks = buildCompactionStreamChunks(
         sealed.baseModel,
@@ -699,72 +807,74 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         sealed.usage.input,
         sealed.usage.output,
         sealed.usage.total,
-        Date.now()
-      )
+        Date.now(),
+      );
 
-      const headers = new Headers(sealed.headers)
-      headers.set("Content-Type", "text/event-stream")
+      const headers = new Headers(sealed.headers);
+      headers.set("Content-Type", "text/event-stream");
 
-      return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
+      return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult;
     }
 
-    return yield* executeGenerateStream(context, expanded.request, expanded.options)
-  })
+    return yield* executeGenerateStream(context, expanded.request, expanded.options);
+  });
 
   const executeGenerateStream = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const attempt = yield* resolve(context, request, options)
-    const baseModel = parseSuffix(request.model).modelName
-    yield* checkShortCooldown(attempt, baseModel)
-    const agent = yield* userAgent(attempt)
-    yield* maybeRefreshCredits(attempt, agent)
-    const prepared = yield* prepare(attempt, "stream", agent)
-    const response = yield* send(attempt, prepared)
-    yield* finishSuccess(attempt, prepared)
+    const attempt = yield* resolve(context, request, options);
+    const baseModel = parseSuffix(request.model).modelName;
+    yield* checkShortCooldown(attempt, baseModel);
+    const agent = yield* userAgent(attempt);
+    yield* maybeRefreshCredits(attempt, agent);
+    const prepared = yield* prepare(attempt, "stream", agent);
+    const response = yield* send(attempt, prepared);
+    yield* finishSuccess(attempt, prepared);
 
-    const httpClient = yield* HttpClient.HttpClient
-    const responseFormat = responseFormatOf(options)
+    const httpClient = yield* HttpClient.HttpClient;
+    const responseFormat = responseFormatOf(options);
     // Streams always use SSE (`ctx alt = ""`) towards the translators.
-    const ctx = responseContext(attempt, prepared, "")
-    const filter = new UsageFilter()
-    const assembler = new JsonAssembler()
+    const ctx = responseContext(attempt, prepared, "");
+    const filter = new UsageFilter();
+    const assembler = new JsonAssembler();
 
     const translate = (payload: string): ReadonlyArray<string> =>
-      translating(attempt, () => registry.translateStream(responseFormat, to, ctx, payload))
+      translating(attempt, () => registry.translateStream(responseFormat, to, ctx, payload));
 
-    const withToolInputCheck = (chunks: ReadonlyArray<string>): Stream.Stream<string, ExecutionError> =>
+    const withToolInputCheck = (
+      chunks: ReadonlyArray<string>,
+    ): Stream.Stream<string, ExecutionError> =>
       ctx.state.toolInputError !== undefined
         ? Stream.concat(
             Stream.fromIterable(chunks),
-            Stream.fail(new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }))
+            Stream.fail(new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })),
           )
-        : Stream.fromIterable(chunks)
+        : Stream.fromIterable(chunks);
 
-    const lines = splitLines(response.stream).pipe(Stream.mapError(transportError))
+    const lines = splitLines(response.stream).pipe(Stream.mapError(transportError));
 
     const body = lines.pipe(
       Stream.flatMap((line) => {
-        prepared.replay?.observeLine(line)
+        prepared.replay?.observeLine(line);
         // Accounting is captured before the client-facing filter renames usage.
-        const usage = parseAntigravityStreamUsage(line)
+        const usage = parseAntigravityStreamUsage(line);
 
-        if (usage !== undefined) context.usage.publish(usage)
-        const assembled = assembler.push(filter.filter(line))
+        if (usage !== undefined) context.usage.publish(usage);
+        const assembled = assembler.push(filter.filter(line));
 
-        if (assembled.kind === "none") return Stream.empty
+        if (assembled.kind === "none") return Stream.empty;
 
-        if (assembled.kind === "error") return Stream.fail(assembled.error)
+        if (assembled.kind === "error") return Stream.fail(assembled.error);
 
         return Stream.unwrap(
           resolveGrounding(attempt, prepared, assembled.payload).pipe(
             Effect.provideService(HttpClient.HttpClient, httpClient),
             Effect.map((payload) => {
-              context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
-              const chunks = translate(payload)
-              context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload))
+              context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)));
+              const chunks = translate(payload);
+              context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload));
 
               // Responses clients: publish the ledger before the translated completion reaches them, so the next turn
               // finds it (split usage/signature frames may still extend the chain until `response.completed`).
@@ -774,60 +884,69 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
                 responseFormat === Formats.OpenAIResponse &&
                 chunks.some(isResponseCompleted)
                   ? prepared.replay.commit(ledger)
-                  : Effect.void
+                  : Effect.void;
 
-              return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
-            })
-          )
-        )
-      })
-    )
+              return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))));
+            }),
+          ),
+        );
+      }),
+    );
 
     // Only a clean end of stream may produce a synthetic terminal event (a read error never reports success).
     // The ledger is committed before the EOF-generated completion is delivered.
     const tail = Stream.suspend(() => {
-      const chunks = translate("[DONE]")
+      const chunks = translate("[DONE]");
 
       const commit =
-        prepared.replay !== undefined && !prepared.replay.committed ? prepared.replay.commit(ledger) : Effect.void
+        prepared.replay !== undefined && !prepared.replay.committed
+          ? prepared.replay.commit(ledger)
+          : Effect.void;
 
-      return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
-    })
+      return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))));
+    });
 
     const chunks = Stream.concat(body, tail).pipe(
       Stream.ensuring(persistSignatures(attempt)),
-      Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
-    )
+      Stream.tapError((error) =>
+        Effect.sync(() => context.usage.fail(error.status, error.message)),
+      ),
+    );
 
-    return { headers: new Headers(response.headers), chunks } satisfies StreamResult
-  })
+    return { headers: new Headers(response.headers), chunks } satisfies StreamResult;
+  });
 
   const countTokens = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
-    options: ExecutorOptions
+    options: ExecutorOptions,
   ) {
-    const attempt = yield* resolve(context, request, options)
-    const thinking = yield* Thinking
-    const baseModel = parseSuffix(request.model).modelName
-    const from = options.sourceFormat
-    const agent = yield* userAgent(attempt)
+    const attempt = yield* resolve(context, request, options);
+    const thinking = yield* Thinking;
+    const baseModel = parseSuffix(request.model).modelName;
+    const from = options.sourceFormat;
+    const agent = yield* userAgent(attempt);
 
     const original = validateRequestSignatures(
       baseModel,
       from,
-      structuredClone(options.originalRequest ?? request.payload)
-    )
+      structuredClone(options.originalRequest ?? request.payload),
+    );
 
     const texts =
       from === Formats.Claude
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
-        : []
+        : [];
 
     if (texts.length > 0 && attempt.kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(attempt.signatures, makeKvSignatureStore(attempt.kv as KVNamespace), baseModel, texts)
-      )
+        prefetchSignatures(
+          attempt.signatures,
+          makeKvSignatureStore(attempt.kv as KVNamespace),
+          baseModel,
+          texts,
+        ),
+      );
     }
 
     const translated = translating(attempt, () =>
@@ -840,15 +959,15 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
           model: baseModel,
           stream: false,
           body: structuredClone(original),
-          ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo })
+          ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo }),
         },
         thinking.summary,
-        { headers: options.headers, config: context.config }
-      )
-    )
+        { headers: options.headers, config: context.config },
+      ),
+    );
 
-    if (translated.error !== undefined) return yield* requestError(translated)
-    const originalTranslated = structuredClone(translated.body)
+    if (translated.error !== undefined) return yield* requestError(translated);
+    const originalTranslated = structuredClone(translated.body);
 
     let body = yield* thinking.apply({
       body: translated.body,
@@ -859,12 +978,15 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       source: original,
       configurationUpdatesChanged: translated.configurationUpdatesChanged === true,
       modelInfo: request.modelInfo,
-      lookupModelInfo: request.modelLookup
-    })
+      lookupModelInfo: request.modelLookup,
+    });
 
-    body = obfuscateSystemInstruction(body, context.config.oauth.providers.antigravity["sensitive-words"])
-    body = sanitizeGeminiRequestSignatures(baseModel, body)
-    body = ensureLeadingUserContent(baseModel, body)
+    body = obfuscateSystemInstruction(
+      body,
+      context.config.oauth.providers.antigravity["sensitive-words"],
+    );
+    body = sanitizeGeminiRequestSignatures(baseModel, body);
+    body = ensureLeadingUserContent(baseModel, body);
 
     for (const path of [
       "project",
@@ -872,15 +994,17 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       "request.safetySettings",
       "request.toolConfig",
       "request.labels",
-      "request.sessionId"
+      "request.sessionId",
     ]) {
-      del(body, path)
+      del(body, path);
     }
 
-    const alt = options.alt
-    const base = requestBaseUrl(context.credential.attributes, context.credential.metadata)
-    const url = base + ANTIGRAVITY_COUNT_TOKENS_PATH + (alt !== "" ? `?$alt=${encodeURIComponent(alt)}` : "")
-    const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+    const alt = options.alt;
+    const base = requestBaseUrl(context.credential.attributes, context.credential.metadata);
+    const url =
+      base + ANTIGRAVITY_COUNT_TOKENS_PATH + (alt !== "" ? `?$alt=${encodeURIComponent(alt)}` : "");
+    const requestedModel =
+      options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 
     const finalBody = finalizePayload(
       context.config,
@@ -893,10 +1017,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         root: "request",
         requestPath: options.metadata.requestPath,
         headers: options.headers,
-        original: originalTranslated
+        original: originalTranslated,
       },
-      body
-    )
+      body,
+    );
 
     const prepared: PreparedRequest = {
       url,
@@ -906,68 +1030,68 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       translated: finalBody,
       useCredits: false,
       replayScope: NO_REPLAY_SCOPE,
-      replay: undefined
-    }
+      replay: undefined,
+    };
 
-    const response = yield* send(attempt, prepared)
-    const text = yield* response.text.pipe(Effect.mapError(transportError))
-    const count = asInt(get(tryParseJson(text), "totalTokens"))
-    const payload = registry.translateTokenCount(responseFormatOf(options), to, count, text)
+    const response = yield* send(attempt, prepared);
+    const text = yield* response.text.pipe(Effect.mapError(transportError));
+    const count = asInt(get(tryParseJson(text), "totalTokens"));
+    const payload = registry.translateTokenCount(responseFormatOf(options), to, count, text);
 
-    return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
-  })
+    return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse;
+  });
 
-  return { identifier: ANTIGRAVITY_IDENTIFIER, execute, executeStream, countTokens }
-}
+  return { identifier: ANTIGRAVITY_IDENTIFIER, execute, executeStream, countTokens };
+};
 
 /** Whether a translated Responses chunk carries the `response.completed` event. */
 const isResponseCompleted = (chunk: string): boolean =>
   chunk.split("\n").some((line) => {
-    const payload = jsonPayloadOf(line)
+    const payload = jsonPayloadOf(line);
 
-    return payload !== undefined && get(tryParseJson(payload), "type") === "response.completed"
-  })
+    return payload !== undefined && get(tryParseJson(payload), "type") === "response.completed";
+  });
 
 /** `JSONPayload`: the JSON object of an SSE `data:` line or raw JSON line. */
 const jsonPayloadOf = (line: string): string | undefined => {
-  let trimmed = line.trim()
+  let trimmed = line.trim();
 
-  if (trimmed === "" || trimmed === "[DONE]" || trimmed.startsWith("event:")) return undefined
+  if (trimmed === "" || trimmed === "[DONE]" || trimmed.startsWith("event:")) return undefined;
 
-  if (trimmed.startsWith("data:")) trimmed = trimmed.slice(5).trim()
+  if (trimmed.startsWith("data:")) trimmed = trimmed.slice(5).trim();
 
-  return trimmed.startsWith("{") ? trimmed : undefined
-}
+  return trimmed.startsWith("{") ? trimmed : undefined;
+};
 
 /** `obfuscateSensitiveWords` for the system instruction of a translated request. */
 const obfuscateSystemInstruction = (body: Json, words: ReadonlyArray<string>): Json => {
-  const obfuscate = buildSensitiveWordMatcher(words)?.obfuscate
+  const obfuscate = buildSensitiveWordMatcher(words)?.obfuscate;
 
-  if (obfuscate === undefined) return body
+  if (obfuscate === undefined) return body;
 
   for (const path of ["request.systemInstruction", "request.system_instruction"]) {
-    const instruction = get(body, path)
+    const instruction = get(body, path);
 
-    if (instruction === undefined) continue
+    if (instruction === undefined) continue;
 
     if (typeof instruction === "string") {
-      const text = obfuscate(instruction)
+      const text = obfuscate(instruction);
 
-      if (text !== instruction) set(body, path, text)
-      continue
+      if (text !== instruction) set(body, path, text);
+      continue;
     }
 
-    const parts = get(instruction, "parts")
+    const parts = get(instruction, "parts");
 
-    if (!isJsonArray(parts)) continue
+    if (!isJsonArray(parts)) continue;
 
     for (const part of parts) {
-      if (!isJsonObject(part) || typeof part["text"] !== "string") continue
-      const text = obfuscate(part["text"])
+      if (!isJsonObject(part) || typeof part["text"] !== "string") continue;
+      const text = obfuscate(part["text"]);
 
-      if (text !== part["text"]) part["text"] = text
+      if (text !== part["text"]) part["text"] = text;
     }
   }
 
-  return body
-}
+  return body;
+};

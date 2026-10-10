@@ -13,14 +13,18 @@
       ],
       "temperature": 0.25,
       "max_tokens": 64,
-      "tools": [{ "type": "function", "function": { "name": "f", "parameters": { "type": "object" } } }],
+      "tools": [
+        { "type": "function", "function": { "name": "f", "parameters": { "type": "object" } } }
+      ],
       "metadata": { "z": 1, "a": 2 }
     },
     "responseBody": {
       "id": "chatcmpl-1",
       "object": "chat.completion",
       "model": "upstream-model",
-      "choices": [{ "index": 0, "message": { "role": "assistant", "content": "ok" }, "finish_reason": "stop" }],
+      "choices": [
+        { "index": 0, "message": { "role": "assistant", "content": "ok" }, "finish_reason": "stop" }
+      ],
       "usage": { "prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4 }
     }
   },
@@ -82,7 +86,9 @@
     "stream": false,
     "request": { "model": "m", "messages": [] },
     "tokenCount": 42,
-    "tokenCountUsage": { "usage": { "prompt_tokens": 42, "completion_tokens": 0, "total_tokens": 42 } }
+    "tokenCountUsage": {
+      "usage": { "prompt_tokens": 42, "completion_tokens": 0, "total_tokens": 42 }
+    }
   },
   {
     "name": "request: explicit reasoning visibility controls are preserved",
@@ -90,6 +96,11 @@
     "to": "openai",
     "model": "m",
     "stream": false,
-    "request": { "model": "m", "messages": [], "reasoning_effort": "high", "include_reasoning": false }
+    "request": {
+      "model": "m",
+      "messages": [],
+      "reasoning_effort": "high",
+      "include_reasoning": false
+    }
   }
 ]

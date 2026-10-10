@@ -6,39 +6,60 @@
  * parseCodexRetryAfter, codexTerminalFailureBody/Status/Err, codexTerminalStreamErrShouldHandle and the
  * incomplete-stream errors).
  */
-import { asInt, asString, get, isJsonObject, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts"
-import { statusText } from "../../http/status.ts"
-import { ExecutionError } from "../errors.ts"
+import {
+  asInt,
+  asString,
+  get,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  set,
+  tryParseJson,
+} from "../../json/index.ts";
+import { statusText } from "../../http/status.ts";
+import { ExecutionError } from "../errors.ts";
 
 export const CODEX_INCOMPLETE_STREAM_MESSAGE =
-  "stream error: stream disconnected before completion: stream closed before response.completed"
+  "stream error: stream disconnected before completion: stream closed before response.completed";
 
 export const CODEX_EMPTY_INCOMPLETE_STREAM_MESSAGE =
-  "stream error: upstream terminated with incomplete empty response (0 tokens)"
+  "stream error: upstream terminated with incomplete empty response (0 tokens)";
 
 /** 408: the stream ended before `response.completed` (request scoped). */
 export const codexIncompleteStreamError = (): ExecutionError =>
-  new ExecutionError({ status: 408, message: CODEX_INCOMPLETE_STREAM_MESSAGE, requestScoped: true })
+  new ExecutionError({
+    status: 408,
+    message: CODEX_INCOMPLETE_STREAM_MESSAGE,
+    requestScoped: true,
+  });
 
 /** 502: `response.incomplete` without any output (request scoped). */
 export const codexEmptyIncompleteStreamError = (): ExecutionError =>
-  new ExecutionError({ status: 502, message: CODEX_EMPTY_INCOMPLETE_STREAM_MESSAGE, requestScoped: true })
+  new ExecutionError({
+    status: 502,
+    message: CODEX_EMPTY_INCOMPLETE_STREAM_MESSAGE,
+    requestScoped: true,
+  });
 
 /** 502 for an upstream that closed without sending anything. */
 export const codexClosedBeforeFirstPayloadError = (): ExecutionError =>
-  new ExecutionError({ status: 502, message: "upstream stream closed before first payload" })
+  new ExecutionError({ status: 502, message: "upstream stream closed before first payload" });
 
-const str = (body: Json | undefined, path: string): string => asString(get(body, path)).trim()
+const str = (body: Json | undefined, path: string): string => asString(get(body, path)).trim();
 
 /** `isCodexModelCapacityError`. */
 export const isCodexModelCapacityError = (bodyText: string): boolean => {
-  if (bodyText === "") return false
-  const parsed = tryParseJson(bodyText)
+  if (bodyText === "") return false;
+  const parsed = tryParseJson(bodyText);
 
-  for (const candidate of [asString(get(parsed, "error.message")), asString(get(parsed, "message")), bodyText]) {
-    const lower = candidate.trim().toLowerCase()
+  for (const candidate of [
+    asString(get(parsed, "error.message")),
+    asString(get(parsed, "message")),
+    bodyText,
+  ]) {
+    const lower = candidate.trim().toLowerCase();
 
-    if (lower === "") continue
+    if (lower === "") continue;
 
     if (
       lower.includes("model is at capacity") ||
@@ -46,56 +67,63 @@ export const isCodexModelCapacityError = (bodyText: string): boolean => {
       lower.includes("model_is_at_capacity") ||
       (lower.includes("model") && lower.includes("at capacity"))
     ) {
-      return true
+      return true;
     }
   }
 
-  return false
-}
+  return false;
+};
 
 /** `isCodexUsageLimitError`: `error.type` (or `type`) is `usage_limit_reached`. */
 export const isCodexUsageLimitError = (bodyText: string): boolean => {
-  if (bodyText === "") return false
-  const parsed = tryParseJson(bodyText)
+  if (bodyText === "") return false;
+  const parsed = tryParseJson(bodyText);
 
   return [get(parsed, "error.type"), get(parsed, "type")].some(
-    (candidate) => asString(candidate).trim().toLowerCase() === "usage_limit_reached"
-  )
-}
+    (candidate) => asString(candidate).trim().toLowerCase() === "usage_limit_reached",
+  );
+};
 
 /** `parseCodexRetryAfter`: `resets_at`/`resets_in_seconds` of a 429 `usage_limit_reached` body, in ms. */
-export const parseCodexRetryAfterMs = (status: number, bodyText: string, nowMs: number): number | undefined => {
-  if (status !== 429 || bodyText === "") return undefined
-  const parsed = tryParseJson(bodyText)
+export const parseCodexRetryAfterMs = (
+  status: number,
+  bodyText: string,
+  nowMs: number,
+): number | undefined => {
+  if (status !== 429 || bodyText === "") return undefined;
+  const parsed = tryParseJson(bodyText);
 
   for (const quota of [get(parsed, "error"), parsed]) {
-    if (asString(get(quota, "type")).trim().toLowerCase() !== "usage_limit_reached") continue
-    const resetsAt = asInt(get(quota, "resets_at"))
+    if (asString(get(quota, "type")).trim().toLowerCase() !== "usage_limit_reached") continue;
+    const resetsAt = asInt(get(quota, "resets_at"));
 
-    if (resetsAt > 0 && resetsAt * 1000 > nowMs) return resetsAt * 1000 - nowMs
-    const resetsIn = asInt(get(quota, "resets_in_seconds"))
+    if (resetsAt > 0 && resetsAt * 1000 > nowMs) return resetsAt * 1000 - nowMs;
+    const resetsIn = asInt(get(quota, "resets_in_seconds"));
 
-    if (resetsIn > 0) return resetsIn * 1000
+    if (resetsIn > 0) return resetsIn * 1000;
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 interface Classification {
-  readonly code: string
-  readonly type: string
+  readonly code: string;
+  readonly type: string;
 }
 
 /** `codexStatusErrorClassification`. */
-export const codexStatusErrorClassification = (status: number, bodyText: string): Classification | undefined => {
-  const parsed = tryParseJson(bodyText)
-  let errorMessage = str(parsed, "error.message").toLowerCase()
+export const codexStatusErrorClassification = (
+  status: number,
+  bodyText: string,
+): Classification | undefined => {
+  const parsed = tryParseJson(bodyText);
+  let errorMessage = str(parsed, "error.message").toLowerCase();
 
-  if (errorMessage === "") errorMessage = str(parsed, "message").toLowerCase()
-  const lower = bodyText.trim().toLowerCase()
-  const upstreamCode = str(parsed, "error.code").toLowerCase()
-  const upstreamType = str(parsed, "error.type").toLowerCase()
-  const isInvalidRequest = upstreamType === "" || upstreamType === "invalid_request_error"
+  if (errorMessage === "") errorMessage = str(parsed, "message").toLowerCase();
+  const lower = bodyText.trim().toLowerCase();
+  const upstreamCode = str(parsed, "error.code").toLowerCase();
+  const upstreamType = str(parsed, "error.type").toLowerCase();
+  const isInvalidRequest = upstreamType === "" || upstreamType === "invalid_request_error";
 
   if (
     status === 413 ||
@@ -107,11 +135,14 @@ export const codexStatusErrorClassification = (status: number, bodyText: string)
         errorMessage.includes("maximum context") ||
         errorMessage.includes("too many tokens")))
   ) {
-    return { code: "context_too_large", type: "invalid_request_error" }
+    return { code: "context_too_large", type: "invalid_request_error" };
   }
 
-  if (lower.includes("invalid signature in thinking block") || lower.includes("invalid_encrypted_content")) {
-    return { code: "thinking_signature_invalid", type: "invalid_request_error" }
+  if (
+    lower.includes("invalid signature in thinking block") ||
+    lower.includes("invalid_encrypted_content")
+  ) {
+    return { code: "thinking_signature_invalid", type: "invalid_request_error" };
   }
 
   if (
@@ -119,7 +150,7 @@ export const codexStatusErrorClassification = (status: number, bodyText: string)
     lower.includes("previous_response_not_found") ||
     (lower.includes("previous_response_id") && lower.includes("not found"))
   ) {
-    return { code: "previous_response_not_found", type: "invalid_request_error" }
+    return { code: "previous_response_not_found", type: "invalid_request_error" };
   }
 
   if (
@@ -129,168 +160,176 @@ export const codexStatusErrorClassification = (status: number, bodyText: string)
     lower.includes("invalid or expired token") ||
     lower.includes("refresh_token_reused")
   ) {
-    return { code: "auth_unavailable", type: "authentication_error" }
+    return { code: "auth_unavailable", type: "authentication_error" };
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 /** `classifyCodexStatusError`: well-known failures are rewritten to `{"error":{message,type,code}}`. */
 export const classifyCodexStatusError = (status: number, bodyText: string): string => {
-  const classification = codexStatusErrorClassification(status, bodyText)
+  const classification = codexStatusErrorClassification(status, bodyText);
 
-  if (classification === undefined) return bodyText
-  const parsed = tryParseJson(bodyText)
-  let message = asString(get(parsed, "error.message"))
+  if (classification === undefined) return bodyText;
+  const parsed = tryParseJson(bodyText);
+  let message = asString(get(parsed, "error.message"));
 
-  if (message === "") message = asString(get(parsed, "message"))
+  if (message === "") message = asString(get(parsed, "message"));
 
-  if (message === "") message = bodyText.trim()
+  if (message === "") message = bodyText.trim();
 
-  if (message === "") message = statusText(status)
+  if (message === "") message = statusText(status);
 
-  return JSON.stringify({ error: { message, type: classification.type, code: classification.code } })
-}
+  return JSON.stringify({
+    error: { message, type: classification.type, code: classification.code },
+  });
+};
 
 /** `newCodexStatusErrWithCooling`. `headers` are the upstream response headers (exposed with passthrough-headers). */
 export const newCodexStatusError = (
   status: number,
   bodyText: string,
-  options: { readonly modelLevelCooling: boolean; readonly nowMs: number; readonly headers?: Record<string, string> }
+  options: {
+    readonly modelLevelCooling: boolean;
+    readonly nowMs: number;
+    readonly headers?: Record<string, string>;
+  },
 ): ExecutionError => {
-  let code = status
-  const isUsageLimit = isCodexUsageLimitError(bodyText)
-  const credentialScoped = isUsageLimit && !options.modelLevelCooling
+  let code = status;
+  const isUsageLimit = isCodexUsageLimitError(bodyText);
+  const credentialScoped = isUsageLimit && !options.modelLevelCooling;
 
-  if (isCodexModelCapacityError(bodyText) || isUsageLimit) code = 429
-  const body = classifyCodexStatusError(code, bodyText)
-  const retryAfterMs = parseCodexRetryAfterMs(code, body, options.nowMs)
+  if (isCodexModelCapacityError(bodyText) || isUsageLimit) code = 429;
+  const body = classifyCodexStatusError(code, bodyText);
+  const retryAfterMs = parseCodexRetryAfterMs(code, body, options.nowMs);
 
   return new ExecutionError({
     status: code,
     message: body,
     ...(credentialScoped ? { credentialScoped: true } : {}),
     ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
-    ...(options.headers !== undefined ? { headers: options.headers } : {})
-  })
-}
+    ...(options.headers !== undefined ? { headers: options.headers } : {}),
+  });
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Terminal failures delivered inside the stream
 // ---------------------------------------------------------------------------------------------------------------
 
 const terminalErrorBody = (event: Json | undefined, path: string): JsonObject | undefined => {
-  const errorResult = get(event, path)
+  const errorResult = get(event, path);
 
-  if (errorResult === undefined) return undefined
-  let body: Json = { error: {} }
+  if (errorResult === undefined) return undefined;
+  let body: Json = { error: {} };
 
   if (typeof errorResult === "object" && errorResult !== null) {
-    body = set(body, "error", errorResult)
+    body = set(body, "error", errorResult);
   } else {
-    const message = asString(errorResult).trim()
+    const message = asString(errorResult).trim();
 
-    if (message !== "") body = set(body, "error.message", message)
+    if (message !== "") body = set(body, "error.message", message);
   }
 
   if (str(body, "error.message") === "") {
-    const message = str(event, "response.error.message")
+    const message = str(event, "response.error.message");
 
-    if (message !== "") body = set(body, "error.message", message)
+    if (message !== "") body = set(body, "error.message", message);
   }
 
   if (str(body, "error.message") === "") {
-    const code = str(body, "error.code")
+    const code = str(body, "error.code");
 
-    if (code !== "") body = set(body, "error.message", code)
+    if (code !== "") body = set(body, "error.message", code);
   }
 
   if (str(body, "error.message") === "") {
-    const type = str(body, "error.type")
+    const type = str(body, "error.type");
 
-    if (type !== "") body = set(body, "error.message", type)
+    if (type !== "") body = set(body, "error.message", type);
   }
 
-  return isJsonObject(body) ? body : undefined
-}
+  return isJsonObject(body) ? body : undefined;
+};
 
 const terminalTopLevelErrorBody = (event: Json | undefined): JsonObject | undefined => {
-  const message = str(event, "message")
-  const code = str(event, "code")
-  const type = str(event, "error_type")
-  const param = str(event, "param")
+  const message = str(event, "message");
+  const code = str(event, "code");
+  const type = str(event, "error_type");
+  const param = str(event, "param");
 
-  if (message === "" && code === "" && type === "" && param === "") return undefined
-  let body: Json = { error: {} }
+  if (message === "" && code === "" && type === "" && param === "") return undefined;
+  let body: Json = { error: {} };
 
-  if (message !== "") body = set(body, "error.message", message)
+  if (message !== "") body = set(body, "error.message", message);
 
-  if (code !== "") body = set(body, "error.code", code)
+  if (code !== "") body = set(body, "error.code", code);
 
-  if (type !== "") body = set(body, "error.type", type)
+  if (type !== "") body = set(body, "error.type", type);
 
-  if (param !== "") body = set(body, "error.param", param)
+  if (param !== "") body = set(body, "error.param", param);
 
   if (str(body, "error.message") === "") {
-    if (code !== "") body = set(body, "error.message", code)
-    else if (type !== "") body = set(body, "error.message", type)
+    if (code !== "") body = set(body, "error.message", code);
+    else if (type !== "") body = set(body, "error.message", type);
   }
 
-  return isJsonObject(body) ? body : undefined
-}
+  return isJsonObject(body) ? body : undefined;
+};
 
 /** `codexTerminalFailureBody`: the normalised body of an `error` / `response.failed` event. */
 export const codexTerminalFailureBody = (event: Json | undefined): JsonObject | undefined => {
-  let body: JsonObject | undefined
+  let body: JsonObject | undefined;
 
   switch (asString(get(event, "type"))) {
     case "error":
-      body = terminalErrorBody(event, "error") ?? terminalTopLevelErrorBody(event)
-      break
+      body = terminalErrorBody(event, "error") ?? terminalTopLevelErrorBody(event);
+      break;
     case "response.failed":
-      body = terminalErrorBody(event, "response.error") ?? terminalErrorBody(event, "error")
-      break
+      body = terminalErrorBody(event, "response.error") ?? terminalErrorBody(event, "error");
+      break;
     default:
-      return undefined
+      return undefined;
   }
 
-  body ??= { error: { message: "upstream stream failed without error details" } }
-  const sequence = get(event, "sequence_number")
+  body ??= { error: { message: "upstream stream failed without error details" } };
+  const sequence = get(event, "sequence_number");
 
-  if (sequence !== undefined) set(body, "sequence_number", asInt(sequence))
+  if (sequence !== undefined) set(body, "sequence_number", asInt(sequence));
 
-  return body
-}
+  return body;
+};
 
 /** `codexTerminalFailureStatus`. */
 const terminalFailureStatus = (body: Json): number => {
   for (const path of ["error.status_code", "error.status"]) {
-    const status = asInt(get(body, path))
+    const status = asInt(get(body, path));
 
-    if (status >= 400 && status <= 599) return status
+    if (status >= 400 && status <= 599) return status;
   }
 
-  const type = str(body, "error.type").toLowerCase()
-  const code = str(body, "error.code").toLowerCase()
+  const type = str(body, "error.type").toLowerCase();
+  const code = str(body, "error.code").toLowerCase();
 
-  if (code === "cyber_policy") return 400
+  if (code === "cyber_policy") return 400;
 
-  if (type === "not_found_error" || code === "not_found" || code === "model_not_found") return 404
+  if (type === "not_found_error" || code === "not_found" || code === "model_not_found") return 404;
 
-  if (type === "authentication_error" || code === "invalid_api_key" || code === "unauthorized") return 401
+  if (type === "authentication_error" || code === "invalid_api_key" || code === "unauthorized")
+    return 401;
 
-  if (type === "permission_error" || code === "forbidden" || code === "permission_denied") return 403
+  if (type === "permission_error" || code === "forbidden" || code === "permission_denied")
+    return 403;
 
-  if (type === "rate_limit_error" || code === "rate_limit_exceeded") return 429
+  if (type === "rate_limit_error" || code === "rate_limit_exceeded") return 429;
 
-  if (type === "invalid_request_error" || type === "bad_request_error") return 400
+  if (type === "invalid_request_error" || type === "bad_request_error") return 400;
 
-  return 502
-}
+  return 502;
+};
 
 const errorIsContextLength = (body: Json): boolean => {
-  const code = str(body, "error.code").toLowerCase()
-  const message = str(body, "error.message").toLowerCase()
+  const code = str(body, "error.code").toLowerCase();
+  const message = str(body, "error.message").toLowerCase();
 
   return (
     code === "context_length_exceeded" ||
@@ -298,38 +337,38 @@ const errorIsContextLength = (body: Json): boolean => {
     message.includes("context window") ||
     message.includes("context length") ||
     message.includes("too many tokens")
-  )
-}
+  );
+};
 
 const streamErrShouldHandle = (body: Json): boolean => {
-  if (errorIsContextLength(body)) return true
-  const text = JSON.stringify(body)
+  if (errorIsContextLength(body)) return true;
+  const text = JSON.stringify(body);
 
-  if (isCodexUsageLimitError(text) || isCodexModelCapacityError(text)) return true
+  if (isCodexUsageLimitError(text) || isCodexModelCapacityError(text)) return true;
 
-  return codexStatusErrorClassification(400, text)?.code === "thinking_signature_invalid"
-}
+  return codexStatusErrorClassification(400, text)?.code === "thinking_signature_invalid";
+};
 
 export interface CodexTerminalFailure {
-  readonly error: ExecutionError
+  readonly error: ExecutionError;
   /** The normalised failure body. */
-  readonly body: string
+  readonly body: string;
 }
 
 /** `codexTerminalFailureErrWithCooling`: the error for an `error`/`response.failed` event, if it is one. */
 export const codexTerminalFailure = (
   event: Json | undefined,
-  options: { readonly modelLevelCooling: boolean; readonly nowMs: number }
+  options: { readonly modelLevelCooling: boolean; readonly nowMs: number },
 ): CodexTerminalFailure | undefined => {
-  const body = codexTerminalFailureBody(event)
+  const body = codexTerminalFailureBody(event);
 
-  if (body === undefined) return undefined
-  const text = JSON.stringify(body)
-  const status = streamErrShouldHandle(body) ? 400 : terminalFailureStatus(body)
+  if (body === undefined) return undefined;
+  const text = JSON.stringify(body);
+  const status = streamErrShouldHandle(body) ? 400 : terminalFailureStatus(body);
 
-  return { error: newCodexStatusError(status, text, options), body: text }
-}
+  return { error: newCodexStatusError(status, text, options), body: text };
+};
 
 /** True when the failure body asks to clear the reasoning replay cache. */
 export const isThinkingSignatureInvalid = (status: number, bodyText: string): boolean =>
-  codexStatusErrorClassification(status, bodyText)?.code === "thinking_signature_invalid"
+  codexStatusErrorClassification(status, bodyText)?.code === "thinking_signature_invalid";

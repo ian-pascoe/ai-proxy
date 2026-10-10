@@ -2,12 +2,8 @@
   "name": "cliproxy",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "CLIProxyAPI TypeScript/Effect port for Cloudflare Workers",
-  "packageManager": "pnpm@12.10.1",
-  "engines": {
-    "node": ">=22"
-  },
+  "type": "module",
   "scripts": {
     "prepare": "effect-tsgo patch --no-typescript --oxlint && ([ -n \"$CI\" ] || tools/sync-reference-repos.sh)",
     "dev": "alchemy dev",
@@ -44,5 +40,9 @@
     "oxlint-tsgolint": "7.0.2003",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
-  }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.10.1"
 }

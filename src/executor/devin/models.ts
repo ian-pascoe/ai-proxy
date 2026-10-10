@@ -6,7 +6,7 @@
  * `Thinking.Levels`) is reached through a lookup so the executor can use the live registry snapshot with the embedded
  * catalog as fallback.
  */
-import { parseSuffix } from "../suffix.ts"
+import { parseSuffix } from "../suffix.ts";
 
 /** Exact model UID suffixes that mean "already resolved". */
 const KNOWN_SUFFIXES = [
@@ -41,23 +41,23 @@ const KNOWN_SUFFIXES = [
   "_high",
   "_xhigh",
   "_max",
-  "_thinking"
-]
+  "_thinking",
+];
 
 const SPECIAL_ALIASES: Readonly<Record<string, string>> = {
   "claude-haiku-4-5": "MODEL_PRIVATE_11",
-  "gpt-4-1": "MODEL_CHAT_GPT_4_1_2025_04_14"
-}
+  "gpt-4-1": "MODEL_CHAT_GPT_4_1_2025_04_14",
+};
 
 export const hasDevinEffortSuffix = (model: string): boolean => {
-  const lower = model.trim().toLowerCase()
+  const lower = model.trim().toLowerCase();
 
-  return KNOWN_SUFFIXES.some((suffix) => lower.endsWith(suffix))
-}
+  return KNOWN_SUFFIXES.some((suffix) => lower.endsWith(suffix));
+};
 
 /** `NormalizeThinkingLevel`: loose effort strings or a token budget to a canonical effort. */
 export const normalizeDevinThinkingLevel = (level: string, budgetTokens: number): string => {
-  const normalized = level.trim().toLowerCase()
+  const normalized = level.trim().toLowerCase();
 
   switch (normalized) {
     case "minimal":
@@ -67,169 +67,184 @@ export const normalizeDevinThinkingLevel = (level: string, budgetTokens: number)
     case "xhigh":
     case "max":
     case "fast":
-      return normalized
+      return normalized;
     case "none":
     case "off":
     case "disabled":
-      return "none"
+      return "none";
     case "auto":
     case "adaptive":
-      return "high"
+      return "high";
   }
 
   if (budgetTokens > 0) {
-    if (budgetTokens <= 4096) return "low"
+    if (budgetTokens <= 4096) return "low";
 
-    if (budgetTokens <= 16384) return "medium"
+    if (budgetTokens <= 16384) return "medium";
 
-    if (budgetTokens <= 32768) return "high"
+    if (budgetTokens <= 32768) return "high";
 
-    return "max"
+    return "max";
   }
 
-  return ""
-}
+  return "";
+};
 
-const STANDARD_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"]
+const STANDARD_ORDER = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
-const levelIndex = (level: string): number => STANDARD_ORDER.indexOf(level.trim().toLowerCase())
+const levelIndex = (level: string): number => STANDARD_ORDER.indexOf(level.trim().toLowerCase());
 
 /** `clampEffort`: the nearest allowed level; ties go to the higher one. */
-const clampEffort = (requested: string, allowed: ReadonlyArray<string>, defaultEffort: string): string => {
-  if (requested === "") return defaultEffort
-  const wanted = requested.trim().toLowerCase()
-  const exact = allowed.find((candidate) => candidate.trim().toLowerCase() === wanted)
+const clampEffort = (
+  requested: string,
+  allowed: ReadonlyArray<string>,
+  defaultEffort: string,
+): string => {
+  if (requested === "") return defaultEffort;
+  const wanted = requested.trim().toLowerCase();
+  const exact = allowed.find((candidate) => candidate.trim().toLowerCase() === wanted);
 
-  if (exact !== undefined) return exact
+  if (exact !== undefined) return exact;
 
-  if (wanted === "none") return defaultEffort
-  const wantedIndex = levelIndex(wanted)
+  if (wanted === "none") return defaultEffort;
+  const wantedIndex = levelIndex(wanted);
 
-  if (wantedIndex === -1) return defaultEffort
-  let best = defaultEffort
-  let bestDistance = 999
-  let bestIndex = -1
+  if (wantedIndex === -1) return defaultEffort;
+  let best = defaultEffort;
+  let bestDistance = 999;
+  let bestIndex = -1;
 
   for (const candidate of allowed) {
-    const index = levelIndex(candidate)
+    const index = levelIndex(candidate);
 
-    if (index === -1) continue
-    const distance = Math.abs(wantedIndex - index)
+    if (index === -1) continue;
+    const distance = Math.abs(wantedIndex - index);
 
     if (distance < bestDistance) {
-      bestDistance = distance
-      best = candidate
-      bestIndex = index
+      bestDistance = distance;
+      best = candidate;
+      bestIndex = index;
     } else if (distance === bestDistance && index > bestIndex) {
-      best = candidate
-      bestIndex = index
+      best = candidate;
+      bestIndex = index;
     }
   }
 
-  return best
-}
+  return best;
+};
 
 const defaultEffortFor = (baseModel: string, levels: ReadonlyArray<string>): string => {
-  if (baseModel.includes("swe-2")) return "high"
-  const has = (level: string): boolean => levels.includes(level)
+  if (baseModel.includes("swe-2")) return "high";
+  const has = (level: string): boolean => levels.includes(level);
 
-  if (has("none") && has("low") && baseModel.startsWith("gpt-5")) return "low"
+  if (has("none") && has("low") && baseModel.startsWith("gpt-5")) return "low";
 
   if (
     has("high") &&
-    ["gemini", "grok", "glm", "deepseek", "kimi", "nemotron"].some((family) => baseModel.includes(family))
+    ["gemini", "grok", "glm", "deepseek", "kimi", "nemotron"].some((family) =>
+      baseModel.includes(family),
+    )
   ) {
-    return "high"
+    return "high";
   }
 
-  if (has("medium")) return "medium"
+  if (has("medium")) return "medium";
 
-  if (has("high")) return "high"
+  if (has("high")) return "high";
 
-  if (has("low")) return "low"
+  if (has("low")) return "low";
 
-  return levels[0] ?? ""
-}
+  return levels[0] ?? "";
+};
 
 /** Thinking levels of a catalog model (`undefined` = not in the catalog). */
-export type DevinLevelLookup = (modelId: string) => ReadonlyArray<string> | undefined
+export type DevinLevelLookup = (modelId: string) => ReadonlyArray<string> | undefined;
 
 /** `ResolveDevinChatModelUID`. */
 export const resolveDevinChatModelUid = (
   rawModel: string,
   thinkingLevelIn: string,
   budgetTokens: number,
-  levelsOf: DevinLevelLookup
+  levelsOf: DevinLevelLookup,
 ): string => {
-  const model = rawModel.trim()
+  const model = rawModel.trim();
 
-  if (model === "") return "swe-2-high"
-  let clean = model
+  if (model === "") return "swe-2-high";
+  let clean = model;
 
-  if (clean.toLowerCase().startsWith("devin/")) clean = clean.slice(6)
+  if (clean.toLowerCase().startsWith("devin/")) clean = clean.slice(6);
 
-  if (hasDevinEffortSuffix(clean)) return clean
+  if (hasDevinEffortSuffix(clean)) return clean;
 
-  let thinkingLevel = thinkingLevelIn
-  const parsed = parseSuffix(clean)
-  let baseModel = parsed.modelName.trim()
+  let thinkingLevel = thinkingLevelIn;
+  const parsed = parseSuffix(clean);
+  let baseModel = parsed.modelName.trim();
 
   if (parsed.hasSuffix) {
-    thinkingLevel = parsed.rawSuffix
+    thinkingLevel = parsed.rawSuffix;
   } else {
-    const colon = clean.lastIndexOf(":")
+    const colon = clean.lastIndexOf(":");
 
     if (colon !== -1) {
-      baseModel = clean.slice(0, colon).trim()
-      thinkingLevel = clean.slice(colon + 1).trim()
+      baseModel = clean.slice(0, colon).trim();
+      thinkingLevel = clean.slice(colon + 1).trim();
     }
   }
 
-  const effort = normalizeDevinThinkingLevel(thinkingLevel, budgetTokens)
-  const lowerBase = baseModel.toLowerCase()
-  let canonicalBase = lowerBase.replaceAll(".", "-")
+  const effort = normalizeDevinThinkingLevel(thinkingLevel, budgetTokens);
+  const lowerBase = baseModel.toLowerCase();
+  let canonicalBase = lowerBase.replaceAll(".", "-");
 
-  const alias = SPECIAL_ALIASES[canonicalBase]
+  const alias = SPECIAL_ALIASES[canonicalBase];
 
-  if (alias !== undefined) return alias
+  if (alias !== undefined) return alias;
 
   if (canonicalBase.includes("sonnet-4-5"))
-    return effort !== "" && effort !== "none" ? "MODEL_PRIVATE_3" : "MODEL_PRIVATE_2"
+    return effort !== "" && effort !== "none" ? "MODEL_PRIVATE_3" : "MODEL_PRIVATE_2";
 
-  if (canonicalBase === "gemini-3-flash") canonicalBase = "gemini-3-8-flash"
+  if (canonicalBase === "gemini-3-flash") canonicalBase = "gemini-3-8-flash";
 
   switch (canonicalBase.replaceAll("-", "_")) {
     case "model_gpt_5_2":
-      return `MODEL_GPT_5_2_${clampEffort(effort, ["none", "low", "medium", "high", "xhigh"], "low").toUpperCase()}`
+      return `MODEL_GPT_5_2_${clampEffort(effort, ["none", "low", "medium", "high", "xhigh"], "low").toUpperCase()}`;
     case "model_google_gemini_3_0_flash":
-      return `MODEL_GOOGLE_GEMINI_3_0_FLASH_${clampEffort(effort, ["minimal", "low", "medium", "high"], "high").toUpperCase()}`
+      return `MODEL_GOOGLE_GEMINI_3_0_FLASH_${clampEffort(effort, ["minimal", "low", "medium", "high"], "high").toUpperCase()}`;
     case "model_claude_4_5_opus":
-      return effort !== "" && effort !== "none" ? "MODEL_CLAUDE_4_5_OPUS_THINKING" : "MODEL_CLAUDE_4_5_OPUS"
+      return effort !== "" && effort !== "none"
+        ? "MODEL_CLAUDE_4_5_OPUS_THINKING"
+        : "MODEL_CLAUDE_4_5_OPUS";
   }
 
-  const thinks = effort !== "" && effort !== "none"
+  const thinks = effort !== "" && effort !== "none";
 
   switch (canonicalBase) {
     case "swe-1-7":
-      return effort === "medium" ? "swe-1-7-medium" : "swe-1-7"
+      return effort === "medium" ? "swe-1-7-medium" : "swe-1-7";
     case "swe-1-6":
-      return effort === "fast" ? "swe-1-6-fast" : "swe-1-6"
+      return effort === "fast" ? "swe-1-6-fast" : "swe-1-6";
     case "glm-5-2":
-      return effort === "none" ? "glm-5-2-none" : effort === "max" ? "glm-5-2-max" : "glm-5-2"
+      return effort === "none" ? "glm-5-2-none" : effort === "max" ? "glm-5-2-max" : "glm-5-2";
     case "glm-5-2-1m":
-      return effort === "none" ? "glm-5-2-none-1m" : effort === "max" ? "glm-5-2-max-1m" : "glm-5-2-1m"
+      return effort === "none"
+        ? "glm-5-2-none-1m"
+        : effort === "max"
+          ? "glm-5-2-max-1m"
+          : "glm-5-2-1m";
     case "claude-opus-4-6":
     case "claude-sonnet-4-6":
-      return thinks ? `${canonicalBase}-thinking` : canonicalBase
+      return thinks ? `${canonicalBase}-thinking` : canonicalBase;
     case "claude-opus-4-6-1m":
-      return thinks ? "claude-opus-4-6-thinking-1m" : canonicalBase
+      return thinks ? "claude-opus-4-6-thinking-1m" : canonicalBase;
     case "claude-sonnet-4-6-1m":
-      return thinks ? "claude-sonnet-4-6-thinking-1m" : canonicalBase
+      return thinks ? "claude-sonnet-4-6-thinking-1m" : canonicalBase;
   }
 
-  const allowed = levelsOf(canonicalBase) ?? (canonicalBase !== lowerBase ? levelsOf(lowerBase) : undefined) ?? []
+  const allowed =
+    levelsOf(canonicalBase) ??
+    (canonicalBase !== lowerBase ? levelsOf(lowerBase) : undefined) ??
+    [];
 
-  if (allowed.length === 0) return canonicalBase
+  if (allowed.length === 0) return canonicalBase;
 
-  return `${canonicalBase}-${clampEffort(effort, allowed, defaultEffortFor(canonicalBase, allowed))}`
-}
+  return `${canonicalBase}-${clampEffort(effort, allowed, defaultEffortFor(canonicalBase, allowed))}`;
+};

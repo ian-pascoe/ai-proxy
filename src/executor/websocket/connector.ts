@@ -13,150 +13,164 @@
  * The connector is a service so tests can substitute in-memory sockets; executors read it with `Effect.serviceOption`
  * (defaulting to {@link fetchConnector}), which keeps `ExecutorServices` unchanged.
  */
-import { Context, Data, Duration, Effect, Layer, Queue } from "effect"
+import { Context, Data, Duration, Effect, Layer, Queue } from "effect";
 
 /** Go `codexResponsesWebsocketHandshakeTO`. */
-export const HANDSHAKE_TIMEOUT = Duration.seconds(30)
+export const HANDSHAKE_TIMEOUT = Duration.seconds(30);
 
 /** A frame (or lifecycle event) read from an upstream socket. */
 export type UpstreamMessage =
   | { readonly _tag: "text"; readonly data: string }
   | { readonly _tag: "binary" }
   | { readonly _tag: "close"; readonly code: number; readonly reason: string }
-  | { readonly _tag: "error"; readonly message: string }
+  | { readonly _tag: "error"; readonly message: string };
 
 /** The upgrade was rejected (`status` > 0, with the response body) or the dial failed (`status` 0). */
 export class HandshakeError extends Data.TaggedError("HandshakeError")<{
-  readonly status: number
-  readonly body: string
-  readonly headers: Readonly<Record<string, string>>
-  readonly message: string
+  readonly status: number;
+  readonly body: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly message: string;
 }> {}
 
-export class UpstreamSendError extends Data.TaggedError("UpstreamSendError")<{ readonly message: string }> {}
+export class UpstreamSendError extends Data.TaggedError("UpstreamSendError")<{
+  readonly message: string;
+}> {}
 
 /** One established upstream socket. Text frames only; a binary frame is a protocol violation for the caller. */
 export interface UpstreamSocket {
   /** Handshake response headers. */
-  readonly headers: Headers
-  readonly send: (text: string) => Effect.Effect<void, UpstreamSendError>
+  readonly headers: Headers;
+  readonly send: (text: string) => Effect.Effect<void, UpstreamSendError>;
   /** Frames in arrival order; a `close`/`error` message is the last one. */
-  readonly messages: Queue.Dequeue<UpstreamMessage>
-  readonly close: (code?: number, reason?: string) => Effect.Effect<void>
-  readonly isOpen: () => boolean
+  readonly messages: Queue.Dequeue<UpstreamMessage>;
+  readonly close: (code?: number, reason?: string) => Effect.Effect<void>;
+  readonly isOpen: () => boolean;
   /**
    * Registers a listener for the socket ending (close or error), whenever it happens. The returned function removes it.
    * Used to notice an upstream that drops an idle session socket.
    */
-  readonly onEnd: (listener: (message: UpstreamMessage) => void) => () => void
+  readonly onEnd: (listener: (message: UpstreamMessage) => void) => () => void;
 }
 
 export interface UpstreamConnectRequest {
   /** `ws:`/`wss:` (or `http(s):`) URL. */
-  readonly url: string
+  readonly url: string;
   /** Handshake headers (the runtime adds the `Sec-WebSocket-*` ones). */
-  readonly headers: Readonly<Record<string, string>>
+  readonly headers: Readonly<Record<string, string>>;
 }
 
 export class UpstreamWebSocketConnector extends Context.Service<
   UpstreamWebSocketConnector,
   {
-    readonly connect: (request: UpstreamConnectRequest) => Effect.Effect<UpstreamSocket, HandshakeError>
+    readonly connect: (
+      request: UpstreamConnectRequest,
+    ) => Effect.Effect<UpstreamSocket, HandshakeError>;
   }
 >()("cliproxy/executor/UpstreamWebSocketConnector") {
   static readonly layerFetch = Layer.succeed(
     UpstreamWebSocketConnector,
-    UpstreamWebSocketConnector.of(fetchConnector())
-  )
+    UpstreamWebSocketConnector.of(fetchConnector()),
+  );
 }
 
 /** Go `buildCodexResponsesWebsocketURL` / `buildXAIResponsesWebsocketURL`: `http` -> `ws`, `https` -> `wss`. */
 export const websocketUrl = (httpUrl: string): string => {
-  const parsed = new URL(httpUrl.trim())
+  const parsed = new URL(httpUrl.trim());
 
   switch (parsed.protocol) {
     case "http:":
-      parsed.protocol = "ws:"
-      break
+      parsed.protocol = "ws:";
+      break;
     case "https:":
-      parsed.protocol = "wss:"
-      break
+      parsed.protocol = "wss:";
+      break;
     case "ws:":
     case "wss:":
-      break
+      break;
     default:
-      throw new Error(`unsupported responses websocket URL scheme "${parsed.protocol.replace(/:$/, "")}"`)
+      throw new Error(
+        `unsupported responses websocket URL scheme "${parsed.protocol.replace(/:$/, "")}"`,
+      );
   }
 
-  if (parsed.host === "") throw new Error("responses websocket URL host is empty")
+  if (parsed.host === "") throw new Error("responses websocket URL host is empty");
 
-  return parsed.toString()
-}
+  return parsed.toString();
+};
 
 const closeReasonOf = (event: { readonly code?: number; readonly reason?: string }) => ({
   code: event.code ?? 1005,
-  reason: event.reason ?? ""
-})
+  reason: event.reason ?? "",
+});
 
 /**
  * Wraps an accepted Workers `WebSocket`. Messages are queued from the event listeners; text frames keep their order and
  * the terminal `close`/`error` message is delivered once.
  */
 export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket => {
-  const messages = Effect.runSync(Queue.unbounded<UpstreamMessage>())
-  const listeners = new Set<(message: UpstreamMessage) => void>()
-  let open = true
-  let ended = false
+  const messages = Effect.runSync(Queue.unbounded<UpstreamMessage>());
+  const listeners = new Set<(message: UpstreamMessage) => void>();
+  let open = true;
+  let ended = false;
 
   const end = (message: UpstreamMessage) => {
-    if (ended) return
-    ended = true
-    open = false
-    Queue.offerUnsafe(messages, message)
+    if (ended) return;
+    ended = true;
+    open = false;
+    Queue.offerUnsafe(messages, message);
 
-    for (const listener of listeners) listener(message)
-  }
+    for (const listener of listeners) listener(message);
+  };
 
   ws.addEventListener("message", (event) => {
-    const data = (event as MessageEvent).data
-    Queue.offerUnsafe(messages, typeof data === "string" ? { _tag: "text", data } : { _tag: "binary" })
-  })
-  ws.addEventListener("close", (event) => end({ _tag: "close", ...closeReasonOf(event as CloseEvent) }))
-  ws.addEventListener("error", () => end({ _tag: "error", message: "websocket error" }))
+    const data = (event as MessageEvent).data;
+    Queue.offerUnsafe(
+      messages,
+      typeof data === "string" ? { _tag: "text", data } : { _tag: "binary" },
+    );
+  });
+  ws.addEventListener("close", (event) =>
+    end({ _tag: "close", ...closeReasonOf(event as CloseEvent) }),
+  );
+  ws.addEventListener("error", () => end({ _tag: "error", message: "websocket error" }));
 
   return {
     headers,
     send: (text) =>
       Effect.try({
         try: () => {
-          if (!open) throw new Error("websocket is closed")
-          ws.send(text)
+          if (!open) throw new Error("websocket is closed");
+          ws.send(text);
         },
-        catch: (error) => new UpstreamSendError({ message: error instanceof Error ? error.message : String(error) })
+        catch: (error) =>
+          new UpstreamSendError({
+            message: error instanceof Error ? error.message : String(error),
+          }),
       }),
     messages,
     close: (code, reason) =>
       Effect.sync(() => {
-        const wasOpen = open
-        open = false
+        const wasOpen = open;
+        open = false;
 
-        if (!wasOpen) return
+        if (!wasOpen) return;
 
         try {
           // 1005/1006 cannot be sent; default to a normal closure.
-          ws.close(code ?? 1000, reason === undefined ? undefined : reason.slice(0, 120))
+          ws.close(code ?? 1000, reason === undefined ? undefined : reason.slice(0, 120));
         } catch {
           // Already closing.
         }
       }),
     isOpen: () => open,
     onEnd: (listener) => {
-      listeners.add(listener)
+      listeners.add(listener);
 
-      return () => void listeners.delete(listener)
-    }
-  }
-}
+      return () => void listeners.delete(listener);
+    },
+  };
+};
 
 /** The default connector: `fetch` with `Upgrade: websocket`. */
 export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocketConnector> {
@@ -164,27 +178,29 @@ export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocket
     connect: (request) =>
       Effect.tryPromise({
         try: async () => {
-          const url = request.url.replace(/^ws(s?):/i, "http$1:")
-          const response = await fetch(url, { headers: { ...request.headers, upgrade: "websocket" } })
-          const ws = (response as Response & { webSocket?: WebSocket | null }).webSocket
+          const url = request.url.replace(/^ws(s?):/i, "http$1:");
+          const response = await fetch(url, {
+            headers: { ...request.headers, upgrade: "websocket" },
+          });
+          const ws = (response as Response & { webSocket?: WebSocket | null }).webSocket;
 
           if (ws === undefined || ws === null) {
-            const body = await response.text().catch(() => "")
-            const headers: Record<string, string> = {}
+            const body = await response.text().catch(() => "");
+            const headers: Record<string, string> = {};
             response.headers.forEach((value, name) => {
-              headers[name] = value
-            })
+              headers[name] = value;
+            });
             throw new HandshakeError({
               status: response.status,
               body,
               headers,
-              message: `websocket upgrade rejected: ${response.status}`
-            })
+              message: `websocket upgrade rejected: ${response.status}`,
+            });
           }
 
-          ws.accept()
+          ws.accept();
 
-          return wrapWebSocket(ws, new Headers(response.headers))
+          return wrapWebSocket(ws, new Headers(response.headers));
         },
         catch: (cause) =>
           cause instanceof HandshakeError
@@ -193,16 +209,21 @@ export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocket
                 status: 0,
                 body: "",
                 headers: {},
-                message: cause instanceof Error ? cause.message : "websocket dial failed"
-              })
+                message: cause instanceof Error ? cause.message : "websocket dial failed",
+              }),
       }).pipe(
         Effect.timeoutOrElse({
           duration: HANDSHAKE_TIMEOUT,
           orElse: () =>
             Effect.fail(
-              new HandshakeError({ status: 0, body: "", headers: {}, message: "websocket handshake timed out" })
-            )
-        })
-      )
-  }
+              new HandshakeError({
+                status: 0,
+                body: "",
+                headers: {},
+                message: "websocket handshake timed out",
+              }),
+            ),
+        }),
+      ),
+  };
 }

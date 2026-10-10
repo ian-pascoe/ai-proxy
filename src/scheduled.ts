@@ -4,24 +4,29 @@
  *
  * Jobs run one after another and are isolated: a failing job is logged and does not stop the others.
  */
-import { Effect, Layer } from "effect"
-import { FetchHttpClient, type HttpClient } from "effect/http"
-import { ConfigReader } from "./config/reader.ts"
-import { refreshAntigravityModels } from "./executor/antigravity/models.ts"
-import { refreshAntigravityVersion } from "./executor/antigravity/version.ts"
-import { causeSummary } from "./observability/cause.ts"
-import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts"
-import { CatalogStore } from "./registry/catalog-store.ts"
-import { refreshXaiClientVersion } from "./executor/xai/version.ts"
-import { refreshCatalogs } from "./registry/refresh.ts"
-import { pruneExpiredUsage } from "./usage/retention.ts"
+import { Effect, Layer } from "effect";
+import { FetchHttpClient, type HttpClient } from "effect/http";
+import { ConfigReader } from "./config/reader.ts";
+import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
+import { refreshAntigravityVersion } from "./executor/antigravity/version.ts";
+import { causeSummary } from "./observability/cause.ts";
+import { WorkerEnv, WorkerExecutionContext } from "./platform/env.ts";
+import { CatalogStore } from "./registry/catalog-store.ts";
+import { refreshXaiClientVersion } from "./executor/xai/version.ts";
+import { refreshCatalogs } from "./registry/refresh.ts";
+import { pruneExpiredUsage } from "./usage/retention.ts";
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
-export type ScheduledServices = HttpClient.HttpClient | ConfigReader | CatalogStore | WorkerEnv | WorkerExecutionContext
+export type ScheduledServices =
+  | HttpClient.HttpClient
+  | ConfigReader
+  | CatalogStore
+  | WorkerEnv
+  | WorkerExecutionContext;
 
 export interface ScheduledTask {
-  readonly name: string
-  readonly run: Effect.Effect<unknown, unknown, ScheduledServices>
+  readonly name: string;
+  readonly run: Effect.Effect<unknown, unknown, ScheduledServices>;
 }
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
@@ -39,47 +44,54 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   {
     name: "devin-user-status",
     run: Effect.gen(function* () {
-      const env = yield* WorkerEnv
+      const env = yield* WorkerEnv;
 
-      return yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").refreshDevinStatus())
-    })
+      return yield* Effect.promise(() =>
+        env.CONTROL_PLANE.getByName("global").refreshDevinStatus(),
+      );
+    }),
   },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
   {
     name: "credential-refresh-sweep",
     run: Effect.gen(function* () {
-      const env = yield* WorkerEnv
-      yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").sweepRefresh())
-    })
-  }
-]
+      const env = yield* WorkerEnv;
+      yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").sweepRefresh());
+    }),
+  },
+];
 
 export const ScheduledLayer = Layer.mergeAll(
   FetchHttpClient.layer,
   ConfigReader.layerControlPlane(),
-  CatalogStore.layer
-)
+  CatalogStore.layer,
+);
 
 /** Runs all jobs for one cron invocation. */
 export const runScheduledTasks = (
   tasks: ReadonlyArray<ScheduledTask>,
   env: Env,
-  ctx: ExecutionContext
+  ctx: ExecutionContext,
 ): Promise<void> =>
   Effect.forEach(
     tasks,
     (task) =>
       task.run.pipe(
         // A summary only: full causes carry stacks and upstream URLs.
-        Effect.catchCause((cause) => Effect.logError(`scheduled task ${task.name} failed: ${causeSummary(cause)}`))
+        Effect.catchCause((cause) =>
+          Effect.logError(`scheduled task ${task.name} failed: ${causeSummary(cause)}`),
+        ),
       ),
-    { discard: true }
+    { discard: true },
   ).pipe(
     Effect.provide(ScheduledLayer),
     Effect.provideService(WorkerEnv, env),
     Effect.provideService(WorkerExecutionContext, ctx),
-    Effect.runPromise
-  )
+    Effect.runPromise,
+  );
 
-export const dispatchScheduled = (_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> =>
-  runScheduledTasks(scheduledTasks, env, ctx)
+export const dispatchScheduled = (
+  _controller: ScheduledController,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<void> => runScheduledTasks(scheduledTasks, env, ctx);

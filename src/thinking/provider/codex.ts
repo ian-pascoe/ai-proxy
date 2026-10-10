@@ -3,6 +3,6 @@
  *
  * Go source: internal/thinking/provider/codex/apply.go.
  */
-import { effortApplier } from "./effort.ts"
+import { effortApplier } from "./effort.ts";
 
-export const codexApplier = effortApplier("reasoning.effort")
+export const codexApplier = effortApplier("reasoning.effort");

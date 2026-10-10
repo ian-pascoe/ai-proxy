@@ -6,16 +6,22 @@
  * Pure: state, clock and settings are inputs. The Worker runs the loop (including the sleep); the ControlPlane only
  * answers this question because it owns the cooldown state of every credential.
  */
-import { Schema } from "effect"
-import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts"
-import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts"
-import { AuthKind, type Credential, type CredentialError, type CredentialState, executorKey } from "../model.ts"
-import { availabilityBlock, isBlockedForModel } from "./availability.ts"
-import { canonicalModelKey } from "./model-name.ts"
-import { type ModelRoute, resolveModelRoute, type RoutingContext } from "./routing.ts"
-import type { CredentialEntry } from "./pick.ts"
+import { Schema } from "effect";
+import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts";
+import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts";
+import {
+  AuthKind,
+  type Credential,
+  type CredentialError,
+  type CredentialState,
+  executorKey,
+} from "../model.ts";
+import { availabilityBlock, isBlockedForModel } from "./availability.ts";
+import { canonicalModelKey } from "./model-name.ts";
+import { type ModelRoute, resolveModelRoute, type RoutingContext } from "./routing.ts";
+import type { CredentialEntry } from "./pick.ts";
 
-const optional = Schema.optionalKey
+const optional = Schema.optionalKey;
 
 export const RetryQuery = Schema.Struct({
   providers: Schema.Array(Schema.String),
@@ -35,40 +41,48 @@ export const RetryQuery = Schema.Struct({
   maxWaitMs: Schema.Number,
   pinnedAuthId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
-  disallowFreeCodex: optional(Schema.Boolean)
-})
+  disallowFreeCodex: optional(Schema.Boolean),
+});
 
-export type RetryQuery = typeof RetryQuery.Type
+export type RetryQuery = typeof RetryQuery.Type;
 
 export type RetryPlan =
   /** `retryAfterMs`: how long until a credential recovers when that exceeded `maxWaitMs` (for `Retry-After`). */
-  { readonly retry: false; readonly retryAfterMs?: number } | { readonly retry: true; readonly waitMs: number }
+  | { readonly retry: false; readonly retryAfterMs?: number }
+  | { readonly retry: true; readonly waitMs: number };
 
 const parseIntAny = (value: unknown): number | undefined => {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value)
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
 
-  if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) return Number(value.trim())
+  if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) return Number(value.trim());
 
-  return undefined
-}
+  return undefined;
+};
 
 /** `RequestRetryOverride` (negative values are ignored). */
-export const requestRetryOverride = (credential: Pick<Credential, "metadata">): number | undefined => {
+export const requestRetryOverride = (
+  credential: Pick<Credential, "metadata">,
+): number | undefined => {
   for (const key of ["request_retry", "request-retry"]) {
-    const parsed = parseIntAny(credential.metadata[key])
+    const parsed = parseIntAny(credential.metadata[key]);
 
-    if (parsed !== undefined) return parsed < 0 ? undefined : parsed
+    if (parsed !== undefined) return parsed < 0 ? undefined : parsed;
   }
 
-  return undefined
-}
+  return undefined;
+};
 
 /** `effectiveRequestRetryLimit`. */
-export const effectiveRequestRetry = (credential: Pick<Credential, "metadata">, defaultRetry: number): number =>
-  requestRetryOverride(credential) ?? Math.max(0, defaultRetry)
+export const effectiveRequestRetry = (
+  credential: Pick<Credential, "metadata">,
+  defaultRetry: number,
+): number => requestRetryOverride(credential) ?? Math.max(0, defaultRetry);
 
-const retryRoundStateEligible = (error: CredentialError | undefined, quotaExceeded: boolean): boolean =>
-  error === undefined ? quotaExceeded : isCredentialRetryRoundStatus(error.httpStatus ?? 0)
+const retryRoundStateEligible = (
+  error: CredentialError | undefined,
+  quotaExceeded: boolean,
+): boolean =>
+  error === undefined ? quotaExceeded : isCredentialRetryRoundStatus(error.httpStatus ?? 0);
 
 /**
  * `retryRoundAvailabilityForAuth`: a blocked credential is retry-eligible only with a known future recovery whose
@@ -78,52 +92,60 @@ export const retryRoundAvailability = (
   state: CredentialState,
   credential: Credential,
   model: string,
-  now: number
+  now: number,
 ): { readonly eligible: boolean; readonly next: number } => {
-  const block = isBlockedForModel(credential, state, model, now)
+  const block = isBlockedForModel(credential, state, model, now);
 
-  if (!block.blocked) return { eligible: true, next: 0 }
+  if (!block.blocked) return { eligible: true, next: 0 };
 
-  if (block.next === 0 || block.reason === "disabled") return { eligible: false, next: 0 }
+  if (block.next === 0 || block.reason === "disabled") return { eligible: false, next: 0 };
 
-  if (state.quota.exceeded && state.quota.reason === "credential_quota" && state.quota.nextRecoverAt > now) {
-    return { eligible: retryRoundStateEligible(state.lastError, true), next: block.next }
+  if (
+    state.quota.exceeded &&
+    state.quota.reason === "credential_quota" &&
+    state.quota.nextRecoverAt > now
+  ) {
+    return { eligible: retryRoundStateEligible(state.lastError, true), next: block.next };
   }
 
-  const key = canonicalModelKey(model)
-  const states = Object.entries(state.modelStates)
+  const key = canonicalModelKey(model);
+  const states = Object.entries(state.modelStates);
 
   if (key !== "" && states.length > 0) {
-    let matchedBlocked = false
+    let matchedBlocked = false;
 
     for (const [stateModel, modelState] of states) {
-      if (canonicalModelKey(stateModel) !== key) continue
+      if (canonicalModelKey(stateModel) !== key) continue;
 
-      if (modelState.status === "disabled") return { eligible: false, next: 0 }
+      if (modelState.status === "disabled") return { eligible: false, next: 0 };
 
       const stateBlock = availabilityBlock(
         modelState.unavailable,
         modelState.quota.exceeded,
         modelState.nextRetryAfter,
         modelState.quota.nextRecoverAt,
-        now
-      )
+        now,
+      );
 
-      if (!stateBlock.blocked) continue
-      matchedBlocked = true
+      if (!stateBlock.blocked) continue;
+      matchedBlocked = true;
 
-      if (stateBlock.next === 0 || !retryRoundStateEligible(modelState.lastError, modelState.quota.exceeded)) {
-        return { eligible: false, next: 0 }
+      if (
+        stateBlock.next === 0 ||
+        !retryRoundStateEligible(modelState.lastError, modelState.quota.exceeded)
+      ) {
+        return { eligible: false, next: 0 };
       }
     }
 
-    if (matchedBlocked) return { eligible: true, next: block.next }
+    if (matchedBlocked) return { eligible: true, next: block.next };
   }
 
-  if (!retryRoundStateEligible(state.lastError, state.quota.exceeded)) return { eligible: false, next: 0 }
+  if (!retryRoundStateEligible(state.lastError, state.quota.exceeded))
+    return { eligible: false, next: 0 };
 
-  return { eligible: true, next: block.next }
-}
+  return { eligible: true, next: block.next };
+};
 
 /**
  * Availability of a credential for the routed model. Alias pools keep cooldown state per upstream model, so the
@@ -134,119 +156,128 @@ const routeAvailability = (
   state: CredentialState,
   credential: Credential,
   route: ModelRoute | undefined,
-  now: number
+  now: number,
 ): { readonly eligible: boolean; readonly next: number } => {
-  if (route === undefined) return retryRoundAvailability(state, credential, "", now)
+  if (route === undefined) return retryRoundAvailability(state, credential, "", now);
 
-  if (route.upstreamModels.length <= 1) return retryRoundAvailability(state, credential, route.selectionModel, now)
-  let best: { readonly eligible: boolean; readonly next: number } | undefined
+  if (route.upstreamModels.length <= 1)
+    return retryRoundAvailability(state, credential, route.selectionModel, now);
+  let best: { readonly eligible: boolean; readonly next: number } | undefined;
 
   for (const upstream of route.upstreamModels) {
-    const availability = retryRoundAvailability(state, credential, upstream, now)
+    const availability = retryRoundAvailability(state, credential, upstream, now);
 
-    if (availability.eligible && availability.next === 0) return availability
+    if (availability.eligible && availability.next === 0) return availability;
 
-    if (best === undefined || (availability.eligible && (!best.eligible || availability.next < best.next))) {
-      best = availability
+    if (
+      best === undefined ||
+      (availability.eligible && (!best.eligible || availability.next < best.next))
+    ) {
+      best = availability;
     }
   }
 
-  return best ?? { eligible: false, next: 0 }
-}
+  return best ?? { eligible: false, next: 0 };
+};
 
 export interface RetryPlanInput {
-  readonly credentials: ReadonlyArray<CredentialEntry>
-  readonly query: RetryQuery
-  readonly routing: RoutingContext
+  readonly credentials: ReadonlyArray<CredentialEntry>;
+  readonly query: RetryQuery;
+  readonly routing: RoutingContext;
   /** `credential -> cooling disabled`. */
-  readonly coolingDisabled: (credential: Credential) => boolean
-  readonly now: number
+  readonly coolingDisabled: (credential: Credential) => boolean;
+  readonly now: number;
 }
 
 /** `shouldRetryAfterErrorWithAttempted` steps 3-5 (the caller has already checked the error class). */
 export const planRetry = (input: RetryPlanInput): RetryPlan => {
-  const { query, now } = input
-  const providers = new Set(query.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean))
+  const { query, now } = input;
+  const providers = new Set(
+    query.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean),
+  );
 
-  if (providers.size === 0 || query.round < 0) return { retry: false }
-  const attempted = new Set(query.attempted ?? [])
-  const pinned = query.pinnedAuthId?.trim() ?? ""
-  const maxWait = query.maxWaitMs
+  if (providers.size === 0 || query.round < 0) return { retry: false };
+  const attempted = new Set(query.attempted ?? []);
+  const pinned = query.pinnedAuthId?.trim() ?? "";
+  const maxWait = query.maxWaitMs;
 
-  let allowed = false
-  let found = false
-  let minWait = 0
+  let allowed = false;
+  let found = false;
+  let minWait = 0;
 
   for (const { credential, state } of input.credentials) {
-    if (credential.disabled || state.status === "disabled") continue
+    if (credential.disabled || state.status === "disabled") continue;
 
-    if (pinned !== "" && credential.id !== pinned) continue
+    if (pinned !== "" && credential.id !== pinned) continue;
 
-    if (query.requireAuthKind !== undefined && credential.authKind !== query.requireAuthKind) continue
+    if (query.requireAuthKind !== undefined && credential.authKind !== query.requireAuthKind)
+      continue;
 
     if (
       query.disallowFreeCodex === true &&
       credential.provider === "codex" &&
       (credential.attributes.plan_type ?? "").trim().toLowerCase() === "free"
     ) {
-      continue
+      continue;
     }
 
-    if (!providers.has(executorKey(credential))) continue
-    const route = query.model === "" ? undefined : resolveModelRoute(credential, query.model, input.routing)
+    if (!providers.has(executorKey(credential))) continue;
+    const route =
+      query.model === "" ? undefined : resolveModelRoute(credential, query.model, input.routing);
 
-    if (query.model !== "" && route === undefined) continue
+    if (query.model !== "" && route === undefined) continue;
 
-    if (query.round >= effectiveRequestRetry(credential, query.requestRetry)) continue
-    const { eligible, next } = routeAvailability(state, credential, route, now)
+    if (query.round >= effectiveRequestRetry(credential, query.requestRetry)) continue;
+    const { eligible, next } = routeAvailability(state, credential, route, now);
 
-    if (!eligible) continue
-    allowed = true
+    if (!eligible) continue;
+    allowed = true;
 
-    const wasAttempted = attempted.has(credential.id)
+    const wasAttempted = attempted.has(credential.id);
 
     if (!wasAttempted || input.coolingDisabled(credential) || query.status !== 429) {
       if (next === 0) {
         // Something is available right now.
-        return { retry: true, waitMs: 0 }
+        return { retry: true, waitMs: 0 };
       }
 
-      const wait = next - now
+      const wait = next - now;
 
-      if (wait < 0) continue
+      if (wait < 0) continue;
 
       if (!found || wait < minWait) {
-        minWait = wait
-        found = true
+        minWait = wait;
+        found = true;
       }
 
-      continue
+      continue;
     }
 
     // Already attempted in the round that just failed with 429: never an immediate retry.
-    const wait = next === 0 ? MIN_QUOTA_COOLDOWN_MS : Math.max(next - now, MIN_QUOTA_COOLDOWN_MS)
+    const wait = next === 0 ? MIN_QUOTA_COOLDOWN_MS : Math.max(next - now, MIN_QUOTA_COOLDOWN_MS);
 
     if (!found || wait < minWait) {
-      minWait = wait
-      found = true
+      minWait = wait;
+      found = true;
     }
   }
 
-  if (!allowed) return { retry: false }
+  if (!allowed) return { retry: false };
 
   if (found) {
-    if (minWait > 0 && (maxWait <= 0 || minWait > maxWait)) return { retry: false, retryAfterMs: minWait }
+    if (minWait > 0 && (maxWait <= 0 || minWait > maxWait))
+      return { retry: false, retryAfterMs: minWait };
 
-    return { retry: true, waitMs: minWait }
+    return { retry: true, waitMs: minWait };
   }
 
-  const hint = query.retryAfterMs
+  const hint = query.retryAfterMs;
 
   if (hint !== undefined) {
-    if (hint < 0 || (hint > 0 && (maxWait <= 0 || hint > maxWait))) return { retry: false }
+    if (hint < 0 || (hint > 0 && (maxWait <= 0 || hint > maxWait))) return { retry: false };
 
-    return { retry: true, waitMs: hint }
+    return { retry: true, waitMs: hint };
   }
 
-  return { retry: true, waitMs: 0 }
-}
+  return { retry: true, waitMs: 0 };
+};

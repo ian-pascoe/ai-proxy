@@ -1,286 +1,343 @@
 // Devin executor against a mocked Connect-RPC upstream. The scenarios come from the real Go executor
 // (`go run ./tools/fixturegen/devin`): the TypeScript executor must send the same request business fields and
 // produce the same Interactions events / aggregate / errors from the same response frames.
-import { Effect } from "effect"
-import { describe, expect, it } from "vitest"
-import { resetSessionTurnIndex } from "../src/executor/devin/credentials.ts"
-import { makeDevinExecutor } from "../src/executor/devin/executor.ts"
-import { devinPayloadView } from "../src/executor/devin/payload.ts"
-import { ProtoWriter, readFields } from "../src/executor/devin/protobuf.ts"
-import type { ExecutorRequest } from "../src/executor/types.ts"
-import { ExecutionError } from "../src/executor/errors.ts"
-import { type Json, tryParseJson } from "../src/json/index.ts"
-import { collectStream, credential, execute, harness, json, options, type Responder } from "./support/executor-run.ts"
-import fixtures from "./fixtures/devin.json"
+import { Effect } from "effect";
+import { describe, expect, it } from "vitest";
+import { resetSessionTurnIndex } from "../src/executor/devin/credentials.ts";
+import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
+import { devinPayloadView } from "../src/executor/devin/payload.ts";
+import { ProtoWriter, readFields } from "../src/executor/devin/protobuf.ts";
+import type { ExecutorRequest } from "../src/executor/types.ts";
+import { ExecutionError } from "../src/executor/errors.ts";
+import { type Json, tryParseJson } from "../src/json/index.ts";
+import {
+  collectStream,
+  credential,
+  execute,
+  harness,
+  json,
+  options,
+  type Responder,
+} from "./support/executor-run.ts";
+import fixtures from "./fixtures/devin.json";
 
 const fromHex = (hex: string): Uint8Array =>
-  Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16))
+  Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
 
-const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+const toHex = (bytes: Uint8Array): string =>
+  [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 const envelope = (flag: number, payload: Uint8Array): Uint8Array => {
-  const out = new Uint8Array(5 + payload.length)
-  out[0] = flag
-  new DataView(out.buffer).setUint32(1, payload.length, false)
-  out.set(payload, 5)
+  const out = new Uint8Array(5 + payload.length);
+  out[0] = flag;
+  new DataView(out.buffer).setUint32(1, payload.length, false);
+  out.set(payload, 5);
 
-  return out
-}
+  return out;
+};
 
 const framesResponse = (frames: ReadonlyArray<{ flag: number; hex: string }>): Response =>
-  new Response(new Uint8Array(frames.flatMap((frame) => [...envelope(frame.flag, fromHex(frame.hex))])), {
-    status: 200,
-    headers: { "content-type": "application/connect+proto" }
-  })
+  new Response(
+    new Uint8Array(frames.flatMap((frame) => [...envelope(frame.flag, fromHex(frame.hex))])),
+    {
+      status: 200,
+      headers: { "content-type": "application/connect+proto" },
+    },
+  );
 
 const devinCredential = (baseUrl = "https://devin.test") =>
   credential("devin", {
-    attributes: { api_key: "devin-session-token$test", base_url: baseUrl, device_seed: "seed-1" }
-  })
+    attributes: { api_key: "devin-session-token$test", base_url: baseUrl, device_seed: "seed-1" },
+  });
 
-const request = (model: string, payload: string): ExecutorRequest => ({ model, payload: json(JSON.parse(payload)) })
+const request = (model: string, payload: string): ExecutorRequest => ({
+  model,
+  payload: json(JSON.parse(payload)),
+});
 
 const interactionsOptions = (stream: boolean) =>
   options({
     stream,
     sourceFormat: "interactions",
-    metadata: { ...options().metadata, requestPath: "/v1beta/interactions" }
-  })
+    metadata: { ...options().metadata, requestPath: "/v1beta/interactions" },
+  });
 
 /** Parses `data: {...}` chunks; the random interaction ids are normalised like in the fixtures. */
 const normalizeChunks = (chunks: ReadonlyArray<string>): Json[] =>
   chunks.map((chunk) => {
-    const data = chunk.replace(/^data: /, "").trim()
+    const data = chunk.replace(/^data: /, "").trim();
 
     return data === "[DONE]"
       ? "[DONE]"
-      : (tryParseJson(data.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID")) as Json)
-  })
+      : (tryParseJson(data.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID")) as Json);
+  });
 
 const normalizeWire = (wire: Uint8Array): string => {
-  const out = new ProtoWriter()
+  const out = new ProtoWriter();
 
   for (const field of readFields(wire)) {
     if (field.num !== 3) {
-      out.raw(field.encoded)
-      continue
+      out.raw(field.encoded);
+      continue;
     }
 
-    const prompt = new ProtoWriter()
+    const prompt = new ProtoWriter();
 
     for (const inner of readFields(field.bytes)) {
-      if (inner.num === 1) prompt.string(1, "ID")
-      else prompt.raw(inner.encoded)
+      if (inner.num === 1) prompt.string(1, "ID");
+      else prompt.raw(inner.encoded);
     }
 
-    out.bytes(3, prompt.toBytes())
+    out.bytes(3, prompt.toBytes());
   }
 
-  return toHex(out.toBytes())
-}
+  return toHex(out.toBytes());
+};
 
-const executor = makeDevinExecutor()
+const executor = makeDevinExecutor();
 
 describe("Devin executor parity with the Go executor", () => {
   for (const scenario of fixtures.scenarios) {
-    const responder: Responder = () => framesResponse(scenario.frames)
-    const session = (JSON.parse(scenario.payload) as { session_id: string }).session_id
+    const responder: Responder = () => framesResponse(scenario.frames);
+    const session = (JSON.parse(scenario.payload) as { session_id: string }).session_id;
 
     it(`${scenario.name}: request bytes`, async () => {
-      resetSessionTurnIndex(session)
-      const h = await harness(devinCredential(), responder, scenario.configYaml, true)
-      const opts = interactionsOptions(true)
+      resetSessionTurnIndex(session);
+      const h = await harness(devinCredential(), responder, scenario.configYaml, true);
+      const opts = interactionsOptions(true);
 
       for (let turn = 0; turn < (scenario.turns ?? 1); turn++) {
-        await collectStream(executor, h, request(scenario.model, scenario.payload), opts)
+        await collectStream(executor, h, request(scenario.model, scenario.payload), opts);
       }
 
       // The Go run also sent a non-stream request for single-turn scenarios; compare the streamed ones.
-      expect(h.calls).toHaveLength(scenario.turns ?? 1)
+      expect(h.calls).toHaveLength(scenario.turns ?? 1);
       h.calls.forEach((call, index) => {
-        const sent = call.bytes
-        expect(sent[0]).toBe(0)
-        expect(new DataView(sent.buffer, sent.byteOffset).getUint32(1, false)).toBe(sent.length - 5)
-        expect(normalizeWire(sent.subarray(5))).toBe(normalizeWire(fromHex(scenario.requests[index]?.bodyHex ?? "")))
-        expect(call.url).toBe("https://devin.test/exa.api_server_pb.ApiServerService/GetChatMessage")
-        expect(call.headers["authorization"]).toBe("Basic devin-session-token$test-devin-session-token$test")
-        expect(call.headers["content-type"]).toBe("application/connect+proto")
-        expect(call.headers["connect-protocol-version"]).toBe("1")
-        expect(call.headers["sentry-trace"]).toMatch(/^[0-9a-f]{32}-[0-9a-f]{16}-1$/)
-      })
-    })
+        const sent = call.bytes;
+        expect(sent[0]).toBe(0);
+        expect(new DataView(sent.buffer, sent.byteOffset).getUint32(1, false)).toBe(
+          sent.length - 5,
+        );
+        expect(normalizeWire(sent.subarray(5))).toBe(
+          normalizeWire(fromHex(scenario.requests[index]?.bodyHex ?? "")),
+        );
+        expect(call.url).toBe(
+          "https://devin.test/exa.api_server_pb.ApiServerService/GetChatMessage",
+        );
+        expect(call.headers["authorization"]).toBe(
+          "Basic devin-session-token$test-devin-session-token$test",
+        );
+        expect(call.headers["content-type"]).toBe("application/connect+proto");
+        expect(call.headers["connect-protocol-version"]).toBe("1");
+        expect(call.headers["sentry-trace"]).toMatch(/^[0-9a-f]{32}-[0-9a-f]{16}-1$/);
+      });
+    });
 
     it(`${scenario.name}: streamed Interactions events`, async () => {
-      resetSessionTurnIndex(session)
-      const h = await harness(devinCredential(), responder, scenario.configYaml, true)
+      resetSessionTurnIndex(session);
+      const h = await harness(devinCredential(), responder, scenario.configYaml, true);
 
       const collected = await collectStream(
         executor,
         h,
         request(scenario.model, scenario.payload),
-        interactionsOptions(true)
-      )
+        interactionsOptions(true),
+      );
 
-      expect(normalizeChunks(collected.chunks)).toEqual(normalizeChunks(scenario.stream.chunks ?? []))
+      expect(normalizeChunks(collected.chunks)).toEqual(
+        normalizeChunks(scenario.stream.chunks ?? []),
+      );
 
       if (scenario.stream.error === undefined) {
-        expect(collected.error).toBeUndefined()
+        expect(collected.error).toBeUndefined();
       } else {
-        expect(collected.error).toBeInstanceOf(ExecutionError)
+        expect(collected.error).toBeInstanceOf(ExecutionError);
         expect(collected.error?.message).toContain(
-          scenario.stream.error.replace(/^devin upstream stream/, "devin stream")
-        )
+          scenario.stream.error.replace(/^devin upstream stream/, "devin stream"),
+        );
 
-        if (scenario.stream.status !== undefined) expect(collected.error?.status).toBe(scenario.stream.status)
+        if (scenario.stream.status !== undefined)
+          expect(collected.error?.status).toBe(scenario.stream.status);
       }
-    })
+    });
 
-    if ((scenario.turns ?? 1) > 1) continue
+    if ((scenario.turns ?? 1) > 1) continue;
     it(`${scenario.name}: non-stream aggregate`, async () => {
-      resetSessionTurnIndex(session)
-      const h = await harness(devinCredential(), responder, scenario.configYaml)
+      resetSessionTurnIndex(session);
+      const h = await harness(devinCredential(), responder, scenario.configYaml);
 
       if (scenario.nonStream.error !== undefined) {
         const result = await Effect.runPromise(
           Effect.result(
             executor
-              .execute(h.context, request(scenario.model, scenario.payload), interactionsOptions(false))
-              .pipe(Effect.provide(h.layers))
-          )
-        )
+              .execute(
+                h.context,
+                request(scenario.model, scenario.payload),
+                interactionsOptions(false),
+              )
+              .pipe(Effect.provide(h.layers)),
+          ),
+        );
 
-        expect(result._tag).toBe("Failure")
+        expect(result._tag).toBe("Failure");
 
         if (result._tag === "Failure") {
-          expect(result.failure.message).toContain(scenario.nonStream.error)
+          expect(result.failure.message).toContain(scenario.nonStream.error);
 
-          if (scenario.nonStream.status !== undefined) expect(result.failure.status).toBe(scenario.nonStream.status)
+          if (scenario.nonStream.status !== undefined)
+            expect(result.failure.status).toBe(scenario.nonStream.status);
         }
 
-        return
+        return;
       }
 
-      const response = await execute(executor, h, request(scenario.model, scenario.payload), interactionsOptions(false))
-      expect(tryParseJson(response.payload.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID"))).toEqual(
-        tryParseJson(scenario.nonStream.payload ?? "")
-      )
-    })
+      const response = await execute(
+        executor,
+        h,
+        request(scenario.model, scenario.payload),
+        interactionsOptions(false),
+      );
+      expect(
+        tryParseJson(response.payload.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID")),
+      ).toEqual(tryParseJson(scenario.nonStream.payload ?? ""));
+    });
   }
-})
+});
 
 describe("Devin executor behaviour", () => {
-  const hi = '{"session_id":"55555555-5555-4555-8555-555555555555","input":[{"type":"user_input","content":"hi"}]}'
+  const hi =
+    '{"session_id":"55555555-5555-4555-8555-555555555555","input":[{"type":"user_input","content":"hi"}]}';
 
   it("applies payload rules to the protobuf business fields as the last mutation", async () => {
-    const yaml = `payload:\n  override:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        system_prompt: OVERRIDDEN\n        completion_config.temperature: 0.25\n  default:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        completion_config.top_k: 7\n`
-    const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]), yaml)
-    await execute(executor, h, request("swe-2", hi), interactionsOptions(false))
+    const yaml = `payload:\n  override:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        system_prompt: OVERRIDDEN\n        completion_config.temperature: 0.25\n  default:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        completion_config.top_k: 7\n`;
+    const h = await harness(
+      devinCredential(),
+      () => framesResponse([{ flag: 2, hex: "7b7d" }]),
+      yaml,
+    );
+    await execute(executor, h, request("swe-2", hi), interactionsOptions(false));
 
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
-      system_prompt: string
-      completion_config: { temperature: number; top_k: number; max_tokens: number }
-      model: string
-    }
+      system_prompt: string;
+      completion_config: { temperature: number; top_k: number; max_tokens: number };
+      model: string;
+    };
 
-    expect(view.system_prompt).toBe("OVERRIDDEN")
-    expect(view.completion_config.temperature).toBe(0.25)
-    expect(view.completion_config.top_k).toBe(7)
-    expect(view.model).toBe("swe-2-high")
-  })
+    expect(view.system_prompt).toBe("OVERRIDDEN");
+    expect(view.completion_config.temperature).toBe(0.25);
+    expect(view.completion_config.top_k).toBe(7);
+    expect(view.model).toBe("swe-2-high");
+  });
 
   it("clamps max tokens to the catalog's completion limit", async () => {
-    const payload = '{"generation_config":{"max_output_tokens":9999999},"input":[{"type":"user_input","content":"hi"}]}'
-    const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]))
-    await execute(executor, h, request("claude-opus-4-6", payload), interactionsOptions(false))
+    const payload =
+      '{"generation_config":{"max_output_tokens":9999999},"input":[{"type":"user_input","content":"hi"}]}';
+    const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]));
+    await execute(executor, h, request("claude-opus-4-6", payload), interactionsOptions(false));
 
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
-      completion_config: { max_tokens: number }
-    }
+      completion_config: { max_tokens: number };
+    };
 
-    expect(view.completion_config.max_tokens).toBeGreaterThan(0)
-    expect(view.completion_config.max_tokens).toBeLessThan(9_999_999)
-    const unclamped = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]))
+    expect(view.completion_config.max_tokens).toBeGreaterThan(0);
+    expect(view.completion_config.max_tokens).toBeLessThan(9_999_999);
+    const unclamped = await harness(devinCredential(), () =>
+      framesResponse([{ flag: 2, hex: "7b7d" }]),
+    );
     await execute(
       makeDevinExecutor(),
       unclamped,
       {
         ...request("claude-opus-4-6", payload),
-        modelLookup: () => ({ id: "claude-opus-4-6", maxCompletionTokens: 1234 })
+        modelLookup: () => ({ id: "claude-opus-4-6", maxCompletionTokens: 1234 }),
       },
-      interactionsOptions(false)
-    )
+      interactionsOptions(false),
+    );
 
-    const registryView = devinPayloadView((unclamped.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
-      completion_config: { max_tokens: number }
-    }
+    const registryView = devinPayloadView(
+      (unclamped.calls[0] as { bytes: Uint8Array }).bytes.subarray(5),
+    ) as {
+      completion_config: { max_tokens: number };
+    };
 
-    expect(registryView.completion_config.max_tokens).toBe(1234)
-  })
+    expect(registryView.completion_config.max_tokens).toBe(1234);
+  });
 
   it("returns a 429 with Retry-After seconds for upstream HTTP errors", async () => {
     const h = await harness(
       devinCredential(),
-      () => new Response("slow down", { status: 429, headers: { "retry-after": "7" } })
-    )
+      () => new Response("slow down", { status: 429, headers: { "retry-after": "7" } }),
+    );
 
     const error = await Effect.runPromise(
       Effect.flip(
-        executor.execute(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
-      )
-    )
+        executor
+          .execute(h.context, request("swe-2", hi), interactionsOptions(false))
+          .pipe(Effect.provide(h.layers)),
+      ),
+    );
 
-    expect(error.status).toBe(429)
-    expect(error.message).toBe("slow down")
-    expect(error.retryAfterMs).toBe(7000)
-    expect(h.usage.failed).toBe(true)
-  })
+    expect(error.status).toBe(429);
+    expect(error.message).toBe("slow down");
+    expect(error.retryAfterMs).toBe(7000);
+    expect(h.usage.failed).toBe(true);
+  });
 
   it("rejects credentials without a session token", async () => {
-    const h = await harness(credential("devin"), () => new Response(""))
+    const h = await harness(credential("devin"), () => new Response(""));
 
     const error = await Effect.runPromise(
       Effect.flip(
-        executor.execute(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
-      )
-    )
+        executor
+          .execute(h.context, request("swe-2", hi), interactionsOptions(false))
+          .pipe(Effect.provide(h.layers)),
+      ),
+    );
 
-    expect(error.status).toBe(401)
-    expect(h.calls).toHaveLength(0)
-  })
+    expect(error.status).toBe(401);
+    expect(h.calls).toHaveLength(0);
+  });
 
   it("refuses a user turn that only carried media Devin cannot send", async () => {
-    const payload = '{"input":[{"type":"user_input","content":[{"type":"image","uri":"https://example.test/a.png"}]}]}'
-    const h = await harness(devinCredential(), () => new Response(""))
+    const payload =
+      '{"input":[{"type":"user_input","content":[{"type":"image","uri":"https://example.test/a.png"}]}]}';
+    const h = await harness(devinCredential(), () => new Response(""));
 
     const error = await Effect.runPromise(
       Effect.flip(
         executor
           .execute(h.context, request("swe-2", payload), interactionsOptions(false))
-          .pipe(Effect.provide(h.layers))
-      )
-    )
+          .pipe(Effect.provide(h.layers)),
+      ),
+    );
 
-    expect(error.status).toBe(400)
-    expect(error.requestScoped).toBe(true)
-    expect(error.message).toContain("unsupported content part")
-  })
+    expect(error.status).toBe(400);
+    expect(error.requestScoped).toBe(true);
+    expect(error.message).toContain("unsupported content part");
+  });
 
   it("estimates token counts from the payload length", async () => {
-    const h = await harness(devinCredential(), () => new Response(""))
+    const h = await harness(devinCredential(), () => new Response(""));
 
     const response = await Effect.runPromise(
-      executor.countTokens(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
-    )
+      executor
+        .countTokens(h.context, request("swe-2", hi), interactionsOptions(false))
+        .pipe(Effect.provide(h.layers)),
+    );
 
-    const count = Math.floor(JSON.stringify(JSON.parse(hi)).length / 4)
-    expect(JSON.parse(response.payload)).toEqual({ total_tokens: count, input_tokens: count })
-  })
+    const count = Math.floor(JSON.stringify(JSON.parse(hi)).length / 4);
+    expect(JSON.parse(response.payload)).toEqual({ total_tokens: count, input_tokens: count });
+  });
 
   it("derives a stable session UUID from non-UUID session ids and reuses it as cascade id", async () => {
-    const payload = '{"session_id":"conv:abc","input":[{"type":"user_input","content":"hi"}]}'
-    const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]))
-    await execute(executor, h, request("swe-2", payload), interactionsOptions(false))
-    const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as { cascade_id: string }
-    expect(view.cascade_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-  })
-})
+    const payload = '{"session_id":"conv:abc","input":[{"type":"user_input","content":"hi"}]}';
+    const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]));
+    await execute(executor, h, request("swe-2", payload), interactionsOptions(false));
+    const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
+      cascade_id: string;
+    };
+    expect(view.cascade_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+});

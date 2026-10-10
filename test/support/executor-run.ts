@@ -1,54 +1,57 @@
 // Helpers to run provider executors directly against a mocked upstream HttpClient.
-import { Effect, Layer, Stream } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/http"
-import { parseConfigYaml } from "../../src/config/codec.ts"
-import type { Config } from "../../src/config/schema.ts"
-import { ExecutionError } from "../../src/executor/errors.ts"
-import type { CredentialSnapshot } from "../../src/executor/picker.ts"
-import { Thinking } from "../../src/executor/thinking.ts"
+import { Effect, Layer, Stream } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { parseConfigYaml } from "../../src/config/codec.ts";
+import type { Config } from "../../src/config/schema.ts";
+import { ExecutionError } from "../../src/executor/errors.ts";
+import type { CredentialSnapshot } from "../../src/executor/picker.ts";
+import { Thinking } from "../../src/executor/thinking.ts";
 import type {
   ExecutionContext,
   ExecutorOptions,
   ExecutorRequest,
   ExecutorResponse,
   ProviderExecutor,
-  StreamResult
-} from "../../src/executor/types.ts"
-import type { Json } from "../../src/json/index.ts"
-import { UsageReporter } from "../../src/usage/reporter.ts"
+  StreamResult,
+} from "../../src/executor/types.ts";
+import type { Json } from "../../src/json/index.ts";
+import { UsageReporter } from "../../src/usage/reporter.ts";
 
 export interface RecordedCall {
-  readonly url: string
-  readonly method: string
-  readonly headers: Readonly<Record<string, string>>
-  readonly bytes: Uint8Array
-  readonly text: string
+  readonly url: string;
+  readonly method: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly bytes: Uint8Array;
+  readonly text: string;
 }
 
-export type Responder = (call: RecordedCall) => Response | Promise<Response>
+export type Responder = (call: RecordedCall) => Response | Promise<Response>;
 
 /** HttpClient that records every request (raw body bytes included) and answers with `respond`. */
-export const recordingClient = (calls: RecordedCall[], respond: Responder): Layer.Layer<HttpClient.HttpClient> =>
+export const recordingClient = (
+  calls: RecordedCall[],
+  respond: Responder,
+): Layer.Layer<HttpClient.HttpClient> =>
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request, url) =>
       Effect.promise(async () => {
-        const bytes = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array(0)
+        const bytes = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array(0);
 
         const call: RecordedCall = {
           url: url.toString(),
           method: request.method,
           headers: { ...request.headers },
           bytes,
-          text: new TextDecoder().decode(bytes)
-        }
+          text: new TextDecoder().decode(bytes),
+        };
 
-        calls.push(call)
+        calls.push(call);
 
-        return HttpClientResponse.fromWeb(request, await respond(call))
-      })
-    )
-  )
+        return HttpClientResponse.fromWeb(request, await respond(call));
+      }),
+    ),
+  );
 
 export const newUsage = (provider: string, stream = false): UsageReporter =>
   new UsageReporter({
@@ -64,10 +67,11 @@ export const newUsage = (provider: string, stream = false): UsageReporter =>
     source: "s",
     stream,
     serviceTier: "auto",
-    requestedAt: 0
-  })
+    requestedAt: 0,
+  });
 
-export const loadConfig = (yaml = "requests: {}"): Promise<Config> => Effect.runPromise(parseConfigYaml(yaml))
+export const loadConfig = (yaml = "requests: {}"): Promise<Config> =>
+  Effect.runPromise(parseConfigYaml(yaml));
 
 export const options = (overrides: Partial<ExecutorOptions> = {}): ExecutorOptions => ({
   stream: false,
@@ -81,62 +85,62 @@ export const options = (overrides: Partial<ExecutorOptions> = {}): ExecutorOptio
     requestedModel: "",
     serviceTier: "auto",
     generate: true,
-    callerScope: "scope"
+    callerScope: "scope",
   },
-  ...overrides
-})
+  ...overrides,
+});
 
 export interface Harness {
-  readonly calls: RecordedCall[]
-  readonly usage: UsageReporter
-  readonly context: ExecutionContext
-  readonly layers: Layer.Layer<HttpClient.HttpClient | Thinking>
+  readonly calls: RecordedCall[];
+  readonly usage: UsageReporter;
+  readonly context: ExecutionContext;
+  readonly layers: Layer.Layer<HttpClient.HttpClient | Thinking>;
 }
 
 export const harness = async (
   credential: CredentialSnapshot,
   respond: Responder,
   yaml?: string,
-  stream = false
+  stream = false,
 ): Promise<Harness> => {
-  const calls: RecordedCall[] = []
-  const usage = newUsage(credential.provider, stream)
-  const config = await loadConfig(yaml)
+  const calls: RecordedCall[] = [];
+  const usage = newUsage(credential.provider, stream);
+  const config = await loadConfig(yaml);
 
   return {
     calls,
     usage,
     context: { credential, config, usage },
-    layers: Layer.mergeAll(recordingClient(calls, respond), Thinking.live)
-  }
-}
+    layers: Layer.mergeAll(recordingClient(calls, respond), Thinking.live),
+  };
+};
 
 export const run = <A, E, R>(effect: Effect.Effect<A, E, R>, layers: Layer.Layer<R>): Promise<A> =>
-  Effect.runPromise(effect.pipe(Effect.provide(layers)) as Effect.Effect<A>)
+  Effect.runPromise(effect.pipe(Effect.provide(layers)) as Effect.Effect<A>);
 
 export const runFail = async <A>(
   effect: Effect.Effect<A, ExecutionError, HttpClient.HttpClient | Thinking>,
-  layers: Layer.Layer<HttpClient.HttpClient | Thinking>
+  layers: Layer.Layer<HttpClient.HttpClient | Thinking>,
 ): Promise<ExecutionError> => {
-  const result = await Effect.runPromise(Effect.result(effect.pipe(Effect.provide(layers))))
+  const result = await Effect.runPromise(Effect.result(effect.pipe(Effect.provide(layers))));
 
-  if (result._tag === "Success") throw new Error("expected a failure")
+  if (result._tag === "Success") throw new Error("expected a failure");
 
-  return result.failure
-}
+  return result.failure;
+};
 
 export const execute = (
   executor: ProviderExecutor,
   h: Harness,
   request: ExecutorRequest,
-  opts: ExecutorOptions
+  opts: ExecutorOptions,
 ): Promise<ExecutorResponse> =>
-  Effect.runPromise(executor.execute(h.context, request, opts).pipe(Effect.provide(h.layers)))
+  Effect.runPromise(executor.execute(h.context, request, opts).pipe(Effect.provide(h.layers)));
 
 export interface Collected {
-  readonly chunks: string[]
-  readonly error?: ExecutionError
-  readonly result?: StreamResult
+  readonly chunks: string[];
+  readonly error?: ExecutionError;
+  readonly result?: StreamResult;
 }
 
 /** Starts a stream and drains it; a failing start (bootstrap) is reported as `error` with no chunks. */
@@ -144,32 +148,39 @@ export const collectStream = async (
   executor: ProviderExecutor,
   h: Harness,
   request: ExecutorRequest,
-  opts: ExecutorOptions
+  opts: ExecutorOptions,
 ): Promise<Collected> => {
   const started = await Effect.runPromise(
-    Effect.result(executor.executeStream(h.context, request, opts).pipe(Effect.provide(h.layers)))
-  )
+    Effect.result(executor.executeStream(h.context, request, opts).pipe(Effect.provide(h.layers))),
+  );
 
-  if (started._tag === "Failure") return { chunks: [], error: started.failure }
-  const chunks: string[] = []
+  if (started._tag === "Failure") return { chunks: [], error: started.failure };
+  const chunks: string[] = [];
 
   const drained = await Effect.runPromise(
-    Effect.result(Stream.runForEach(started.success.chunks, (chunk) => Effect.sync(() => void chunks.push(chunk))))
-  )
+    Effect.result(
+      Stream.runForEach(started.success.chunks, (chunk) =>
+        Effect.sync(() => void chunks.push(chunk)),
+      ),
+    ),
+  );
 
   return drained._tag === "Failure"
     ? { chunks, error: drained.failure, result: started.success }
-    : { chunks, result: started.success }
-}
+    : { chunks, result: started.success };
+};
 
-export const credential = (provider: string, overrides: Partial<CredentialSnapshot> = {}): CredentialSnapshot => ({
+export const credential = (
+  provider: string,
+  overrides: Partial<CredentialSnapshot> = {},
+): CredentialSnapshot => ({
   id: `${provider}-1`,
   provider,
   kind: "oauth",
   label: "test",
   attributes: {},
   metadata: {},
-  ...overrides
-})
+  ...overrides,
+});
 
-export const json = (value: unknown): Json => value as Json
+export const json = (value: unknown): Json => value as Json;

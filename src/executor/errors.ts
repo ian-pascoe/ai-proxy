@@ -7,7 +7,7 @@
  * (`StatusCode()`, `RetryAfter()`, `IsCredentialScoped()`, `IsRequestScoped()`, `DirectResponse()`, `Headers()`)
  * become plain fields.
  */
-import { Schema } from "effect"
+import { Schema } from "effect";
 
 export class ExecutionError extends Schema.TaggedError<ExecutionError>()("ExecutionError", {
   /** HTTP status for the client (Go `StatusCode()`; 500 when unknown, 499 when the client went away). */
@@ -33,41 +33,42 @@ export class ExecutionError extends Schema.TaggedError<ExecutionError>()("Execut
   headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   /** Safe headers for the client regardless of passthrough (e.g. `Retry-After` of cooldown errors). */
   safeHeaders: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  cause: Schema.optional(Schema.Defect())
+  cause: Schema.optional(Schema.Defect()),
 }) {}
 
 /** Convenience constructor for plain status errors (Go `statusErr{code, msg}`). */
-export const statusError = (status: number, message: string): ExecutionError => new ExecutionError({ status, message })
+export const statusError = (status: number, message: string): ExecutionError =>
+  new ExecutionError({ status, message });
 
 /** A request-scoped 501 for an operation the provider does not support (no cooldown, no failover). */
 export const notImplemented = (message: string): ExecutionError =>
-  new ExecutionError({ status: 501, message, requestScoped: true })
+  new ExecutionError({ status: 501, message, requestScoped: true });
 
 /** Plain record of response headers (lower-case names). */
 export const headersRecord = (headers: Headers): Record<string, string> => {
-  const out: Record<string, string> = {}
+  const out: Record<string, string> = {};
   headers.forEach((value, name) => {
-    out[name] = value
-  })
+    out[name] = value;
+  });
 
-  return out
-}
+  return out;
+};
 
 /** Copy of `error` with some fields replaced (an `Error` subclass does not survive object spread). */
 export const withErrorFields = (
   error: ExecutionError,
   fields: Partial<{
-    status: number
-    message: string
-    code: string
-    retryAfterMs: number
-    credentialScoped: boolean
-    requestScoped: boolean
-    terminalAuth: boolean
-    direct: boolean
-    headers: Record<string, string>
-    safeHeaders: Record<string, string>
-  }>
+    status: number;
+    message: string;
+    code: string;
+    retryAfterMs: number;
+    credentialScoped: boolean;
+    requestScoped: boolean;
+    terminalAuth: boolean;
+    direct: boolean;
+    headers: Record<string, string>;
+    safeHeaders: Record<string, string>;
+  }>,
 ): ExecutionError =>
   new ExecutionError({
     status: error.status,
@@ -81,5 +82,5 @@ export const withErrorFields = (
     ...(error.headers === undefined ? {} : { headers: error.headers }),
     ...(error.safeHeaders === undefined ? {} : { safeHeaders: error.safeHeaders }),
     ...(error.cause === undefined ? {} : { cause: error.cause }),
-    ...fields
-  })
+    ...fields,
+  });

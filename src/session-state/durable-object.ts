@@ -6,22 +6,22 @@
  * {@link SessionState.run} (see `client.ts`). Expired entries read as absent immediately; an alarm deletes them
  * (and the whole instance storage once nothing is left) so abandoned sessions cost nothing.
  */
-import { DurableObject } from "cloudflare:workers"
-import { StateEngine } from "./engine.ts"
-import type { StateOp, StateResult } from "./protocol.ts"
-import { SqliteStateTable } from "./sqlite-table.ts"
+import { DurableObject } from "cloudflare:workers";
+import { StateEngine } from "./engine.ts";
+import type { StateOp, StateResult } from "./protocol.ts";
+import { SqliteStateTable } from "./sqlite-table.ts";
 
 export class SessionState extends DurableObject<Env> {
-  #engine: StateEngine
-  #armedAt: number | undefined
+  #engine: StateEngine;
+  #armedAt: number | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env)
-    this.#engine = this.#newEngine()
+    super(ctx, env);
+    this.#engine = this.#newEngine();
   }
 
   #newEngine(): StateEngine {
-    return new StateEngine(new SqliteStateTable(this.ctx.storage.sql))
+    return new StateEngine(new SqliteStateTable(this.ctx.storage.sql));
   }
 
   /**
@@ -29,37 +29,38 @@ export class SessionState extends DurableObject<Env> {
    * results are positional.
    */
   async run(ops: StateOp[], now: number = Date.now()): Promise<StateResult[]> {
-    const results = this.ctx.storage.transactionSync(() => this.#engine.run(ops, now))
+    const results = this.ctx.storage.transactionSync(() => this.#engine.run(ops, now));
 
-    if (ops.some((op) => op.op === "put" || op.op === "incr")) await this.#arm(this.#engine.nextExpiry())
+    if (ops.some((op) => op.op === "put" || op.op === "incr"))
+      await this.#arm(this.#engine.nextExpiry());
 
-    return results
+    return results;
   }
 
   /** Drops expired entries and re-arms the alarm; an empty instance deletes its storage. */
   async sweep(now: number = Date.now()): Promise<void> {
-    const next = this.ctx.storage.transactionSync(() => this.#engine.sweep(now))
-    this.#armedAt = undefined
+    const next = this.ctx.storage.transactionSync(() => this.#engine.sweep(now));
+    this.#armedAt = undefined;
 
     if (next === undefined) {
-      await this.ctx.storage.deleteAlarm()
-      await this.ctx.storage.deleteAll()
+      await this.ctx.storage.deleteAlarm();
+      await this.ctx.storage.deleteAll();
       // `deleteAll` drops the SQLite tables too.
-      this.#engine = this.#newEngine()
+      this.#engine = this.#newEngine();
 
-      return
+      return;
     }
 
-    await this.#arm(next)
+    await this.#arm(next);
   }
 
   override async alarm(): Promise<void> {
-    await this.sweep(Date.now())
+    await this.sweep(Date.now());
   }
 
   async #arm(next: number | undefined): Promise<void> {
-    if (next === undefined || next === this.#armedAt) return
-    this.#armedAt = next
-    await this.ctx.storage.setAlarm(next)
+    if (next === undefined || next === this.#armedAt) return;
+    this.#armedAt = next;
+    await this.ctx.storage.setAlarm(next);
   }
 }

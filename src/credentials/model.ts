@@ -10,23 +10,23 @@
  *
  * All timestamps are epoch milliseconds; `0` means "unset" (Go zero time).
  */
-import { Schema } from "effect"
-import { ModelEntry, OAuthModelAlias } from "../config/schema.ts"
-import { RecentBucket } from "./cooldown/recent-requests.ts"
+import { Schema } from "effect";
+import { ModelEntry, OAuthModelAlias } from "../config/schema.ts";
+import { RecentBucket } from "./cooldown/recent-requests.ts";
 
-const optional = Schema.optionalKey
+const optional = Schema.optionalKey;
 
-const StringMap = Schema.Record(Schema.String, Schema.String)
+const StringMap = Schema.Record(Schema.String, Schema.String);
 
 /** `Auth.AuthKind()` (classification.go). Credentials without any recognisable kind (key-less compat) omit it. */
-export const AuthKind = Schema.Literals(["oauth", "apikey"])
+export const AuthKind = Schema.Literals(["oauth", "apikey"]);
 
-export type AuthKind = typeof AuthKind.Type
+export type AuthKind = typeof AuthKind.Type;
 
 /** Where a credential came from: an imported auth JSON file or an `api-keys` config entry. */
-export const CredentialSource = Schema.Literals(["file", "config"])
+export const CredentialSource = Schema.Literals(["file", "config"]);
 
-export type CredentialSource = typeof CredentialSource.Type
+export type CredentialSource = typeof CredentialSource.Type;
 
 export const Credential = Schema.Struct({
   /** File credentials: the auth file name (relative path). Config credentials: `<kind>:<12 hex>[-n]` (§4.3). */
@@ -60,23 +60,30 @@ export const Credential = Schema.Struct({
   /** Bumped whenever token/api-key material changes; stale results are ignored by `report`. */
   credentialVersion: Schema.Int,
   createdAt: Schema.Number,
-  updatedAt: Schema.Number
-})
+  updatedAt: Schema.Number,
+});
 
-export type Credential = typeof Credential.Type
+export type Credential = typeof Credential.Type;
 
 export const CredentialError = Schema.Struct({
   code: optional(Schema.String),
   message: Schema.String,
   retryable: Schema.Boolean,
-  httpStatus: optional(Schema.Int)
-})
+  httpStatus: optional(Schema.Int),
+});
 
-export type CredentialError = typeof CredentialError.Type
+export type CredentialError = typeof CredentialError.Type;
 
-export const CredentialStatus = Schema.Literals(["unknown", "active", "pending", "refreshing", "error", "disabled"])
+export const CredentialStatus = Schema.Literals([
+  "unknown",
+  "active",
+  "pending",
+  "refreshing",
+  "error",
+  "disabled",
+]);
 
-export type CredentialStatus = typeof CredentialStatus.Type
+export type CredentialStatus = typeof CredentialStatus.Type;
 
 /** Go `QuotaState`. `reason`: `quota`, `credential_quota` or `cloudflare challenge`. */
 export const QuotaState = Schema.Struct({
@@ -85,10 +92,10 @@ export const QuotaState = Schema.Struct({
   nextRecoverAt: Schema.Number,
   backoffLevel: Schema.Int,
   observedAt: optional(Schema.Number),
-  signals: optional(StringMap)
-})
+  signals: optional(StringMap),
+});
 
-export type QuotaState = typeof QuotaState.Type
+export type QuotaState = typeof QuotaState.Type;
 
 /** Go `ModelState`: per-(credential, model) cooldown state. */
 export const ModelState = Schema.Struct({
@@ -98,10 +105,10 @@ export const ModelState = Schema.Struct({
   nextRetryAfter: Schema.Number,
   lastError: optional(CredentialError),
   quota: QuotaState,
-  updatedAt: Schema.Number
-})
+  updatedAt: Schema.Number,
+});
 
-export type ModelState = typeof ModelState.Type
+export type ModelState = typeof ModelState.Type;
 
 /** Runtime state of one credential (Go `Auth` runtime fields). */
 export const CredentialState = Schema.Struct({
@@ -120,12 +127,16 @@ export const CredentialState = Schema.Struct({
   failed: Schema.Int,
   /** Recent-requests ring (20 x 10 min), see `cooldown/recent-requests.ts`. */
   recentRequests: optional(Schema.Array(RecentBucket)),
-  updatedAt: Schema.Number
-})
+  updatedAt: Schema.Number,
+});
 
-export type CredentialState = typeof CredentialState.Type
+export type CredentialState = typeof CredentialState.Type;
 
-export const emptyQuota = (): QuotaState => ({ exceeded: false, nextRecoverAt: 0, backoffLevel: 0 })
+export const emptyQuota = (): QuotaState => ({
+  exceeded: false,
+  nextRecoverAt: 0,
+  backoffLevel: 0,
+});
 
 export const emptyState = (): CredentialState => ({
   status: "active",
@@ -137,34 +148,38 @@ export const emptyState = (): CredentialState => ({
   refreshFailures: 0,
   success: 0,
   failed: 0,
-  updatedAt: 0
-})
+  updatedAt: 0,
+});
 
 /**
  * Executor key of a credential (`executorKeyFromAuth`, conductor_execution.go:1794): the provider key used to look up
  * the executor and matched against `PickRequest.providers`.
  */
-export const executorKey = (credential: Pick<Credential, "provider" | "label" | "attributes">): string => {
-  const compatName = credential.attributes.compat_name?.trim() ?? ""
+export const executorKey = (
+  credential: Pick<Credential, "provider" | "label" | "attributes">,
+): string => {
+  const compatName = credential.attributes.compat_name?.trim() ?? "";
 
-  if (compatName !== "") return openAICompatibleProviderKey(credential.attributes.provider_key?.trim() || compatName)
-  const provider = credential.provider.trim().toLowerCase()
+  if (compatName !== "")
+    return openAICompatibleProviderKey(credential.attributes.provider_key?.trim() || compatName);
+  const provider = credential.provider.trim().toLowerCase();
 
-  if (provider === "openai-compatibility") return openAICompatibleProviderKey(credential.label.trim())
+  if (provider === "openai-compatibility")
+    return openAICompatibleProviderKey(credential.label.trim());
 
-  if (provider === "kimi.com") return "kimi"
+  if (provider === "kimi.com") return "kimi";
 
-  if (provider === "kimi.ai") return "kimi-ai"
+  if (provider === "kimi.ai") return "kimi-ai";
 
-  return provider
-}
+  return provider;
+};
 
 /** `util.OpenAICompatibleProviderKey` (internal/util/provider.go). */
 export const openAICompatibleProviderKey = (name: string): string => {
-  const key = name.trim().toLowerCase()
+  const key = name.trim().toLowerCase();
 
   if (key === "" || key === "openai-compatibility" || key.startsWith("openai-compatible-"))
-    return key || "openai-compatibility"
+    return key || "openai-compatibility";
 
-  return `openai-compatible-${key}`
-}
+  return `openai-compatible-${key}`;
+};

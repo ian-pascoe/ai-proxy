@@ -12,15 +12,15 @@ const SENSITIVE_HEADERS = new Set([
   "x-goog-api-key",
   "cf-access-jwt-assertion",
   "cf-access-client-id",
-  "cf-access-client-secret"
-])
+  "cf-access-client-secret",
+]);
 
 /** Returns the headers as a plain record with sensitive values replaced by `[redacted]`. */
 export const redactHeaders = (headers: Headers): Record<string, string> => {
-  const out: Record<string, string> = {}
+  const out: Record<string, string> = {};
   headers.forEach((value, name) => {
-    out[name] = SENSITIVE_HEADERS.has(name.toLowerCase()) ? "[redacted]" : value
-  })
+    out[name] = SENSITIVE_HEADERS.has(name.toLowerCase()) ? "[redacted]" : value;
+  });
 
-  return out
-}
+  return out;
+};

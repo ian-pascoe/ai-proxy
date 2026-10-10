@@ -5,16 +5,16 @@
  * tool integer normalisation for Codex clients when the target executor is not Codex) and payload_finalizer.go.
  * Executors call {@link finalizePayload} as the very last business-payload mutation (AGENTS.md).
  */
-import { applyPayloadRules, type PayloadRequest } from "../../config/payload/index.ts"
-import type { Config } from "../../config/schema.ts"
-import type { Json } from "../../json/index.ts"
-import { isCodexUserAgent, normalizeCodexToolIntegerTypes } from "./codex-tool-schema.ts"
+import { applyPayloadRules, type PayloadRequest } from "../../config/payload/index.ts";
+import type { Config } from "../../config/schema.ts";
+import type { Json } from "../../json/index.ts";
+import { isCodexUserAgent, normalizeCodexToolIntegerTypes } from "./codex-tool-schema.ts";
 
 const isCodexTargetExecutor = (executor: string): boolean => {
-  const name = executor.trim().toLowerCase()
+  const name = executor.trim().toLowerCase();
 
-  return name === "codex" || name === "codex-websockets" || name === "codex_websockets"
-}
+  return name === "codex" || name === "codex-websockets" || name === "codex_websockets";
+};
 
 /**
  * Applies the user payload rules to the final business payload (mutated in place). For requests from Codex clients
@@ -24,11 +24,11 @@ export const finalizePayload = (
   config: Config,
   targetExecutor: string,
   request: PayloadRequest,
-  payload: Json
+  payload: Json,
 ): Json => {
   if (isCodexUserAgent(request.headers) && !isCodexTargetExecutor(targetExecutor)) {
-    normalizeCodexToolIntegerTypes(payload, request.headers)
+    normalizeCodexToolIntegerTypes(payload, request.headers);
   }
 
-  return applyPayloadRules(config, request, payload).payload
-}
+  return applyPayloadRules(config, request, payload).payload;
+};

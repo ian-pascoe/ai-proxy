@@ -7,93 +7,102 @@
  * (handleStreamingResponse: first-chunk peek, SSE headers), sdk/api/handlers/stream_forwarder.go (ForwardStream),
  * sdk/api/handlers/handlers.go (StartNonStreamingKeepAlive).
  */
-import { Duration, Effect, Fiber, Pull, type Scope, Stream } from "effect"
-import { HttpServerResponse } from "effect/http"
-import type { ExecutionError } from "../executor/errors.ts"
-import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts"
-import { filterUpstreamHeaders, isCPAReservedResponseHeader, mergeUpstreamHeaders } from "../http/headers.ts"
-import { isValidJson } from "../http/json-text.ts"
-import { statusText } from "../http/status.ts"
-import type { StreamOutput } from "./execute.ts"
-import type { StreamFramer } from "./framing.ts"
+import { Duration, Effect, Fiber, Pull, type Scope, Stream } from "effect";
+import { HttpServerResponse } from "effect/http";
+import type { ExecutionError } from "../executor/errors.ts";
+import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts";
+import {
+  filterUpstreamHeaders,
+  isCPAReservedResponseHeader,
+  mergeUpstreamHeaders,
+} from "../http/headers.ts";
+import { isValidJson } from "../http/json-text.ts";
+import { statusText } from "../http/status.ts";
+import type { StreamOutput } from "./execute.ts";
+import type { StreamFramer } from "./framing.ts";
 
 /** Error body family of an entry protocol. */
-export type ErrorProtocol = "openai" | "claude"
+export type ErrorProtocol = "openai" | "claude";
 
 export interface ErrorResponseOptions {
   /** `requests.passthrough-headers`: expose upstream error headers. */
-  readonly passthroughHeaders: boolean
+  readonly passthroughHeaders: boolean;
 }
 
 /** `WriteErrorResponse` (OpenAI/Gemini/Interactions/Responses) and the Claude variant. */
 export const errorResponse = (
   protocol: ErrorProtocol,
   error: ExecutionError,
-  options: ErrorResponseOptions
+  options: ErrorResponseOptions,
 ): HttpServerResponse.HttpServerResponse => {
-  const status = error.status > 0 ? error.status : 500
-  const headers: Record<string, string> = {}
+  const status = error.status > 0 ? error.status : 500;
+  const headers: Record<string, string> = {};
 
   if (error.direct === true) {
     if (error.headers !== undefined) {
       filterUpstreamHeaders(new Headers(error.headers)).forEach((value, name) => {
-        if (!isCPAReservedResponseHeader(name)) headers[name] = value
-      })
+        if (!isCPAReservedResponseHeader(name)) headers[name] = value;
+      });
     }
 
-    headers["content-type"] ??= isValidJson(error.message) ? "application/json" : "text/plain; charset=utf-8"
+    headers["content-type"] ??= isValidJson(error.message)
+      ? "application/json"
+      : "text/plain; charset=utf-8";
 
-    return HttpServerResponse.text(error.message, { status, headers })
+    return HttpServerResponse.text(error.message, { status, headers });
   }
 
-  const retryAfter = error.safeHeaders?.["retry-after"] ?? error.safeHeaders?.["Retry-After"]
+  const retryAfter = error.safeHeaders?.["retry-after"] ?? error.safeHeaders?.["Retry-After"];
 
-  if (retryAfter !== undefined) headers["retry-after"] = retryAfter
+  if (retryAfter !== undefined) headers["retry-after"] = retryAfter;
 
   if (options.passthroughHeaders && error.headers !== undefined) {
     for (const [name, value] of Object.entries(error.headers)) {
-      if (!isCPAReservedResponseHeader(name)) headers[name.toLowerCase()] = value
+      if (!isCPAReservedResponseHeader(name)) headers[name.toLowerCase()] = value;
     }
   }
 
-  const text = error.message.trim() !== "" ? error.message : statusText(status)
+  const text = error.message.trim() !== "" ? error.message : statusText(status);
 
   const body =
     protocol === "claude"
       ? claudeErrorBody(status, text)
-      : openAIErrorBody(status, text, error.terminalAuth === true ? { terminalAuth: true } : {})
+      : openAIErrorBody(status, text, error.terminalAuth === true ? { terminalAuth: true } : {});
 
-  headers["content-type"] = "application/json"
+  headers["content-type"] = "application/json";
 
-  return HttpServerResponse.text(body, { status, headers })
-}
+  return HttpServerResponse.text(body, { status, headers });
+};
 
 /** Successful non-stream body; upstream headers are added without overriding the proxy's own. */
-export const jsonResponse = (payload: string, upstream: Headers | undefined): HttpServerResponse.HttpServerResponse =>
+export const jsonResponse = (
+  payload: string,
+  upstream: Headers | undefined,
+): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(payload, {
-    headers: mergeUpstreamHeaders({ "content-type": "application/json" }, upstream)
-  })
+    headers: mergeUpstreamHeaders({ "content-type": "application/json" }, upstream),
+  });
 
 const SSE_HEADERS = {
   "content-type": "text/event-stream",
   "cache-control": "no-cache",
   connection: "keep-alive",
-  "access-control-allow-origin": "*"
-} as const
+  "access-control-allow-origin": "*",
+} as const;
 
 export interface StreamResponseOptions {
-  readonly framer: StreamFramer
-  readonly onError: (error: ExecutionError) => HttpServerResponse.HttpServerResponse
+  readonly framer: StreamFramer;
+  readonly onError: (error: ExecutionError) => HttpServerResponse.HttpServerResponse;
   /** `requests.streaming.keepalive-seconds` (0 disables). */
-  readonly keepAliveSeconds: number
+  readonly keepAliveSeconds: number;
   /** Content type of the stream (Gemini `alt=json` streams are not SSE). */
-  readonly contentType?: string
+  readonly contentType?: string;
 }
 
 type FirstPull<A> =
   | { readonly _tag: "chunk"; readonly chunk: ReadonlyArray<A> }
   | { readonly _tag: "done" }
-  | { readonly _tag: "error"; readonly error: ExecutionError }
+  | { readonly _tag: "error"; readonly error: ExecutionError };
 
 /**
  * Runs a stream execution and answers with SSE. Must run inside the request scope: the remaining stream is pulled by
@@ -101,48 +110,57 @@ type FirstPull<A> =
  */
 export const streamResponse = Effect.fnUntraced(function* <R>(
   start: Effect.Effect<StreamOutput, ExecutionError, R>,
-  options: StreamResponseOptions
+  options: StreamResponseOptions,
 ) {
-  const started = yield* Effect.result(start)
+  const started = yield* Effect.result(start);
 
-  if (started._tag === "Failure") return options.onError(started.failure)
-  const output = started.success
-  const pull = yield* Stream.toPull(output.chunks)
+  if (started._tag === "Failure") return options.onError(started.failure);
+  const output = started.success;
+  const pull = yield* Stream.toPull(output.chunks);
 
   const first: FirstPull<string> = yield* pull.pipe(
     Effect.map((chunk): FirstPull<string> => ({ _tag: "chunk", chunk })),
     Pull.catchDone(() => Effect.succeed<FirstPull<string>>({ _tag: "done" })),
-    Effect.catch((error: ExecutionError) => Effect.succeed<FirstPull<string>>({ _tag: "error", error }))
-  )
+    Effect.catch((error: ExecutionError) =>
+      Effect.succeed<FirstPull<string>>({ _tag: "error", error }),
+    ),
+  );
 
-  if (first._tag === "error") return options.onError(first.error)
+  if (first._tag === "error") return options.onError(first.error);
 
   const headers = mergeUpstreamHeaders(
-    { ...SSE_HEADERS, ...(options.contentType !== undefined ? { "content-type": options.contentType } : {}) },
-    output.headers
-  )
+    {
+      ...SSE_HEADERS,
+      ...(options.contentType !== undefined ? { "content-type": options.contentType } : {}),
+    },
+    output.headers,
+  );
 
-  const { framer } = options
+  const { framer } = options;
 
   if (first._tag === "done") {
-    return HttpServerResponse.stream(Stream.make(framer.emptyBody).pipe(Stream.encodeText), { headers })
+    return HttpServerResponse.stream(Stream.make(framer.emptyBody).pipe(Stream.encodeText), {
+      headers,
+    });
   }
 
-  const rest = Stream.fromPull(Effect.succeed(pull))
+  const rest = Stream.fromPull(Effect.succeed(pull));
 
   const framed = Stream.concat(Stream.fromIterable(first.chunk), rest).pipe(
     Stream.map(framer.chunk),
     Stream.concat(
       Stream.suspend(() => {
-        const closeError = framer.closeError()
+        const closeError = framer.closeError();
 
-        return Stream.make(closeError === undefined ? framer.done() : framer.terminalError(closeError))
-      })
+        return Stream.make(
+          closeError === undefined ? framer.done() : framer.terminalError(closeError),
+        );
+      }),
     ),
-    Stream.catch((error: ExecutionError) => Stream.make(framer.terminalError(error)))
-  )
+    Stream.catch((error: ExecutionError) => Stream.make(framer.terminalError(error))),
+  );
 
-  const keepAlive = framer.keepAlive
+  const keepAlive = framer.keepAlive;
 
   const withKeepAlive =
     keepAlive !== undefined && options.keepAliveSeconds > 0
@@ -150,19 +168,19 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
           framed,
           Stream.tick(Duration.seconds(options.keepAliveSeconds)).pipe(
             Stream.drop(1),
-            Stream.map(() => keepAlive)
+            Stream.map(() => keepAlive),
           ),
-          { haltStrategy: "left" }
+          { haltStrategy: "left" },
         )
-      : framed
+      : framed;
 
   const body = withKeepAlive.pipe(
     Stream.filter((text) => text !== ""),
-    Stream.encodeText
-  )
+    Stream.encodeText,
+  );
 
-  return HttpServerResponse.stream(body, { headers })
-})
+  return HttpServerResponse.stream(body, { headers });
+});
 
 /**
  * `StartNonStreamingKeepAlive` (`requests.nonstream-keepalive-interval`): while a non-stream execution is pending, a blank
@@ -173,33 +191,40 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
  */
 export const withNonStreamKeepAlive = <E, R>(
   intervalSeconds: number,
-  run: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>
+  run: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, E, R | Scope.Scope> => {
-  if (!(intervalSeconds > 0)) return run
+  if (!(intervalSeconds > 0)) return run;
 
   return Effect.gen(function* () {
-    const fiber = yield* Effect.forkScoped(run)
-    const interval = Duration.seconds(intervalSeconds)
+    const fiber = yield* Effect.forkScoped(run);
+    const interval = Duration.seconds(intervalSeconds);
 
     const ready = yield* Effect.raceFirst(
       Fiber.join(fiber).pipe(Effect.map((response) => ({ done: true as const, response }))),
-      Effect.sleep(interval).pipe(Effect.as({ done: false as const }))
-    )
+      Effect.sleep(interval).pipe(Effect.as({ done: false as const })),
+    );
 
-    if (ready.done) return ready.response
-    const blank = new Uint8Array([10])
+    if (ready.done) return ready.response;
+    const blank = new Uint8Array([10]);
 
     const final = Stream.fromEffect(
       Effect.gen(function* () {
-        const response = yield* Fiber.join(fiber)
+        const response = yield* Fiber.join(fiber);
 
         // The final body is emitted as one chunk so no blank line can interleave with it.
-        return new Uint8Array(yield* Effect.promise(() => HttpServerResponse.toWeb(response).arrayBuffer()))
-      })
-    )
+        return new Uint8Array(
+          yield* Effect.promise(() => HttpServerResponse.toWeb(response).arrayBuffer()),
+        );
+      }),
+    );
 
-    const body = Stream.merge(Stream.tick(interval).pipe(Stream.map(() => blank)), final, { haltStrategy: "right" })
+    const body = Stream.merge(Stream.tick(interval).pipe(Stream.map(() => blank)), final, {
+      haltStrategy: "right",
+    });
 
-    return HttpServerResponse.stream(body, { status: 200, headers: { "content-type": "application/json" } })
-  })
-}
+    return HttpServerResponse.stream(body, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  });
+};

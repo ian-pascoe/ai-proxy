@@ -1,20 +1,21 @@
 // Devin GetUserStatus quota/profile refresh against the real Go DevinExecutor.Refresh
 // (`go run ./tools/fixturegen/devinstatus`), the cron wiring and the catalog/EOF guards of the executor.
-import { Effect } from "effect"
-import { describe, expect, it } from "vitest"
-import { applyDevinStatus, refreshDevinStatuses } from "../src/credentials/devin-status.ts"
-import type { Credential, CredentialState } from "../src/credentials/model.ts"
-import { emptyState } from "../src/credentials/model.ts"
-import type { JsonObject } from "../src/json/index.ts"
-import { parseUserStatus } from "../src/oauth/flows/devin-status.ts"
-import { scheduledTasks } from "../src/scheduled.ts"
-import { recordingClient, type RecordedCall } from "./support/executor-run.ts"
-import fixtures from "./fixtures/devin-status.json"
+import { Effect } from "effect";
+import { describe, expect, it } from "vitest";
+import { applyDevinStatus, refreshDevinStatuses } from "../src/credentials/devin-status.ts";
+import type { Credential, CredentialState } from "../src/credentials/model.ts";
+import { emptyState } from "../src/credentials/model.ts";
+import type { JsonObject } from "../src/json/index.ts";
+import { parseUserStatus } from "../src/oauth/flows/devin-status.ts";
+import { scheduledTasks } from "../src/scheduled.ts";
+import { recordingClient, type RecordedCall } from "./support/executor-run.ts";
+import fixtures from "./fixtures/devin-status.json";
 
 const fromHex = (hex: string): Uint8Array =>
-  Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16))
+  Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16));
 
-const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+const toHex = (bytes: Uint8Array): string =>
+  [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 const credential = (seed: string, extra: Partial<Credential> = {}): Credential =>
   ({
@@ -22,38 +23,42 @@ const credential = (seed: string, extra: Partial<Credential> = {}): Credential =
     provider: "devin",
     source: "file",
     disabled: false,
-    attributes: { api_key: "devin-session-token$abc", base_url: "https://stub.test", device_seed: seed },
+    attributes: {
+      api_key: "devin-session-token$abc",
+      base_url: "https://stub.test",
+      device_seed: seed,
+    },
     metadata: { api_key: "devin-session-token$abc", old: "kept" },
-    ...extra
-  }) as unknown as Credential
+    ...extra,
+  }) as unknown as Credential;
 
 interface Commit {
-  readonly id: string
-  readonly metadata?: JsonObject
-  readonly state?: CredentialState
+  readonly id: string;
+  readonly metadata?: JsonObject;
+  readonly state?: CredentialState;
 }
 
 const refresh = async (entries: Credential[], status: number, body: Uint8Array) => {
-  const calls: RecordedCall[] = []
-  const commits: Commit[] = []
+  const calls: RecordedCall[] = [];
+  const commits: Commit[] = [];
 
   const pool = {
     entries: () => entries.map((c) => ({ credential: c, state: emptyState() })),
     commitRefresh: (id: string, change: Omit<Commit, "id">) => {
-      commits.push({ id, ...change })
+      commits.push({ id, ...change });
 
-      return undefined
-    }
-  }
+      return undefined;
+    },
+  };
 
   const summary = await Effect.runPromise(
     refreshDevinStatuses(pool as never, () => 1_700_000_000_000).pipe(
-      Effect.provide(recordingClient(calls, () => new Response(body as BodyInit, { status })))
-    )
-  )
+      Effect.provide(recordingClient(calls, () => new Response(body as BodyInit, { status }))),
+    ),
+  );
 
-  return { summary, calls, commits }
-}
+  return { summary, calls, commits };
+};
 
 describe("Devin GetUserStatus refresh (Go parity)", () => {
   for (const scenario of fixtures.scenarios) {
@@ -61,48 +66,56 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
       const { summary, calls, commits } = await refresh(
         [credential(scenario.seed)],
         scenario.httpStatus,
-        fromHex(scenario.response)
-      )
+        fromHex(scenario.response),
+      );
 
-      expect(calls).toHaveLength(1)
-      expect(calls[0]?.url).toBe("https://stub.test/exa.seat_management_pb.SeatManagementService/GetUserStatus")
-      expect(calls[0]?.headers["authorization"]).toBe("Basic devin-session-token$abc-devin-session-token$abc")
-      expect(calls[0]?.headers["connect-protocol-version"]).toBe("1")
-      expect(calls[0]?.headers["content-type"]).toContain("application/proto")
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toBe(
+        "https://stub.test/exa.seat_management_pb.SeatManagementService/GetUserStatus",
+      );
+      expect(calls[0]?.headers["authorization"]).toBe(
+        "Basic devin-session-token$abc-devin-session-token$abc",
+      );
+      expect(calls[0]?.headers["connect-protocol-version"]).toBe("1");
+      expect(calls[0]?.headers["content-type"]).toContain("application/proto");
 
       if (scenario.error) {
-        expect(summary).toEqual({ refreshed: 0, failed: 1, skipped: 0 })
-        expect(commits).toEqual([])
+        expect(summary).toEqual({ refreshed: 0, failed: 1, skipped: 0 });
+        expect(commits).toEqual([]);
 
-        return
+        return;
       }
 
-      expect(summary).toEqual({ refreshed: 1, failed: 0, skipped: 0 })
-      const [commit] = commits
-      const { last_refresh: stamped, ...metadata } = commit?.metadata ?? {}
-      expect(stamped).toBe("2023-11-14T22:13:20Z")
-      expect(metadata).toEqual(scenario.metadata)
-      expect(commit?.state?.quota.signals).toEqual(scenario.signals)
-      expect(commit?.state?.quota.observedAt).toBe(1_700_000_000_000)
-    })
+      expect(summary).toEqual({ refreshed: 1, failed: 0, skipped: 0 });
+      const [commit] = commits;
+      const { last_refresh: stamped, ...metadata } = commit?.metadata ?? {};
+      expect(stamped).toBe("2023-11-14T22:13:20Z");
+      expect(metadata).toEqual(scenario.metadata);
+      expect(commit?.state?.quota.signals).toEqual(scenario.signals);
+      expect(commit?.state?.quota.observedAt).toBe(1_700_000_000_000);
+    });
   }
 
   it("builds the same request body as Go for a seeded device fingerprint", async () => {
-    const { calls } = await refresh([credential("seed-1")], 200, fromHex(fixtures.scenarios[0]?.response ?? ""))
-    expect(toHex(calls[0]?.bytes ?? new Uint8Array())).toBe(fixtures.deterministicRequest)
-  })
+    const { calls } = await refresh(
+      [credential("seed-1")],
+      200,
+      fromHex(fixtures.scenarios[0]?.response ?? ""),
+    );
+    expect(toHex(calls[0]?.bytes ?? new Uint8Array())).toBe(fixtures.deterministicRequest);
+  });
 
   it("parses every field Go reads and ignores malformed tails", () => {
-    const status = parseUserStatus(fromHex(fixtures.scenarios[0]?.response ?? ""))
+    const status = parseUserStatus(fromHex(fixtures.scenarios[0]?.response ?? ""));
     expect(status).toMatchObject({
       email: "ada@example.com",
       teamId: "team_9",
       orgName: "Acme Inc",
       dailyQuotaRemainingPercent: 87,
       weeklyQuotaResetAt: 1700604800,
-      planEnd: 1702592000
-    })
-  })
+      planEnd: 1702592000,
+    });
+  });
 
   it("skips disabled, config and non-Devin credentials and ones without a token", async () => {
     const { summary, calls } = await refresh(
@@ -110,27 +123,36 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
         credential("", { disabled: true }),
         credential("", { id: "cfg", source: "config" } as Partial<Credential>),
         credential("", { id: "other", provider: "codex" }),
-        credential("", { id: "none", attributes: {}, metadata: {} })
+        credential("", { id: "none", attributes: {}, metadata: {} }),
       ],
       200,
-      fromHex(fixtures.scenarios[0]?.response ?? "")
-    )
+      fromHex(fixtures.scenarios[0]?.response ?? ""),
+    );
 
-    expect(summary).toEqual({ refreshed: 0, failed: 0, skipped: 1 })
-    expect(calls).toHaveLength(0)
-  })
+    expect(summary).toEqual({ refreshed: 0, failed: 0, skipped: 1 });
+    expect(calls).toHaveLength(0);
+  });
 
   it("keeps previous quota signals not reported again", () => {
     const state: CredentialState = {
       ...emptyState(),
-      quota: { ...emptyState().quota, signals: { stale: "x", plan: "Old" } }
-    }
+      quota: { ...emptyState().quota, signals: { stale: "x", plan: "Old" } },
+    };
 
-    const next = applyDevinStatus({}, state, parseUserStatus(fromHex(fixtures.scenarios[1]?.response ?? ""))!, 5)
-    expect(next.state.quota.signals).toMatchObject({ stale: "x", plan: "Free", daily_quota_remaining_percent: "100%" })
-  })
+    const next = applyDevinStatus(
+      {},
+      state,
+      parseUserStatus(fromHex(fixtures.scenarios[1]?.response ?? ""))!,
+      5,
+    );
+    expect(next.state.quota.signals).toMatchObject({
+      stale: "x",
+      plan: "Free",
+      daily_quota_remaining_percent: "100%",
+    });
+  });
 
   it("is scheduled as a cron task", () => {
-    expect(scheduledTasks.map((task) => task.name)).toContain("devin-user-status")
-  })
-})
+    expect(scheduledTasks.map((task) => task.name)).toContain("devin-user-status");
+  });
+});

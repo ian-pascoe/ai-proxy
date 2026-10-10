@@ -3,407 +3,444 @@
  *
  * Go source: internal/translator/openai/gemini/openai_gemini_request.go.
  */
-import { createHash } from "node:crypto"
-import { asBool, asFloat, asInt, cloneJson, get, type Json, type JsonObject } from "../../../json/index.ts"
-import { convertBudgetToLevel } from "../../../thinking/convert.ts"
-import { getStr, isArr, isObj, raw, str } from "../common/read.ts"
+import { createHash } from "node:crypto";
+import {
+  asBool,
+  asFloat,
+  asInt,
+  cloneJson,
+  get,
+  type Json,
+  type JsonObject,
+} from "../../../json/index.ts";
+import { convertBudgetToLevel } from "../../../thinking/convert.ts";
+import { getStr, isArr, isObj, raw, str } from "../common/read.ts";
 
 /** `IsGeminiThoughtPart` (common/gemini.go). */
-export const isGeminiThoughtPart = (part: Json | undefined): boolean => asBool(get(part, "thought"))
+export const isGeminiThoughtPart = (part: Json | undefined): boolean =>
+  asBool(get(part, "thought"));
 
 const deterministicToolCallId = (
   kind: string,
   msgIdx: number,
   partIdx: number,
   name: string,
-  payload: string
+  payload: string,
 ): string =>
-  `call_${createHash("sha256").update(`${kind}|${msgIdx}|${partIdx}|${name}|${payload}`).digest("hex").slice(0, 24)}`
+  `call_${createHash("sha256").update(`${kind}|${msgIdx}|${partIdx}|${name}|${payload}`).digest("hex").slice(0, 24)}`;
 
 const explicitGeminiToolId = (node: Json | undefined): string => {
-  const id = getStr(node, "id").trim()
+  const id = getStr(node, "id").trim();
 
-  if (id !== "") return id
-  const callId = getStr(node, "call_id").trim()
+  if (id !== "") return id;
+  const callId = getStr(node, "call_id").trim();
 
-  if (callId !== "") return callId
+  if (callId !== "") return callId;
 
-  return getStr(node, "callId").trim()
-}
+  return getStr(node, "callId").trim();
+};
 
 const openAIInputAudioFormatFromMime = (mimeType: string): string => {
   switch (mimeType.trim().toLowerCase()) {
     case "audio/wav":
     case "audio/wave":
     case "audio/x-wav":
-      return "wav"
+      return "wav";
     case "audio/flac":
-      return "flac"
+      return "flac";
     case "audio/opus":
     case "audio/ogg":
-      return "opus"
+      return "opus";
     case "audio/pcm":
     case "audio/l16":
-      return "pcm16"
+      return "pcm16";
     default:
-      return "mp3"
+      return "mp3";
   }
-}
+};
 
 const openAIFileNameFromMime = (mimeType: string): string => {
-  const mime = mimeType.trim().toLowerCase()
+  const mime = mimeType.trim().toLowerCase();
 
   switch (mime) {
     case "application/pdf":
-      return "document.pdf"
+      return "document.pdf";
     case "text/plain":
-      return "document.txt"
+      return "document.txt";
     case "text/csv":
-      return "document.csv"
+      return "document.csv";
     case "application/json":
-      return "document.json"
+      return "document.json";
     case "application/xml":
     case "text/xml":
-      return "document.xml"
+      return "document.xml";
     default:
-      return mime.startsWith("video/") ? "video" : "document"
+      return mime.startsWith("video/") ? "video" : "document";
   }
-}
+};
 
 const firstNonEmpty = (node: Json | undefined, ...paths: string[]): string => {
   for (const path of paths) {
-    const value = getStr(node, path)
+    const value = getStr(node, path);
 
-    if (value !== "") return value
+    if (value !== "") return value;
   }
 
-  return ""
-}
+  return "";
+};
 
 const openAIContentPartFromGeminiInlineData = (part: Json): JsonObject | undefined => {
-  const inlineData = get(part, "inlineData") ?? get(part, "inline_data")
+  const inlineData = get(part, "inlineData") ?? get(part, "inline_data");
 
-  if (inlineData === undefined) return undefined
-  let mimeType = firstNonEmpty(inlineData, "mimeType", "mime_type")
+  if (inlineData === undefined) return undefined;
+  let mimeType = firstNonEmpty(inlineData, "mimeType", "mime_type");
 
-  if (mimeType === "") mimeType = "application/octet-stream"
-  const data = getStr(inlineData, "data")
+  if (mimeType === "") mimeType = "application/octet-stream";
+  const data = getStr(inlineData, "data");
 
-  if (data === "") return undefined
-  const dataUrl = `data:${mimeType};base64,${data}`
-  const lower = mimeType.toLowerCase()
+  if (data === "") return undefined;
+  const dataUrl = `data:${mimeType};base64,${data}`;
+  const lower = mimeType.toLowerCase();
 
-  if (lower.startsWith("image/")) return { type: "image_url", image_url: { url: dataUrl } }
+  if (lower.startsWith("image/")) return { type: "image_url", image_url: { url: dataUrl } };
 
   if (lower.startsWith("audio/")) {
-    return { type: "input_audio", input_audio: { data, format: openAIInputAudioFormatFromMime(mimeType) } }
+    return {
+      type: "input_audio",
+      input_audio: { data, format: openAIInputAudioFormatFromMime(mimeType) },
+    };
   }
 
-  if (lower.startsWith("video/")) return { type: "video_url", video_url: { url: dataUrl } }
+  if (lower.startsWith("video/")) return { type: "video_url", video_url: { url: dataUrl } };
 
-  return { type: "file", file: { filename: openAIFileNameFromMime(mimeType), file_data: data } }
-}
+  return { type: "file", file: { filename: openAIFileNameFromMime(mimeType), file_data: data } };
+};
 
 const openAIContentPartFromGeminiFileData = (part: Json): JsonObject | undefined => {
-  const fileData = get(part, "fileData") ?? get(part, "file_data")
+  const fileData = get(part, "fileData") ?? get(part, "file_data");
 
-  if (fileData === undefined) return undefined
-  const fileUri = firstNonEmpty(fileData, "fileUri", "file_uri")
+  if (fileData === undefined) return undefined;
+  const fileUri = firstNonEmpty(fileData, "fileUri", "file_uri");
 
-  if (fileUri === "") return undefined
-  const mimeType = firstNonEmpty(fileData, "mimeType", "mime_type")
-  const lower = mimeType.toLowerCase()
+  if (fileUri === "") return undefined;
+  const mimeType = firstNonEmpty(fileData, "mimeType", "mime_type");
+  const lower = mimeType.toLowerCase();
 
-  if (lower.startsWith("image/")) return { type: "image_url", image_url: { url: fileUri } }
+  if (lower.startsWith("image/")) return { type: "image_url", image_url: { url: fileUri } };
 
-  if (lower.startsWith("video/")) return { type: "video_url", video_url: { url: fileUri } }
+  if (lower.startsWith("video/")) return { type: "video_url", video_url: { url: fileUri } };
 
   if (lower.startsWith("application/") || lower.startsWith("text/")) {
-    return { type: "file", file: { filename: openAIFileNameFromMime(mimeType), file_url: fileUri } }
+    return {
+      type: "file",
+      file: { filename: openAIFileNameFromMime(mimeType), file_url: fileUri },
+    };
   }
 
-  let fileInfo = `File: ${fileUri}`
+  let fileInfo = `File: ${fileUri}`;
 
-  if (mimeType !== "") fileInfo += ` (Type: ${mimeType})`
+  if (mimeType !== "") fileInfo += ` (Type: ${mimeType})`;
 
-  return { type: "text", text: fileInfo }
-}
+  return { type: "text", text: fileInfo };
+};
 
 /** `ConvertGeminiRequestToOpenAI`. */
-export const convertGeminiRequestToOpenAI = (modelName: string, root: Json, stream: boolean): Json => {
-  const out: JsonObject = { model: modelName, messages: [] }
+export const convertGeminiRequestToOpenAI = (
+  modelName: string,
+  root: Json,
+  stream: boolean,
+): Json => {
+  const out: JsonObject = { model: modelName, messages: [] };
 
-  const genConfig = get(root, "generationConfig")
+  const genConfig = get(root, "generationConfig");
 
   if (genConfig !== undefined) {
-    const temp = get(genConfig, "temperature")
+    const temp = get(genConfig, "temperature");
 
-    if (temp !== undefined) out.temperature = asFloat(temp)
-    const maxTokens = get(genConfig, "maxOutputTokens")
+    if (temp !== undefined) out.temperature = asFloat(temp);
+    const maxTokens = get(genConfig, "maxOutputTokens");
 
-    if (maxTokens !== undefined) out.max_tokens = asInt(maxTokens)
-    const topP = get(genConfig, "topP")
+    if (maxTokens !== undefined) out.max_tokens = asInt(maxTokens);
+    const topP = get(genConfig, "topP");
 
-    if (topP !== undefined) out.top_p = asFloat(topP)
-    const topK = get(genConfig, "topK")
+    if (topP !== undefined) out.top_p = asFloat(topP);
+    const topK = get(genConfig, "topK");
 
-    if (topK !== undefined) out.top_k = asInt(topK)
+    if (topK !== undefined) out.top_k = asInt(topK);
 
-    const stopSequences = get(genConfig, "stopSequences")
+    const stopSequences = get(genConfig, "stopSequences");
 
     if (isArr(stopSequences)) {
-      const stops = stopSequences.map((value) => str(value))
+      const stops = stopSequences.map((value) => str(value));
 
-      if (stops.length > 0) out.stop = stops
+      if (stops.length > 0) out.stop = stops;
     }
 
-    const candidateCount = get(genConfig, "candidateCount")
+    const candidateCount = get(genConfig, "candidateCount");
 
-    if (candidateCount !== undefined) out.n = asInt(candidateCount)
+    if (candidateCount !== undefined) out.n = asInt(candidateCount);
 
-    const responseModalities = get(genConfig, "responseModalities")
+    const responseModalities = get(genConfig, "responseModalities");
 
     if (isArr(responseModalities)) {
-      const modalities: string[] = []
+      const modalities: string[] = [];
 
       for (const value of responseModalities) {
-        const modality = str(value).trim().toLowerCase()
+        const modality = str(value).trim().toLowerCase();
 
-        if (modality === "text" || modality === "image" || modality === "audio") modalities.push(modality)
+        if (modality === "text" || modality === "image" || modality === "audio")
+          modalities.push(modality);
       }
 
-      if (modalities.length > 0) out.modalities = modalities
+      if (modalities.length > 0) out.modalities = modalities;
     }
 
     // Always convert so models that are not in the registry (allowCompat) still get a reasoning effort.
     // The Google Python SDK sends snake_case fields (thinking_level/thinking_budget).
-    const thinkingConfig = get(genConfig, "thinkingConfig")
+    const thinkingConfig = get(genConfig, "thinkingConfig");
 
     if (isObj(thinkingConfig)) {
-      const thinkingLevel = get(thinkingConfig, "thinkingLevel") ?? get(thinkingConfig, "thinking_level")
+      const thinkingLevel =
+        get(thinkingConfig, "thinkingLevel") ?? get(thinkingConfig, "thinking_level");
 
       if (thinkingLevel !== undefined) {
-        const effort = str(thinkingLevel).trim().toLowerCase()
+        const effort = str(thinkingLevel).trim().toLowerCase();
 
-        if (effort !== "") out.reasoning_effort = effort
+        if (effort !== "") out.reasoning_effort = effort;
       } else {
-        const thinkingBudget = get(thinkingConfig, "thinkingBudget") ?? get(thinkingConfig, "thinking_budget")
+        const thinkingBudget =
+          get(thinkingConfig, "thinkingBudget") ?? get(thinkingConfig, "thinking_budget");
 
         if (thinkingBudget !== undefined) {
-          const effort = convertBudgetToLevel(asInt(thinkingBudget))
+          const effort = convertBudgetToLevel(asInt(thinkingBudget));
 
-          if (effort !== undefined) out.reasoning_effort = effort
+          if (effort !== undefined) out.reasoning_effort = effort;
         }
       }
     }
   }
 
-  out.stream = stream
-  const serviceTier = get(root, "service_tier")
+  out.stream = stream;
+  const serviceTier = get(root, "service_tier");
 
-  if (typeof serviceTier === "string") out.service_tier = serviceTier
+  if (typeof serviceTier === "string") out.service_tier = serviceTier;
 
-  const messageItems: Json[] = []
-  const toolCallIdsByName = new Map<string, string[]>()
+  const messageItems: Json[] = [];
+  const toolCallIdsByName = new Map<string, string[]>();
 
   // Gemini may provide `systemInstruction` or `system_instruction`.
-  const systemInstruction = get(root, "systemInstruction") ?? get(root, "system_instruction")
+  const systemInstruction = get(root, "systemInstruction") ?? get(root, "system_instruction");
 
   if (systemInstruction !== undefined) {
-    const parts = get(systemInstruction, "parts")
-    const contentItems: Json[] = []
+    const parts = get(systemInstruction, "parts");
+    const contentItems: Json[] = [];
 
     if (isArr(parts)) {
       for (const part of parts) {
-        if (isGeminiThoughtPart(part)) continue
-        const text = get(part, "text")
+        if (isGeminiThoughtPart(part)) continue;
+        const text = get(part, "text");
 
-        if (text !== undefined) contentItems.push({ type: "text", text: str(text) })
-        const inline = openAIContentPartFromGeminiInlineData(part)
+        if (text !== undefined) contentItems.push({ type: "text", text: str(text) });
+        const inline = openAIContentPartFromGeminiInlineData(part);
 
-        if (inline !== undefined) contentItems.push(inline)
-        const file = openAIContentPartFromGeminiFileData(part)
+        if (inline !== undefined) contentItems.push(inline);
+        const file = openAIContentPartFromGeminiFileData(part);
 
-        if (file !== undefined) contentItems.push(file)
+        if (file !== undefined) contentItems.push(file);
       }
     }
 
-    if (contentItems.length > 0) messageItems.push({ role: "system", content: contentItems })
+    if (contentItems.length > 0) messageItems.push({ role: "system", content: contentItems });
   }
 
-  const contents = get(root, "contents")
+  const contents = get(root, "contents");
 
   if (isArr(contents)) {
-    let msgIdx = 0
+    let msgIdx = 0;
 
     for (const content of contents) {
-      let role = getStr(content, "role")
-      const parts = get(content, "parts")
+      let role = getStr(content, "role");
+      const parts = get(content, "parts");
 
-      if (role === "model") role = "assistant"
+      if (role === "model") role = "assistant";
 
-      const msg: JsonObject = { role, content: "" }
-      let text = ""
-      const contentItems: Json[] = []
-      let onlyTextContent = true
-      const toolCallItems: Json[] = []
-      let droppedThought = false
+      const msg: JsonObject = { role, content: "" };
+      let text = "";
+      const contentItems: Json[] = [];
+      let onlyTextContent = true;
+      const toolCallItems: Json[] = [];
+      let droppedThought = false;
 
       if (isArr(parts)) {
-        let partIdx = 0
+        let partIdx = 0;
 
         for (const part of parts) {
-          const currentPartIdx = partIdx
-          partIdx++
+          const currentPartIdx = partIdx;
+          partIdx++;
 
           if (isGeminiThoughtPart(part)) {
-            droppedThought = true
-            continue
+            droppedThought = true;
+            continue;
           }
 
-          const textValue = get(part, "text")
+          const textValue = get(part, "text");
 
           if (textValue !== undefined) {
-            const formatted = str(textValue)
-            text += formatted
-            contentItems.push({ type: "text", text: formatted })
+            const formatted = str(textValue);
+            text += formatted;
+            contentItems.push({ type: "text", text: formatted });
           }
 
-          const inline = openAIContentPartFromGeminiInlineData(part)
+          const inline = openAIContentPartFromGeminiInlineData(part);
 
           if (inline !== undefined) {
-            onlyTextContent = false
-            contentItems.push(inline)
+            onlyTextContent = false;
+            contentItems.push(inline);
           }
 
-          const file = openAIContentPartFromGeminiFileData(part)
+          const file = openAIContentPartFromGeminiFileData(part);
 
           if (file !== undefined) {
-            onlyTextContent = false
-            contentItems.push(file)
+            onlyTextContent = false;
+            contentItems.push(file);
           }
 
-          const functionCall = get(part, "functionCall")
+          const functionCall = get(part, "functionCall");
 
           if (functionCall !== undefined) {
-            const funcName = getStr(functionCall, "name")
-            const args = get(functionCall, "args")
-            const argsRaw = args !== undefined ? raw(args) : ""
-            let toolCallId = explicitGeminiToolId(functionCall)
+            const funcName = getStr(functionCall, "name");
+            const args = get(functionCall, "args");
+            const argsRaw = args !== undefined ? raw(args) : "";
+            let toolCallId = explicitGeminiToolId(functionCall);
 
             if (toolCallId === "")
-              toolCallId = deterministicToolCallId("call", msgIdx, currentPartIdx, funcName, argsRaw)
-            const queue = toolCallIdsByName.get(funcName) ?? []
-            queue.push(toolCallId)
-            toolCallIdsByName.set(funcName, queue)
+              toolCallId = deterministicToolCallId(
+                "call",
+                msgIdx,
+                currentPartIdx,
+                funcName,
+                argsRaw,
+              );
+            const queue = toolCallIdsByName.get(funcName) ?? [];
+            queue.push(toolCallId);
+            toolCallIdsByName.set(funcName, queue);
             toolCallItems.push({
               id: toolCallId,
               type: "function",
-              function: { name: funcName, arguments: argsRaw !== "" ? argsRaw : "{}" }
-            })
+              function: { name: funcName, arguments: argsRaw !== "" ? argsRaw : "{}" },
+            });
           }
 
-          const functionResponse = get(part, "functionResponse")
+          const functionResponse = get(part, "functionResponse");
 
           if (functionResponse !== undefined) {
-            const funcName = getStr(functionResponse, "name")
-            const toolMsg: JsonObject = { role: "tool", tool_call_id: "", content: "" }
-            let responseRaw = ""
-            const response = get(functionResponse, "response")
+            const funcName = getStr(functionResponse, "name");
+            const toolMsg: JsonObject = { role: "tool", tool_call_id: "", content: "" };
+            let responseRaw = "";
+            const response = get(functionResponse, "response");
 
             if (response !== undefined) {
-              const contentField = get(response, "content")
-              responseRaw = contentField !== undefined ? raw(contentField) : raw(response)
-              toolMsg.content = responseRaw
+              const contentField = get(response, "content");
+              responseRaw = contentField !== undefined ? raw(contentField) : raw(response);
+              toolMsg.content = responseRaw;
             }
 
-            const explicitId = explicitGeminiToolId(functionResponse)
-            const queue = toolCallIdsByName.get(funcName)
+            const explicitId = explicitGeminiToolId(functionResponse);
+            const queue = toolCallIdsByName.get(funcName);
 
             if (explicitId !== "") {
-              toolMsg.tool_call_id = explicitId
+              toolMsg.tool_call_id = explicitId;
 
               if (queue !== undefined && queue.length > 0) {
-                const i = queue.indexOf(explicitId)
+                const i = queue.indexOf(explicitId);
 
-                if (i >= 0) queue.splice(i, 1)
+                if (i >= 0) queue.splice(i, 1);
               }
             } else if (queue !== undefined && queue.length > 0) {
-              toolMsg.tool_call_id = queue.shift() as string
+              toolMsg.tool_call_id = queue.shift() as string;
             } else {
-              toolMsg.tool_call_id = deterministicToolCallId("response", msgIdx, currentPartIdx, funcName, responseRaw)
+              toolMsg.tool_call_id = deterministicToolCallId(
+                "response",
+                msgIdx,
+                currentPartIdx,
+                funcName,
+                responseRaw,
+              );
             }
 
-            messageItems.push(toolMsg)
+            messageItems.push(toolMsg);
           }
         }
       }
 
-      if (contentItems.length > 0) msg.content = onlyTextContent ? text : contentItems
+      if (contentItems.length > 0) msg.content = onlyTextContent ? text : contentItems;
 
-      if (toolCallItems.length > 0) msg.tool_calls = toolCallItems
+      if (toolCallItems.length > 0) msg.tool_calls = toolCallItems;
 
       if (droppedThought && contentItems.length === 0 && toolCallItems.length === 0) {
-        msgIdx++
-        continue
+        msgIdx++;
+        continue;
       }
 
-      messageItems.push(msg)
-      msgIdx++
+      messageItems.push(msg);
+      msgIdx++;
     }
   }
 
-  if (messageItems.length > 0) out.messages = messageItems
+  if (messageItems.length > 0) out.messages = messageItems;
 
-  const tools = get(root, "tools")
+  const tools = get(root, "tools");
 
   if (isArr(tools)) {
-    const toolItems: Json[] = []
+    const toolItems: Json[] = [];
 
     for (const tool of tools) {
-      const functionDeclarations = get(tool, "functionDeclarations")
+      const functionDeclarations = get(tool, "functionDeclarations");
 
-      if (!isArr(functionDeclarations)) continue
+      if (!isArr(functionDeclarations)) continue;
 
       for (const funcDecl of functionDeclarations) {
-        const fn: JsonObject = { name: getStr(funcDecl, "name"), description: getStr(funcDecl, "description") }
-        const parameters = get(funcDecl, "parameters") ?? get(funcDecl, "parametersJsonSchema")
+        const fn: JsonObject = {
+          name: getStr(funcDecl, "name"),
+          description: getStr(funcDecl, "description"),
+        };
+        const parameters = get(funcDecl, "parameters") ?? get(funcDecl, "parametersJsonSchema");
 
-        if (parameters !== undefined) fn.parameters = cloneJson(parameters)
-        toolItems.push({ type: "function", function: fn })
+        if (parameters !== undefined) fn.parameters = cloneJson(parameters);
+        toolItems.push({ type: "function", function: fn });
       }
     }
 
-    if (toolItems.length > 0) out.tools = toolItems
+    if (toolItems.length > 0) out.tools = toolItems;
   }
 
-  const toolConfig = get(root, "toolConfig")
+  const toolConfig = get(root, "toolConfig");
 
   if (toolConfig !== undefined) {
-    const functionCallingConfig = get(toolConfig, "functionCallingConfig")
+    const functionCallingConfig = get(toolConfig, "functionCallingConfig");
 
     if (functionCallingConfig !== undefined) {
-      const mode = getStr(functionCallingConfig, "mode")
-      const allowedNames = get(functionCallingConfig, "allowedFunctionNames")
+      const mode = getStr(functionCallingConfig, "mode");
+      const allowedNames = get(functionCallingConfig, "allowedFunctionNames");
 
       switch (mode) {
         case "NONE":
-          out.tool_choice = "none"
-          break
+          out.tool_choice = "none";
+          break;
         case "AUTO":
-          out.tool_choice = "auto"
-          break
+          out.tool_choice = "auto";
+          break;
         case "ANY":
           if (isArr(allowedNames) && allowedNames.length === 1) {
-            out.tool_choice = { type: "function", function: { name: str(allowedNames[0]) } }
+            out.tool_choice = { type: "function", function: { name: str(allowedNames[0]) } };
           } else {
-            out.tool_choice = "required"
+            out.tool_choice = "required";
           }
 
-          break
+          break;
       }
     }
   }
 
-  return out
-}
+  return out;
+};

@@ -10,22 +10,25 @@
  * The conductor wraps every attempt with {@link withCredentialRefresh}, so executors normally do not call it; executors
  * with their own transport paths (WebSocket) can use it directly with their `ExecutionContext`.
  */
-import { Clock, Context, Effect, Layer } from "effect"
-import { accessTokenExpiry } from "../../credentials/expiry.ts"
-import type { RefreshResult } from "../../credentials/refresh/index.ts"
-import { metaNeedsMint } from "../../credentials/refresh/meta.ts"
-import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts"
-import type { JsonObject } from "../../json/index.ts"
-import { WorkerEnv } from "../../platform/env.ts"
-import { toExecutorSnapshot } from "../control-plane-picker.ts"
-import { ExecutionError, withErrorFields } from "../errors.ts"
-import type { CredentialSnapshot } from "../picker.ts"
-import type { ExecutionContext } from "../types.ts"
+import { Clock, Context, Effect, Layer } from "effect";
+import { accessTokenExpiry } from "../../credentials/expiry.ts";
+import type { RefreshResult } from "../../credentials/refresh/index.ts";
+import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
+import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts";
+import type { JsonObject } from "../../json/index.ts";
+import { WorkerEnv } from "../../platform/env.ts";
+import { toExecutorSnapshot } from "../control-plane-picker.ts";
+import { ExecutionError, withErrorFields } from "../errors.ts";
+import type { CredentialSnapshot } from "../picker.ts";
+import type { ExecutionContext } from "../types.ts";
 
 /** The slice of the ControlPlane RPC surface used here (tests substitute their own). */
 export interface RefreshApi {
-  readonly refreshNow: (credentialId: string, rejectedAccessToken?: string) => PromiseLike<RefreshResult>
-  readonly ensureFresh: (credentialId: string) => PromiseLike<RefreshResult>
+  readonly refreshNow: (
+    credentialId: string,
+    rejectedAccessToken?: string,
+  ) => PromiseLike<RefreshResult>;
+  readonly ensureFresh: (credentialId: string) => PromiseLike<RefreshResult>;
 }
 
 export class CredentialRefresher extends Context.Service<
@@ -33,37 +36,42 @@ export class CredentialRefresher extends Context.Service<
   {
     readonly refreshNow: (
       credentialId: string,
-      rejectedAccessToken?: string
-    ) => Effect.Effect<RefreshResult, never, WorkerEnv>
-    readonly ensureFresh: (credentialId: string) => Effect.Effect<RefreshResult, never, WorkerEnv>
+      rejectedAccessToken?: string,
+    ) => Effect.Effect<RefreshResult, never, WorkerEnv>;
+    readonly ensureFresh: (credentialId: string) => Effect.Effect<RefreshResult, never, WorkerEnv>;
   }
 >()("cliproxy/executor/CredentialRefresher") {
   /** Calls the ControlPlane through `api(env)`; transport failures become structured `refresh_failed` results. */
   static readonly layerFor = (api: (env: Env) => RefreshApi) => {
     const call = (run: (api: RefreshApi) => PromiseLike<RefreshResult>) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv
+        const env = yield* WorkerEnv;
 
-        return yield* Effect.tryPromise({ try: async () => await run(api(env)), catch: (cause) => cause }).pipe(
+        return yield* Effect.tryPromise({
+          try: async () => await run(api(env)),
+          catch: (cause) => cause,
+        }).pipe(
           Effect.orElseSucceed((): RefreshResult => ({
             ok: false,
             error: { code: "refresh_failed", message: "credential store unavailable" },
-            terminal: false
-          }))
-        )
-      })
+            terminal: false,
+          })),
+        );
+      });
 
     return Layer.succeed(
       CredentialRefresher,
       CredentialRefresher.of({
         refreshNow: (id, rejected) => call((target) => target.refreshNow(id, rejected)),
-        ensureFresh: (id) => call((target) => target.ensureFresh(id))
-      })
-    )
-  }
+        ensureFresh: (id) => call((target) => target.ensureFresh(id)),
+      }),
+    );
+  };
 
   /** Production: the global ControlPlane Durable Object. */
-  static readonly controlPlane = CredentialRefresher.layerFor((env) => env.CONTROL_PLANE.getByName("global"))
+  static readonly controlPlane = CredentialRefresher.layerFor((env) =>
+    env.CONTROL_PLANE.getByName("global"),
+  );
 
   /** No refresh support (tests with API keys only). */
   static readonly none = Layer.succeed(
@@ -73,67 +81,73 @@ export class CredentialRefresher extends Context.Service<
         Effect.succeed({
           ok: false,
           error: { code: "not_refreshable", message: "refresh unavailable" },
-          terminal: false
+          terminal: false,
         }),
       ensureFresh: () =>
         Effect.succeed({
           ok: false,
           error: { code: "not_refreshable", message: "refresh unavailable" },
-          terminal: false
-        })
-    })
-  )
+          terminal: false,
+        }),
+    }),
+  );
 }
 
 const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => {
-  const token = metadata["access_token"]
+  const token = metadata["access_token"];
 
-  return typeof token === "string" ? token.trim() : ""
-}
+  return typeof token === "string" ? token.trim() : "";
+};
 
 /**
  * Whether the picked snapshot may need preparation before use. Conservative: API-key credentials never do; OAuth
  * credentials only when the token is unusable or the provider mints tokens/keys on demand.
  */
 export const needsPreparation = (credential: CredentialSnapshot, now: number): boolean => {
-  if (credential.kind !== "oauth") return false
-  const metadata = credential.metadata
+  if (credential.kind !== "oauth") return false;
+  const metadata = credential.metadata;
 
   switch (credential.provider) {
     case "vertex":
       // Pick injects a cached service-account token; without one it has to be minted.
-      return accessTokenOf(metadata) === ""
+      return accessTokenOf(metadata) === "";
     case "meta":
-      return metaNeedsMint(metadata as JsonObject)
+      return metaNeedsMint(metadata as JsonObject);
     default: {
-      const token = accessTokenOf(metadata)
+      const token = accessTokenOf(metadata);
 
-      if (token === "") return true
-      const expiry = accessTokenExpiry(metadata as JsonObject)
-      const safety = credential.provider === "antigravity" ? ANTIGRAVITY_REQUEST_SAFETY_MS : 0
+      if (token === "") return true;
+      const expiry = accessTokenExpiry(metadata as JsonObject);
+      const safety = credential.provider === "antigravity" ? ANTIGRAVITY_REQUEST_SAFETY_MS : 0;
 
-      return expiry !== undefined && expiry <= now + safety
+      return expiry !== undefined && expiry <= now + safety;
     }
   }
-}
+};
 
 /** Failures that mean "nothing to prepare" rather than a broken credential. */
-const BENIGN = new Set(["not_refreshable", "not_found"])
+const BENIGN = new Set(["not_refreshable", "not_found"]);
 
 const refreshError = (failure: Extract<RefreshResult, { ok: false }>): ExecutionError =>
   new ExecutionError({
-    status: failure.terminal || failure.error.httpStatus === 401 ? 401 : (failure.error.httpStatus ?? 503),
+    status:
+      failure.terminal || failure.error.httpStatus === 401
+        ? 401
+        : (failure.error.httpStatus ?? 503),
     code: failure.error.code === "unauthorized" ? "unauthorized" : "refresh_failed",
     message: failure.error.message,
-    ...(failure.terminal ? { terminalAuth: true } : {})
-  })
+    ...(failure.terminal ? { terminalAuth: true } : {}),
+  });
 
 export interface RefreshHooks {
   /**
    * Called before the repeated attempt with the 401 error and the refreshed credential; returns the context of the
    * repeat (the conductor uses it to close the usage record of the rejected attempt and start a new one).
    */
-  readonly retry?: (error: ExecutionError, credential: CredentialSnapshot) => Effect.Effect<ExecutionContext>
+  readonly retry?: (
+    error: ExecutionError,
+    credential: CredentialSnapshot,
+  ) => Effect.Effect<ExecutionContext>;
 }
 
 /**
@@ -144,42 +158,48 @@ export interface RefreshHooks {
 export const withCredentialRefresh = <A, R>(
   context: ExecutionContext,
   use: (context: ExecutionContext) => Effect.Effect<A, ExecutionError, R>,
-  hooks: RefreshHooks = {}
+  hooks: RefreshHooks = {},
 ) =>
   Effect.gen(function* () {
-    const refresher = yield* CredentialRefresher
-    let current = context
-    const now = yield* Clock.currentTimeMillis
+    const refresher = yield* CredentialRefresher;
+    let current = context;
+    const now = yield* Clock.currentTimeMillis;
 
     if (needsPreparation(context.credential, now)) {
-      const prepared = yield* refresher.ensureFresh(context.credential.id)
+      const prepared = yield* refresher.ensureFresh(context.credential.id);
 
       if (prepared.ok) {
-        current = { ...current, credential: toExecutorSnapshot(prepared.credential) }
+        current = { ...current, credential: toExecutorSnapshot(prepared.credential) };
       } else if (!BENIGN.has(prepared.error.code)) {
-        return yield* refreshError(prepared)
+        return yield* refreshError(prepared);
       }
     }
 
-    const first = yield* Effect.result(use(current))
+    const first = yield* Effect.result(use(current));
 
-    if (first._tag === "Success") return first.success
-    const error = first.failure
+    if (first._tag === "Success") return first.success;
+    const error = first.failure;
 
-    if (error.status !== 401) return yield* error
+    if (error.status !== 401) return yield* error;
 
-    const rejected = accessTokenOf(current.credential.metadata)
-    const refreshed = yield* refresher.refreshNow(current.credential.id, rejected === "" ? undefined : rejected)
+    const rejected = accessTokenOf(current.credential.metadata);
+    const refreshed = yield* refresher.refreshNow(
+      current.credential.id,
+      rejected === "" ? undefined : rejected,
+    );
 
     if (!refreshed.ok) {
-      return yield* refreshed.terminal ? withErrorFields(error, { terminalAuth: true }) : error
+      return yield* refreshed.terminal ? withErrorFields(error, { terminalAuth: true }) : error;
     }
 
-    const snapshot = toExecutorSnapshot(refreshed.credential)
+    const snapshot = toExecutorSnapshot(refreshed.credential);
 
     // The token did not change: repeating the request would only repeat the rejection.
-    if (rejected !== "" && accessTokenOf(snapshot.metadata) === rejected) return yield* error
-    const next = hooks.retry === undefined ? { ...current, credential: snapshot } : yield* hooks.retry(error, snapshot)
+    if (rejected !== "" && accessTokenOf(snapshot.metadata) === rejected) return yield* error;
+    const next =
+      hooks.retry === undefined
+        ? { ...current, credential: snapshot }
+        : yield* hooks.retry(error, snapshot);
 
-    return yield* use(next)
-  })
+    return yield* use(next);
+  });

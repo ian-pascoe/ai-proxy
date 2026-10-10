@@ -5,230 +5,242 @@
  * payloadFromProtocolMatches, payloadModelCandidates, matchModelPattern, payload*ConditionsMatch) and
  * internal/thinking/suffix.go (ParseSuffix).
  */
-import { get, type Json, jsonEquals } from "../../json/index.ts"
-import type { PayloadModelRule } from "./schema.ts"
-import { buildPayloadPath, resolvePayloadRulePaths } from "./paths.ts"
+import { get, type Json, jsonEquals } from "../../json/index.ts";
+import type { PayloadModelRule } from "./schema.ts";
+import { buildPayloadPath, resolvePayloadRulePaths } from "./paths.ts";
 
 /** Inbound request headers: Web `Headers`, or a record whose values may be multi-valued. */
-export type HeaderInput = Headers | Readonly<Record<string, string | readonly string[] | undefined>>
+export type HeaderInput =
+  | Headers
+  | Readonly<Record<string, string | readonly string[] | undefined>>;
 
-const equalFold = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+const equalFold = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /** `*`-only glob matching (Go matchModelPattern); both sides are trimmed. */
 export const matchModelPattern = (rawPattern: string, rawModel: string): boolean => {
-  const pattern = rawPattern.trim()
-  const model = rawModel.trim()
+  const pattern = rawPattern.trim();
+  const model = rawModel.trim();
 
-  if (pattern === "") return false
+  if (pattern === "") return false;
 
-  if (pattern === "*") return true
-  let pi = 0
-  let si = 0
-  let starIdx = -1
-  let matchIdx = 0
+  if (pattern === "*") return true;
+  let pi = 0;
+  let si = 0;
+  let starIdx = -1;
+  let matchIdx = 0;
 
   while (si < model.length) {
     if (pi < pattern.length && pattern[pi] === model[si]) {
-      pi++
-      si++
+      pi++;
+      si++;
     } else if (pi < pattern.length && pattern[pi] === "*") {
-      starIdx = pi
-      matchIdx = si
-      pi++
+      starIdx = pi;
+      matchIdx = si;
+      pi++;
     } else if (starIdx !== -1) {
-      pi = starIdx + 1
-      matchIdx++
-      si = matchIdx
+      pi = starIdx + 1;
+      matchIdx++;
+      si = matchIdx;
     } else {
-      return false
+      return false;
     }
   }
 
-  while (pi < pattern.length && pattern[pi] === "*") pi++
+  while (pi < pattern.length && pattern[pi] === "*") pi++;
 
-  return pi === pattern.length
-}
+  return pi === pattern.length;
+};
 
 /** Mirrors thinking.ParseSuffix: `name(value)` -> base name and whether a suffix was present. */
 const parseThinkingSuffix = (model: string): { modelName: string; hasSuffix: boolean } => {
-  const lastOpen = model.lastIndexOf("(")
+  const lastOpen = model.lastIndexOf("(");
 
-  if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false }
+  if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false };
 
-  return { modelName: model.slice(0, lastOpen), hasSuffix: true }
-}
+  return { modelName: model.slice(0, lastOpen), hasSuffix: true };
+};
 
 /** `[upstream model, base of requested model, requested model with suffix]`, deduplicated case-insensitively. */
 export const payloadModelCandidates = (rawModel: string, rawRequestedModel: string): string[] => {
-  const model = rawModel.trim()
-  const requestedModel = rawRequestedModel.trim()
-  const candidates: string[] = []
-  const seen = new Set<string>()
+  const model = rawModel.trim();
+  const requestedModel = rawRequestedModel.trim();
+  const candidates: string[] = [];
+  const seen = new Set<string>();
 
   const add = (raw: string): void => {
-    const value = raw.trim()
+    const value = raw.trim();
 
-    if (value === "") return
-    const key = value.toLowerCase()
+    if (value === "") return;
+    const key = value.toLowerCase();
 
-    if (seen.has(key)) return
-    seen.add(key)
-    candidates.push(value)
-  }
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(value);
+  };
 
-  add(model)
+  add(model);
 
   if (requestedModel !== "") {
-    const parsed = parseThinkingSuffix(requestedModel)
-    add(parsed.modelName)
+    const parsed = parseThinkingSuffix(requestedModel);
+    add(parsed.modelName);
 
-    if (parsed.hasSuffix) add(requestedModel)
+    if (parsed.hasSuffix) add(requestedModel);
   }
 
-  return candidates
-}
+  return candidates;
+};
 
 const normalizeFromProtocol = (protocol: string): string => {
-  const normalized = protocol.trim().toLowerCase()
+  const normalized = protocol.trim().toLowerCase();
 
-  return normalized === "openai-response" || normalized === "openai-responses" || normalized === "response"
+  return normalized === "openai-response" ||
+    normalized === "openai-responses" ||
+    normalized === "response"
     ? "responses"
-    : normalized
-}
+    : normalized;
+};
 
-const fromProtocolMatches = (pattern: string | undefined, fromProtocol: string | undefined): boolean => {
-  const wanted = normalizeFromProtocol(pattern ?? "")
+const fromProtocolMatches = (
+  pattern: string | undefined,
+  fromProtocol: string | undefined,
+): boolean => {
+  const wanted = normalizeFromProtocol(pattern ?? "");
 
-  if (wanted === "") return true
-  const actual = normalizeFromProtocol(fromProtocol ?? "")
+  if (wanted === "") return true;
+  const actual = normalizeFromProtocol(fromProtocol ?? "");
 
-  return actual !== "" && wanted === actual
-}
+  return actual !== "" && wanted === actual;
+};
 
 const headerValues = (headers: HeaderInput | undefined, key: string): string[] => {
-  if (headers === undefined) return []
+  if (headers === undefined) return [];
 
   if (headers instanceof Headers) {
-    const joined = headers.get(key)
+    const joined = headers.get(key);
 
-    if (joined === null) return []
+    if (joined === null) return [];
 
     // The Fetch API folds repeated headers into one comma-separated value; any single value may match too.
-    return [joined, ...joined.split(",").map((value) => value.trim())]
+    return [joined, ...joined.split(",").map((value) => value.trim())];
   }
 
-  const values: string[] = []
+  const values: string[] = [];
 
   for (const [name, value] of Object.entries(headers)) {
-    if (!equalFold(name, key) || value === undefined) continue
+    if (!equalFold(name, key) || value === undefined) continue;
 
-    if (typeof value === "string") values.push(value)
-    else values.push(...value)
+    if (typeof value === "string") values.push(value);
+    else values.push(...value);
   }
 
-  return values
-}
+  return values;
+};
 
 const headersMatch = (
   headers: HeaderInput | undefined,
-  rules: Readonly<Record<string, string>> | undefined
+  rules: Readonly<Record<string, string>> | undefined,
 ): boolean => {
-  if (rules === undefined) return true
+  if (rules === undefined) return true;
 
   for (const [rawKey, pattern] of Object.entries(rules)) {
-    const key = rawKey.trim()
+    const key = rawKey.trim();
 
-    if (key === "") continue
-    const values = headerValues(headers, key)
+    if (key === "") continue;
+    const values = headerValues(headers, key);
 
-    if (values.length === 0) return false
+    if (values.length === 0) return false;
 
-    if (!values.some((value) => matchModelPattern(pattern, value))) return false
+    if (!values.some((value) => matchModelPattern(pattern, value))) return false;
   }
 
-  return true
-}
+  return true;
+};
 
 const pathMatchesValue = (payload: Json, path: string, value: Json): boolean =>
   resolvePayloadRulePaths(payload, path).some((resolved) => {
-    const current = get(payload, resolved)
+    const current = get(payload, resolved);
 
-    return current !== undefined && jsonEquals(current, value)
-  })
+    return current !== undefined && jsonEquals(current, value);
+  });
 
 const pathExists = (payload: Json, path: string): boolean =>
   resolvePayloadRulePaths(payload, path).some((resolved) => {
-    const current = get(payload, resolved)
+    const current = get(payload, resolved);
 
-    return current !== undefined && current !== null
-  })
+    return current !== undefined && current !== null;
+  });
 
 const conditionsMatch = (payload: Json, root: string, rule: PayloadModelRule): boolean => {
   for (const condition of rule.match ?? []) {
     for (const [path, value] of Object.entries(condition)) {
-      if (path.trim() === "") continue
+      if (path.trim() === "") continue;
 
-      if (!pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false
+      if (!pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false;
     }
   }
 
   for (const condition of rule["not-match"] ?? []) {
     for (const [path, value] of Object.entries(condition)) {
-      if (path.trim() === "") continue
+      if (path.trim() === "") continue;
 
-      if (pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false
+      if (pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false;
     }
   }
 
   for (const path of rule.exist ?? []) {
-    if (path.trim() === "") continue
+    if (path.trim() === "") continue;
 
-    if (!pathExists(payload, buildPayloadPath(root, path))) return false
+    if (!pathExists(payload, buildPayloadPath(root, path))) return false;
   }
 
   for (const path of rule["not-exist"] ?? []) {
-    if (path.trim() === "") continue
+    if (path.trim() === "") continue;
 
-    if (pathExists(payload, buildPayloadPath(root, path))) return false
+    if (pathExists(payload, buildPayloadPath(root, path))) return false;
   }
 
-  return true
-}
+  return true;
+};
 
 export interface PayloadMatchContext {
-  readonly protocol: string
-  readonly fromProtocol: string
-  readonly headers: HeaderInput | undefined
-  readonly root: string
-  readonly candidates: readonly string[]
+  readonly protocol: string;
+  readonly fromProtocol: string;
+  readonly headers: HeaderInput | undefined;
+  readonly root: string;
+  readonly candidates: readonly string[];
 }
 
 /** True when any model entry matches any model candidate and its protocol/header/payload conditions hold. */
 export const payloadModelRulesMatch = (
   rules: readonly PayloadModelRule[] | undefined,
   context: PayloadMatchContext,
-  payload: Json
+  payload: Json,
 ): boolean => {
-  if (rules === undefined || rules.length === 0 || context.candidates.length === 0) return false
+  if (rules === undefined || rules.length === 0 || context.candidates.length === 0) return false;
 
   for (const model of context.candidates) {
     for (const entry of rules) {
-      const name = (entry.name ?? "").trim()
+      const name = (entry.name ?? "").trim();
 
-      if (name === "") continue
-      const entryProtocol = (entry.protocol ?? "").trim()
+      if (name === "") continue;
+      const entryProtocol = (entry.protocol ?? "").trim();
 
-      if (entryProtocol !== "" && context.protocol !== "" && !equalFold(entryProtocol, context.protocol)) continue
+      if (
+        entryProtocol !== "" &&
+        context.protocol !== "" &&
+        !equalFold(entryProtocol, context.protocol)
+      )
+        continue;
 
-      if (!fromProtocolMatches(entry["from-protocol"], context.fromProtocol)) continue
+      if (!fromProtocolMatches(entry["from-protocol"], context.fromProtocol)) continue;
 
-      if (!headersMatch(context.headers, entry.headers)) continue
+      if (!headersMatch(context.headers, entry.headers)) continue;
 
-      if (!matchModelPattern(name, model)) continue
+      if (!matchModelPattern(name, model)) continue;
 
-      if (conditionsMatch(payload, context.root, entry)) return true
+      if (conditionsMatch(payload, context.root, entry)) return true;
     }
   }
 
-  return false
-}
+  return false;
+};

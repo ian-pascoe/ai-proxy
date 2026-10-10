@@ -38,8 +38,8 @@ const STATUS_TEXT: Readonly<Record<number, string>> = {
   502: "Bad Gateway",
   503: "Service Unavailable",
   504: "Gateway Timeout",
-  505: "HTTP Version Not Supported"
-}
+  505: "HTTP Version Not Supported",
+};
 
 /** `http.StatusText`: empty for unknown codes. */
-export const statusText = (status: number): string => STATUS_TEXT[status] ?? ""
+export const statusText = (status: number): string => STATUS_TEXT[status] ?? "";

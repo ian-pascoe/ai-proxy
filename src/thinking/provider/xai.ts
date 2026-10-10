@@ -3,6 +3,6 @@
  *
  * Go source: internal/thinking/provider/xai/apply.go (embeds codex.Applier).
  */
-import { codexApplier } from "./codex.ts"
+import { codexApplier } from "./codex.ts";
 
-export const xaiApplier = codexApplier
+export const xaiApplier = codexApplier;
