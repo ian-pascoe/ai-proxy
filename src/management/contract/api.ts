@@ -8,6 +8,7 @@
  */
 import { HttpApi } from "effect/http-api";
 import { CredentialsGroup } from "./credentials.ts";
+import { OAuthGroup } from "./oauth.ts";
 import { UsageGroupApi } from "./usage.ts";
 
 export const MANAGEMENT_API_PREFIX = "/v8/management";
@@ -15,4 +16,5 @@ export const MANAGEMENT_API_PREFIX = "/v8/management";
 export class ManagementApi extends HttpApi.make("management")
   .add(CredentialsGroup)
   .add(UsageGroupApi)
+  .add(OAuthGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

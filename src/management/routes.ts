@@ -25,6 +25,7 @@ import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.
 import { modelDefinitionsHandler } from "./model-definitions.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { panelHandler } from "./panel.ts";
+import { quotaCheckHandler } from "./quota-routes.ts";
 import { PANEL_PAGE_PATHS, webPanelAsset, webPanelPage } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 import {
@@ -58,6 +59,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...usageRoutes,
       ...oauthRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
+      HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),
       HttpRouter.route("GET", `${BASE}/server/latest-version`, bound(latestVersionHandler)),
       HttpRouter.route("POST", `${BASE}/requests/api-call`, bound(apiCallHandler)),
       HttpRouter.route(
