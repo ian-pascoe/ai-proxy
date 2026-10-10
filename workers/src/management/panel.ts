@@ -5,8 +5,9 @@
  * The page is a static asset (`public/management.html`, installed by `pnpm panel:sync` with a SHA-256 check against
  * the GitHub release digest, see `tools/panel-sync.mjs`) served through the `ASSETS` binding. It is gated like the
  * management API (Access admin, `access/routes.ts`) although it contains no secrets. The panel talks to
- * `/v8/management` on the page's own origin; Access authenticates those calls, so the "management key" the login
- * form asks for can be any non-empty text.
+ * `/v8/management` on the page's own origin; Access authenticates those calls, so the "management key" its login form
+ * asks for is meaningless here. Deviation from Go: the page is served with `AUTO_LOGIN_SCRIPT` prepended to `<head>`,
+ * which stores a placeholder key and the "remember me" flag before the panel boots, so the panel logs in on its own.
  */
 import { Effect } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -14,6 +15,19 @@ import { WorkerEnv } from "../platform/env.ts"
 import { jsonReply } from "./http.ts"
 
 const ASSET_PATH = "/management.html"
+
+/** Placeholder stored as the panel's management key (never checked: Access is the authentication). */
+export const PANEL_PLACEHOLDER_KEY = "cloudflare-access"
+
+/**
+ * Seeds the panel's saved login (Cli-Proxy-API-Management-Center `restoreSession`: `localStorage.isLoggedIn === "true"`
+ * plus a `managementKey`; the API base defaults to the page's origin). A plain JSON value is migrated by the panel into
+ * its obfuscated storage format on start. Logging out in the panel only lasts until the next page load.
+ */
+export const AUTO_LOGIN_SCRIPT =
+  `(()=>{try{if(localStorage.getItem("isLoggedIn")!=="true"){` +
+  `localStorage.setItem("managementKey",${JSON.stringify(JSON.stringify(PANEL_PLACEHOLDER_KEY))});` +
+  `localStorage.setItem("isLoggedIn","true")}}catch{}})()`
 
 const PANEL_HEADERS = {
   "content-type": "text/html; charset=utf-8",
@@ -39,9 +53,13 @@ export const panelHandler = Effect.gen(function* () {
     yield* Effect.logWarning(NOT_INSTALLED)
     return jsonReply(404, { error: NOT_INSTALLED })
   }
-  const etag = asset.headers.get("etag")
-  return HttpServerResponse.raw(asset.body, {
-    status: 200,
-    headers: { ...PANEL_HEADERS, ...(etag === null ? {} : { etag }) }
-  })
+  const page = new HTMLRewriter()
+    .on("head", {
+      element: (head) => {
+        head.prepend(`<script>${AUTO_LOGIN_SCRIPT}</script>`, { html: true })
+      }
+    })
+    .transform(asset)
+  // The asset's ETag describes the unmodified file; the rewritten page is always sent in full (no-cache, no ETag).
+  return HttpServerResponse.raw(page.body, { status: 200, headers: PANEL_HEADERS })
 })

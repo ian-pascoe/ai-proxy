@@ -749,7 +749,9 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; response shapes follow
 the Go server so the official panel (`Cli-Proxy-API-Management-Center`, checked against v1.25.6) works unchanged. Auth is
 the Access admin gate only (`access/routes.ts` classifies `/v8/management*` **and `/management.html`** as `management`);
-the panel's "management key" is ignored (any text logs in).
+there is no management key: the page is served with a small script prepended to `<head>` (`panel.ts`, `AUTO_LOGIN_SCRIPT`)
+that seeds the panel's saved login with a placeholder key, so it connects without showing its login form (its logout lasts
+until the next page load).
 
 - **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
   `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),

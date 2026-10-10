@@ -21,7 +21,8 @@ own provider logins (OAuth) and API keys, with round-robin credential selection,
 - **State** lives in a `ControlPlane` Durable Object (config, credentials, cooldowns, OAuth sessions), a `SessionState`
   Durable Object (reasoning replay/continuity caches), KV `CACHE` (model catalogs), and D1 `USAGE` (usage records).
 - **Management**: the official control panel is served at `/management.html` and the API at `/v8/management`, both for Access
-  admins only. You add credentials (OAuth login or auth-file upload) and edit config there.
+  admins only. Access is the login, so the panel opens without asking for a management key. You add credentials (OAuth
+  login or auth-file upload) and edit config there.
 
 ## Provider support
 
@@ -77,7 +78,7 @@ host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** (`dev@example.com`,
 `.env`). The bypass is ignored for any other host and refused whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, and
 deployed Workers never get it.
 
-Open `http://localhost:1337/management.html` (any non-empty text works as "management key"), add a credential, then:
+Open `http://localhost:1337/management.html` (it logs in by itself: there is no management key), add a credential, then:
 
 ```bash
 curl localhost:1337/v1/models

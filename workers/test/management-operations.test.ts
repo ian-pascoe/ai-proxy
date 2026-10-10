@@ -1,14 +1,15 @@
 // api-call, latest-version, model definitions, log stubs and the control panel page.
 import { afterAll, beforeEach, describe, expect, it } from "vitest"
 import { authIndexOf } from "../src/management/auth-index.ts"
-import { NOT_INSTALLED } from "../src/management/panel.ts"
+import { AUTO_LOGIN_SCRIPT, NOT_INSTALLED, PANEL_PLACEHOLDER_KEY } from "../src/management/panel.ts"
 import { claudeFile, controlPlane, jsonInit, makeHarness, resetControlPlane, token } from "./support/management.ts"
 
 let release: () => { status?: number; body?: unknown; transportError?: boolean } = () => ({
   body: { tag_name: "v8.1.0" }
 })
 
-const PANEL_HTML = "<!doctype html><title>panel</title>"
+const PANEL_HTML = "<!doctype html><html><head><title>panel</title></head><body></body></html>"
+const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`)
 const panelAssets = (found: boolean) =>
   ({
     fetch: async (request: Request) =>
@@ -246,8 +247,8 @@ describe("control panel page", () => {
     expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8")
     expect(page.headers.get("x-frame-options")).toBe("DENY")
     expect(page.headers.get("x-content-type-options")).toBe("nosniff")
-    expect(page.headers.get("etag")).toBe('"abc"')
-    expect(await page.text()).toBe(PANEL_HTML)
+    expect(page.headers.get("etag")).toBeNull()
+    expect(await page.text()).toBe(SERVED_HTML)
 
     expect((await call("/management.html", { auth: false })).status).toBe(401)
     expect((await call("/Management.HTML", { auth: false })).status).toBe(401)
@@ -261,5 +262,29 @@ describe("control panel page", () => {
     } finally {
       await missing.dispose()
     }
+  })
+})
+
+describe("control panel auto-login", () => {
+  // Runs the injected script against a fake localStorage, as the browser does before the panel boots.
+  const run = (initial: Record<string, string>) => {
+    const store = new Map(Object.entries(initial))
+    const localStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value)
+    }
+    new Function("localStorage", AUTO_LOGIN_SCRIPT)(localStorage)
+    return Object.fromEntries(store)
+  }
+
+  it("stores a placeholder key and the remember-me flag", () => {
+    expect(run({})).toEqual({ managementKey: JSON.stringify(PANEL_PLACEHOLDER_KEY), isLoggedIn: "true" })
+  })
+
+  it("keeps an existing saved login", () => {
+    expect(run({ managementKey: "obfuscated", isLoggedIn: "true" })).toEqual({
+      managementKey: "obfuscated",
+      isLoggedIn: "true"
+    })
   })
 })

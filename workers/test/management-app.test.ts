@@ -3,13 +3,15 @@
 import { env } from "cloudflare:workers"
 import { afterAll, describe, expect, it } from "vitest"
 import { makeWebHandler } from "../src/http/app.ts"
+import { AUTO_LOGIN_SCRIPT } from "../src/management/panel.ts"
 import { requestContext } from "../src/platform/env.ts"
 import { claudeFile, resetControlPlane } from "./support/management.ts"
 
 const app = makeWebHandler()
 afterAll(app.dispose)
 
-const PANEL_HTML = "<!doctype html><title>cliproxy panel</title>"
+const PANEL_HTML = "<!doctype html><html><head><title>cliproxy panel</title></head><body></body></html>"
+const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`)
 const bindings = {
   ...env,
   ACCESS_DEV_BYPASS: "admin@example.com",
@@ -28,7 +30,7 @@ describe("control panel in the application", () => {
 
     const page = await get("/management.html")
     expect(page.status).toBe(200)
-    expect(await page.text()).toBe(PANEL_HTML)
+    expect(await page.text()).toBe(SERVED_HTML)
 
     const list = await get("/v8/management/credentials")
     expect(list.status).toBe(200)
