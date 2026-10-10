@@ -25,7 +25,7 @@ TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com
 ## Reference repositories
 
 The `pnpm install` command materializes these read-only references in `.repos/`.
-Run `./tools/sync-reference-repos.sh` to refresh them directly.
+Run `pnpm repos:sync` (`./tools/sync-reference-repos.sh`) to refresh them; `pnpm install` skips it when dependencies are up to date.
 
 | Repository                                                                  | Path                 | Useful for                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
