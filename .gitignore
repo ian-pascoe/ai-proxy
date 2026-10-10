@@ -1,70 +1,31 @@
-# Binaries
-cli-proxy-api
-*.exe
-
-# Configuration
-config.yaml
+node_modules
+dist
+# Alchemy: local state (ALCHEMY_STATE=local), dev emulators, bundles, logs and the service token credentials file
+.alchemy
+.wrangler
+# Deploy settings (copy .env.example)
 .env
+.env.*
+!.env.example
+# Control panel installed by `pnpm panel:sync` (large; fetched at deploy time)
+public/management.html
+public/management.html.tmp
 
-# Generated content
-bin/*
-/logs
-conv/*
-temp/*
-refs/*
-plugins/*
-examples/plugin/bin/*
-
-# Storage backends
-pgstore/*
-gitstore/*
-objectstore/*
-
-# Static assets
-static/*
-
-# Authentication data
-auths/*
-/auths
-!auths/.gitkeep
-
-# Documentation
-docs/*
-!docs/management-api-v8.md
-!docs/workers-port/
-AGENTS.md
-CLAUDE.md
-GEMINI.md
-AGENTS.override.md
+# Reference repositories (tools/sync-reference-repos.sh)
+.repos/
+# Go workspace checksums for tools/fixturegen
+go.work.sum
 
 # Tooling metadata
 .vscode/*
+.idea/*
 .worktrees/
 .codex/*
 .claude/*
-.claude
 .gemini/*
 .serena/*
 .agent/*
-.agents
-.pi
 .agents/*
+.pi
 .opencode/*
-.idea/*
-.beads/*
-.bmad/*
-_bmad/*
-_bmad-output/*
-.gocache/
-.gitnexus/
-
-# macOS
-.DS_Store
-._*
-
-# docker
-docker-compose.override.yml
-
-
-# Local LLM Wiki vault
-.llm-wiki
+AGENTS.override.md
