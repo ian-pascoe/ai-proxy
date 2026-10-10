@@ -29,6 +29,7 @@
     "web/src/lib/format.ts",
     "web/src/lib/history.ts",
     "web/src/lib/quota.ts",
+    "web/src/lib/usage.ts",
     "worker-configuration.d.ts",
     "vitest.config.ts"
   ]

@@ -1,9 +1,9 @@
 // The page frame: the yellow shell bar (name and host, page links, Connect account, Refresh) above the page.
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { credentialsAtom, usageLastDayAtom } from "../api/client.ts";
+import { credentialsAtom, usageEpochAtom, usageLastDayAtom } from "../api/client.ts";
 import styles from "./Shell.module.css";
 
 const PAGES = [
@@ -19,7 +19,7 @@ const RefreshButton = () => {
   const credentials = useAtomValue(credentialsAtom);
   const usage = useAtomValue(usageLastDayAtom);
   const refreshCredentials = useAtomRefresh(credentialsAtom);
-  const refreshUsage = useAtomRefresh(usageLastDayAtom);
+  const bumpUsage = useAtomSet(usageEpochAtom);
   const busy = credentials.waiting || usage.waiting;
 
   return (
@@ -31,7 +31,7 @@ const RefreshButton = () => {
       aria-busy={busy}
       onClick={() => {
         refreshCredentials();
-        refreshUsage();
+        bumpUsage((epoch) => epoch + 1);
       }}
     >
       <RefreshCw

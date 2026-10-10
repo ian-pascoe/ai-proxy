@@ -79,3 +79,27 @@ const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 
 /** A day of the month: "Oct 10". */
 export const formatDay = (epochMs: number): string => shortDate.format(epochMs);
+
+const moment = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const timeOfDay = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
+
+/** When something happened: the time alone today ("4:35 PM"), with the day otherwise ("Oct 4, 11:12 PM"). */
+export const formatMoment = (epochMs: number, now: number): string =>
+  new Date(epochMs).toDateString() === new Date(now).toDateString()
+    ? timeOfDay.format(epochMs)
+    : moment.format(epochMs);
+
+/** A request's latency: "840 ms", "2.4 s", "1 min 12 s". */
+export const formatLatency = (ms: number): string => {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+
+  if (ms < MINUTE) return `${oneDecimal.format(ms / 1000)} s`;
+
+  return `${Math.floor(ms / MINUTE)} min ${Math.round((ms % MINUTE) / 1000)} s`;
+};

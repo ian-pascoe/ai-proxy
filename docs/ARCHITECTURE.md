@@ -786,7 +786,14 @@ until the next page load).
   All / Needs attention / Disabled, search, allowance meters); Account (`/accounts/$authIndex`: allowance with reset
   blades, cooldowns with clear, window history, routing priority and note, details, served models, check quota, refresh
   tokens, enable/disable, delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
-  code, Vertex service-account import, auth-file upload). Allowance figures (`web/src/lib/quota.ts`) come from the
+  code, Vertex service-account import, auth-file upload); Usage (`/usage`: totals, tokens per hour or day, a breakdown
+  by model, account, provider, user or endpoint whose rows narrow the page, and the request log with each request's
+  details and failure body). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
+  `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
+  summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
+  through the `next_before` cursor); every range starts at its first bar. The shell's Refresh bumps one epoch atom
+  that every usage query reads, so they all refetch. Allowance figures (`web/src/lib/quota.ts`) come from the
   stored quota check when it is newer than the last response's rate-limit headers, otherwise from the headers. Window
   history (`web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
   windows, counted back from the current reset (approximate for windows the provider starts on first use), or into days

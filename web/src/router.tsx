@@ -7,6 +7,8 @@ import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound, Placeholder } from "./pages/Placeholder.tsx";
+import { UsagePage } from "./pages/Usage.tsx";
+import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
 
@@ -40,11 +42,12 @@ const routeTree = rootRoute.addChildren([
     "Models",
     "The models clients can call, which accounts serve each one, aliases and exclusions.",
   ),
-  page(
-    "/usage",
-    "Usage",
-    "Itemised usage by model, provider, user, account or day, and the request log.",
-  ),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/usage",
+    validateSearch: readUsageSearch,
+    component: UsagePage,
+  }),
   page(
     "/settings",
     "Settings",

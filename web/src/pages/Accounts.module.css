@@ -17,46 +17,13 @@
   letter-spacing: -0.025em;
 }
 
-/* The filter: a row of plain words with counts; the chosen one carries the shell's ink underline. */
+/* The filter tabs and the search, on one line. */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3) var(--space-5);
-}
-
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
-}
-
-.filter {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  height: 2.5rem;
-  padding: 0;
-  background: none;
-  border: 0;
-  border-bottom: 4px solid transparent;
-  font-size: var(--text-sm);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.filter:hover {
-  border-bottom-color: var(--stone-2);
-}
-
-.filter[aria-checked="true"] {
-  border-bottom-color: var(--ink);
-}
-
-.filterCount {
-  font-weight: 400;
-  color: var(--stone-4);
 }
 
 .search {
