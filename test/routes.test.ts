@@ -34,14 +34,11 @@ describe("GET /healthz", () => {
 });
 
 describe("GET /", () => {
-  it("returns the server banner with Go's key order", async () => {
+  it("is the control panel, gated like the management API (no public banner)", async () => {
+    // proxy.test has no Access settings, so the management zone fails closed.
     const response = await fetchWorker("/");
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
-    expect(await response.text()).toBe(
-      '{"endpoints":["POST /v1/chat/completions","POST /v1/completions","GET /v1/models"],"message":"CLI Proxy API Server"}',
-    );
-    expectCors(response);
+    expect(response.status).toBeGreaterThanOrEqual(401);
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 });
 

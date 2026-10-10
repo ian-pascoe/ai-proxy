@@ -1,0 +1,201 @@
+.skip {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-2);
+  z-index: 10;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink);
+  color: var(--white);
+  border-radius: var(--radius);
+  transform: translateY(-200%);
+}
+
+.skip:focus-visible {
+  transform: none;
+}
+
+/* The shell is the yellow of the trail signs; everything on it is sign ink. */
+.bar {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.inner {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 0 var(--page-gutter);
+  min-height: 4rem;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-6);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.host {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: color-mix(in oklab, var(--ink) 72%, var(--yellow));
+}
+
+.nav ul {
+  display: flex;
+  height: 100%;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--space-3);
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: inset 0 -4px 0 transparent;
+}
+
+.navLink:hover {
+  box-shadow: inset 0 -4px 0 color-mix(in oklab, var(--ink) 25%, var(--yellow));
+}
+
+.navLink[aria-current="page"] {
+  font-weight: 750;
+  box-shadow: inset 0 -4px 0 var(--ink);
+}
+
+.navLink:focus-visible {
+  outline-offset: -3px;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.connect {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2.5rem;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  background: var(--ink);
+  color: var(--white);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.connect:hover {
+  background: color-mix(in oklab, var(--ink) 82%, var(--white));
+}
+
+.refresh {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.refresh:hover {
+  background: var(--yellow-deep);
+}
+
+.spinning {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.main {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--page-gutter) var(--space-7);
+}
+
+.main:focus {
+  outline: none;
+}
+
+/* Narrow screens: name and actions on the first row, page links wrap onto the second. */
+@media (max-width: 64rem) {
+  .inner {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+    padding-top: var(--space-3);
+  }
+
+  /* One row of page links that scrolls sideways; an edge with more links beyond it fades out. */
+  .nav {
+    --fade-start: 2.5rem;
+    --fade-end: 2.5rem;
+
+    order: 3;
+    flex-basis: 100%;
+    margin: 0 calc(var(--page-gutter) * -1);
+    padding: 0 calc(var(--page-gutter) - var(--space-3));
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-padding-inline: 3rem;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent
+    );
+  }
+
+  .nav[data-start="true"] {
+    --fade-start: 0px;
+  }
+
+  .nav[data-end="true"] {
+    --fade-end: 0px;
+  }
+
+  .nav ul {
+    width: max-content;
+    gap: 0;
+  }
+
+  .navLink {
+    height: 2.75rem;
+  }
+}

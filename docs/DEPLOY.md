@@ -77,8 +77,8 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 ## Operations
 
-- **Management panel.** CI installs the panel release pinned by `PANEL_TAG` in `ci.yml` (`pnpm panel:sync --tag`).
-  Bump it deliberately; Dependabot does not.
+- **Management panels.** CI builds the control panel from `web/` (`pnpm web:build`) and installs the upstream panel
+  release pinned by `PANEL_TAG` in `ci.yml` (`pnpm panel:sync --tag`); bump the tag deliberately, Dependabot does not.
 - **State.** Deploys use the Alchemy state store in the account (`Cloudflare.state()`), shared by CI and local
   machines; `deploy --yes` also upgrades the state store when Alchemy needs a newer version.
 - **Concurrency.** One deploy per stage at a time, never cancelled midway; a newer push to `main` waits for the

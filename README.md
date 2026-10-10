@@ -20,8 +20,8 @@ own provider logins (OAuth) and API keys, with round-robin credential selection,
   Access **service tokens** (`CF-Access-Client-Id` / `CF-Access-Client-Secret` headers).
 - **State** lives in a `ControlPlane` Durable Object (config, credentials, cooldowns, OAuth sessions), a `SessionState`
   Durable Object (reasoning replay/continuity caches), KV `CACHE` (model catalogs), and D1 `USAGE` (usage records).
-- **Management**: the official control panel is served at `/management.html` and the API at `/v8/management`, both for Access
-  admins only. Access is the login, so the panel opens without asking for a management key. You add credentials (OAuth
+- **Management**: the control panel is served at `/` (new, being built page by page in `web/`), the official upstream panel
+  at `/management.html` until the new one covers everything, and the API at `/v8/management`, all for Access admins only. Access is the login, so the panel opens without asking for a management key. You add credentials (OAuth
   login or auth-file upload) and edit config there.
 
 ## Provider support
@@ -66,7 +66,8 @@ view (an Access application on the whole hostname still protects them).
 
 ```bash
 pnpm install                       # also clones the Go server into .repos/ (read-only reference, see DEVELOPMENT.md)
-pnpm panel:sync                    # downloads the control panel into public/ (optional locally)
+pnpm web:build                     # builds the control panel (/) into public/ (pnpm web:dev for hot reload)
+pnpm panel:sync                    # downloads the upstream panel (/management.html) into public/ (optional locally)
 ALCHEMY_STATE=local pnpm dev       # alchemy dev: http://localhost:1337, hot reload
 ```
 
@@ -77,7 +78,8 @@ host (`localhost`, `127.0.0.1`, `[::1]`) an Access **admin** (`dev@example.com`,
 `.env`). The bypass is ignored for any other host and refused whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, and
 deployed Workers never get it.
 
-Open `http://localhost:1337/management.html` (it logs in by itself: there is no management key), add a credential, then:
+Open `http://localhost:1337/` for the overview, or `http://localhost:1337/management.html` (it logs in by itself: there is
+no management key) to add a credential, then:
 
 ```bash
 curl localhost:1337/v1/models
@@ -113,10 +115,12 @@ domain (zone) in that account, Zero Trust enabled (note your team name), Node 22
    See [ACCESS.md](docs/ACCESS.md) for what each Access setting creates. The Worker reads **no other
    secrets**: provider tokens and API keys are stored in the `ControlPlane` Durable Object through the management API/panel.
 
-3. **Install the control panel** (not committed; ~3 MB, SHA-256 verified against the GitHub release):
+3. **Build and install the control panels** (neither is committed; the upstream one is ~3 MB, SHA-256 verified against
+   the GitHub release):
 
    ```bash
-   pnpm panel:sync          # GITHUB_TOKEN raises the API rate limit; --tag vX.Y.Z pins a release
+   pnpm web:build           # the control panel at /
+   pnpm panel:sync          # the upstream panel; GITHUB_TOKEN raises the API rate limit; --tag vX.Y.Z pins a release
    ```
 
 4. **Deploy** (shows the plan and asks for confirmation; `pnpm plan` only previews):
@@ -152,8 +156,8 @@ Re-run `pnpm panel:sync` before a deploy to pick up a new panel release.
 
 ## Cloudflare Access reference
 
-`/v1*`, `/openai/v1*`, `/backend-api/codex*` need a valid `Cf-Access-Jwt-Assertion`; `/v8/management*` and
-`/management.html` additionally need an admin. Cross-site browser requests (and cross-origin WebSocket upgrades) are refused;
+`/v1*`, `/openai/v1*`, `/backend-api/codex*` need a valid `Cf-Access-Jwt-Assertion`; `/v8/management*`,
+`/management.html` and the control panel (`/`, its pages and `/assets`) additionally need an admin. Cross-site browser requests (and cross-origin WebSocket upgrades) are refused;
 non-browser clients are unaffected. Variables and the browser-session hardening: see
 [ACCESS.md](docs/ACCESS.md#3-worker-variables).
 

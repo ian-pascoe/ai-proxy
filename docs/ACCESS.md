@@ -62,7 +62,7 @@ Set by the deploy from the settings above (Alchemy binds them as plain-text vari
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `ACCESS_TEAM_DOMAIN`          | `myteam`, `myteam.cloudflareaccess.com` or `https://myteam.cloudflareaccess.com` (issuer + JWKS host) |
 | `ACCESS_AUD`                  | AUD tag(s) of the application(s), comma separated                                                     |
-| `ACCESS_ADMIN_EMAILS`         | Admins for `/v8/management*` and `/management.html` (comma/space separated, case-insensitive)         |
+| `ACCESS_ADMIN_EMAILS`         | Admins for `/v8/management*` and the panels (comma/space separated, case-insensitive)                 |
 | `ACCESS_ADMIN_SERVICE_TOKENS` | Service token **Client IDs** allowed to administer (the full `….access` id)                           |
 | `ACCESS_DEV_BYPASS`           | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
 
@@ -80,7 +80,8 @@ warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to
 ## 4. How the Worker validates requests
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` need a
-   principal; `/v8/management*` and `/management.html` need an admin; everything else (`/healthz`, `/`, the OAuth browser callbacks
+   principal; `/v8/management*`, `/management.html` and the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`,
+   `/settings` with their sub-paths, `/assets/*`) need an admin; everything else (`/healthz`, the OAuth browser callbacks
    `/anthropic/callback`, `/codex/callback`, `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
 2. `Cf-Access-Jwt-Assertion` is verified with `jose`: RS256 signature against the JWKS at

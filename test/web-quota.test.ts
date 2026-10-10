@@ -1,0 +1,236 @@
+// The panel's quota reading (web/src/lib/quota.ts) and figure formatting (web/src/lib/format.ts).
+import { describe, expect, it } from "vitest";
+import type { CredentialEntry } from "#contract/credentials.ts";
+import { formatCount, formatDuration, formatPercent, formatTokens } from "../web/src/lib/format.ts";
+import { accountStanding, byUrgency, quotaWindows, windowLabel } from "../web/src/lib/quota.ts";
+
+const entry = (
+  overrides: Partial<CredentialEntry> & Pick<CredentialEntry, "name" | "provider">,
+): CredentialEntry => ({
+  id: overrides.name,
+  auth_index: "0",
+  type: overrides.provider,
+  label: "",
+  status: "active",
+  status_message: "",
+  disabled: false,
+  unavailable: false,
+  runtime_only: false,
+  source: "file",
+  size: 0,
+  success: 0,
+  failed: 0,
+  recent_requests: [],
+  quota: { signals: {} },
+  cooldowns: [],
+  ...overrides,
+});
+
+const RESET = "2026-10-10T18:00:00.000Z";
+
+describe("quotaWindows", () => {
+  it("reads Claude's unified utilization fractions, whatever the header case", () => {
+    const windows = quotaWindows(
+      entry({
+        name: "claude.json",
+        provider: "claude",
+        quota: {
+          signals: {
+            "Anthropic-Ratelimit-Unified-5h-Utilization": "0.69",
+            "Anthropic-Ratelimit-Unified-5h-Reset": "1791655200",
+            "anthropic-ratelimit-unified-7d-utilization": "1.2",
+          },
+        },
+      }),
+    );
+
+    expect(windows).toEqual([
+      { label: "5-hour", usedPercent: 69, resetsAt: 1_791_655_200_000 },
+      { label: "Weekly", usedPercent: 100, resetsAt: undefined },
+    ]);
+  });
+
+  it("reads Codex windows and derives the reset from the observation time", () => {
+    const windows = quotaWindows(
+      entry({
+        name: "codex.json",
+        provider: "codex",
+        quota: {
+          observed_at: "2026-10-10T12:00:00.000Z",
+          signals: {
+            "X-Codex-Primary-Used-Percent": "42",
+            "X-Codex-Primary-Window-Minutes": "300",
+            "X-Codex-Primary-Reset-After-Seconds": "600",
+            "X-Codex-Secondary-Used-Percent": "85",
+            "X-Codex-Secondary-Window-Minutes": "10080",
+            "X-Codex-Secondary-Reset-At": RESET,
+          },
+        },
+      }),
+    );
+
+    expect(windows).toEqual([
+      { label: "5-hour", usedPercent: 42, resetsAt: Date.parse("2026-10-10T12:10:00.000Z") },
+      { label: "Weekly", usedPercent: 85, resetsAt: Date.parse(RESET) },
+    ]);
+  });
+
+  it("turns Devin's remaining percentages into use", () => {
+    const windows = quotaWindows(
+      entry({
+        name: "devin.json",
+        provider: "devin",
+        quota: {
+          signals: {
+            daily_quota_remaining_percent: "25%",
+            daily_quota_reset_at: RESET,
+            weekly_quota_remaining_percent: "90%",
+          },
+        },
+      }),
+    );
+
+    expect(windows).toEqual([
+      { label: "Daily", usedPercent: 75, resetsAt: Date.parse(RESET) },
+      { label: "Weekly", usedPercent: 10, resetsAt: undefined },
+    ]);
+  });
+
+  it("is empty without signals or for providers that send none", () => {
+    expect(quotaWindows(entry({ name: "c.json", provider: "claude" }))).toEqual([]);
+    expect(
+      quotaWindows(
+        entry({ name: "g.json", provider: "gemini", quota: { signals: { "x-anything": "1" } } }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("labels window lengths", () => {
+    expect([10_080, 1440, 4320, 300, 45].map(windowLabel)).toEqual([
+      "Weekly",
+      "Daily",
+      "3-day",
+      "5-hour",
+      "45-minute",
+    ]);
+  });
+});
+
+describe("accountStanding", () => {
+  it("is cut off by a credential-wide cooldown, which sets the next reset", () => {
+    const standing = accountStanding(
+      entry({
+        name: "claude.json",
+        provider: "claude",
+        quota: { signals: { "anthropic-ratelimit-unified-5h-utilization": "0.2" } },
+        cooldowns: [
+          {
+            scope: "model",
+            model_key: "m",
+            reason: "quota",
+            retry_at: "2026-10-10T13:00:00Z",
+            remaining_seconds: 60,
+          },
+          { scope: "credential", reason: "quota", retry_at: RESET, remaining_seconds: 600 },
+        ],
+      }),
+    );
+
+    expect(standing.level).toBe("out");
+    expect(standing.cutOffUntil).toBe(Date.parse(RESET));
+    expect(standing.nextReset).toBe(Date.parse(RESET));
+  });
+
+  it("follows the fullest window", () => {
+    const standing = accountStanding(
+      entry({
+        name: "codex.json",
+        provider: "codex",
+        quota: {
+          signals: {
+            "x-codex-primary-used-percent": "30",
+            "x-codex-secondary-used-percent": "80",
+            "x-codex-secondary-reset-at": RESET,
+          },
+        },
+      }),
+    );
+
+    expect(standing).toMatchObject({
+      level: "near",
+      peakPercent: 80,
+      nextReset: Date.parse(RESET),
+      nextResetWindow: "Long",
+      cutOffUntil: undefined,
+    });
+  });
+
+  it("is out when the credential is failing", () => {
+    expect(
+      accountStanding(entry({ name: "c.json", provider: "claude", status: "error" })).level,
+    ).toBe("out");
+  });
+});
+
+describe("byUrgency", () => {
+  it("orders cut off, near, fuller, without data, then disabled", () => {
+    const claude = (name: string, utilization: string) =>
+      entry({
+        name,
+        provider: "claude",
+        quota: { signals: { "anthropic-ratelimit-unified-5h-utilization": utilization } },
+      });
+
+    const accounts = [
+      entry({ name: "disabled.json", provider: "claude", disabled: true, status: "error" }),
+      entry({ name: "no-data.json", provider: "gemini" }),
+      claude("low.json", "0.1"),
+      claude("mid.json", "0.5"),
+      claude("near.json", "0.9"),
+      entry({
+        name: "cut.json",
+        provider: "claude",
+        cooldowns: [
+          { scope: "credential", reason: "quota", retry_at: RESET, remaining_seconds: 1 },
+        ],
+      }),
+    ];
+
+    expect(accounts.toSorted(byUrgency).map((account) => account.name)).toEqual([
+      "cut.json",
+      "near.json",
+      "mid.json",
+      "low.json",
+      "no-data.json",
+      "disabled.json",
+    ]);
+  });
+});
+
+describe("format", () => {
+  it("prints counts, tokens and percentages", () => {
+    expect(formatCount(1204)).toBe("1,204");
+    expect([18_200_000, 7400, 312, 2_500_000_000].map(formatTokens)).toEqual([
+      "18.2 M",
+      "7.4 k",
+      "312",
+      "2.5 B",
+    ]);
+    expect([68.6, 0.4, 0, 100].map(formatPercent)).toEqual(["69%", "<1%", "0%", "100%"]);
+  });
+
+  it("spells durations in their two largest units", () => {
+    const minute = 60_000;
+
+    expect(
+      [
+        30_000,
+        12 * minute,
+        155 * minute,
+        120 * minute,
+        (4 * 24 + 3) * 60 * minute,
+        2 * 1440 * minute,
+      ].map(formatDuration),
+    ).toEqual(["under 1 min", "12 min", "2 h 35 min", "2 h", "4 d 3 h", "2 d"]);
+  });
+});

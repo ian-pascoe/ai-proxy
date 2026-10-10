@@ -1,0 +1,26 @@
+{
+  // The control panel (web/) runs in the browser: DOM types, React JSX, no Workers or Node.js globals. It shares the
+  // management API contract (src/management/contract, imported as `#contract/*`), which must stay browser-safe.
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": ".tsbuild/tsconfig.web.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["web/src", "src/management/contract"]
+}

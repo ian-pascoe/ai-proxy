@@ -10,6 +10,9 @@ dist
 # Control panel installed by `pnpm panel:sync` (large; fetched at deploy time)
 public/management.html
 public/management.html.tmp
+# Control panel built from web/ by `pnpm web:build`
+public/index.html
+public/assets/
 
 # Reference repositories (tools/sync-reference-repos.sh)
 .repos/
@@ -31,3 +34,6 @@ go.work.sum
 AGENTS.override.md
 # TypeScript build info (tsc -b)
 .tsbuild
+
+# impeccable question-loop runtime state (decisions and surfaces are committed)
+.impeccable/questions/

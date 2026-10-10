@@ -45,7 +45,8 @@ export default Alchemy.Stack(
       ...(dev || settings.preview ? {} : { domain: settings.domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
-      // The management panel (`pnpm panel:sync`). The Worker runs first so proxy routes are never shadowed by assets.
+      // The control panel (`pnpm web:build`) and the upstream panel (`pnpm panel:sync`). The Worker runs first so proxy
+      // routes are never shadowed by assets and Access gates the panel (src/management/web-panel.ts serves it).
       assets: { directory: "./public", runWorkerFirst: true },
       // Previews have no credentials to refresh or catalog worth keeping fresh.
       crons: settings.preview ? [] : CRONS,

@@ -77,10 +77,9 @@ describe("Access gate through the router", () => {
     base = "https://proxy.test",
   ) => handler(new Request(`${base}${path}`, init), requestContext(bindings, ctx));
 
-  it("keeps /healthz and / public", async () => {
+  it("keeps /healthz public and gates / (the control panel)", async () => {
     expect((await call("/healthz")).status).toBe(200);
-    const root = await call("/");
-    expect(root.status).toBe(200);
+    expect((await call("/")).status).toBe(401);
     expect((await call("/nope")).status).toBe(404);
   });
 

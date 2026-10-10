@@ -1,8 +1,10 @@
 #!/bin/sh
 # Boots the stack under `alchemy dev` (local emulators, local state, no Cloudflare login) and checks that the bundled
-# Worker starts and answers: the CI replacement for a deploy dry run. Usage: pnpm smoke
+# Worker starts and answers: the CI replacement for a deploy dry run. Builds the control panel first so `/` is served.
+# Usage: pnpm smoke
 set -eu
 cd "$(dirname "$0")/.."
+pnpm -s web:build >/dev/null
 log=$(mktemp)
 ALCHEMY_STATE=local pnpm exec alchemy dev --stage smoke >"$log" 2>&1 &
 pid=$!
@@ -34,6 +36,8 @@ check() {
   [ "$status" = 200 ] || { cat "$log"; exit 1; }
 }
 check "$url/healthz"
+check "$url/"
+check "$url/accounts"
 check "$url/v1/models"
 check "$url/v8/management/config"
 check "$url/v8/management/observability/usage/summary"

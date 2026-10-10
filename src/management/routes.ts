@@ -1,5 +1,5 @@
 /**
- * Management API routes (`/v8/management/*`) and the control panel page.
+ * Management API routes (`/v8/management/*`) and the control panels (`/management.html`, the `web/` panel at `/`).
  *
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
  * (`access/routes.ts`: the whole `/v8/management` prefix and `/management.html`), which replaces the Go management
@@ -25,6 +25,7 @@ import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.
 import { modelDefinitionsHandler } from "./model-definitions.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { panelHandler } from "./panel.ts";
+import { PANEL_PAGE_PATHS, webPanelAsset, webPanelPage } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 import {
   errorLogsHandler,
@@ -69,6 +70,8 @@ export const ManagementRoutes = HttpRouter.addAll(
       HttpRouter.route("GET", `${BASE}/observability/logs/errors/*`, errorLogsHandler),
       HttpRouter.route("GET", `${BASE}/observability/logs/requests/*`, requestLogHandler),
       HttpRouter.route("GET", "/management.html", panelHandler),
+      ...PANEL_PAGE_PATHS.map((path) => HttpRouter.route("GET", path, webPanelPage)),
+      HttpRouter.route("GET", "/assets/*", webPanelAsset),
     ];
   }),
 );

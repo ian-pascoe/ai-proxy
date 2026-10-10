@@ -1,0 +1,17 @@
+.page {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 65ch;
+  padding-top: var(--space-4);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-2);
+}
+
+.lead {
+  color: var(--stone-4);
+}

@@ -1,0 +1,116 @@
+.post {
+  display: inline-flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/*
+ * A trail-sign blade: square tail, pointed head. Every blade in the column has the same length, so the tips line
+ * up like blades on one post; the destination sits left and the time right.
+ */
+.blade {
+  --tip: 0.875rem;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 12rem;
+  height: 2.125rem;
+  padding: 0 calc(var(--tip) + var(--space-3)) 0 var(--space-3);
+  background: var(--yellow);
+  color: var(--ink);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--tip)) 0,
+    100% 50%,
+    calc(100% - var(--tip)) 100%,
+    0 100%
+  );
+  white-space: nowrap;
+  animation: unfold 520ms var(--ease-out) both;
+}
+
+.blade[data-demanding="true"] {
+  padding-right: calc(var(--tip) + var(--space-5));
+}
+
+.blade[data-closed="true"] {
+  background: var(--red);
+  color: var(--white);
+}
+
+.edge {
+  position: relative;
+  display: inline-flex;
+}
+
+/*
+ * Mountain trail: the white-red-white band painted on the tip. Its hairline edge keeps the white apart from the
+ * white page; the tip settles once its blade has unfolded.
+ */
+.tipFrame {
+  position: absolute;
+  inset: 0 0 0 auto;
+  filter: drop-shadow(1px 0 0 var(--stone-4)) drop-shadow(0 1px 0 var(--stone-4))
+    drop-shadow(0 -1px 0 var(--stone-4));
+  animation: settle 200ms var(--ease-out) both;
+}
+
+.tip {
+  --tip: 0.875rem;
+
+  display: block;
+  width: calc(var(--tip) + 0.75rem);
+  height: 100%;
+  background: linear-gradient(var(--white) 0 33%, var(--red) 33% 67%, var(--white) 67% 100%);
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--tip)) 0,
+    100% 50%,
+    calc(100% - var(--tip)) 100%,
+    0 100%
+  );
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+  }
+}
+
+.destination {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.time {
+  font-size: 0.9375rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+/* The one authored moment: on load the blades unfold toward their reset, top sign first. */
+@keyframes unfold {
+  from {
+    clip-path: polygon(0 0, 0 0, 0 50%, 0 100%, 0 100%);
+  }
+}
+
+.caption {
+  font-size: var(--text-xs);
+  color: var(--stone-4);
+  white-space: nowrap;
+}
+
+/* The red paint band beside something closed or failing. */
+.mark {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 0.5rem;
+  background: var(--red);
+}

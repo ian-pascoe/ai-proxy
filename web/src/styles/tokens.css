@@ -1,0 +1,48 @@
+/*
+ * Swiss trail signage. Every colour has one meaning:
+ *   yellow  the route: the shell and the time until an account is back to full (reset blades)
+ *   red     danger: solid when an account is closed or failing, in the trail marker when it is near its limit
+ *   ink     figures and text
+ *   stone   the fixed neutral ramp (rules, tracks, secondary text); no other greys
+ */
+:root {
+  --white: #ffffff;
+  --stone-1: #f3f3f1; /* hover and sunk fields */
+  --stone-2: #e3e3df; /* meter tracks, hairlines */
+  --stone-3: #c4c5c0; /* strong rules */
+  --stone-4: #6a6c69; /* secondary text, 5.4:1 on white */
+  --ink: #1b1c1b;
+
+  --yellow: #f5c400; /* Wanderweg yellow, 12:1 with ink */
+  --yellow-deep: #dcae00; /* pressed and hovered yellow */
+  --red: #d52b1e; /* Swiss red, 4.9:1 with white */
+
+  --font:
+    "Atkinson Hyperlegible Next Variable", "Atkinson Hyperlegible Next", system-ui, sans-serif;
+
+  --text-xs: 0.8125rem; /* 13px: captions, clock times */
+  --text-sm: 0.875rem; /* 14px: table text, nav */
+  --text-md: 1rem; /* 16px: body */
+  --text-lg: 1.375rem; /* 22px: section headings */
+  --text-xl: 2.25rem; /* 36px: totals */
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.5rem;
+  --space-7: 4rem;
+
+  --radius: 3px;
+  --page-width: 80rem;
+  --page-gutter: var(--space-6);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --page-gutter: var(--space-4);
+  }
+}

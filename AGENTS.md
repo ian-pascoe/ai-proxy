@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) on plain Cloudflare Workers, behind Cloudflare Access. One pnpm package at the repository root. Design: `docs/ARCHITECTURE.md` (layout, per-subsystem behaviour, deviations from Go); developer notes: `docs/DEVELOPMENT.md`.
+TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) on plain Cloudflare Workers, behind Cloudflare Access. One pnpm package at the repository root; the control panel served at `/` lives in `web/` (React + Effect Atom, talks to the management API through `src/management/contract/`; design system in `DESIGN.md`, product context in `PRODUCT.md`, surface briefs in `.impeccable/`). Design: `docs/ARCHITECTURE.md` (layout, per-subsystem behaviour, deviations from Go); developer notes: `docs/DEVELOPMENT.md`.
 
 ## Commands
 

@@ -521,7 +521,7 @@ describe("config", () => {
 describe("classifyPath", () => {
   it("classifies public, protected and management paths", () => {
     expect(classifyPath("https://x.test/healthz")).toBe("public");
-    expect(classifyPath("https://x.test/")).toBe("public");
+    expect(classifyPath("https://x.test/")).toBe("management");
     expect(classifyPath("https://x.test/nope")).toBe("public");
 
     for (const path of [
