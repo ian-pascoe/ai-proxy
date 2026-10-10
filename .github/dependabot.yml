@@ -1,0 +1,40 @@
+# Weekly dependency updates, grouped to keep the PR count low. Packages that must move together are grouped so one PR
+# upgrades them in lockstep (see docs/DEVELOPMENT.md, "Lint and format").
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # effect-tsgo patches oxlint/tsgolint and targets one TypeScript release.
+      lint-toolchain:
+        patterns: ["oxlint", "oxlint-tsgolint", "@oxlint/*", "oxfmt", "@effect/tsgo", "typescript"]
+      effect:
+        patterns: ["effect", "@effect/*"]
+      cloudflare:
+        patterns:
+          ["alchemy", "@distilled.cloud/*", "@cloudflare/*", "wrangler", "vitest", "@vitest/*"]
+      git-hooks:
+        patterns: ["husky", "lint-staged", "@commitlint/*"]
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]

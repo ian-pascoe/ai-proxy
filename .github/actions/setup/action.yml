@@ -1,0 +1,17 @@
+name: setup
+description: pnpm (version from package.json devEngines), Node.js (.node-version) and `pnpm install --frozen-lockfile`.
+inputs:
+  cache:
+    description: Restore and save the pnpm store cache ("false" in jobs that hold deploy credentials).
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .node-version
+        cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
+        package-manager-cache: false
+    - shell: bash
+      run: pnpm install --frozen-lockfile

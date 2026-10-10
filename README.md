@@ -144,8 +144,8 @@ domain (zone) in that account, Zero Trust enabled (note your team name), Node 22
    [MIGRATION.md](docs/MIGRATION.md).
 
 Other commands: `pnpm logs --stage prod --tail` (Workers logs), `pnpm destroy --stage prod` (deletes everything,
-including the D1 usage history and the Durable Objects holding credentials). In CI set `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_API_TOKEN` instead of a profile (see the Alchemy CI guide).
+including the D1 usage history and the Durable Objects holding credentials). Pushes to `main` deploy
+production from CI and every pull request gets a preview stage: see [DEPLOY.md](docs/DEPLOY.md).
 
 The cron trigger (`0 */3 * * *`) refreshes model catalogs, prunes old usage rows and re-arms credential refresh alarms.
 Re-run `pnpm panel:sync` before a deploy to pick up a new panel release.

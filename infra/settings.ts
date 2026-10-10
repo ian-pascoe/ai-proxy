@@ -6,6 +6,11 @@ import * as Effect from "effect/Effect";
  * are inputs of `alchemy deploy` only; the Worker itself never reads this file.
  */
 export interface Settings {
+  /**
+   * Pull-request preview stage (`pr-<number>`): served on its `workers.dev` URL behind its own Access application,
+   * with empty storage and no cron trigger. `domain`, `existingAud` and `serviceTokens` are ignored.
+   */
+  readonly preview: boolean;
   /** Custom hostname of the Worker (the zone must exist in the account), e.g. `proxy.example.com`. */
   readonly domain: string;
   /** Access team name or domain, e.g. `myteam` or `myteam.cloudflareaccess.com`. */
@@ -17,6 +22,8 @@ export interface Settings {
   readonly allowEmailDomains: ReadonlyArray<string>;
   /** Names of the service tokens to create (Service Auth policy), one per client/machine. */
   readonly serviceTokens: ReadonlyArray<string>;
+  /** IDs of service tokens managed outside the stack (e.g. CI's) that the Service Auth policy also admits. */
+  readonly allowServiceTokenIds: ReadonlyArray<string>;
   /** Management admins: emails, and service token names (from `serviceTokens`) or Client IDs. */
   readonly adminEmails: ReadonlyArray<string>;
   readonly adminServiceTokens: ReadonlyArray<string>;
@@ -44,15 +51,22 @@ const list = (name: string) =>
 
 const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
-export const readSettings = (dev: boolean) =>
+/** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
+export const PREVIEW_STAGE = /^pr-\d+$/;
+
+export const readSettings = (dev: boolean, stage: string) =>
   Effect.gen(function* () {
+    const preview = !dev && PREVIEW_STAGE.test(stage);
+
     const settings: Settings = {
+      preview,
       domain: (yield* text("CLIPROXY_DOMAIN")).trim(),
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
-      existingAud: (yield* text("ACCESS_AUD")).trim(),
+      existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
       allowEmails: yield* list("ACCESS_ALLOW_EMAILS"),
       allowEmailDomains: yield* list("ACCESS_ALLOW_EMAIL_DOMAINS"),
-      serviceTokens: yield* list("ACCESS_SERVICE_TOKENS"),
+      serviceTokens: preview ? [] : yield* list("ACCESS_SERVICE_TOKENS"),
+      allowServiceTokenIds: yield* list("ACCESS_ALLOW_SERVICE_TOKEN_IDS"),
       adminEmails: yield* list("ACCESS_ADMIN_EMAILS"),
       adminServiceTokens: yield* list("ACCESS_ADMIN_SERVICE_TOKENS"),
       sessionDuration: (yield* text("ACCESS_SESSION_DURATION", "24h")).trim(),
@@ -66,7 +80,7 @@ export const readSettings = (dev: boolean) =>
     if (dev) return settings;
     const problems: Array<string> = [];
 
-    if (settings.domain === "")
+    if (settings.domain === "" && !preview)
       problems.push("CLIPROXY_DOMAIN is required (the Worker's custom hostname)");
 
     if (settings.teamDomain === "")
@@ -76,10 +90,11 @@ export const readSettings = (dev: boolean) =>
       if (
         settings.allowEmails.length === 0 &&
         settings.allowEmailDomains.length === 0 &&
-        settings.serviceTokens.length === 0
+        settings.serviceTokens.length === 0 &&
+        settings.allowServiceTokenIds.length === 0
       ) {
         problems.push(
-          "set ACCESS_ALLOW_EMAILS, ACCESS_ALLOW_EMAIL_DOMAINS and/or ACCESS_SERVICE_TOKENS, or ACCESS_AUD for an existing Access application",
+          "set ACCESS_ALLOW_EMAILS, ACCESS_ALLOW_EMAIL_DOMAINS, ACCESS_SERVICE_TOKENS and/or ACCESS_ALLOW_SERVICE_TOKEN_IDS, or ACCESS_AUD for an existing Access application",
         );
       }
 
@@ -87,9 +102,9 @@ export const readSettings = (dev: boolean) =>
         if (!TOKEN_NAME.test(name))
           problems.push(`ACCESS_SERVICE_TOKENS: "${name}" must match ${TOKEN_NAME.source}`);
       }
-    } else if (settings.serviceTokens.length > 0) {
+    } else if (settings.serviceTokens.length > 0 || settings.allowServiceTokenIds.length > 0) {
       problems.push(
-        "ACCESS_SERVICE_TOKENS needs a stack-managed Access application: unset ACCESS_AUD",
+        "ACCESS_SERVICE_TOKENS and ACCESS_ALLOW_SERVICE_TOKEN_IDS need a stack-managed Access application: unset ACCESS_AUD",
       );
     }
 

@@ -16,6 +16,8 @@ export interface AccessWiring {
   readonly aud: string | Output.Output<string>;
   readonly adminServiceTokens: string | Output.Output<string>;
   readonly serviceTokenClientIds: Record<string, Output.Output<string>>;
+  /** The stack's application on preview stages, where the Worker enrolls into it (`access` prop) for `workers.dev`. */
+  readonly application?: Cloudflare.Access.Application;
 }
 
 /**
@@ -46,12 +48,19 @@ const ApplicationSettings = Alchemy.Action(
       readonly appLauncherVisible?: boolean;
       readonly tags?: Array<string>;
       readonly policies?: ReadonlyArray<{ readonly id?: string; readonly precedence?: number }>;
+      readonly destinations?: zeroTrust.AccessApplicationsUpdateRequestDestinationsList;
     };
 
     yield* zeroTrust.updateAccessApplicationForAccount({
       accountId: input.accountId,
       appId: input.applicationId,
-      ...(app.domain === undefined ? {} : { domain: app.domain }),
+      // Preview applications have no domain: they protect the Worker through its `worker` destinations, which a
+      // PUT without them would drop.
+      ...(app.domain === undefined
+        ? app.destinations === undefined
+          ? {}
+          : { destinations: app.destinations }
+        : { domain: app.domain }),
       type: app.type ?? "self_hosted",
       ...(app.name === undefined ? {} : { name: app.name }),
       ...(app.sessionDuration === undefined ? {} : { sessionDuration: app.sessionDuration }),
@@ -120,8 +129,9 @@ const WriteServiceTokens = Alchemy.Action(
 
 /**
  * Cloudflare Access for the Worker's custom domain: one self-hosted application covering the whole hostname, an Allow
- * policy for people, a Service Auth policy for the stack's service tokens, and the tokens themselves. With
- * `ACCESS_AUD` set, an application managed elsewhere is used instead and nothing is created.
+ * policy for people, a Service Auth policy for the stack's service tokens (and `ACCESS_ALLOW_SERVICE_TOKEN_IDS`), and
+ * the tokens themselves. With `ACCESS_AUD` set, an application managed elsewhere is used instead and nothing is
+ * created. Preview stages get an application without a domain that the Worker enrolls into (see `application`).
  */
 export const provisionAccess = (settings: Settings) =>
   Effect.gen(function* () {
@@ -161,10 +171,15 @@ export const provisionAccess = (settings: Settings) =>
       policies.push(allow.policyId);
     }
 
-    if (tokens.length > 0) {
+    const serviceTokenIds: Array<string | Output.Output<string>> = [
+      ...tokens.map(({ token }) => token.serviceTokenId),
+      ...settings.allowServiceTokenIds,
+    ];
+
+    if (serviceTokenIds.length > 0) {
       const serviceAuth = yield* Cloudflare.Access.Policy("AllowServiceTokens", {
         decision: "non_identity",
-        include: tokens.map(({ token }) => ({ serviceToken: token.serviceTokenId })),
+        include: serviceTokenIds.map((serviceToken) => ({ serviceToken })),
       });
 
       policies.push(serviceAuth.policyId);
@@ -172,7 +187,7 @@ export const provisionAccess = (settings: Settings) =>
 
     const app = yield* Cloudflare.Access.Application("Access", {
       type: "self_hosted",
-      domain: settings.domain,
+      ...(settings.preview ? {} : { domain: settings.domain }),
       sessionDuration: settings.sessionDuration,
       policies,
     });
@@ -218,6 +233,7 @@ export const provisionAccess = (settings: Settings) =>
           ? joinedAdminIds
           : settings.adminServiceTokens.join(","),
       serviceTokenClientIds: clientIds,
+      ...(settings.preview ? { application: app } : {}),
     };
 
     return wiring;
