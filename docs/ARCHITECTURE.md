@@ -39,8 +39,9 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
     translator/               registry + one directory per (client -> provider) pair
     executor/                 executor interface + one directory per provider
     handlers/                 inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
-    management/               /v8/management API + OAuth login flows
+    management/               /v8/management API (+ contract/: shared Effect HttpApi schemas), panel serving, OAuth flows
     usage/                    usage records, D1 persistence
+  web/                        control panel served at / (React, Effect Atom, TanStack Router; built into public/)
   test/                       vitest suites (+ fixtures generated from the Go code)
   tools/fixturegen/           Go programs (own module, root go.work) that emit golden fixtures from the Go code
   tools/sync-reference-repos.sh  clones/updates the reference repositories in .repos/ (pnpm install, pnpm repos:sync)
@@ -61,7 +62,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   "Responses WebSocket transports").
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
-- **Static assets**: management control panel.
+- **Static assets** (`public/`, Worker runs first): the control panel (`web/` build) and the upstream panel.
 - **Cron trigger**: model catalog refresh (3 h in Go) and a safety sweep that re-arms credential refresh alarms.
 
 Request flow:
@@ -771,11 +772,19 @@ until the next page load).
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
 - **Not here**: `/oauth/*` (`oauth-routes.ts`, see _Provider OAuth logins_), `/observability/usage/*` (`usage-routes.ts`, see
   "Usage accounting and observability"), plugins, Home, `/v0/management`.
-- **Panel asset**: `GET /management.html` serves `public/management.html` through the `ASSETS` binding
+- **Control panel** (`web-panel.ts`, `web/`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
+  `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
+  management zone, so only Access admins get them. Every page path answers `public/index.html` (the browser router picks
+  the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths), `404` with a build
+  hint when it is missing. The panel calls `/v8/management` on its own origin with no key; Access authenticates the calls.
+  Its client is derived from `contract/` (Effect `HttpApi` groups for the endpoints it uses, imported by the worker tests
+  and the browser as `#contract/*`; `test/management-contract.test.ts` decodes real responses through it). Deviation
+  from Go: `/` was a public JSON banner there.
+- **Upstream panel asset** (until the control panel covers every page): `GET /management.html` serves `public/management.html` through the `ASSETS` binding
   (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
   (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
   file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
-- Deviations from Go: cooldown `reason`s are
+- Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings.
 
 ## Usage accounting and observability (`src/usage/`, `src/observability/`, `src/management/usage-routes.ts`)

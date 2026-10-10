@@ -1,5 +1,6 @@
 {
-  // Deploy-time code (alchemy.run.ts, infra/, stacks/) runs in Node.js under the Alchemy CLI, not in workerd.
+  // Deploy- and build-time code runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI) and the
+  // control panel's Vite config.
   "compilerOptions": {
     "composite": true,
     "tsBuildInfoFile": ".tsbuild/tsconfig.infra.tsbuildinfo",
@@ -19,5 +20,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["alchemy.run.ts", "infra", "stacks"]
+  "include": ["alchemy.run.ts", "infra", "stacks", "web/vite.config.ts"]
 }

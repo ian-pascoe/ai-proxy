@@ -15,6 +15,24 @@ export const MANAGEMENT_PREFIX = "/v8/management";
 /** The control panel page: static, but only administrators get it (Go serves it unauthenticated behind its login). */
 export const MANAGEMENT_PANEL_PATH = "/management.html";
 
+/**
+ * Top-level paths of the new control panel (`web/`, served by `src/management/web-panel.ts`): `/` itself, the panel's
+ * pages and their sub-paths, and its bundled files under `/assets`. Like the management API, only administrators get
+ * them. Deviation from Go: `/` serves the panel instead of the public JSON banner.
+ */
+export const PANEL_SECTIONS = [
+  "accounts",
+  "keys",
+  "models",
+  "usage",
+  "settings",
+  "assets",
+] as const;
+
+const isPanelPath = (path: string): boolean =>
+  path === "/" ||
+  PANEL_SECTIONS.some((section) => path === `/${section}` || path.startsWith(`/${section}/`));
+
 export type AccessZone = "public" | "protected" | "management";
 
 /**
@@ -49,7 +67,11 @@ export const classifyPath = (requestUrl: string): AccessZone => {
 
   if (path === undefined) return "protected";
 
-  if (path.startsWith(MANAGEMENT_PREFIX) || path.startsWith(MANAGEMENT_PANEL_PATH))
+  if (
+    path.startsWith(MANAGEMENT_PREFIX) ||
+    path.startsWith(MANAGEMENT_PANEL_PATH) ||
+    isPanelPath(path)
+  )
     return "management";
 
   return PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "protected" : "public";

@@ -13,6 +13,8 @@
     "worker-configuration.d.ts",
     "test/fixtures",
     "src/registry/catalog",
+    // Design decision records written by the impeccable tooling
+    ".impeccable",
     // Codex corpus requests are compact on purpose: Go forwards some raw JSON text (tool_use input) verbatim.
     "tools/fixturegen/translator/corpus/codex-*.json",
     // Gemini/Interactions corpus requests are compact on purpose: Go embeds some raw JSON text verbatim.

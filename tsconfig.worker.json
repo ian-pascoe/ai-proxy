@@ -20,5 +20,13 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "test", "tools/panel-sync", "worker-configuration.d.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "tools/panel-sync",
+    "web/src/lib/quota.ts",
+    "web/src/lib/format.ts",
+    "worker-configuration.d.ts",
+    "vitest.config.ts"
+  ]
 }

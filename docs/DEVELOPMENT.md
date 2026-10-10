@@ -25,16 +25,18 @@ Run from the repository root:
 | `pnpm install`      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                 |
 | `pnpm repos:sync`   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                             |
 | `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
-| `pnpm typecheck`    | `tsc -b`: the Worker (`tsconfig.worker.json`) and the deploy code (`tsconfig.infra.json`), referenced by `tsconfig.json`    |
+| `pnpm web:build`    | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                              |
+| `pnpm web:dev`      | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CLIPROXY_DEV_URL`, default :1337)  |
+| `pnpm typecheck`    | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                 |
 | `pnpm lint`         | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                     |
 | `pnpm format`       | `oxfmt`                                                                                                                     |
 | `pnpm test`         | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
-| `pnpm smoke`        | Boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                |
+| `pnpm smoke`        | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)              |
 | `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
 | `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
 | `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
 | `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                   |
-| `pnpm panel:sync`   | Install `public/management.html` (control panel) from its GitHub release                                                    |
+| `pnpm panel:sync`   | Install `public/management.html` (upstream panel, until the new one replaces it) from its GitHub release                    |
 | `pnpm ci:setup`     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
 | `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
 
@@ -65,8 +67,21 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 and `src/thinking` (pure sync translation), `src/executor` (one directory per provider), `src/credentials` (ControlPlane
 Durable Object, token refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and
 `/models`), `src/management` and `src/oauth` (management API, panel, provider logins), `src/usage` and
-`src/observability` (D1 usage records, trace ids), `migrations/` (D1 schema), `tools/panel-sync` (control panel installer)
-and `tools/fixturegen` (Go programs that emit golden fixtures, see below).
+`src/observability` (D1 usage records, trace ids), `migrations/` (D1 schema), `web/` (control panel, below),
+`tools/panel-sync` (upstream panel installer) and `tools/fixturegen` (Go programs that emit golden fixtures, see below).
+
+## Control panel (`web/`)
+
+React 19 + Vite, Effect Atom (`effect/reactivity`, `@effect/atom-react`) for server state and TanStack Router (code-based
+routes in `web/src/router.tsx`). It calls the management API through the shared Effect `HttpApi` contract in
+`src/management/contract/` (imported as `#contract/*`; the contract imports `effect` only, so it stays browser-safe).
+`tsconfig.web.json` type-checks it with DOM types; `web/src/lib/quota.ts` and `format.ts` are DOM-free and also part of
+`tsconfig.worker.json` so `test/web-quota.test.ts` can run them in workerd. Design context: `PRODUCT.md` and
+`.impeccable/`.
+
+Local loop: `pnpm dev` in one terminal, `pnpm web:dev` in another, open http://localhost:5173 (the dev Access bypass
+applies). The build output in `public/` is gitignored; CI builds it before smoke and deploy. A new top-level page needs
+its path segment in `PANEL_SECTIONS` (`src/access/routes.ts`) so the Worker serves `index.html` for it.
 
 ## Golden fixtures (`tools/fixturegen`)
 
@@ -140,7 +155,7 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 ## Dependency notes
 
 - TypeScript 7 (native `tsc`); `tsconfig.json` is a solution config referencing `tsconfig.worker.json` (Worker, workerd
-  types) and `tsconfig.infra.json` (deploy code, Node.js types). `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
+  types), `tsconfig.infra.json` (deploy code, Node.js types) and `tsconfig.web.json` (panel, DOM types). `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
   range; it only ships types, so the peer warning is harmless.
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
   which `@effect/vitest@4` requires.

@@ -129,6 +129,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm panel:sync --tag "$PANEL_TAG"
+      - name: Build the control panel
+        run: pnpm web:build
       - name: Deploy
         id: deploy
         run: |
