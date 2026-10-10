@@ -1,73 +1,32 @@
 # AGENTS.md
 
-Go 1.26+ proxy server providing OpenAI/Gemini/Claude/Codex compatible APIs with OAuth and round-robin load balancing.
-
-## Repository
-- GitHub: https://github.com/router-for-me/CLIProxyAPI
+TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) on plain Cloudflare Workers, behind Cloudflare Access. One pnpm package at the repository root. Design: `docs/ARCHITECTURE.md` (layout, per-subsystem behaviour, deviations from Go); developer notes: `docs/DEVELOPMENT.md`.
 
 ## Commands
-```bash
-gofmt -w . # Format (required after Go changes)
-go build -o cli-proxy-api ./cmd/server # Build
-go run ./cmd/server # Run dev server
-go test ./... # Run all tests
-go test -v -run TestName ./path/to/pkg # Run single test
-go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRED after changes)
-```
-- Common flags: `--config <path>`, `--tui`, `--standalone`, `--local-model`, `--no-browser`, `--oauth-callback-port <port>`
 
-## Config
-- Default config: `config.yaml` (template: `config.example.yaml`)
-- `.env` is auto-loaded from the working directory
-- Auth material defaults under `auths/`
-- Storage backends: file-based default; optional Postgres/git/object store (`PGSTORE_*`, `GITSTORE_*`, `OBJECTSTORE_*`)
+- Run before finishing: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`; `pnpm format` formats.
+- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked.
 
-## Architecture
-- `cmd/server/` — Server entrypoint
-- `internal/api/` — Gin HTTP API (routes, middleware, modules)
-- `internal/api/modules/amp/` — Amp integration (Amp-style routes + reverse proxy)
-- `internal/thinking/` — Main thinking/reasoning pipeline. `ApplyThinking()` (apply.go) parses suffixes (`suffix.go`, suffix overrides body), normalizes config to canonical `ThinkingConfig` (`types.go`), normalizes and validates centrally (`validate.go`/`convert.go`), then applies provider-specific output via `ProviderApplier`. Do not break this "canonical representation → per-provider translation" architecture.
-- `internal/runtime/executor/` — Per-provider runtime executors (incl. Codex WebSocket)
-- `internal/translator/` — Provider protocol translators (and shared `common`)
-- `internal/registry/` — Model registry + remote updater (`StartModelsUpdater`); `--local-model` disables remote updates
-- `internal/store/` — Storage implementations and secret resolution
-- `internal/managementasset/` — Config snapshots and management assets
-- `internal/cache/` — Request signature caching
-- `internal/watcher/` — Config hot-reload and watchers
-- `internal/wsrelay/` — WebSocket relay sessions
-- `internal/usage/` — Usage and token accounting
-- `internal/home/` — CLIProxyAPIHome control plane integration (bootstrap, RESP communication, dispatch coordination)
-- `internal/tui/` — Bubbletea terminal UI (`--tui`, `--standalone`)
-- `sdk/cliproxy/` — Embeddable SDK entry (service/builder/watchers/pipeline)
-- `test/` — Cross-module integration tests
+## Go reference
 
-## Code Conventions
-- Keep changes small and simple (KISS)
-- Comments in English only
-- If editing code that already contains non-English comments, translate them to English (don’t add new non-English comments)
-- For user-visible strings, keep the existing language used in that file/area
-- New Markdown docs should be in English unless the file is explicitly language-specific (e.g. `README_CN.md`)
-- As a rule, do not make standalone changes to `internal/translator/`. You may modify it only as part of broader changes elsewhere.
-- If a task requires changing only `internal/translator/`, run `gh repo view --json viewerPermission -q .viewerPermission` to confirm you have `WRITE`, `MAINTAIN`, or `ADMIN`. If you do, you may proceed; otherwise, file a GitHub issue including the goal, rationale, and the intended implementation code, then stop further work.
-- `internal/runtime/executor/` should contain executors and their unit tests only. Place any helper/supporting files under `internal/runtime/executor/helps/`.
-- Payload configuration MUST be the final semantic barrier before sending requests in every executor, including streaming, WebSocket, continuation, retry/fallback, image, and token-count paths where applicable. Complete all built-in payload translation, normalization, injection, and cleanup first, then evaluate and apply user payload rules exactly once to the final business payload. No subsequent logic may overwrite configured values or restore filtered fields. Only necessary transport framing, serialization, signature calculation, and read-only validation may follow without changing business payload semantics. Add regression tests when introducing or changing request-building paths to enforce this ordering.
-- Follow `gofmt`; keep imports goimports-style; wrap errors with context where helpful
-- Do not use `log.Fatal`/`log.Fatalf` (terminates the process); prefer returning errors and logging via logrus
-- Shadowed variables: use method suffix (`errStart := server.Start()`)
-- Wrap defer errors: `defer func() { if err := f.Close(); err != nil { log.Errorf(...) } }()`
-- Use logrus structured logging; avoid leaking secrets/tokens in logs
-- Avoid panics in HTTP handlers; prefer logged errors and meaningful HTTP status codes
-- Timeouts are allowed only during credential acquisition; after an upstream connection is established, do not set timeouts for any subsequent network behavior. Intentional exceptions that must remain allowed are the Codex websocket liveness deadlines in `internal/runtime/executor/codex_websockets_executor.go`, the wsrelay session deadlines in `internal/wsrelay/session.go`, the management APICall timeout in `internal/api/handlers/management/api_tools.go`, and the `cmd/fetch_antigravity_models` utility timeouts
-- Avoid wall-clock `time.Sleep` in TTL, expiration, ordering, or cache-eviction unit tests due to platform timer granularity (e.g. Windows default timer resolution of ~15.6ms) and CI jitter under load; prefer controllable clocks (`nowFunc` / mock clock), explicit timestamp manipulation, or deterministic synchronization primitives.
-- Note: if modifying features that involve CLIProxyAPIHome, check if corresponding updates are needed in the CLIProxyAPIHome repository.
-- Endpoints under the `/v0/management` base URL are deprecated and no longer maintained. For any feature changes, do not modify endpoints under `/v0/management` unless necessary to fix compilation errors.
+- The Go server is the behavioural source of truth. It lives in the read-only reference checkout `.repos/CLIProxyAPI`; Go paths in code and docs (`internal/...`, `sdk/...`) are relative to it. Read it there; change only this repository.
+- Golden fixtures come from `tools/fixturegen` (Go programs run against the reference checkout, see `docs/DEVELOPMENT.md`). A fixture diff after a reference update is an upstream change to port.
 
-## workers/ (TypeScript port)
-- `workers/` is a pnpm package: TypeScript strict + Effect v4 (`effect@4.0.2`) on plain Cloudflare Workers. Design: `docs/workers-port/ARCHITECTURE.md`; Go code remains the behavioural source of truth. Read `workers/node_modules/effect/AGENTS.md` and the effect source (APIs differ from Effect 3).
-- Commands (run before finishing): `pnpm -C workers typecheck && pnpm -C workers lint && pnpm -C workers test && pnpm -C workers smoke`; `pnpm -C workers format` to format.
-- Infrastructure is deployed with Alchemy v2 (`workers/alchemy.run.ts`, `workers/infra/`); there is no Wrangler config. A new binding/variable goes in the Worker `env` in `alchemy.run.ts`, `workers/src/env.d.ts` and `workers/vitest.config.ts` together. Never run `alchemy deploy`/`destroy` against a real account unless asked.
-- Code under `workers/src/`; tests under `workers/test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
-- Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); never capture them in layers.
+## Conventions
+
+- Read `node_modules/effect/AGENTS.md` and the effect source before writing Effect code (APIs differ from Effect 3).
+- Infrastructure is Alchemy v2 (`alchemy.run.ts`, `infra/`); there is no Wrangler config. A new binding/variable goes in the Worker `env` in `alchemy.run.ts`, `src/env.d.ts` and `vitest.config.ts` together.
+- Tests under `test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
+- Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); layers stay free of them.
 - Translators/thinking/payload rules are pure sync functions over parsed JSON; cite the Go source path at the top of each ported module. Payload rules stay the final mutation before upstream requests.
-- Never log tokens/API keys/JWTs (`redactHeaders`); no wall-clock sleeps in tests (use `TestClock`); no `any` without a justifying comment.
-- Do not edit `internal/translator/` or Go code from workers slices; golden fixtures come from `workers/tools/fixturegen`.
+- Redact tokens/API keys/JWTs in logs (`redactHeaders`); drive time in tests with `TestClock`; justify every `any` with a comment.
+- Document every deliberate behaviour difference from Go in the module header and in `docs/ARCHITECTURE.md`.
+
+## Reference repositories
+
+The `pnpm install` command materializes these read-only references in `.repos/`.
+Run `./tools/sync-reference-repos.sh` to refresh them directly.
+
+| Repository                                                                  | Path                 | Useful for                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) | `.repos/CLIProxyAPI` | The Go server this project ports: behavioural source of truth for translators, thinking, payload rules, executors, credential selection/refresh and the management API; `tools/fixturegen` builds against it to generate golden fixtures and `pnpm catalog:sync` copies its model catalogs. |
