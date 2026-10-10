@@ -8,6 +8,7 @@ const rng = (seed: number) => () => {
   seed ^= seed << 13
   seed ^= seed >>> 17
   seed ^= seed << 5
+
   return (seed >>> 0) / 0x1_0000_0000
 }
 
@@ -45,10 +46,12 @@ describe("tokenizer units", () => {
     const next = rng(25)
     const codec = getCodec("o200k_base")
     const alphabets = ["ab", "abcdefgh ", "etaoin shrdlu", "é中文😀ab", "0123456789"]
+
     for (let round = 0; round < 300; round++) {
       const alphabet = Array.from(alphabets[round % alphabets.length] as string)
       const length = 1 + Math.floor(next() * (round % 5 === 0 ? 600 : 60))
       let piece = ""
+
       for (let i = 0; i < length; i++) piece += alphabet[Math.floor(next() * alphabet.length)]
       const { naive, heap } = codec.mergeCounts(piece)
       expect(heap, JSON.stringify(piece)).toBe(naive)

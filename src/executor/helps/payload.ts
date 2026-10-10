@@ -12,6 +12,7 @@ import { isCodexUserAgent, normalizeCodexToolIntegerTypes } from "./codex-tool-s
 
 const isCodexTargetExecutor = (executor: string): boolean => {
   const name = executor.trim().toLowerCase()
+
   return name === "codex" || name === "codex-websockets" || name === "codex_websockets"
 }
 
@@ -28,5 +29,6 @@ export const finalizePayload = (
   if (isCodexUserAgent(request.headers) && !isCodexTargetExecutor(targetExecutor)) {
     normalizeCodexToolIntegerTypes(payload, request.headers)
   }
+
   return applyPayloadRules(config, request, payload).payload
 }

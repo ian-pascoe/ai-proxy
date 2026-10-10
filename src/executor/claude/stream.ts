@@ -52,27 +52,35 @@ export class ClaudeStreamReader {
 
   #observe(line: string): void {
     const payload = ssePayloadObject(line)
+
     if (payload === undefined) return
+
     switch (str(get(payload, "type"))) {
       case "message_start": {
         const id = str(get(payload, "message.id")).trim()
+
         if (id !== "") this.messageId = id
         break
       }
+
       case "message_stop":
         this.completed = true
     }
+
     this.options.onResponseModel(responseModelOf(payload))
     const usage = parseClaudeStreamUsage(line)
+
     if (usage !== undefined) {
       this.#usage = mergeUsage(this.#usage, usage)
       this.options.onUsage(this.#usage)
     }
+
     this.accumulator.observe(line)
   }
 
   #fail(message: string, status = 500): ClaudeStreamStep {
     this.#done = true
+
     return { chunks: [], error: new ExecutionError({ status, message, requestScoped: true }), stop: true }
   }
 
@@ -81,58 +89,78 @@ export class ClaudeStreamReader {
     if (this.#done) return { chunks: [], stop: true }
     this.#observe(line)
     let restored = line
+
     try {
       restored = restoreToolNamesInStreamLine(line, this.options.reverseMap)
+
       if (this.options.restoreLine !== undefined) restored = this.options.restoreLine(restored)
     } catch (error) {
       if (error instanceof AliasRestoreError) {
         return this.#fail(`restore Claude OAuth tool name from streaming response: ${error.message}`)
       }
+
       throw error
     }
+
     const { registry, responseFormat, context } = this.options
+
     if (responseFormat === "claude") {
       this.#event.push(`${restored}\n`)
+
       if (restored.trim() !== "") return { chunks: [], stop: false }
       const chunk = this.#event.join("")
       this.#event.length = 0
+
       if (this.completed) this.#done = true
+
       return { chunks: [chunk], stop: this.completed }
     }
+
     const translated = registry.translateStream(responseFormat, "claude", context, restored)
+
     if (context.state.toolInputError !== undefined) {
       this.#done = true
+
       return {
         chunks: translated,
         error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }),
         stop: true
       }
     }
+
     // Go `EnsureResponsesUsageDetails` on every translated Responses chunk.
     const chunks =
       responseFormat === "openai-response" ? translated.map((chunk) => ensureResponsesUsageDetails(chunk)) : translated
+
     if (this.completed) this.#done = true
+
     return { chunks, stop: this.completed }
   }
 
   /** Clean EOF: flushes a pending passthrough event. */
   end(): ClaudeStreamStep {
     const chunks: string[] = []
+
     if (this.#event.length > 0 && !this.#done) {
       chunks.push(this.#event.join(""))
       this.#event.length = 0
     }
+
     if (this.options.responseFormat !== "claude") {
       // Go `EndApplyPatchStream`: a patch-enabled stream that ends before its terminator fails with the failure frame.
       const { state } = this.options.context
+
       if (state.toolInputError === undefined && state.finalizeToolInput !== undefined) {
         chunks.push(...state.finalizeToolInput())
       }
+
       if (state.toolInputError !== undefined) {
         return { chunks, error: new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }), stop: true }
       }
     }
+
     this.#done = true
+
     return { chunks, stop: true }
   }
 }
@@ -145,34 +173,46 @@ export const validateClaudeStreamingResponse = (data: string): string | undefine
   let hasData = false
   let hasMessageStart = false
   let hasMessageDelta = false
+
   for (const raw of data.split("\n")) {
     const line = raw.trim()
+
     if (line === "" || !line.startsWith("data:")) continue
     const payloadText = line.slice(5).trim()
+
     if (payloadText === "" || payloadText === "[DONE]") continue
     hasData = true
     const payload = tryParseJson(payloadText)
+
     if (payload === undefined) return "claude executor: upstream returned malformed stream data"
+
     switch (str(get(payload, "type"))) {
       case "error": {
         const message =
           str(get(payload, "error.message")).trim() ||
           str(get(payload, "error.type")).trim() ||
           "unknown upstream error"
+
         return `claude executor: upstream returned error event: ${message}`
       }
+
       case "message_start":
         if (str(get(payload, "message.id")).trim() === "" || str(get(payload, "message.model")).trim() === "") {
           return "claude executor: upstream stream message_start is missing id or model"
         }
+
         hasMessageStart = true
         break
       case "message_delta":
         hasMessageDelta = true
     }
   }
+
   if (!hasData) return "claude executor: upstream returned empty stream response"
+
   if (!hasMessageStart) return "claude executor: upstream stream response is missing message_start"
+
   if (!hasMessageDelta) return "claude executor: upstream stream response ended before message completion"
+
   return undefined
 }

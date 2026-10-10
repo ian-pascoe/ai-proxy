@@ -11,6 +11,7 @@ export const ThinkingErrorCode = Schema.Literals([
   "BUDGET_OUT_OF_RANGE",
   "PROVIDER_MISMATCH"
 ])
+
 export type ThinkingErrorCode = typeof ThinkingErrorCode.Type
 
 /** Invalid thinking configuration for the model; maps to HTTP 400 (`statusCode`). Messages are lowercase, no period. */

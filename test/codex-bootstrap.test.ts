@@ -32,30 +32,39 @@ import { mockHttpClient, sseResponse, staticConfigReader, type UpstreamCall } fr
 import { makePool, poolPickerLayer } from "./support/pool.ts"
 
 const data = (event: object): string => `data: ${JSON.stringify(event)}`
+
 const created = data({ type: "response.created", response: { id: "r1", status: "in_progress" } })
+
 const inProgress = data({ type: "response.in_progress", response: { id: "r1" } })
+
 const messageAdded = data({
   type: "response.output_item.added",
   output_index: 0,
   item: { type: "message", role: "assistant", content: [] }
 })
+
 const delta = data({ type: "response.output_text.delta", item_id: "m", output_index: 0, content_index: 0, delta: "Hi" })
+
 const completed = data({
   type: "response.completed",
   response: { id: "r1", status: "completed", output: [], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
 })
+
 const overload = data({
   type: "response.failed",
   response: { id: "r1", error: { code: "server_is_overloaded", message: "Our servers are currently overloaded." } }
 })
+
 const invalid = data({
   type: "response.failed",
   response: { id: "r1", error: { code: "invalid_prompt", message: "bad prompt" } }
 })
 
 let clock = 0
+
 const reader = (overrides: Partial<CodexStreamOptions> = {}) => {
   clock = 1_000
+
   const usage = new UsageReporter({
     requestId: "r",
     provider: "codex",
@@ -71,6 +80,7 @@ const reader = (overrides: Partial<CodexStreamOptions> = {}) => {
     serviceTier: "auto",
     requestedAt: 0
   })
+
   return new CodexStreamReader({
     registry: builtinTranslators,
     responseFormat: Formats.OpenAIResponse,
@@ -87,6 +97,7 @@ const reader = (overrides: Partial<CodexStreamOptions> = {}) => {
 }
 
 const feed = (r: CodexStreamReader, lines: ReadonlyArray<string>) => lines.map((line) => r.push(line))
+
 const text = (steps: ReadonlyArray<{ chunks: ReadonlyArray<string> }>): string =>
   steps.flatMap((s) => s.chunks).join("")
 
@@ -225,6 +236,7 @@ describe("bootstrap helpers", () => {
       ["10 s", 0],
       ["0s", 0]
     ]
+
     for (const [raw, ms] of table) expect(bootstrapTimeoutMs(raw), raw).toBe(ms)
   })
 
@@ -239,6 +251,7 @@ describe("bootstrap helpers", () => {
     ]) {
       expect(isOverloadBootstrapFailure(body), body).toBe(true)
     }
+
     for (const body of [
       '{"error":{"code":"invalid_prompt"}}',
       '{"error":{"type":"server_error","message":"boom"}}',
@@ -276,6 +289,7 @@ describe("bootstrap failover through the conductor", () => {
     principalId: "user:dev@example.com",
     callerScope: "scope-1"
   } as const
+
   const request = {
     url: "/v1/responses",
     method: "POST",
@@ -284,6 +298,7 @@ describe("bootstrap failover through the conductor", () => {
 
   const run = async (yaml: string, respond: (call: UpstreamCall) => Response) => {
     const harness = await makePool(yaml)
+
     for (const name of ["a", "b"]) {
       harness.store.upsert(`codex-${name}.json`, "codex", {
         type: "codex",
@@ -292,8 +307,10 @@ describe("bootstrap failover through the conductor", () => {
         expired: new Date(harness.clock.now() + 3_600_000).toISOString()
       })
     }
+
     const calls: UpstreamCall[] = []
     const records: UsageRecord[] = []
+
     const layer = Layer.mergeAll(
       poolPickerLayer(harness.pool),
       Layer.succeed(
@@ -310,6 +327,7 @@ describe("bootstrap failover through the conductor", () => {
       mockHttpClient(calls, respond),
       Thinking.live
     ).pipe(Layer.provideMerge(staticConfigReader(harness.config)))
+
     const result = await Effect.runPromise(
       Effect.scoped(
         executeStream({
@@ -326,11 +344,13 @@ describe("bootstrap failover through the conductor", () => {
         Effect.result
       )
     )
+
     return { calls, records, result }
   }
 
   const bearer = (call: UpstreamCall): string => (call.headers["authorization"] ?? "").replace("Bearer ", "")
   const frames = (...lines: string[]): Response => sseResponse(lines.map((line) => `${line}\n\n`))
+
   const servedBy = (call: UpstreamCall) =>
     bearer(call) === "tok-a" ? frames(created, inProgress, overload) : frames(created, delta, completed)
 
@@ -349,6 +369,7 @@ describe("bootstrap failover through the conductor", () => {
     const outcome = await run("", servedBy)
     // First call: whichever credential the picker chose; only the overloaded one fails the stream.
     const first = outcome.calls[0]
+
     if (first !== undefined && bearer(first) === "tok-a") {
       expect(outcome.calls).toHaveLength(1)
       expect(outcome.result._tag).toBe("Failure")

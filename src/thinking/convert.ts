@@ -23,19 +23,29 @@ const LEVEL_TO_BUDGET: ReadonlyMap<string, number> = new Map([
 export const convertLevelToBudget = (level: string): number | undefined => LEVEL_TO_BUDGET.get(level.toLowerCase())
 
 export const THRESHOLD_MINIMAL = 512
+
 export const THRESHOLD_LOW = 1024
+
 export const THRESHOLD_MEDIUM = 8192
+
 export const THRESHOLD_HIGH = 24576
 
 /** Budget → nearest level; `undefined` for invalid negatives (< -1). */
 export const convertBudgetToLevel = (budget: number): string | undefined => {
   if (budget < -1) return undefined
+
   if (budget === -1) return Level.auto
+
   if (budget === 0) return Level.none
+
   if (budget <= THRESHOLD_MINIMAL) return Level.minimal
+
   if (budget <= THRESHOLD_LOW) return Level.low
+
   if (budget <= THRESHOLD_MEDIUM) return Level.medium
+
   if (budget <= THRESHOLD_HIGH) return Level.high
+
   return Level.xhigh
 }
 
@@ -46,6 +56,7 @@ export const hasLevel = (levels: readonly string[] | undefined, target: string):
 /** Maps a generic level to Claude adaptive effort (low/medium/high/max). */
 export const mapToClaudeEffort = (level: string, supportsMax: boolean): string | undefined => {
   const value = normalize(level)
+
   switch (value) {
     case "":
       return undefined
@@ -71,11 +82,16 @@ export type ModelCapability = "unknown" | "none" | "budget-only" | "level-only" 
 export const detectModelCapability = (modelInfo: ThinkingModelInfo | undefined): ModelCapability => {
   if (modelInfo === undefined) return "unknown"
   const support = modelInfo.thinking
+
   if (support === undefined) return "none"
   const hasBudget = (support.min ?? 0) > 0 || (support.max ?? 0) > 0
   const hasLevels = (support.levels?.length ?? 0) > 0
+
   if (hasBudget && hasLevels) return "hybrid"
+
   if (hasBudget) return "budget-only"
+
   if (hasLevels) return "level-only"
+
   return "none"
 }

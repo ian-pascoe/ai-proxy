@@ -27,20 +27,25 @@ const handle = (compact: boolean) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const configResult = yield* Effect.result(currentConfig)
+
     if (configResult._tag === "Failure")
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false })
     const config = configResult.success
+
     const onError = (error: ExecutionError) =>
       errorResponse("openai", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
+
     if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
     let body: Json | undefined = read.success.json
+
     if (body === undefined) return badRequest("request body is not valid JSON")
 
     // Official Codex clients: collaboration tools (not for compaction) and orphan delegations.
     yield* prepareCodexResponsesRequest(body, request.headers as Record<string, string>, !compact)
     const streamField = get(body, "stream")
+
     if (compact) {
       if (streamField === true) {
         return HttpServerResponse.text(
@@ -50,8 +55,10 @@ const handle = (compact: boolean) =>
           { status: 400, contentType: "application/json" }
         )
       }
+
       if (streamField !== undefined) body = del(body, "stream")
     }
+
     const input: ExecutionInput = {
       entryProtocol: Formats.OpenAIResponse,
       model: asString(get(body, "model")),
@@ -59,6 +66,7 @@ const handle = (compact: boolean) =>
       alt: compact ? "responses/compact" : "",
       request
     }
+
     if (!compact && streamField === true) {
       return yield* streamResponse(executeStream(input), {
         framer: responsesFramer({
@@ -68,8 +76,11 @@ const handle = (compact: boolean) =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
+
     const result = yield* Effect.result(executeNonStream(input))
+
     if (result._tag === "Failure") return onError(result.failure)
+
     return jsonResponse(result.success.payload, result.success.headers)
   })
 
@@ -86,7 +97,9 @@ const SOCKET_ROUTES = ["/v1/responses", "/backend-api/codex/responses"] as const
 export const ResponsesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const services = yield* routeServices<ProxyServices>()
+
     for (const [path, compact] of ROUTES) yield* router.add("POST", path, Effect.provide(handle(compact), services))
+
     // The Responses WebSocket (`Upgrade: websocket`), see websocket/routes.ts.
     for (const path of SOCKET_ROUTES) yield* router.add("GET", path, Effect.provide(handleResponsesSocket, services))
   })

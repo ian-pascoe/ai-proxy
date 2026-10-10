@@ -64,6 +64,7 @@ describe("config document paths", () => {
       "api-keys": { claude: [{ auth_index: "g", "auth-index": "g", keys: [{ auth_index: "k", "api-key": "x" }] }] },
       other: { auth_index: "keep" }
     }
+
     expect(stripAuthIndexes(doc)).toEqual({
       "api-keys": { claude: [{ keys: [{ "api-key": "x" }] }] },
       other: { auth_index: "keep" }
@@ -100,6 +101,7 @@ describe("credential entries", () => {
         last_refresh: "2026-01-01T00:00:00Z"
       }
     })
+
     const entry = buildCredentialEntry(credential, state({ success: 5, failed: 1 }), NOW)
     expect(entry).toMatchObject({
       id: "codex.json",
@@ -136,19 +138,23 @@ describe("credential entries", () => {
   it("shows cooldowns and the derived status", () => {
     const next = NOW + 90_500
     const credential = cred("a.json")
+
     const cooling429: CredentialState = state({
       modelStates: {
         "gpt-5": { ...cooling(next, true), lastError: { message: "limit", retryable: true, httpStatus: 429 } }
       }
     })
+
     expect(cooldownSnapshot(cooling429, NOW)).toEqual([
       expect.objectContaining({ scope: "model", model_key: "gpt-5", reason: "unknown", remaining_seconds: 91 })
     ])
+
     const credentialWide = state({
       unavailable: true,
       nextRetryAfter: NOW + 5000,
       lastError: { message: "x", retryable: true, httpStatus: 503 }
     })
+
     const entry = buildCredentialEntry(credential, credentialWide, NOW)
     expect(entry).toMatchObject({
       unavailable: true,
@@ -164,6 +170,7 @@ describe("credential entries", () => {
       disabled: true,
       status: "disabled"
     })
+
     const quota = cooldownSnapshot(
       state({
         quota: {
@@ -176,6 +183,7 @@ describe("credential entries", () => {
       }),
       NOW
     )
+
     expect(quota).toEqual([expect.objectContaining({ scope: "credential", reason: "credential_quota" })])
   })
 })
@@ -221,6 +229,7 @@ describe("cooldown reset", () => {
       lastError: { message: "limit", retryable: true, httpStatus: 429 },
       modelStates: { "m-a": cooling(NOW + 1000), "  ": cooling(NOW + 1000) }
     })
+
     const reset = resetCooldownState(blocked, NOW)
     expect(reset.models).toEqual(["m-a"])
     expect(reset.state).toMatchObject({
@@ -240,6 +249,7 @@ describe("cooldown reset", () => {
       state({ status: "error", lastError: { message: "unauthorized", retryable: false, httpStatus: 401 } }),
       NOW
     )
+
     expect(terminal.state).toMatchObject({ status: "error", lastError: { httpStatus: 401 } })
   })
 })

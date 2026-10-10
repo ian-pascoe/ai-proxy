@@ -8,9 +8,11 @@ describe("BPE counts match the Go tokenizer", () => {
       const codec = getCodec(name)
       const cases = fixtures.counts[name]
       expect(cases.length).toBeGreaterThan(100)
+
       const mismatches = cases
         .map((c) => ({ text: c.text.slice(0, 60), want: c.count, got: codec.count(c.text) }))
         .filter((c) => c.want !== c.got)
+
       expect(mismatches).toEqual([])
     })
   }

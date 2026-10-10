@@ -36,6 +36,7 @@ export const durableObjectBackend = (namespace: DurableObjectNamespace<SessionSt
   run: (address, ops) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
+
       return yield* Effect.tryPromise({
         try: async () => await namespace.getByName(addressName(address)).run([...ops], now),
         catch: (cause) => new SessionStateError({ message: "SessionState request failed", cause })
@@ -51,25 +52,32 @@ const MAX_MEMORY_INSTANCES = 10240
  */
 export const makeMemoryBackend = (now?: () => number): SessionStateBackend => {
   const instances = new Map<string, StateEngine>()
+
   return {
     run: (address, ops) =>
       Effect.gen(function* () {
         const at = now === undefined ? yield* Clock.currentTimeMillis : now()
         const name = addressName(address)
         let engine = instances.get(name)
+
         if (engine === undefined) {
           engine = new StateEngine(new MemoryStateTable())
+
           while (instances.size >= MAX_MEMORY_INSTANCES) {
             const oldest = instances.keys().next()
+
             if (oldest.done === true) break
             instances.delete(oldest.value)
           }
         } else {
           instances.delete(name)
         }
+
         instances.set(name, engine)
         const results = engine.run(ops, at)
+
         if (engine.size() === 0) instances.delete(name)
+
         return results
       })
   }
@@ -122,7 +130,9 @@ export type Update =
   | { readonly _tag: "keep" }
 
 export const putValue = (value: string): Update => ({ _tag: "put", value })
+
 export const deleteValue: Update = { _tag: "delete" }
+
 export const keepValue: Update = { _tag: "keep" }
 
 export interface UpdateOutcome {
@@ -149,6 +159,7 @@ export const updateEntry = (
   Effect.gen(function* () {
     let generation: number
     let current: string | undefined
+
     if (options.known !== undefined) {
       generation = options.known.generation
       current = options.known.value
@@ -156,12 +167,16 @@ export const updateEntry = (
       const first = (yield* backend.run(address, [
         { op: "get", key, ...(options.slideTtl === true ? { extendTtlMs: options.ttlMs } : {}) }
       ]))[0]
+
       generation = first?.status === "ok" ? first.generation : 0
       current = first?.status === "ok" ? first.value : undefined
     }
+
     for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
       const update = decide(current)
+
       if (update._tag === "keep") return { applied: false, generation }
+
       const op: StateOp =
         update._tag === "put"
           ? {
@@ -173,11 +188,15 @@ export const updateEntry = (
               ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries })
             }
           : { op: "delete", key, ifGeneration: generation }
+
       const result = (yield* backend.run(address, [op]))[0]
+
       if (result?.status === "ok") return { applied: true, generation: result.generation }
+
       if (result?.status !== "conflict") return { applied: false, generation }
       generation = result.generation
       current = result.value
     }
+
     return { applied: false, generation }
   })

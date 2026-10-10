@@ -41,6 +41,7 @@ export const registerBuiltinTranslators = (registry: TranslatorRegistry): Transl
   registerOpenAICompatTranslators(registry)
   registerAntigravityTranslators(registry)
   registerCompatRequests(registry)
+
   return registry
 }
 

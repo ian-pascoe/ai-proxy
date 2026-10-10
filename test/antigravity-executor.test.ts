@@ -20,6 +20,7 @@ requests:
 `
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
@@ -29,11 +30,13 @@ const cred = credential("antigravity", "antigravity-dev@example.com.json", {
   attributes: { "header:X-Extra": "yes" },
   metadata: { access_token: "ya29.token", project_id: "proj-1", email: "dev@example.com" }
 })
+
 const unique = (name: string) =>
   credential("antigravity", `antigravity-${name}-${crypto.randomUUID()}.json`, {
     kind: "oauth",
     metadata: { access_token: "ya29.token", project_id: "proj-1" }
   })
+
 const models = {
   "claude-sonnet-4-5": ["antigravity"],
   "gemini-2.5-flash": ["antigravity"],
@@ -66,6 +69,7 @@ describe("antigravity executor: non-stream", () => {
     resetMemoryAntigravityState()
     const h = harness(() => jsonResponse(upstream([{ text: "Hello" }])))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({
@@ -77,6 +81,7 @@ describe("antigravity executor: non-stream", () => {
         ]
       })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { choices: Array<{ message: { content: string } }> }
     expect(body.choices[0]?.message.content).toBe("Hello")
@@ -118,11 +123,14 @@ describe("antigravity executor: non-stream", () => {
           : jsonResponse(upstream([{ text: "x" }])),
       { credential: credential("antigravity", "ag-2", { kind: "oauth", metadata: { access_token: "t" } }) }
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(200)
     expect(h.calls[0]?.url).toBe("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")
     expect(JSON.parse(h.calls[1]?.body ?? "{}").project).toBe("found-proj")
@@ -132,11 +140,14 @@ describe("antigravity executor: non-stream", () => {
     const h = harness(() => new Response("nope", { status: 500 }), {
       credential: credential("antigravity", "ag-3", { kind: "oauth", metadata: { access_token: "t" } })
     })
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(400)
     expect(await response.text()).toContain("antigravity auth missing project_id")
     expect(h.calls).toHaveLength(1)
@@ -144,6 +155,7 @@ describe("antigravity executor: non-stream", () => {
 
   it("streams Claude models upstream and merges the SSE for non-stream callers", async () => {
     resetMemoryAntigravityState()
+
     const h = harness(() =>
       sse([
         upstream([{ text: "think", thought: true }], { usageMetadata: { promptTokenCount: 5 } }),
@@ -151,7 +163,9 @@ describe("antigravity executor: non-stream", () => {
         upstream([{ text: "there" }])
       ])
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/messages",
       postJson({
@@ -161,6 +175,7 @@ describe("antigravity executor: non-stream", () => {
         messages: [{ role: "user", content: "hello" }]
       })
     )
+
     expect(response.status).toBe(200)
     const message = (await response.json()) as { content: Array<{ type: string; text?: string }>; stop_reason: string }
     expect(message.content.find((block) => block.type === "text")?.text).toBe("Hi there")
@@ -181,10 +196,12 @@ describe("antigravity executor: Interactions clients", () => {
   it("serves /v1beta/interactions through the Interactions -> Antigravity translators", async () => {
     const h = harness(() => jsonResponse(upstream([{ text: "Hello" }])))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/interactions",
       postJson({ model: "gemini-3-pro-high", input: "hi", system_instruction: "be brief" })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { object: string; steps: Array<{ type: string }> }
     expect(body.object).toBe("interaction")
@@ -198,17 +215,21 @@ describe("antigravity executor: Interactions clients", () => {
 describe("antigravity executor: stream", () => {
   it("translates SSE lines, renames non-terminal usage and synthesises the terminal event", async () => {
     resetMemoryAntigravityState()
+
     const h = harness(() =>
       sse([
         upstream([{ text: "Hel" }], { candidates: [{ content: { role: "model", parts: [{ text: "Hel" }] } }] }),
         upstream([{ text: "lo" }])
       ])
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(200)
     const text = await response.text()
     expect(text).toContain('"content":"Hel"')
@@ -221,10 +242,12 @@ describe("antigravity executor: stream", () => {
   it("reports an in-stream error object with its status", async () => {
     const h = harness(() => sse([{ error: { code: 429, message: "slow down", status: "RESOURCE_EXHAUSTED" } }]))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(429)
   })
 })
@@ -262,14 +285,18 @@ describe("antigravity executor: errors", () => {
 
   it("passes other upstream errors through verbatim", async () => {
     resetMemoryAntigravityState()
+
     const h = harness(() => jsonResponse({ error: { code: 400, message: "bad" } }, { status: 400 }), {
       credential: unique("passthrough")
     })
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(400)
     expect(await response.text()).toContain("bad")
   })
@@ -279,10 +306,12 @@ describe("antigravity executor: token counting", () => {
   it("posts the bare request to countTokens and renders the Claude input_tokens", async () => {
     const h = harness(() => jsonResponse({ totalTokens: 42 }))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/messages/count_tokens",
       postJson({ model: "claude-sonnet-4-5", messages: [{ role: "user", content: "hello" }] })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ input_tokens: 42 })
     const call = h.calls[0]

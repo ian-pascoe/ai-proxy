@@ -7,8 +7,10 @@ type Token = { kind: "star" } | { kind: "any" } | { kind: "lit"; cp: string }
 const tokenize = (pattern: string): Token[] => {
   const tokens: Token[] = []
   const chars = Array.from(pattern)
+
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i] as string
+
     if (ch === "*") {
       if (tokens.at(-1)?.kind !== "star") tokens.push({ kind: "star" })
     } else if (ch === "?") {
@@ -20,6 +22,7 @@ const tokenize = (pattern: string): Token[] => {
       tokens.push({ kind: "lit", cp: ch })
     }
   }
+
   return tokens
 }
 
@@ -31,8 +34,10 @@ export const wildcardMatch = (value: string, pattern: string): boolean => {
   let s = 0
   let starToken = -1
   let starChar = 0
+
   while (s < chars.length) {
     const token = tokens[t]
+
     if (token !== undefined && token.kind === "star") {
       starToken = t++
       starChar = s
@@ -46,6 +51,8 @@ export const wildcardMatch = (value: string, pattern: string): boolean => {
       return false
     }
   }
+
   while (tokens[t]?.kind === "star") t++
+
   return t === tokens.length
 }

@@ -38,8 +38,11 @@ import {
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts"
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest)
+
 const decodeLease = Schema.decodeUnknownSync(Lease)
+
 const decodeReportResult = Schema.decodeUnknownSync(ReportResult)
+
 const decodeRetryQuery = Schema.decodeUnknownSync(RetryQuery)
 
 const PROTECTED_KEYS = new Set(["type", "disabled", "api_key", "dca_token", "dca_expired", "dca_expires_at"])
@@ -99,8 +102,10 @@ export class ControlPlane extends DurableObject<Env> {
           })),
         save: async (name, metadata) => {
           const result = this.#pool.upsert(name, metadata, { mergeExisting: false })
+
           if (!result.ok) return { ok: false, message: result.message }
           await this.#rearm()
+
           return { ok: true }
         },
         remove: async (id) => {
@@ -114,9 +119,11 @@ export class ControlPlane extends DurableObject<Env> {
   #currentConfig(): ConfigView {
     const cached = this.#configView
     const snapshot = this.#config.get(cached?.version)
+
     if (cached !== undefined && snapshot.unchanged) return cached
     const config: Config = Effect.runSync(decodeStoredConfig(snapshot.document ?? ""))
     this.#configView = { version: snapshot.version, config }
+
     return this.#configView
   }
 
@@ -180,7 +187,9 @@ export class ControlPlane extends DurableObject<Env> {
     options?: { mergeExisting?: boolean }
   ): Promise<UpsertResult> {
     const result = this.#pool.upsert(name, content, { mergeExisting: options?.mergeExisting ?? true })
+
     if (result.ok) await this.#rearm()
+
     return result
   }
 
@@ -194,32 +203,40 @@ export class ControlPlane extends DurableObject<Env> {
     options: { readonly mergeExisting?: boolean } = {}
   ): Promise<UpsertResult> {
     const result = this.#pool.upsert(name, content, { mergeExisting: options.mergeExisting === true })
+
     if (result.ok) await this.#rearm()
+
     return result
   }
 
   /** Removes a stored credential and its runtime state. */
   async removeCredential(id: string): Promise<{ readonly removed: boolean }> {
     const removed = this.#pool.remove(id)
+
     if (removed) {
       this.#refresh.forget(id)
       await this.#rearm()
     }
+
     return { removed }
   }
 
   /** Removes several stored credentials; returns the ids that existed. */
   async removeCredentials(ids: ReadonlyArray<string>): Promise<string[]> {
     const removed: string[] = []
+
     for (const id of ids) if ((await this.removeCredential(id)).removed) removed.push(id)
+
     return removed
   }
 
   /** Disables or re-enables a stored credential (persisted as `disabled` in its file JSON). */
   async setCredentialDisabled(id: string, disabled: boolean): Promise<SetDisabledResult> {
     const result = this.#pool.setDisabled(id, disabled)
+
     if (result !== "ok") return { ok: false, error: result }
     await this.#rearm()
+
     return { ok: true }
   }
 
@@ -237,6 +254,7 @@ export class ControlPlane extends DurableObject<Env> {
    */
   refreshNow(credentialId: string, rejectedAccessToken?: string): Promise<RefreshResult> {
     const options: RefreshOptions = rejectedAccessToken === undefined ? {} : { rejectedAccessToken }
+
     return this.#refresh.refreshNow(credentialId, options)
   }
 
@@ -264,7 +282,9 @@ export class ControlPlane extends DurableObject<Env> {
     const summary = await Effect.runPromise(
       refreshDevinStatuses(this.#pool).pipe(Effect.provide(FetchHttpClient.layer))
     )
+
     if (summary.refreshed > 0) await this.#rearm()
+
     return summary
   }
 
@@ -278,15 +298,20 @@ export class ControlPlane extends DurableObject<Env> {
     patch: JsonObject
   ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "forbidden_key" }> {
     const target = this.#pool.refreshTarget(credentialId)
+
     if (target === undefined) return { ok: false, error: "not_found" }
+
     if (Object.keys(patch).some(isProtectedMetadataKey)) return { ok: false, error: "forbidden_key" }
     const metadata: JsonObject = { ...target.credential.metadata }
+
     for (const [key, value] of Object.entries(patch)) {
       if (value === null) delete metadata[key]
       else metadata[key] = value
     }
+
     this.#pool.commitRefresh(credentialId, { metadata })
     await this.#rearm()
+
     return { ok: true }
   }
 
@@ -295,6 +320,7 @@ export class ControlPlane extends DurableObject<Env> {
   /** Panel entries of all stored auth files (no secrets). Config API keys are not listed. */
   listCredentialEntries(): WireJsonObject[] {
     const now = Date.now()
+
     return this.#pool
       .entries()
       .filter(({ credential }) => credential.source === "file")
@@ -309,20 +335,26 @@ export class ControlPlane extends DurableObject<Env> {
   /** Edits fields of a stored auth file (`PATCH /credentials/fields`); see `field-patch.ts`. */
   async patchCredentialFields(ref: CredentialRef, fields: WireJsonObject): Promise<CredentialMutation> {
     const target = findCredential(this.#pool.entries(), ref)
+
     if (target === undefined || target.credential.source !== "file") {
       return { ok: false, error: "not_found", message: "auth file not found" }
     }
+
     const patched = applyFieldPatch(target.credential.metadata, fields)
+
     if (!patched.ok) return { ok: false, error: "invalid", message: patched.message }
     this.#pool.commitRefresh(target.credential.id, { metadata: patched.metadata })
     await this.#rearm()
+
     return { ok: true, id: target.credential.id }
   }
 
   /** Enables/disables a credential addressed by file name and/or `auth_index`. */
   async setCredentialDisabledByRef(ref: CredentialRef, disabled: boolean): Promise<SetDisabledResult> {
     const target = findCredential(this.#pool.entries(), ref)
+
     if (target === undefined) return { ok: false, error: "not_found" }
+
     return await this.setCredentialDisabled(target.credential.id, disabled)
   }
 
@@ -334,6 +366,7 @@ export class ControlPlane extends DurableObject<Env> {
     | { readonly ok: false } {
     const target = findCredential(this.#pool.entries(), ref)
     const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id)
+
     return target === undefined || reset === undefined
       ? { ok: false }
       : { ok: true, authIndex: authIndexOf(target.credential.id), models: reset.models }
@@ -342,14 +375,19 @@ export class ControlPlane extends DurableObject<Env> {
   /** Manual refresh of one auth file (`POST /credentials/refresh`). */
   async refreshCredential(ref: CredentialRef): Promise<RefreshOneResult> {
     const target = findCredential(this.#pool.entries(), ref)
+
     if (target === undefined || target.credential.source !== "file") return { ok: false, error: "not_found" }
     const id = target.credential.id
     const result = await this.#refresh.refreshNow(id, { force: true })
+
     if (!result.ok && result.error.code !== "not_refreshable") {
       return { ok: false, error: "refresh_failed", message: result.error.message }
     }
+
     const current = this.#pool.entry(id)
+
     if (current === undefined) return { ok: false, error: "not_found" }
+
     return {
       ok: true,
       refreshed: result.ok && result.refreshed,
@@ -365,12 +403,15 @@ export class ControlPlane extends DurableObject<Env> {
         result: await this.#refresh.refreshNow(credential.id, { force: true })
       }))
     )
+
     const items: RefreshAllItem[] = []
+
     for (const { id, result } of results) {
       if (result.ok) items.push({ id, success: true })
       // Credentials without a refresh token are not part of a refresh run.
       else if (result.error.code !== "not_refreshable") items.push({ id, success: false, error: result.error.message })
     }
+
     return items
   }
 
@@ -380,14 +421,19 @@ export class ControlPlane extends DurableObject<Env> {
    */
   async resolveApiCallToken(authIndex: string): Promise<ApiCallTokenResult> {
     const target = findCredential(this.#pool.entries(), { authIndex })
+
     if (target === undefined) return { ok: false, error: "not_found" }
     let credential: Pick<Credential, "metadata" | "attributes"> = target.credential
+
     if (target.credential.source === "file") {
       const fresh = await this.#refresh.ensureFresh(target.credential.id)
+
       if (!fresh.ok) return { ok: false, error: "refresh_failed" }
       credential = fresh.credential
     }
+
     const token = apiCallToken(credential)
+
     return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token }
   }
 

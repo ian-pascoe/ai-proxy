@@ -42,6 +42,7 @@ export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpSe
   (app) =>
     Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest
+
       const response =
         request.method === "OPTIONS"
           ? HttpServerResponse.empty({ status: 204 })
@@ -50,7 +51,9 @@ export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpSe
                 error.reason._tag === "RouteNotFound" ? Effect.succeed(notFound) : Effect.fail(error)
               )
             )
+
       if (classifyPath(request.originalUrl) === "management") return response
+
       return HttpServerResponse.setHeaders(response, corsHeaders)
     }),
   { global: true }

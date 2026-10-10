@@ -43,16 +43,21 @@ export const panelHandler = Effect.gen(function* () {
   const env = yield* WorkerEnv
   const request = yield* HttpServerRequest.HttpServerRequest
   const assetUrl = new URL(ASSET_PATH, new URL(request.originalUrl, "http://localhost"))
+
   const asset = yield* Effect.tryPromise({
     try: async () => await env.ASSETS.fetch(new Request(assetUrl, { headers: { accept: "text/html" } })),
     catch: () => undefined
   }).pipe(Effect.orElseSucceed(() => undefined))
+
   const contentType = asset?.headers.get("content-type") ?? ""
+
   if (asset === undefined || asset.status !== 200 || !contentType.includes("text/html")) {
     // Without the asset the platform answers an SPA fallback or 404; make the failure explicit.
     yield* Effect.logWarning(NOT_INSTALLED)
+
     return jsonReply(404, { error: NOT_INSTALLED })
   }
+
   const page = new HTMLRewriter()
     .on("head", {
       element: (head) => {
@@ -60,6 +65,7 @@ export const panelHandler = Effect.gen(function* () {
       }
     })
     .transform(asset)
+
   // The asset's ETag describes the unmodified file; the rewritten page is always sent in full (no-cache, no ETag).
   return HttpServerResponse.raw(page.body, { status: 200, headers: PANEL_HEADERS })
 })

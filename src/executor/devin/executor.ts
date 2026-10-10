@@ -63,7 +63,9 @@ import {
 import { devinLevelLookup, devinMaxCompletionTokens } from "./catalog.ts"
 
 export const DEVIN_PROVIDER = "devin"
+
 const MAX_ERROR_BODY_BYTES = 1 << 20
+
 const TRUNCATED_STREAM = "devin stream terminated prematurely before EOS trailer"
 
 export interface DevinExecutorOptions {
@@ -95,7 +97,9 @@ export const devinUsageDetail = (usage: DevinUsage | undefined): UsageDetail => 
       totalTokens: 0
     }
   }
+
   const input = usage.promptTokens + usage.cachedTokens
+
   return {
     inputTokens: input,
     outputTokens: usage.completionTokens,
@@ -132,6 +136,7 @@ interface StreamStep {
 /** `registry.LookupDevinModel` through the attempt's registry snapshot: catalog ids are namespaced `devin/<id>`. */
 const lookupDevinInfo = (request: ExecutorRequest, modelId: string) => {
   const bare = modelId.trim().replace(/^devin\//i, "")
+
   return request.modelLookup?.(`devin/${bare}`, DEVIN_PROVIDER) ?? request.modelLookup?.(bare, DEVIN_PROVIDER)
 }
 
@@ -148,15 +153,18 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
   ) {
     const thinking = yield* Thinking
     const { apiKey, baseUrl, deviceSeed } = devinCredentials(context.credential)
+
     if (apiKey === "") {
       return yield* new ExecutionError({
         status: 401,
         message: "devin credentials missing: api_key or session_token required"
       })
     }
+
     const from = options.sourceFormat
     let payload: Json = request.payload
     const nativeSource = from === "" || from === Formats.Interactions
+
     if (!nativeSource) {
       const translated = registry.translateRequest(
         from,
@@ -164,6 +172,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
         { format: from, model: request.model, stream, body: payload },
         thinking.summary
       )
+
       if (translated.error !== undefined) {
         return yield* new ExecutionError({
           status: translated.error.status,
@@ -171,11 +180,14 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
           requestScoped: true
         })
       }
+
       payload = translated.body
     }
+
     const parsed = parseInteractionsPayload(payload, options.originalRequest)
     // Devin cannot fetch a remote uri or take audio, video or documents: a user turn with nothing else is refused.
     const turns = checkDevinUserTurns(parsed.prompts)
+
     if (turns.error !== undefined) {
       return yield* new ExecutionError({
         status: turns.error.status,
@@ -183,12 +195,15 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
         requestScoped: true
       })
     }
+
     const ids = resolveSessionIds(parsed.sessionId, parsed.cascadeId, options.metadata.sessionId)
     const baseModel = parseSuffix(request.model).modelName
     let maxTokens = parsed.maxTokens
     const info = lookupDevinInfo(request, baseModel)
     const modelMax = info?.maxCompletionTokens ?? devinMaxCompletionTokens(baseModel)
+
     if (modelMax > 0 && (maxTokens > modelMax || maxTokens <= 0)) maxTokens = modelMax
+
     // The cron-refreshed catalog (registry snapshot) wins over the embedded one, like Go's active devin catalog.
     const chatModelUid = resolveDevinChatModelUid(
       request.model,
@@ -199,6 +214,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
 
     const turnIndex = yield* nextSessionTurnIndex(ids.sessionId, options.metadata.callerScope)
     const matcher = buildSensitiveWordMatcher(context.config.oauth.providers.devin["sensitive-words"])
+
     const wire = buildGetChatMessageRequest({
       sessionToken: apiKey,
       deviceSeed,
@@ -213,6 +229,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       turnIndex,
       matcher
     })
+
     // User payload rules over the protobuf business fields: the last mutation before framing.
     const finalized = finalizeDevinPayload(wire, (view) =>
       finalizePayload(
@@ -230,6 +247,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
         view
       )
     )
+
     const headers: Record<string, string> = {
       authorization: `Basic ${apiKey}-${apiKey}`,
       "content-type": "application/connect+proto",
@@ -239,7 +257,9 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       // Native devin-cli sends no User-Agent.
       "user-agent": ""
     }
+
     applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId)
+
     return {
       url: `${baseUrl.replace(/\/+$/, "")}${DEVIN_CHAT_PATH}`,
       headers,
@@ -251,26 +271,34 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
 
   const send = Effect.fnUntraced(function* (context: ExecutionContext, prepared: PreparedDevin) {
     const client = yield* HttpClient.HttpClient
+
     const httpRequest = HttpClientRequest.post(prepared.url).pipe(
       HttpClientRequest.bodyUint8Array(prepared.body, "application/connect+proto"),
       HttpClientRequest.setHeaders(prepared.headers)
     )
+
     const response = yield* client
       .execute(httpRequest)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status < 200 || response.status >= 300) {
       const bytes = yield* response.arrayBuffer.pipe(Effect.orElseSucceed(() => new ArrayBuffer(0)))
       const text = new TextDecoder().decode(bytes.slice(0, MAX_ERROR_BODY_BYTES))
+
       const error = devinStatusError(
         response.status,
         new Headers(response.headers),
         text,
         yield* Clock.currentTimeMillis
       )
+
       context.usage.fail(error.status, error.message)
+
       return yield* error
     }
+
     return response
   })
 
@@ -295,41 +323,52 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     // Go: any consume failure of an apply_patch-declaring request is the sanitised gateway error.
     const original = options.originalRequest ?? request.payload
     const patchRequested = applyPatchRequested(original)
+
     const consumeFailure = (error: ExecutionError) => {
       const failure = patchRequested ? applyPatchGatewayError() : error
       context.usage.fail(failure.status, failure.message)
+
       return failure
     }
+
     const aggregator = new DevinAggregator()
     yield* Effect.gen(function* () {
       const body = yield* response.arrayBuffer.pipe(
         Effect.mapError((error) => readError(`devin upstream read failed: ${error.reason._tag}`))
       )
+
       const parser = new ConnectFrameParser()
       let sawEos = false
+
       const frames = yield* Effect.try({
         try: () => parser.push(new Uint8Array(body)),
         catch: (error) => readError(error instanceof ConnectFrameError ? error.message : String(error))
       })
+
       for (const frame of frames) {
         const payload = yield* Effect.tryPromise({
           try: () => inflateFrame(frame),
           catch: (error) => readError(error instanceof Error ? error.message : String(error))
         })
+
         if ((frame.flag & CONNECT_FLAG_END_STREAM) !== 0) {
           const trailer = parseTrailerError(payload)
+
           if (trailer !== undefined) {
             return yield* new ExecutionError({ status: trailer.status, message: trailer.message })
           }
+
           sawEos = true
           break
         }
+
         try {
           aggregator.push(parseDevinFrame(payload))
         } catch {
           // A malformed frame is skipped (Go `continue`).
         }
       }
+
       if (!sawEos) {
         return yield* readError(
           parser.pending > 0 ? "unexpected EOF" : "devin upstream stream terminated prematurely before EOS trailer"
@@ -337,23 +376,29 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       }
     }).pipe(Effect.mapError(consumeFailure))
     const aggregate = aggregator.finish(request.model)
+
     // A tool call whose arguments never became valid JSON is a corrupt patch when it is the declared apply_patch tool.
     if (aggregate.legacyToolNames.some((name) => isApplyPatchUpstreamTool(original, name))) {
       return yield* consumeFailure(applyPatchGatewayError())
     }
+
     if (aggregate.usage?.modelName !== undefined && aggregate.usage.modelName !== "") {
       context.usage.observeResponseModel(aggregate.usage.modelName)
     }
+
     const responseFormat = responseFormatOf(options)
+
     const out = registry.translateNonStream(
       responseFormat,
       Formats.Interactions,
       responseContext(request, options),
       JSON.stringify(aggregate.interaction)
     )
+
     if (out === undefined || out === "")
       return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
     context.usage.publish(devinUsageDetail(aggregate.usage))
+
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -375,21 +420,26 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
         if (this.stopped) return { events: [], stop: true }
         const events: string[] = []
         let frames
+
         try {
           frames = this.parser.push(bytes)
         } catch (error) {
           return this.#readFailure(events, error)
         }
+
         for (const frame of frames) {
           let payload: Uint8Array
+
           try {
             payload = await inflateFrame(frame)
           } catch (error) {
             return this.#readFailure(events, error)
           }
+
           if ((frame.flag & CONNECT_FLAG_END_STREAM) !== 0) {
             this.stopped = true
             const trailer = parseTrailerError(payload)
+
             if (trailer !== undefined) {
               return {
                 events,
@@ -398,15 +448,19 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
                 stop: true
               }
             }
+
             events.push(...this.assembler.complete())
+
             return { events, done: true, stop: true }
           }
+
           try {
             events.push(...this.assembler.push(parseDevinFrame(payload)))
           } catch {
             // A malformed frame is skipped (Go `continue`).
           }
         }
+
         return { events, stop: false }
       })
     }
@@ -414,6 +468,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     #readFailure(events: string[], error: unknown): StreamStep {
       this.stopped = true
       const message = error instanceof Error ? error.message : String(error)
+
       return {
         events,
         failureEvents: this.assembler.abort("stream_read_error", message),
@@ -426,7 +481,9 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     end(): StreamStep {
       if (this.stopped) return { events: [], stop: true }
       this.stopped = true
+
       if (this.parser.pending > 0) return this.#readFailure([], new Error("unexpected EOF"))
+
       return {
         events: [],
         failureEvents: this.assembler.abort("stream_truncated", TRUNCATED_STREAM),
@@ -446,46 +503,62 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     const responseFormat = responseFormatOf(options)
     const state = new FrameState(request.model, responseFormat)
     const translation = responseContext(request, options)
+
     const frameInteractions = (json: string): string[] =>
       responseFormat === Formats.Interactions
         ? [`data: ${json}\n\n`]
         : [...registry.translateStream(responseFormat, Formats.Interactions, translation, json)]
+
     // `InitializeApplyPatchStream`: a patch-declaring Responses client gets its translator state before the first event.
     const original = options.originalRequest ?? request.payload
+
     if (responseFormat === Formats.OpenAIResponse && applyPatchRequested(original)) {
       registry.translateStream(responseFormat, Formats.Interactions, translation, "")
     }
+
     const translate = (step: StreamStep): Stream.Stream<string, ExecutionError> => {
       const chunks: string[] = []
+
       const frame = (events: ReadonlyArray<string>) => {
         for (const json of events) {
           const event = tryParseJson(json)
           const type = asString(get(event, "event_type"))
+
           if (type === "interaction.completed") {
             const usage = state.assembler.usage
             context.usage.publish(devinUsageDetail(usage))
+
             if (usage?.modelName !== undefined && usage.modelName !== "")
               context.usage.observeResponseModel(usage.modelName)
           }
+
           chunks.push(...frameInteractions(json))
         }
       }
+
       frame(step.events)
+
       if (step.failureEvents !== undefined && translation.state.toolInputError === undefined) {
         // `EndApplyPatchStream`: a patch-enabled stream that ends abnormally fails with the one translated frame.
         const ended = endApplyPatchStream(translation.state)
         chunks.push(...ended.chunks)
+
         if (!ended.failed) frame(step.failureEvents)
       }
+
       if (step.done === true) {
         chunks.push(...(responseFormat === Formats.Interactions ? ["data: [DONE]\n\n"] : frameInteractions("[DONE]")))
       }
+
       const emitted = Stream.fromIterable(chunks)
+
       if (translation.state.toolInputError !== undefined) {
         return Stream.concat(emitted, Stream.fail(applyPatchGatewayError()))
       }
+
       return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
     }
+
     const chunks = response.stream.pipe(
       Stream.mapError(transportError),
       Stream.mapAccumEffect(
@@ -497,12 +570,14 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       Stream.flatMap(translate),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
   /** `CountTokens`: no upstream endpoint; `len(payload)/4` like Go. */
   const countTokens: ProviderExecutor["countTokens"] = (_context, request) => {
     const tokens = Math.floor(new TextEncoder().encode(JSON.stringify(cloneJson(request.payload))).length / 4)
+
     return Effect.succeed({
       payload: `{"total_tokens":${tokens},"input_tokens":${tokens}}`,
       headers: new Headers()

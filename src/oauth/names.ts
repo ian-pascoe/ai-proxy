@@ -13,6 +13,7 @@ const MAX_STATE_LENGTH = 128
 /** `ValidateOAuthState`: non-empty, at most 128 chars of `[A-Za-z0-9._-]`, no `..`. */
 export const isValidOAuthState = (state: string): boolean => {
   const trimmed = state.trim()
+
   return (
     trimmed !== "" && trimmed.length <= MAX_STATE_LENGTH && !trimmed.includes("..") && /^[A-Za-z0-9._-]+$/.test(trimmed)
   )

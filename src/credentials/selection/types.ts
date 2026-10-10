@@ -16,6 +16,7 @@ export const SessionRef = Schema.Struct({
   /** Hash of the caller (Access principal): bindings never cross scopes. */
   callerScope: optional(Schema.String)
 })
+
 export type SessionRef = typeof SessionRef.Type
 
 /** A prepared LCP request sequence (`session-routing/canonical.ts#prepareFingerprints`). */
@@ -25,6 +26,7 @@ export const LcpSequence = Schema.Struct({
   tailFingerprints: Schema.Array(Schema.String),
   envDigest: Schema.String
 })
+
 export type LcpSequence = typeof LcpSequence.Type
 
 /** The session identity the selection settled on (explicit, LCP match or LCP binding), for usage records. */
@@ -35,6 +37,7 @@ export const ResolvedSession = Schema.Struct({
   isCompaction: optional(Schema.Boolean),
   nodeKind: optional(Schema.String)
 })
+
 export type ResolvedSession = typeof ResolvedSession.Type
 
 export const PickRequest = Schema.Struct({
@@ -67,6 +70,7 @@ export const PickRequest = Schema.Struct({
   /** Derived content-hash / message-hash identity, used when the LCP matcher does not apply. */
   fallbackSession: optional(SessionRef)
 })
+
 export type PickRequest = typeof PickRequest.Type
 
 /** Routing outcome for the picked credential: requested model -> upstream model. */
@@ -82,6 +86,7 @@ export const ModelRouteSnapshot = Schema.Struct({
   /** Several upstream models share the alias: report each attempt under its upstream model (`ReportResult.model`). */
   pooled: Schema.Boolean
 })
+
 export type ModelRouteSnapshot = typeof ModelRouteSnapshot.Type
 
 /**
@@ -95,6 +100,7 @@ export const CredentialSnapshot = Schema.Struct({
   /** Executor key used for the lookup (`kimi.com` -> `kimi`, compat -> `openai-compatible-<name>`). */
   executor: Schema.String
 })
+
 export type CredentialSnapshot = typeof CredentialSnapshot.Type
 
 export const Lease = Schema.Struct({
@@ -116,6 +122,7 @@ export const Lease = Schema.Struct({
     })
   )
 })
+
 export type Lease = typeof Lease.Type
 
 export const PickFailureCode = Schema.Literals([
@@ -124,6 +131,7 @@ export const PickFailureCode = Schema.Literals([
   "auth_unavailable",
   "model_cooldown"
 ])
+
 export type PickFailureCode = typeof PickFailureCode.Type
 
 /** Why nothing could be picked (mirrors the Go selector errors, credentials.md §6.5). */
@@ -138,6 +146,7 @@ export const PickFailure = Schema.Struct({
   /** JSON error body for `model_cooldown` (`{"error":{"code":"model_cooldown",...}}`). */
   body: optional(Schema.String)
 })
+
 export type PickFailure = typeof PickFailure.Type
 
 export type PickResult =
@@ -172,6 +181,7 @@ export const ReportResult = Schema.Struct({
   /** Count the request but never touch availability (`responses/compact` request faults). */
   availabilityNeutral: optional(Schema.Boolean)
 })
+
 export type ReportResult = typeof ReportResult.Type
 
 export type ReportOutcome =

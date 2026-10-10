@@ -121,6 +121,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       let hasTurnInFlight = false
       // The selected credential's executor owns the socket (Codex response steering): a response ends no stream.
       let duplexStream = false
+
       const duplexInput: WebsocketDuplex | undefined =
         deps.steering === true
           ? {
@@ -132,15 +133,19 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       const write = (payload: JsonObject): void => {
         if (!closed) io.send(JSON.stringify(payload))
       }
+
       const closeSocket = (code: number, reason: string): void => {
         if (closed) return
         closed = true
         io.close(code, truncateCloseReason(reason))
       }
+
       /** `closeForUpstreamError` + `writeResponsesWebsocketTerminalError`: mirror, expose or just close. */
       const terminate = (error: ExecutionError, payload?: JsonObject): void => {
         const mirrored = closeForUpstreamError(error)
+
         if (mirrored !== undefined) return closeSocket(mirrored.code, mirrored.reason)
+
         if (shouldExposeError(error)) write(payload ?? buildErrorPayload(error))
         closeSocket(CLOSE_INTERNAL_ERROR, shouldExposeError(error) ? "error" : "upstream error")
       }
@@ -153,10 +158,12 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
           terminate(error)
         })
       )
+
       deps.toolCaches.retain(deps.toolSessionKey)
       yield* Effect.addFinalizer(() =>
         Effect.gen(function* () {
           closed = true
+
           for (const stop of unsubscribe) stop()
           deps.toolCaches.release(deps.toolSessionKey)
           xaiIdStates.delete(sessionId)
@@ -168,28 +175,38 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       // --- client frame reader: the only consumer of `raw`, so interrupts never wait behind a running response -----
       const interrupt = Effect.fnUntraced(function* (frame: JsonObject, text: string) {
         const responseId = frame["response_id"]
+
         if (typeof responseId !== "string" || responseId.trim() === "") {
           write(buildErrorPayload({ status: 400, message: "response.interrupt requires response_id" }))
+
           return
         }
+
         if (yield* codexSessionStore.interrupt(sessionId, text)) return
         const signal = interruptSignal
+
         if (hasTurnInFlight && signal !== undefined) {
           yield* Deferred.succeed(signal, responseId.trim())
+
           return
         }
+
         write(buildErrorPayload({ status: 400, message: "no active upstream websocket" }))
       })
+
       yield* Effect.forkScoped(
         Effect.gen(function* () {
           while (true) {
             const next = yield* takeOption(raw)
+
             if (Option.isNone(next)) return yield* Queue.end(commands)
             const frame = tryParseJson(next.value)
+
             if (isJsonObject(frame) && asString(frame["type"]) === "response.interrupt") {
               yield* interrupt(frame, next.value)
               continue
             }
+
             yield* Queue.offer(commands, next.value)
           }
         })
@@ -215,29 +232,37 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             Effect.gen(function* () {
               for (const payload of payloadsFromChunk(chunk)) {
                 const type = asString(payload["type"])
+
                 if (type === "response.created") {
                   responseStarted = true
                   collector.reset()
                   completed = false
                 }
+
                 collector.collect(payload)
+
                 if (isCompletionEvent(type) && !options.preserveCompletionOutput())
                   collector.restoreCompletionOutput(payload)
+
                 if (options.toolTurn !== undefined) options.toolTurn.recordResponse(payload)
                 else recordToolCallsFromPayload(deps.toolCaches, deps.toolSessionKey, payload)
                 collector.recordPending(payload)
                 // In Codex duplex mode the executor owns connection termination: payload errors after response.created are
                 // recoverable events; a failing stream still arrives as an execution error and closes the socket.
                 const preserveErrorEvent = responseStarted && duplexStream
+
                 if (type === "error" && !preserveErrorEvent) {
                   const stop: ForwardStop = { _tag: "ForwardStop", error: errorFromPayload(payload), payload }
+
                   return yield* Effect.fail(stop)
                 }
+
                 if (type !== "error" && (isCompletionEvent(type) || type === "response.incomplete")) {
                   completed = true
                   completedOutput = collector.completedOutput(payload)
                   completedResponseId = asString(get(payload, "response.id")).trim()
                 }
+
                 write(payload)
               }
             })
@@ -246,6 +271,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             error instanceof ExecutionError ? { _tag: "ForwardStop", error } : error
           )
         )
+
         const result: Effect.Effect<"done" | "interrupted", ForwardStop> = Effect.raceFirst(
           consume.pipe(Effect.as("done" as const)),
           Deferred.await(options.signal).pipe(
@@ -261,9 +287,12 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             Effect.as("interrupted" as const)
           )
         )
+
         const outcome = yield* Effect.result(result)
+
         if (outcome._tag === "Failure") {
           const failure = outcome.failure
+
           return {
             error: failure.error,
             payload: failure.payload,
@@ -272,6 +301,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             pendingToolCallIds: collector.pending()
           } satisfies ForwardResult
         }
+
         if (outcome.success === "done" && duplexStream) {
           // A duplex stream ends with its socket, not with an individual response.
           return {
@@ -283,6 +313,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             pendingToolCallIds: collector.pending()
           } satisfies ForwardResult
         }
+
         if (outcome.success === "done" && !completed) {
           return {
             error: new ExecutionError({ status: 408, message: "stream closed before response.completed" }),
@@ -292,6 +323,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
             pendingToolCallIds: collector.pending()
           } satisfies ForwardResult
         }
+
         return {
           error: undefined,
           payload: undefined,
@@ -303,11 +335,14 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
 
       const executeTurn = Effect.fnUntraced(function* (plan: Extract<Plan, { _tag: "execute" }>) {
         const { request: planned, nativePassthrough } = plan
+
         // Native passthrough keeps the state upstream; otherwise tool calls are repaired against the session caches.
         const repaired = nativePassthrough
           ? { request: planned, turn: undefined }
           : prepareFallbackTurn(deps.toolCaches, deps.toolSessionKey, planned)
+
         const requestJson = repaired.request
+
         if (nativePassthrough && plan.modelName !== "") state.passthroughModelName = plan.modelName
         const nativeRequest = isCodexResponsesLiteRequest(requestJson, deps.headers)
         let selected: CredentialSnapshot | undefined
@@ -342,10 +377,12 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
                   selected = credential
                   duplexStream =
                     deps.steering === true && credential.provider === "codex" && codexWebsocketsEnabled(credential)
+
                   if (pinnedId !== "" && credential.id === pinnedId) pinnedAuthAttempted = true
                 }
               })
             )
+
             if (started._tag === "Failure") {
               return {
                 error: started.failure,
@@ -355,6 +392,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
                 pendingToolCallIds: []
               } satisfies ForwardResult
             }
+
             return yield* forward(started.success.chunks, {
               toolTurn: repaired.turn,
               preserveCompletionOutput: () => nativeRequest && selected?.provider === "codex",
@@ -372,15 +410,19 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
 
         if (result.duplexClosed === true) {
           closeSocket(1000, "")
+
           return true
         }
+
         if (result.error !== undefined) {
           // A continuation cannot rotate credentials in place: the client replays the whole turn on a new socket.
           if (replayPinnedAuthFailure(result.error)) {
             closeSocket(1012, "upstream requires HTTP replay")
           } else terminate(result.error, result.payload)
+
           return true
         }
+
         repaired.turn?.commit()
         commitTurn(state, {
           modelName: plan.modelName,
@@ -397,6 +439,7 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
           completedResponseId: result.completedResponseId,
           pendingToolCallIds: result.pendingToolCallIds
         })
+
         return false
       })
 
@@ -404,14 +447,17 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
       while (true) {
         if (closed) return
         const next = yield* takeOption(commands)
+
         if (Option.isNone(next)) return
         const parsed = tryParseJson(next.value)
         const payload: JsonObject = isJsonObject(parsed) ? parsed : {}
         const plan = planTurn(state, payload)
+
         // Go prepares the normalised request (after the transcript was rebuilt), not the raw frame.
         if (deps.prepare !== undefined && (plan._tag === "execute" || plan._tag === "prewarm")) {
           yield* deps.prepare(plan.request)
         }
+
         switch (plan._tag) {
           case "error":
             write(buildErrorPayload(plan.error))
@@ -424,12 +470,14 @@ export const runResponsesSocket = <R>(deps: SocketDeps<R>, raw: Queue.Dequeue<st
               id: crypto.randomUUID(),
               createdAt: Math.floor((yield* Clock.currentTimeMillis) / 1000)
             }
+
             const [created, completed] = syntheticPrewarmPayloads(plan.request, now)
             write(created)
             write(completed)
             commitPrewarm(state, plan, asString(get(created, "response.id")))
             break
           }
+
           case "execute":
             if (yield* executeTurn(plan)) return
             break

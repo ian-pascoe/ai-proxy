@@ -29,7 +29,9 @@ import {
 /** `dropForeignClaudeCompactionItems`: compaction items without a CPA capsule are dropped (Go logs a warning). */
 export const dropForeignCompactionItems = (payload: Json | undefined): Json | undefined => {
   const input = get(payload, "input")
+
   if (payload === undefined || !isJsonArray(input)) return payload
+
   const kept = input.filter(
     (item) =>
       !(
@@ -37,15 +39,19 @@ export const dropForeignCompactionItems = (payload: Json | undefined): Json | un
         !recognizedCompactionCapsule(asString(get(item, "encrypted_content")))
       )
   )
+
   if (kept.length === input.length) return payload
   const out = cloneJson(payload)
   set(out, "input", kept)
+
   return out
 }
 
 const expandPayload = async (payload: Json | undefined): Promise<Json | undefined> => {
   const filtered = dropForeignCompactionItems(payload)
+
   if (filtered !== undefined && hasResponsesCompactionItem(filtered)) return expandCompactionCapsules(filtered)
+
   return filtered
 }
 
@@ -59,6 +65,7 @@ export const expandClaudeResponsesCompaction = async (
 ): Promise<{ readonly request: ExecutorRequest; readonly options: ExecutorOptions }> => {
   const payload = await expandPayload(request.payload)
   const original = await expandPayload(options.originalRequest)
+
   return {
     request: payload === request.payload || payload === undefined ? request : { ...request, payload },
     options: original === options.originalRequest ? options : { ...options, originalRequest: original }
@@ -74,12 +81,15 @@ export const claudeCompactionRequested = (request: ExecutorRequest, options: Exe
 /** `claudeCompactionSourcePayload`. */
 export const claudeCompactionSourcePayload = (request: ExecutorRequest, options: ExecutorOptions): Json => {
   let payload: Json = request.payload
+
   if (!hasResponsesCompactionTrigger(payload) && hasResponsesCompactionTrigger(options.originalRequest)) {
     payload = options.originalRequest as Json
   }
+
   if ((payload === undefined || payload === null) && options.originalRequest !== undefined) {
     payload = options.originalRequest
   }
+
   return payload
 }
 
@@ -88,8 +98,11 @@ export const prepareClaudeCompactionSummaryPayload = (payload: Json): Json => {
   const tools = get(payload, "tools")
   const additionalTools = get(payload, "additional_tools")
   const out = prepareCompactionSummaryPayload(payload)
+
   if (tools !== undefined) set(out, "tools", cloneJson(tools))
+
   if (additionalTools !== undefined) set(out, "additional_tools", cloneJson(additionalTools))
+
   return out
 }
 
@@ -100,16 +113,21 @@ const textBlock = (text: string): JsonObject => ({ type: "text", text })
 /** `flattenClaudeToolBlocksForCompaction`: tool blocks become text so Anthropic accepts orphan tool history. */
 export const flattenClaudeToolBlocksForCompaction = (body: JsonObject): JsonObject => {
   const messages = body["messages"]
+
   if (!isJsonArray(messages)) return body
   let changed = false
+
   const rewritten = messages.map((message) => {
     const content = get(message, "content")
+
     if (!isJsonArray(content) || !isJsonObject(message)) return message
     let messageChanged = false
+
     const parts = content.map((part): Json => {
       switch (asString(get(part, "type"))) {
         case "tool_use":
           messageChanged = true
+
           return textBlock(
             `Tool call ${asString(get(part, "name"))} (${asString(get(part, "id"))}): ${rawText(get(part, "input"))}`
           )
@@ -117,17 +135,23 @@ export const flattenClaudeToolBlocksForCompaction = (body: JsonObject): JsonObje
           messageChanged = true
           const result = get(part, "content")
           const resultText = typeof result === "string" ? result : rawText(result)
+
           return textBlock(`Tool result ${asString(get(part, "tool_use_id"))}: ${resultText}`)
         }
+
         default:
           return part
       }
     })
+
     if (!messageChanged) return message
     changed = true
+
     return { ...message, content: parts }
   })
+
   if (changed) body["messages"] = rewritten
+
   return body
 }
 
@@ -138,10 +162,13 @@ export const flattenClaudeToolBlocksForCompaction = (body: JsonObject): JsonObje
  */
 export const finalizeClaudeCompactionSummaryBody = (body: JsonObject): JsonObject => {
   const tools = body["tools"]
+
   if (isJsonArray(tools) && tools.length > 0) {
     body["tool_choice"] = { type: "none" }
+
     return body
   }
+
   return flattenClaudeToolBlocksForCompaction(body)
 }
 
@@ -151,13 +178,17 @@ export const claudeCompactionUsage = (
   rawBody: string
 ): { readonly input: number; readonly output: number; readonly total: number; readonly cached: number } => {
   const usage = get(payload, "usage")
+
   if (usage === undefined) {
     const parsed = parseOpenAIUsage(rawBody)
+
     return { input: parsed.inputTokens, output: parsed.outputTokens, total: parsed.totalTokens, cached: 0 }
   }
+
   const cached = asInt(get(usage, "cache_read_input_tokens"))
   const input = asInt(get(usage, "input_tokens")) + asInt(get(usage, "cache_creation_input_tokens")) + cached
   const output = asInt(get(usage, "output_tokens"))
+
   return { input, output, total: input + output, cached }
 }
 
@@ -168,19 +199,24 @@ export const patchClaudeCompactionStreamUsage = (
 ): string => {
   const prefix = "data: "
   const index = chunk.indexOf(prefix)
+
   if (index < 0) return chunk
   let data: Json
+
   try {
     data = JSON.parse(chunk.slice(index + prefix.length).trim()) as Json
   } catch {
     return chunk
   }
+
   const path =
     get(data, "response.usage") !== undefined ? "response.usage" : get(data, "usage") !== undefined ? "usage" : ""
+
   if (path === "") return chunk
   set(data, `${path}.input_tokens`, usage.input)
   set(data, `${path}.output_tokens`, usage.output)
   set(data, `${path}.total_tokens`, usage.total)
   set(data, `${path}.input_tokens_details.cached_tokens`, usage.cached)
+
   return `${chunk.slice(0, index)}${prefix}${JSON.stringify(data)}\n\n`
 }

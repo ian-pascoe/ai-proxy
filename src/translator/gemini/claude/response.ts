@@ -47,6 +47,7 @@ let toolUseIdCounter = 0
 
 export const resolveGeminiClaudeStopReason = (finishReason: string, sawToolCall: boolean): string => {
   if (sawToolCall) return "tool_use"
+
   switch (finishReason) {
     case "MAX_TOKENS":
       return "max_tokens"
@@ -68,13 +69,17 @@ const event = (name: string, payload: Json): string => `event: ${name}\ndata: ${
 
 const blockStart = (index: number, block: JsonObject): string =>
   event("content_block_start", { type: "content_block_start", index, content_block: block })
+
 const blockStop = (index: number): string => event("content_block_stop", { type: "content_block_stop", index })
+
 const blockDelta = (index: number, delta: JsonObject): string =>
   event("content_block_delta", { type: "content_block_delta", index, delta })
 
 const messageDelta = (p: Params, stopReason: string): string => {
   const usage: JsonObject = { input_tokens: p.inputTokens, output_tokens: p.outputTokens }
+
   if (p.cachedTokens > 0) usage["cache_read_input_tokens"] = p.cachedTokens
+
   return event("message_delta", {
     type: "message_delta",
     delta: { stop_reason: stopReason, stop_sequence: null },
@@ -84,12 +89,15 @@ const messageDelta = (p: Params, stopReason: string): string => {
 
 const partSignature = (part: Json): string => {
   let sig = get(part, "thoughtSignature")
+
   if (sig === undefined) sig = get(part, "thought_signature")
+
   return sig !== undefined && asString(sig) !== "" ? asString(sig) : ""
 }
 
 export const convertGeminiResponseToClaude = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   const state = context.state
+
   if (state.value === undefined) {
     state.value = {
       hasFirstResponse: false,
@@ -106,6 +114,7 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
       cachedTokens: 0
     } satisfies Params
   }
+
   const p = state.value as Params
   let output = ""
 
@@ -115,18 +124,23 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
       p.responseType = 1
       p.hasContent = true
     }
+
     if (p.hasContent) {
       if (p.responseType !== 0) {
         output += blockStop(p.responseIndex)
         p.responseType = 0
       }
+
       if (!p.hasFinalEvents) {
         output += messageDelta(p, resolveGeminiClaudeStopReason(p.finishReason, p.sawToolCall))
         p.hasFinalEvents = true
       }
+
       output += event("message_stop", { type: "message_stop" })
+
       return [output]
     }
+
     return []
   }
 
@@ -140,11 +154,13 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
 
   const appendCarrierThinkingBlock = (signature: string): void => {
     if (signature === "") return
+
     if (p.responseType !== 0) {
       output += blockStop(p.responseIndex)
       p.responseIndex++
       p.responseType = 0
     }
+
     output += blockStart(p.responseIndex, { type: "thinking", thinking: "" })
     output += blockDelta(p.responseIndex, { type: "signature_delta", signature })
     output += blockStop(p.responseIndex)
@@ -164,15 +180,19 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
       stop_sequence: null,
       usage: { input_tokens: 0, output_tokens: 0 }
     }
+
     const modelVersion = get(root, "modelVersion")
+
     if (modelVersion !== undefined) message["model"] = asString(modelVersion)
     const responseId = get(root, "responseId")
+
     if (responseId !== undefined) message["id"] = asString(responseId)
     output += event("message_start", { type: "message_start", message })
     p.hasFirstResponse = true
   }
 
   const parts = get(root, "candidates.0.content.parts")
+
   if (isJsonArray(parts)) {
     for (const part of parts) {
       const partText = get(part, "text")
@@ -194,7 +214,9 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
           else appendCarrierThinkingBlock(partSig)
           continue
         }
+
         const text = asString(partText)
+
         if (p.responseType === 2) {
           output += blockDelta(p.responseIndex, { type: "thinking_delta", thinking: text })
           p.hasContent = true
@@ -203,11 +225,13 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
             output += blockStop(p.responseIndex)
             p.responseIndex++
           }
+
           output += blockStart(p.responseIndex, { type: "thinking", thinking: "" })
           output += blockDelta(p.responseIndex, { type: "thinking_delta", thinking: text })
           p.responseType = 2
           p.hasContent = true
         }
+
         if (hasThoughtSignature) appendSignatureDelta(partSig)
         continue
       }
@@ -222,20 +246,24 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
           if (args !== undefined) {
             output += blockDelta(p.responseIndex, { type: "input_json_delta", partial_json: JSON.stringify(args) })
           }
+
           if (hasThoughtSignature) appendCarrierThinkingBlock(partSig)
           continue
         }
 
         if (hasThoughtSignature) appendCarrierThinkingBlock(partSig)
+
         if (p.responseType === 3) {
           output += blockStop(p.responseIndex)
           p.responseIndex++
           p.responseType = 0
         }
+
         if (p.responseType !== 0) {
           output += blockStop(p.responseIndex)
           p.responseIndex++
         }
+
         toolUseIdCounter++
         output += blockStart(p.responseIndex, {
           type: "tool_use",
@@ -243,9 +271,11 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
           name: clientToolName,
           input: {}
         })
+
         if (args !== undefined) {
           output += blockDelta(p.responseIndex, { type: "input_json_delta", partial_json: JSON.stringify(args) })
         }
+
         p.responseType = 3
         p.hasContent = true
         continue
@@ -253,12 +283,15 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
 
       if (partText !== undefined) {
         const text = asString(partText)
+
         if (hasThoughtSignature && text === "") {
           if (p.responseType === 2) appendSignatureDelta(partSig)
           else appendCarrierThinkingBlock(partSig)
           continue
         }
+
         if (hasThoughtSignature) appendCarrierThinkingBlock(partSig)
+
         if (p.responseType === 1) {
           output += blockDelta(p.responseIndex, { type: "text_delta", text })
           p.hasContent = true
@@ -267,11 +300,13 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
             output += blockStop(p.responseIndex)
             p.responseIndex++
           }
+
           output += blockStart(p.responseIndex, { type: "text", text: "" })
           output += blockDelta(p.responseIndex, { type: "text_delta", text })
           p.responseType = 1
           p.hasContent = true
         }
+
         continue
       }
 
@@ -280,16 +315,20 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
   }
 
   const finish = get(root, "candidates.0.finishReason")
+
   if (finish !== undefined && asString(finish) !== "") p.finishReason = asString(finish)
 
   const usage = get(root, "usageMetadata")
+
   if (usage !== undefined) {
     const cachedTokens = asInt(get(usage, "cachedContentTokenCount"))
     const promptTokens = Math.max(0, asInt(get(usage, "promptTokenCount")) - cachedTokens)
     let outputTokens = asInt(get(usage, "candidatesTokenCount")) + asInt(get(usage, "thoughtsTokenCount"))
+
     if (outputTokens === 0 && asInt(get(usage, "totalTokenCount")) > 0) {
       outputTokens = Math.max(0, asInt(get(usage, "totalTokenCount")) - asInt(get(usage, "promptTokenCount")))
     }
+
     p.inputTokens = promptTokens
     p.outputTokens = outputTokens
     p.cachedTokens = cachedTokens
@@ -301,11 +340,13 @@ export const convertGeminiResponseToClaude = (context: ResponseContext, line: st
       p.responseType = 1
       p.hasContent = true
     }
+
     if (p.hasContent) {
       if (p.responseType !== 0) {
         output += blockStop(p.responseIndex)
         p.responseType = 0
       }
+
       output += messageDelta(p, resolveGeminiClaudeStopReason(p.finishReason, p.sawToolCall))
       p.hasFinalEvents = true
     }
@@ -321,10 +362,14 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
 
   const cachedTokens = asInt(get(root, "usageMetadata.cachedContentTokenCount"))
   const inputTokens = Math.max(0, asInt(get(root, "usageMetadata.promptTokenCount")) - cachedTokens)
+
   const outputTokens =
     asInt(get(root, "usageMetadata.candidatesTokenCount")) + asInt(get(root, "usageMetadata.thoughtsTokenCount"))
+
   const usage: JsonObject = { input_tokens: inputTokens, output_tokens: outputTokens }
+
   if (cachedTokens > 0) usage["cache_read_input_tokens"] = cachedTokens
+
   const out: JsonObject = {
     id: asString(get(root, "responseId")),
     type: "message",
@@ -349,14 +394,17 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
     blocks.push({ type: "text", text })
     text = ""
   }
+
   const flushThinking = (): void => {
     if (thinking === "" && thinkingSignature === "") return
     const block: JsonObject = { type: "thinking", thinking }
+
     if (thinkingSignature !== "") block["signature"] = thinkingSignature
     blocks.push(block)
     thinking = ""
     thinkingSignature = ""
   }
+
   const appendCarrierThinkingBlock = (signature: string): void => {
     if (signature !== "") blocks.push({ type: "thinking", thinking: "", signature })
   }
@@ -371,7 +419,9 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
 
       if (isThought) {
         flushText()
+
         if (partSig !== "") thinkingSignature = partSig
+
         if (hasText) thinking += asString(partText)
         continue
       }
@@ -381,11 +431,13 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
           thinkingSignature = partSig
           continue
         }
+
         if (partSig !== "") {
           flushThinking()
           flushText()
           appendCarrierThinkingBlock(partSig)
         }
+
         continue
       }
 
@@ -393,6 +445,7 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
 
       if (functionCall !== undefined) {
         flushText()
+
         if (partSig !== "") appendCarrierThinkingBlock(partSig)
         hasToolCall = true
         const upstreamToolName = restoreSanitizedToolName(sanitizedNameMap, asString(get(functionCall, "name")))
@@ -413,6 +466,7 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
           flushText()
           appendCarrierThinkingBlock(partSig)
         }
+
         text += asString(partText)
         continue
       }
@@ -421,12 +475,14 @@ export const convertGeminiResponseToClaudeNonStream = (context: ResponseContext,
 
   flushThinking()
   flushText()
+
   if (blocks.length > 0) out["content"] = blocks
 
   const finish = get(root, "candidates.0.finishReason")
   out["stop_reason"] = resolveGeminiClaudeStopReason(finish === undefined ? "" : asString(finish), hasToolCall)
 
   if (inputTokens === 0 && outputTokens === 0 && !exists(root, "usageMetadata")) delete out["usage"]
+
   return JSON.stringify(out)
 }
 

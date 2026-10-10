@@ -25,7 +25,9 @@ export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Databa
       if (!/duplicate column name/i.test(String(error))) throw error
     }
   }
+
   await db.prepare("DELETE FROM usage_records").run()
+
   return db
 }
 

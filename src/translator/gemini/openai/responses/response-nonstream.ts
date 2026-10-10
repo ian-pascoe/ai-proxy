@@ -87,10 +87,12 @@ interface OutputOrder {
 
 const runeLength = (text: string): number => {
   let count = 0
+
   for (const _ of text) {
     void _
     count++
   }
+
   return count
 }
 
@@ -117,12 +119,16 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
     error: null,
     incomplete_details: null
   }
+
   const { status, incompleteDetails } = terminalState(asString(get(root, "candidates.0.finishReason")))
   resp["status"] = status
+
   if (incompleteDetails !== undefined) resp["incomplete_details"] = incompleteDetails
 
   let id = asString(get(root, "responseId"))
+
   if (id === "") id = newResponseId()
+
   if (!id.startsWith("resp_")) id = `resp_${id}`
   resp["id"] = id
   resp["created_at"] = parseCreateTime(get(root, "createTime")) ?? Math.floor(Date.now() / 1000)
@@ -132,6 +138,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
     echoRequestFields(resp, "", unwrapRequestRoot(reqJson), get(root, "modelVersion"))
   } else {
     const modelVersion = get(root, "modelVersion")
+
     if (modelVersion !== undefined) resp["model"] = asString(modelVersion)
   }
 
@@ -145,6 +152,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   const messageOutputs: MessageOutput[] = []
   const outputOrder: OutputOrder[] = []
   const reasoningOutputSignatures = new Set<string>()
+
   const flushReasoningOutput = (): void => {
     if (reasoningText.length === 0 && reasoningEncrypted === "") return
     const reasoningIndex = reasoningOutputs.length
@@ -155,17 +163,20 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
       targetKind: reasoningTargetKind
     })
     outputOrder.push({ kind: "reasoning", index: reasoningIndex })
+
     if (reasoningEncrypted !== "") reasoningOutputSignatures.add(reasoningEncrypted)
     reasoningText = ""
     reasoningEncrypted = ""
     reasoningDirection = ""
     reasoningTargetKind = ""
   }
+
   const detachedReasoningOutputs: DetachedOutput[] = []
   let currentMessageText = ""
   let currentMessageSignatures: string[] = []
   const partMappings: GeminiPartMapping[] = []
   let currentMsgRuneOffset = 0
+
   const flushMessageOutput = (): void => {
     if (currentMessageText.length === 0) return
     const messageIndex = messageOutputs.length
@@ -181,6 +192,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   const outputs: Json[] = []
   let detachedOutputIndex = 0
   const seenDetachedOutputs = new Set<string>()
+
   const appendDetachedOutput = (signature: string, direction: string, targetKind: string): void => {
     if (signature === "" || seenDetachedOutputs.has(signature)) return
     seenDetachedOutputs.add(signature)
@@ -193,6 +205,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
     })
     detachedOutputIndex++
   }
+
   const addDetached = (signature: string, direction: string, targetKind: string): void => {
     const detachedIndex = detachedReasoningOutputs.length
     detachedReasoningOutputs.push({ signature, direction, targetKind })
@@ -202,25 +215,34 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   /** One part; `false` stops the iteration. */
   const handlePart = (p: Json, key: number): boolean => {
     let partIdx = key
+
     if (get(p, "partIndex") !== undefined) partIdx = asInt(get(p, "partIndex"))
     else if (get(p, "index") !== undefined) partIdx = asInt(get(p, "index"))
     let signature = asString(get(p, "thoughtSignature")).trim()
+
     if (signature === "") signature = asString(get(p, "thought_signature")).trim()
     const text = get(p, "text")
+
     if (asBool(get(p, "thought"))) {
       flushMessageOutput()
       currentMsgRuneOffset = 0
+
       if (signature !== "" && reasoningEncrypted !== "" && signature !== reasoningEncrypted) flushReasoningOutput()
+
       if (text !== undefined) reasoningText += asString(text)
+
       if (signature !== "") {
         reasoningEncrypted = signature
         reasoningDirection = CARRIER_STANDALONE
         reasoningTargetKind = CARRIER_TEXT
       }
+
       return true
     }
+
     if (text !== undefined && asString(text) !== "") {
       let messageSignature = ""
+
       if (signature !== "") {
         if (reasoningText.length > 0 && reasoningEncrypted === "") {
           reasoningEncrypted = signature
@@ -230,7 +252,9 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
           messageSignature = signature
         }
       }
+
       flushReasoningOutput()
+
       if (
         currentMessageSignatures.length > 0 &&
         (messageSignature === "" || currentMessageSignatures[currentMessageSignatures.length - 1] !== messageSignature)
@@ -238,6 +262,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
         flushMessageOutput()
         currentMsgRuneOffset = 0
       }
+
       const partText = asString(text)
       partMappings.push({
         partIndex: partIdx,
@@ -247,6 +272,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
       })
       currentMsgRuneOffset += runeLength(partText)
       currentMessageText += partText
+
       if (
         messageSignature !== "" &&
         (currentMessageSignatures.length === 0 ||
@@ -254,9 +280,12 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
       ) {
         currentMessageSignatures.push(messageSignature)
       }
+
       return true
     }
+
     const fc = get(p, "functionCall")
+
     if (fc !== undefined) {
       if (reasoningText.length > 0 && reasoningEncrypted === "" && signature !== "") {
         reasoningEncrypted = signature
@@ -264,22 +293,29 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
         reasoningTargetKind = CARRIER_FUNCTION
         signature = ""
       }
+
       flushReasoningOutput()
       flushMessageOutput()
       currentMsgRuneOffset = 0
 
       let explicitIndex = -1
+
       if (get(p, "partIndex") !== undefined) explicitIndex = asInt(get(p, "partIndex"))
       else if (get(p, "index") !== undefined) explicitIndex = asInt(get(p, "index"))
       const evidence = recordFunctionEvidence(evidenceState, fc, explicitIndex, parsed !== undefined)
+
       if (evidence.applyPatch && evidence.err !== undefined) {
         toolInputError = evidence.err
+
         return false
       }
+
       if (evidence.rawName === "") return true
       let rawName = asString(get(fc, "name"))
+
       if (evidence.applyPatch) rawName = evidence.rawName
       let identity: ResponsesToolIdentity | undefined = toolIdentityMap.get(rawName)
+
       if (identity === undefined) {
         identity = {
           name: restoreSanitizedToolName(sanitizedNames, rawName),
@@ -288,29 +324,41 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
           applyPatch: false
         }
       }
+
       const { name, namespace } = identity
       const isCustom = identity.custom
       const argsValue = get(fc, "args")
       const argsStr = argsValue === undefined ? "" : JSON.stringify(argsValue)
+
       if (identity.applyPatch && evidence.patchCall !== undefined) {
         const finished = finishApplyPatchArguments(argsStr)
+
         if ("error" in finished) {
           toolInputError = finished.error
+
           return false
         }
+
         return true
       }
+
       let callId = newNonStreamCallId()
+
       if (identity.applyPatch && evidence.upstreamId !== "") callId = evidence.upstreamId
       let item: JsonObject
+
       if (isCustom) {
         let inputStr = unwrapResponsesCustomToolInput(argsStr)
+
         if (identity.applyPatch) {
           const finished = finishApplyPatchArguments(argsStr)
+
           if ("error" in finished) {
             toolInputError = finished.error
+
             return false
           }
+
           inputStr = finished.input
           evidence.patchCall = {
             itemId: `ctc_${callId}`,
@@ -320,6 +368,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
             outputIndex: 0
           }
         }
+
         item = {
           id: `ctc_${callId}`,
           type: "custom_tool_call",
@@ -338,12 +387,15 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
           name: ""
         }
       }
+
       setToolCallIdentity(item, name, namespace)
       const functionIndex = functionOutputs.length
       functionOutputs.push({ item, signature })
       outputOrder.push({ kind: "function", index: functionIndex })
+
       return true
     }
+
     if (signature !== "") {
       if (reasoningText.length > 0) {
         if (reasoningEncrypted === "") {
@@ -368,10 +420,12 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
         addDetached(signature, CARRIER_NEXT, CARRIER_ANY)
       }
     }
+
     return true
   }
 
   const parts = get(root, "candidates.0.content.parts")
+
   if (isJsonArray(parts)) {
     for (let index = 0; index < parts.length; index++) {
       if (!handlePart(parts[index] as Json, index)) break
@@ -379,10 +433,13 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   }
 
   toolInputError ??= pendingIdentityError(evidenceState)
+
   if (toolInputError !== undefined) {
     context.state.toolInputError = toolInputError
+
     return undefined
   }
+
   const activeMessageIndex = currentMessageText.length > 0 ? messageOutputs.length : -1
   flushReasoningOutput()
   flushMessageOutput()
@@ -392,9 +449,11 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   const hasGrounding = hasValidWebGrounding(groundingMetadata)
   let wsItem: Json | undefined
   let messageCitations = new Map<number, Json[]>()
+
   if (hasGrounding) {
     const queries = extractGroundingQueries(groundingMetadata)
     let query = queries[0] ?? ""
+
     if (query === "" && reqJson !== undefined) query = extractResponsesWebSearchQuery(unwrapRequestRoot(reqJson))
     const sources = extractGroundingSources(groundingMetadata)
     wsItem = buildResponsesWebSearchCallItem(`ws_${stripResponsePrefix(id)}`, query, queries, sources)
@@ -406,40 +465,54 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   }
 
   let wsAppended = false
+
   for (const outputItem of outputOrder) {
     switch (outputItem.kind) {
       case "detached": {
         const detached = detachedReasoningOutputs[outputItem.index]
+
         if (detached === undefined) continue
+
         if (!reasoningOutputSignatures.has(detached.signature)) {
           appendDetachedOutput(detached.signature, detached.direction, detached.targetKind)
         }
+
         break
       }
+
       case "reasoning": {
         const reasoningOutput = reasoningOutputs[outputItem.index]
+
         if (reasoningOutput === undefined) continue
         const rid = stripResponsePrefix(id)
         const reasoningId = reasoningOutputs.length > 1 ? `rs_${rid}_${outputItem.index}` : `rs_${rid}`
         let encryptedContent = reasoningOutput.signature
+
         if (encryptedContent !== "" && reasoningOutput.direction !== "") {
           encryptedContent = encodeCarrier(encryptedContent, reasoningOutput.direction, reasoningOutput.targetKind)
         }
+
         const item: JsonObject = { id: reasoningId, type: "reasoning", encrypted_content: encryptedContent }
+
         if (reasoningOutput.text !== "") set(item, "summary", [{ type: "summary_text", text: reasoningOutput.text }])
         outputs.push(item)
         break
       }
+
       case "message": {
         if (hasGrounding && !wsAppended) {
           outputs.push(wsItem as Json)
           wsAppended = true
         }
+
         const messageOutput = messageOutputs[outputItem.index]
+
         if (messageOutput === undefined) continue
+
         for (const signature of messageOutput.signatures) {
           if (!reasoningOutputSignatures.has(signature)) appendDetachedOutput(signature, CARRIER_NEXT, CARRIER_TEXT)
         }
+
         const citations = messageCitations.get(outputItem.index) ?? []
         outputs.push({
           id: `msg_${stripResponsePrefix(id)}_${outputItem.index}`,
@@ -450,8 +523,10 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
         })
         break
       }
+
       case "function": {
         const functionOutput = functionOutputs[outputItem.index]
+
         if (functionOutput === undefined) continue
         appendDetachedOutput(functionOutput.signature, CARRIER_NEXT, CARRIER_FUNCTION)
         outputs.push(functionOutput.item)
@@ -459,10 +534,15 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
       }
     }
   }
+
   if (hasGrounding && !wsAppended) outputs.push(wsItem as Json)
+
   if (outputs.length > 0) resp["output"] = outputs
+
   if (hasGrounding) resp["tool_usage"] = { web_search: { num_requests: 1 } }
   const usage = newUsage()
+
   if (mergeUsage(usage, root)) resp["usage"] = usageJson(usage)
+
   return JSON.stringify(resp)
 }

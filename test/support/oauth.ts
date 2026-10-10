@@ -21,6 +21,7 @@ export const makeOAuth = (
   const table = new MemorySessionTable()
   const files = new Map<string, JsonObject>(Object.entries(seed))
   const removed: string[] = []
+
   const sink: CredentialSink = {
     get: (name) => files.get(name),
     list: () =>
@@ -31,6 +32,7 @@ export const makeOAuth = (
       })),
     save: async (name, metadata) => {
       files.set(name, structuredClone(metadata))
+
       return await Promise.resolve({ ok: true } as const)
     },
     remove: async (id) => {
@@ -39,12 +41,15 @@ export const makeOAuth = (
       await Promise.resolve()
     }
   }
+
   const service: OAuthService = makeOAuthService({
     sessions: new OAuthSessions(table),
     sink,
     metaMintUrl: options.metaMintUrl
   })
+
   const http = mockHttp(handler)
+
   return {
     service,
     table,
@@ -70,8 +75,10 @@ export const s256 = async (verifier: string): Promise<string> => base64Url(await
 /** The only file a login produced. */
 export const onlyFile = (harness: OAuthHarness): { readonly name: string; readonly file: JsonObject } => {
   const entries = [...harness.files]
+
   if (entries.length !== 1) throw new Error(`expected one credential, got ${entries.length}`)
   const [name, file] = entries[0] as [string, JsonObject]
+
   return { name, file }
 }
 
@@ -82,7 +89,9 @@ export const statusOf = (harness: OAuthHarness, state: string): Effect.Effect<St
 export const begin = (harness: OAuthHarness, provider: string, extra: { domain?: string; flow?: string } = {}) =>
   Effect.gen(function* () {
     const started = yield* harness.run(harness.service.start({ provider, ...extra }))
+
     if (!started.ok) throw new Error(`start failed: ${started.error}`)
+
     return started
   })
 

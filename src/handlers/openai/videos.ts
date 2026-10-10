@@ -56,6 +56,7 @@ const pathOf = (request: HttpServerRequest.HttpServerRequest): string =>
 /** Decoded path remainder after `prefix` (without a leading slash), `""` for the bare prefix. */
 const remainder = (request: HttpServerRequest.HttpServerRequest, prefix: string): string => {
   const rest = pathOf(request).slice(prefix.length).replace(/^\/+/, "")
+
   try {
     return decodeURIComponent(rest)
   } catch {
@@ -79,6 +80,7 @@ const runVideo = (request: HttpServerRequest.HttpServerRequest, run: VideoRun) =
     request,
     ...(run.pinnedId !== undefined ? { pinnedId: run.pinnedId } : {})
   }
+
   return executeNonStream(input)
 }
 
@@ -94,6 +96,7 @@ interface Services {
 
 const services = Effect.gen(function* () {
   const config = yield* currentConfig
+
   return {
     passthroughHeaders: config.requests["passthrough-headers"],
     ttlMs: videoResultAuthCacheTtlMs(config),
@@ -116,6 +119,7 @@ const retrieve = (request: HttpServerRequest.HttpServerRequest, videoId: string)
   Effect.gen(function* () {
     const binding = yield* loadVideoBinding(videoId)
     const model = binding !== undefined && binding.model.trim() !== "" ? binding.model.trim() : DEFAULT_XAI_VIDEOS_MODEL
+
     return {
       model,
       output: yield* runVideo(request, {
@@ -135,22 +139,28 @@ const nativePost = Effect.gen(function* () {
   const { passthroughHeaders, ttlMs } = yield* servicesOrDefault
   const onError = (error: ExecutionError) => errorResponse("openai", error, { passthroughHeaders })
   const read = yield* Effect.result(readRequestBody(request))
+
   if (read._tag === "Failure") return invalid(read.failure.message, read.failure.status)
   const body = read.success.json
+
   if (body === undefined || !isJsonObject(body)) return invalid("body must be valid JSON")
   const requested = asString(get(body, "model")).trim() || DEFAULT_XAI_VIDEOS_MODEL
+
   if (!isXaiVideosModel(requested)) {
     return openAiError(
       400,
       `Model ${requested} is not supported on /v1/videos/generations, /v1/videos/edits, or /v1/videos/extensions. Use ${DEFAULT_XAI_VIDEOS_MODEL}.`
     )
   }
+
   const routingModel = routingXaiVideosModel(requested)
   const payload: JsonObject = { ...body, model: canonicalXaiVideosModel(requested) }
   const result = yield* Effect.result(runVideo(request, { model: routingModel, body: payload }))
+
   if (result._tag === "Failure") return onError(result.failure)
   const output = result.success
   yield* bind(output, videoIdFromPayload(tryParseJson(output.payload)), routingModel, ttlMs)
+
   return upstreamJson(output.payload, output.headers)
 })
 
@@ -158,11 +168,14 @@ const nativeRetrieve = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const { passthroughHeaders, ttlMs } = yield* servicesOrDefault
   const requestId = remainder(request, "/v1/videos").trim()
+
   if (requestId === "" || requestId.includes("/")) return HttpServerResponse.empty({ status: 404 })
   const result = yield* Effect.result(retrieve(request, requestId))
+
   if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
   const { model, output } = result.success
   yield* bind(output, requestId, model, ttlMs)
+
   return upstreamJson(output.payload, output.headers)
 })
 
@@ -173,8 +186,10 @@ const nativeRetrieve = Effect.gen(function* () {
 const readCreateBody = (request: HttpServerRequest.HttpServerRequest) =>
   Effect.gen(function* () {
     const contentType = (request.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? ""
+
     if (contentType === "multipart/form-data" || contentType === "application/x-www-form-urlencoded") {
       const raw = yield* request.arrayBuffer
+
       const form = yield* Effect.tryPromise({
         try: () =>
           new Request("http://localhost/", {
@@ -184,10 +199,14 @@ const readCreateBody = (request: HttpServerRequest.HttpServerRequest) =>
           }).formData(),
         catch: (error) => (error instanceof Error ? error.message : String(error))
       })
+
       return videosCreateRequestFromForm(form) as Json
     }
+
     const read = yield* readRequestBody(request).pipe(Effect.mapError((error) => error.message))
+
     if (read.json === undefined) return yield* Effect.fail("body must be valid JSON")
+
     return read.json
   })
 
@@ -195,6 +214,7 @@ const soraCreate = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const { passthroughHeaders, ttlMs } = yield* servicesOrDefault
   const read = yield* Effect.result(readCreateBody(request))
+
   if (read._tag === "Failure") {
     return failedVideo(
       400,
@@ -203,10 +223,13 @@ const soraCreate = Effect.gen(function* () {
       `Invalid request: ${String(read.failure)}`
     )
   }
+
   const body = read.success
   const requested = asString(get(body, "model")).trim() || DEFAULT_XAI_VIDEOS_MODEL
+
   if (!isSupportedVideosModel(requested)) {
     const path = pathOf(request) || "/openai/v1/videos"
+
     return failedVideo(
       400,
       requested,
@@ -214,18 +237,25 @@ const soraCreate = Effect.gen(function* () {
       `Model ${requested} is not supported on ${path}. Use ${DEFAULT_OPENAI_VIDEOS_MODEL}.`
     )
   }
+
   const built = buildXaiVideosCreateRequest(body, requested, Math.floor((yield* Clock.currentTimeMillis) / 1000))
+
   if (typeof built === "string") {
     return failedVideo(400, canonicalXaiVideosModel(requested), "invalid_request_error", `Invalid request: ${built}`)
   }
+
   const result = yield* Effect.result(runVideo(request, { model: built.meta.routingModel, body: built.request }))
+
   if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
   const output = result.success
   const out = buildVideosCreateResponse(tryParseJson(output.payload), built.meta)
+
   if (typeof out !== "string") {
     return errorResponse("openai", new ExecutionErrorClass({ status: 502, message: out.error }), { passthroughHeaders })
   }
+
   yield* bind(output, videoIdFromPayload(tryParseJson(out)), built.meta.routingModel, ttlMs)
+
   return upstreamJson(out, output.headers)
 })
 
@@ -248,23 +278,30 @@ const soraContent = (
   Effect.gen(function* () {
     const variant =
       (new URL(request.originalUrl, "http://localhost").searchParams.get("variant") ?? "").trim() || "video"
+
     if (variant !== "video") {
       return openAiError(400, `Invalid request: variant "${variant}" is not available for xAI video downloads`)
     }
+
     const result = yield* Effect.result(retrieve(request, videoId))
+
     if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
     const { model, output } = result.success
     yield* bind(output, videoId, model, ttlMs)
     const url = videoContentUrl(tryParseJson(output.payload))
+
     if (typeof url !== "string") {
       return errorResponse("openai", new ExecutionErrorClass({ status: 502, message: url.error }), {
         passthroughHeaders
       })
     }
+
     const client = yield* HttpClient.HttpClient
+
     const download = yield* Effect.result(
       client.execute(HttpClientRequest.get(url)).pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false))
     )
+
     if (download._tag === "Failure") {
       return errorResponse(
         "openai",
@@ -274,9 +311,12 @@ const soraContent = (
         }
       )
     }
+
     const response = download.success
+
     if (response.status < 200 || response.status >= 300) {
       const body = (yield* response.text.pipe(Effect.orElseSucceed(() => ""))).trim()
+
       return errorResponse(
         "openai",
         new ExecutionErrorClass({
@@ -286,12 +326,17 @@ const soraContent = (
         { passthroughHeaders }
       )
     }
+
     const headers: Record<string, string> = {}
+
     for (const name of CONTENT_HEADERS) {
       const value = response.headers[name]
+
       if (value !== undefined && value !== "") headers[name] = value
     }
+
     headers["content-type"] ??= "application/octet-stream"
+
     return HttpServerResponse.stream(response.stream, { status: response.status, headers })
   })
 
@@ -301,16 +346,21 @@ const soraGet = Effect.gen(function* () {
   const rest = remainder(request, "/openai/v1/videos").trim()
   const wantsContent = rest.endsWith("/content")
   const videoId = (wantsContent ? rest.slice(0, -"/content".length) : rest).trim()
+
   if (videoId === "" || videoId.includes("/")) return HttpServerResponse.empty({ status: 404 })
+
   if (wantsContent) return yield* soraContent(request, videoId, passthroughHeaders, ttlMs)
+
   // Go keeps blank lines flowing only around the retrieval (`VideosRetrieve`); content downloads write binary bodies.
   return yield* withNonStreamKeepAlive(
     keepAliveSeconds,
     Effect.gen(function* () {
       const result = yield* Effect.result(retrieve(request, videoId))
+
       if (result._tag === "Failure") return errorResponse("openai", result.failure, { passthroughHeaders })
       const { model, output } = result.success
       yield* bind(output, videoId, model, ttlMs)
+
       return upstreamJson(
         buildVideosRetrieveResponse(videoId, tryParseJson(output.payload), DEFAULT_OPENAI_VIDEOS_MODEL),
         output.headers

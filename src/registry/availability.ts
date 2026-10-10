@@ -32,11 +32,15 @@ const cooldownReason = (
   lastError: ModelSource["state"]["lastError"]
 ): string => {
   const reason = (quota.reason ?? "").trim()
+
   if (reason !== "") return reason
   const message = (statusMessage ?? "").trim()
+
   if (message !== "") return message
   const code = (lastError?.code ?? "").trim()
+
   if (code !== "") return code
+
   return (lastError?.message ?? "").trim()
 }
 
@@ -47,26 +51,34 @@ const cooldownReason = (
 export const projectModel = (source: ModelSource, model: ModelInfo, now: number): ClientProjection => {
   const { state } = source
   const keys = [canonicalModelKey(model.id)]
+
   if (model.metadataModelId !== undefined && model.metadataModelId !== "")
     keys.push(canonicalModelKey(model.metadataModelId))
   const modelState = keys.map((key) => state.modelStates[key]).find((candidate) => candidate !== undefined)
 
   let suspended = source.disabled || state.status === "disabled"
+
   if (state.quota.exceeded && state.quota.reason === "credential_quota" && state.quota.nextRecoverAt > now)
     suspended = true
   let quotaExceeded = false
   let suspendReason = ""
   let quotaSince: number | undefined
+
   if (modelState !== undefined) {
     if (modelState.status === "disabled" || modelState.unavailable || modelState.nextRetryAfter > now) suspended = true
+
     if (modelState.quota.exceeded && (modelState.quota.nextRecoverAt === 0 || modelState.quota.nextRecoverAt > now)) {
       quotaExceeded = true
       quotaSince = modelState.quota.observedAt ?? (modelState.updatedAt > 0 ? modelState.updatedAt : now)
     }
+
     if (suspended) suspendReason = cooldownReason(modelState.statusMessage, modelState.quota, modelState.lastError)
   }
+
   if (Object.keys(state.modelStates).length === 0 && state.unavailable && state.nextRetryAfter > now) suspended = true
+
   if (suspended && suspendReason === "")
     suspendReason = cooldownReason(state.statusMessage, state.quota, state.lastError)
+
   return { suspended, suspendReason, quotaExceeded, ...(quotaSince === undefined ? {} : { quotaSince }) }
 }

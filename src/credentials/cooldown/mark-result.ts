@@ -25,11 +25,16 @@ import { observeResponseHeaders } from "./quota-signals.ts"
 import { recordRecentRequest } from "./recent-requests.ts"
 
 export const QUOTA_BACKOFF_BASE_MS = 1000
+
 export const QUOTA_BACKOFF_MAX_MS = 30 * 60_000
+
 /** `minQuotaCooldownFloor`: minimum cooldown when upstream gives a `Retry-After`. */
 export const MIN_QUOTA_COOLDOWN_MS = 10_000
+
 export const TRANSIENT_ERROR_COOLDOWN_MS = 60_000
+
 const HARD_COOLDOWN_MS = 30 * 60_000
+
 const NOT_FOUND_COOLDOWN_MS = 12 * 60 * 60_000
 
 export interface CooldownSettings {
@@ -49,7 +54,9 @@ type DeepMutable<T> =
       : T
 
 type Draft = DeepMutable<CredentialState>
+
 type DraftModel = DeepMutable<ModelState>
+
 type DraftQuota = DeepMutable<QuotaState>
 
 const cloneState = (state: CredentialState): Draft => structuredClone(state) as Draft
@@ -62,9 +69,12 @@ const cloneError = (error: CredentialError): CredentialError => ({ ...error, mes
 /** `nextQuotaCooldown`: `1s << level` capped at 30 min; the level only advances below the cap. */
 export const nextQuotaCooldown = (previousLevel: number, disableCooling: boolean): readonly [number, number] => {
   const level = Math.max(0, previousLevel)
+
   if (disableCooling) return [0, level]
   const cooldown = QUOTA_BACKOFF_BASE_MS * 2 ** Math.min(level, 40)
+
   if (cooldown >= QUOTA_BACKOFF_MAX_MS) return [QUOTA_BACKOFF_MAX_MS, level]
+
   return [cooldown, level + 1]
 }
 
@@ -78,6 +88,7 @@ export const quotaCooldownAfterFailure = (
 ): readonly [number, number] => {
   if (quota.nextRecoverAt > now) return [quota.nextRecoverAt, quota.backoffLevel]
   const [cooldown, level] = nextQuotaCooldown(quota.backoffLevel, false)
+
   return [cooldown > 0 ? now + cooldown : 0, level]
 }
 
@@ -85,6 +96,7 @@ const nextCloudflareCooldown = (level: number, disableCooling: boolean, now: num
   if (disableCooling) return [0, level]
   const [cooldown, nextLevel] = nextQuotaCooldown(level, disableCooling)
   const effective = Math.max(cooldown, 10_000)
+
   return [now + effective, nextLevel]
 }
 
@@ -96,8 +108,11 @@ export const recoverableRetryAfter = (
   transientSeconds: number
 ): number => {
   if (disableCooling) return 0
+
   if (transientSeconds < 0) return 0
+
   if (retryAfterMs !== undefined && retryAfterMs > 0) return now + retryAfterMs
+
   return now + (transientSeconds === 0 ? TRANSIENT_ERROR_COOLDOWN_MS : transientSeconds * 1000)
 }
 
@@ -105,7 +120,9 @@ export const recoverableRetryAfter = (
 
 const parseBoolAny = (value: unknown): boolean | undefined => {
   if (typeof value === "boolean") return value
+
   if (typeof value === "number") return value !== 0
+
   if (typeof value === "string") {
     switch (value.trim().toLowerCase()) {
       case "1":
@@ -120,6 +137,7 @@ const parseBoolAny = (value: unknown): boolean | undefined => {
         return undefined
     }
   }
+
   return undefined
 }
 
@@ -127,8 +145,10 @@ const parseBoolAny = (value: unknown): boolean | undefined => {
 export const coolingDisabledFor = (credential: Pick<Credential, "metadata">, settings: CooldownSettings): boolean => {
   for (const key of ["disable_cooling", "disable-cooling"]) {
     const parsed = parseBoolAny(credential.metadata[key])
+
     if (parsed !== undefined) return parsed
   }
+
   return settings.disableCooling
 }
 
@@ -139,6 +159,7 @@ const applyCooldownFields = (
   fields: Pick<QuotaState, "exceeded" | "nextRecoverAt" | "backoffLevel"> & { reason?: string }
 ): void => {
   target.exceeded = fields.exceeded
+
   if (fields.reason === undefined || fields.reason === "") delete target.reason
   else target.reason = fields.reason
   target.nextRecoverAt = fields.nextRecoverAt
@@ -147,7 +168,9 @@ const applyCooldownFields = (
 
 const ensureModelState = (state: Draft, model: string): DraftModel => {
   const existing = state.modelStates[model]
+
   if (existing !== undefined) return existing
+
   const created: DraftModel = {
     status: "active",
     unavailable: false,
@@ -155,7 +178,9 @@ const ensureModelState = (state: Draft, model: string): DraftModel => {
     quota: { exceeded: false, nextRecoverAt: 0, backoffLevel: 0 },
     updatedAt: 0
   }
+
   state.modelStates[model] = created
+
   return created
 }
 
@@ -186,24 +211,33 @@ const clearAggregatedAvailability = (state: Draft): void => {
 export const updateAggregatedAvailability = (state: Draft, now: number): void => {
   if (hasUnauthorizedFailure(state)) {
     state.unavailable = true
+
     return
   }
+
   if (state.quota.exceeded && state.quota.reason === "credential_quota" && state.quota.nextRecoverAt > now) {
     state.unavailable = true
+
     return
   }
+
   const models = Object.values(state.modelStates)
+
   if (models.length === 0) {
     clearAggregatedAvailability(state)
+
     return
   }
+
   let allUnavailable = true
   let earliestRetry = 0
   let quotaExceeded = false
   let quotaRecover = 0
   let maxBackoff = 0
+
   for (const model of models) {
     let unavailable = false
+
     if (model.status === "disabled") {
       unavailable = true
     } else if (model.unavailable) {
@@ -211,26 +245,34 @@ export const updateAggregatedAvailability = (state: Draft, now: number): void =>
         unavailable = false
       } else if (model.nextRetryAfter > now) {
         unavailable = true
+
         if (earliestRetry === 0 || model.nextRetryAfter < earliestRetry) earliestRetry = model.nextRetryAfter
       } else {
         model.unavailable = false
         model.nextRetryAfter = 0
       }
     }
+
     if (!unavailable) allUnavailable = false
+
     if (model.quota.exceeded) {
       quotaExceeded = true
+
       if (quotaRecover === 0 || (model.quota.nextRecoverAt !== 0 && model.quota.nextRecoverAt < quotaRecover)) {
         quotaRecover = model.quota.nextRecoverAt
       }
+
       if (model.quota.backoffLevel > maxBackoff) maxBackoff = model.quota.backoffLevel
     }
   }
+
   state.unavailable = allUnavailable
   state.nextRetryAfter = allUnavailable ? earliestRetry : 0
+
   if (quotaExceeded) {
     state.quota.exceeded = true
     state.quota.reason = "quota"
+
     if (state.quota.nextRecoverAt > quotaRecover) quotaRecover = state.quota.nextRecoverAt
     state.quota.nextRecoverAt = quotaRecover
     state.quota.backoffLevel = maxBackoff
@@ -244,8 +286,10 @@ export const updateAggregatedAvailability = (state: Draft, now: number): void =>
 const clearStateOnSuccess = (state: Draft, now: number): void => {
   if (hasUnauthorizedFailure(state)) {
     state.unavailable = true
+
     return
   }
+
   state.unavailable = false
   state.status = "active"
   delete state.statusMessage
@@ -268,15 +312,20 @@ const applyCredentialFailure = (
   settings: CooldownSettings
 ): void => {
   const previous = state.nextRetryAfter
+
   if (shouldSkipCredentialCooldown(classified)) return
   state.unavailable = true
   state.status = "error"
   state.updatedAt = now
+
   if (error !== undefined) {
     state.lastError = cloneError(error)
+
     if (error.message !== "") state.statusMessage = redactSecrets(error.message)
   }
+
   const status = classified.status
+
   if (isCloudflareChallengeError(classified)) {
     state.statusMessage = "cloudflare challenge"
     const [next, level] = nextCloudflareCooldown(state.quota.backoffLevel, disableCooling, now)
@@ -314,6 +363,7 @@ const applyCredentialFailure = (
         state.quota.exceeded = true
         state.quota.reason = "quota"
         let next = 0
+
         if (!disableCooling) {
           if (retryAfterMs !== undefined) {
             next = now + Math.max(retryAfterMs, MIN_QUOTA_COOLDOWN_MS)
@@ -322,12 +372,15 @@ const applyCredentialFailure = (
             next = after
             state.quota.backoffLevel = level
           }
+
           if (state.quota.exceeded && state.quota.nextRecoverAt > next) next = state.quota.nextRecoverAt
         }
+
         state.quota.nextRecoverAt = next
         state.nextRetryAfter = next
         break
       }
+
       case 408:
       case 500:
       case 502:
@@ -361,11 +414,14 @@ const applyCredentialFailure = (
         break
     }
   }
+
   if (state.nextRetryAfter !== 0 && previous > state.nextRetryAfter && previous > now) state.nextRetryAfter = previous
+
   if (error?.code === ErrorCode.forceCooldown && state.nextRetryAfter === 0) {
     state.nextRetryAfter = now + TRANSIENT_ERROR_COOLDOWN_MS
     state.unavailable = true
   }
+
   if (disableCooling && state.nextRetryAfter === 0 && state.quota.nextRecoverAt === 0) {
     state.unavailable = false
     state.quota.exceeded = false
@@ -389,8 +445,10 @@ export const resultError = (result: ReportResult): CredentialError | undefined =
   if (result.success) return undefined
   const source = result.error
   const httpStatus = source?.httpStatus ?? result.httpStatus
+
   const code =
     result.requestScoped === true && source?.code !== ErrorCode.forceCooldown ? ErrorCode.requestScoped : source?.code
+
   return {
     message: source?.message ?? (httpStatus === undefined ? "request failed" : `HTTP ${httpStatus}`),
     retryable: source?.retryable ?? false,
@@ -416,11 +474,13 @@ export const markResult = (input: MarkInput): CredentialState => {
   let modelState: DraftModel | undefined = modelKey === "" ? undefined : state.modelStates[modelKey]
 
   state.recentRequests = recordRecentRequest(state.recentRequests, now, result.success)
+
   if (result.success) state.success += 1
   else state.failed += 1
 
   if (result.availabilityNeutral === true) {
     state.updatedAt = now
+
     return state
   }
 
@@ -436,6 +496,7 @@ export const markResult = (input: MarkInput): CredentialState => {
       modelState = ensureModelState(state, modelKey)
       resetModelState(modelState, now)
       updateAggregatedAvailability(state, now)
+
       if (!hasModelError(state, now)) {
         delete state.lastError
         delete state.statusMessage
@@ -449,6 +510,7 @@ export const markResult = (input: MarkInput): CredentialState => {
     const classified = classifiable(failure)
     const forced = failure.code === ErrorCode.forceCooldown
     const disableCooling = forced ? false : coolingDisabledFor(input.credential, settings)
+
     if (modelKey !== "") {
       if (!shouldSkipCredentialCooldown(classified)) {
         modelState = ensureModelState(state, modelKey)
@@ -459,12 +521,14 @@ export const markResult = (input: MarkInput): CredentialState => {
         const previousRetryAfter = model.nextRetryAfter
         model.lastError = cloneError(failure)
         model.statusMessage = redactSecrets(failure.message)
+
         if (!wasTerminalUnauthorized) {
           state.lastError = cloneError(failure)
           state.statusMessage = redactSecrets(failure.message)
         }
 
         const status = classified.status
+
         if (isModelSupportError(classified)) {
           if (disableCooling) model.nextRetryAfter = 0
           else if (retryAfterMs !== undefined && retryAfterMs > 0) model.nextRetryAfter = now + retryAfterMs
@@ -473,6 +537,7 @@ export const markResult = (input: MarkInput): CredentialState => {
           const [next, level] = nextCloudflareCooldown(model.quota.backoffLevel, disableCooling, now)
           model.nextRetryAfter = next
           model.statusMessage = "cloudflare challenge"
+
           if (state.lastError !== undefined && !wasTerminalUnauthorized) state.statusMessage = "cloudflare challenge"
           applyCooldownFields(model.quota, {
             exceeded: true,
@@ -535,14 +600,17 @@ export const markResult = (input: MarkInput): CredentialState => {
           model.unavailable = false
           model.quota.exceeded = false
         }
+
         if (failure.code === ErrorCode.forceCooldown && model.nextRetryAfter === 0) {
           model.nextRetryAfter = now + TRANSIENT_ERROR_COOLDOWN_MS
           model.unavailable = true
         }
+
         // A later failure only extends a live cooldown; a deliberate zero write (cooling disabled) still clears it.
         if (model.nextRetryAfter !== 0 && previousRetryAfter > model.nextRetryAfter && previousRetryAfter > now) {
           model.nextRetryAfter = previousRetryAfter
         }
+
         state.status = "error"
         updateAggregatedAvailability(state, now)
       }
@@ -557,13 +625,16 @@ export const markResult = (input: MarkInput): CredentialState => {
     state.nextRefreshAfter = 0
     state.nextRetryAfter = 0
   }
+
   state.updatedAt = now
 
   if (result.skipQuotaObservation !== true) {
     observeResponseHeaders(state.quota, input.credential.provider, result.headers, now)
+
     if (modelState !== undefined)
       observeResponseHeaders(modelState.quota, input.credential.provider, result.headers, now)
   }
+
   return state
 }
 
@@ -582,33 +653,44 @@ const applyQuotaFailure = (
   let next = 0
   let credentialNext = 0
   let backoffLevel = model.quota.backoffLevel
+
   if (credentialScope) backoffLevel = authQuotaActive ? state.quota.backoffLevel : 0
+
   if (!disableCooling) {
     if (retryAfterMs !== undefined) {
       next = now + Math.max(retryAfterMs, MIN_QUOTA_COOLDOWN_MS)
     } else {
       let forFailure: Pick<QuotaState, "nextRecoverAt" | "backoffLevel"> = model.quota
+
       if (credentialScope) {
         forFailure = authQuotaActive ? state.quota : { nextRecoverAt: 0, backoffLevel: 0 }
       }
+
       ;[next, backoffLevel] = quotaCooldownAfterFailure(forFailure, now)
     }
+
     credentialNext = next
+
     if (model.quota.exceeded && model.quota.nextRecoverAt > next) next = model.quota.nextRecoverAt
   }
+
   model.nextRetryAfter = next
   applyCooldownFields(model.quota, { exceeded: true, reason: "quota", nextRecoverAt: next, backoffLevel })
+
   if (!credentialScope || disableCooling) return
 
   for (const other of Object.values(state.modelStates)) {
     if (other === model) continue
     other.unavailable = true
     other.status = "error"
+
     const otherQuotaNext =
       other.quota.exceeded && other.quota.nextRecoverAt > credentialNext ? other.quota.nextRecoverAt : credentialNext
+
     // Propagation only extends a sibling's still-live deadline; it never shortens one.
     const otherRetryAfter =
       other.nextRetryAfter !== 0 && other.nextRetryAfter > otherQuotaNext ? other.nextRetryAfter : otherQuotaNext
+
     other.nextRetryAfter = otherRetryAfter
     applyCooldownFields(other.quota, {
       exceeded: true,
@@ -617,9 +699,11 @@ const applyQuotaFailure = (
       backoffLevel
     })
   }
+
   if (!wasTerminalUnauthorized) {
     state.unavailable = true
     let authNext = credentialNext
+
     if (authQuotaActive && state.quota.nextRecoverAt > authNext) authNext = state.quota.nextRecoverAt
     state.quota.exceeded = true
     state.quota.reason = "credential_quota"

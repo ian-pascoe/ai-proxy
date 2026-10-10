@@ -34,6 +34,7 @@ export const recordingClient = (calls: RecordedCall[], respond: Responder): Laye
     HttpClient.make((request, url) =>
       Effect.promise(async () => {
         const bytes = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array(0)
+
         const call: RecordedCall = {
           url: url.toString(),
           method: request.method,
@@ -41,7 +42,9 @@ export const recordingClient = (calls: RecordedCall[], respond: Responder): Laye
           bytes,
           text: new TextDecoder().decode(bytes)
         }
+
         calls.push(call)
+
         return HttpClientResponse.fromWeb(request, await respond(call))
       })
     )
@@ -99,6 +102,7 @@ export const harness = async (
   const calls: RecordedCall[] = []
   const usage = newUsage(credential.provider, stream)
   const config = await loadConfig(yaml)
+
   return {
     calls,
     usage,
@@ -115,7 +119,9 @@ export const runFail = async <A>(
   layers: Layer.Layer<HttpClient.HttpClient | Thinking>
 ): Promise<ExecutionError> => {
   const result = await Effect.runPromise(Effect.result(effect.pipe(Effect.provide(layers))))
+
   if (result._tag === "Success") throw new Error("expected a failure")
+
   return result.failure
 }
 
@@ -143,11 +149,14 @@ export const collectStream = async (
   const started = await Effect.runPromise(
     Effect.result(executor.executeStream(h.context, request, opts).pipe(Effect.provide(h.layers)))
   )
+
   if (started._tag === "Failure") return { chunks: [], error: started.failure }
   const chunks: string[] = []
+
   const drained = await Effect.runPromise(
     Effect.result(Stream.runForEach(started.success.chunks, (chunk) => Effect.sync(() => void chunks.push(chunk))))
   )
+
   return drained._tag === "Failure"
     ? { chunks, error: drained.failure, result: started.success }
     : { chunks, result: started.success }

@@ -20,9 +20,13 @@ import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from 
 import { type DeviceFlow, flowFailure } from "./types.ts"
 
 export const XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access"
+
 export const XAI_DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
 const MAX_POLL_MS = 30 * 60_000
+
 const DEFAULT_INTERVAL_MS = 5_000
+
 const MAX_ERROR_TEXT = 512
 
 /** `sanitizeFileSegment`: `[A-Za-z0-9@._-]` kept, anything else becomes `-`, then trimmed of `-`. */
@@ -34,8 +38,10 @@ const sanitizeSegment = (value: string): string =>
 
 export const xaiFileName = (email: string, subject: string, now: number): string => {
   const cleanEmail = sanitizeSegment(email)
+
   if (cleanEmail !== "") return `xai-${cleanEmail}.json`
   const cleanSubject = sanitizeSegment(subject)
+
   return cleanSubject !== "" ? `xai-${cleanSubject}.json` : `xai-${now}.json`
 }
 
@@ -56,9 +62,11 @@ export const xaiFlow = (): DeviceFlow => ({
       const discovery = yield* call(
         HttpClientRequest.get(XAI_DISCOVERY_URL).pipe(HttpClientRequest.setHeader("accept", "application/json"))
       )
+
       const endpoints = discovery.status === 200 ? parseJsonObject(discovery.text) : undefined
       const deviceEndpoint = str(endpoints?.device_authorization_endpoint)
       const tokenEndpoint = str(endpoints?.token_endpoint)
+
       if (!isXaiOAuthEndpoint(deviceEndpoint) || !isXaiOAuthEndpoint(tokenEndpoint)) {
         return yield* flowFailure("xai discovery: invalid OAuth endpoints")
       }
@@ -68,11 +76,14 @@ export const xaiFlow = (): DeviceFlow => ({
       const deviceCode = str(device?.device_code)
       const userCode = str(device?.user_code)
       const url = str(device?.verification_uri_complete) || str(device?.verification_uri)
+
       if (device === undefined || deviceCode === "" || userCode === "" || url === "") {
         return yield* flowFailure("xai device code request failed")
       }
+
       const expiresIn = Math.trunc(seconds(device.expires_in))
       const intervalMs = Math.max(Math.trunc(seconds(device.interval)) * 1000, DEFAULT_INTERVAL_MS)
+
       return {
         url,
         userCode,
@@ -87,6 +98,7 @@ export const xaiFlow = (): DeviceFlow => ({
   poll: ({ data, now, intervalMs }) =>
     Effect.gen(function* () {
       const tokenEndpoint = str(data.token_endpoint)
+
       const reply = yield* tryCall(
         formPost(tokenEndpoint, {
           grant_type: XAI_DEVICE_GRANT,
@@ -94,12 +106,16 @@ export const xaiFlow = (): DeviceFlow => ({
           client_id: XAI_CLIENT_ID
         })
       )
+
       if (reply === undefined || reply.status >= 500) return { _tag: "pending" as const }
       const payload = parseJsonObject(reply.text)
+
       if (payload === undefined) {
         return yield* flowFailure("Authentication failed: xai device token: parse response failed")
       }
+
       const error = str(payload.error)
+
       if (error !== "") {
         switch (error) {
           case "authorization_pending":
@@ -112,18 +128,22 @@ export const xaiFlow = (): DeviceFlow => ({
             return yield* flowFailure("Authentication failed: xai device authorization denied")
           default: {
             const description = str(payload.error_description)
+
             return yield* flowFailure(
               `Authentication failed: xai device token error: ${error}${description === "" ? "" : `: ${description}`}`
             )
           }
         }
       }
+
       if (reply.status !== 200) {
         return yield* flowFailure(
           `Authentication failed: xai device token request failed with status ${reply.status}: ${clipBody(reply.text).slice(0, MAX_ERROR_TEXT)}`
         )
       }
+
       const accessToken = str(payload.access_token)
+
       if (accessToken === "") {
         return yield* flowFailure("Authentication failed: xai device token response missing access_token")
       }
@@ -133,6 +153,7 @@ export const xaiFlow = (): DeviceFlow => ({
       const email = str(claims?.email)
       const subject = str(claims?.sub)
       const expiresIn = Math.trunc(seconds(payload.expires_in))
+
       const metadata: JsonObject = {
         type: "xai",
         access_token: accessToken,
@@ -146,8 +167,11 @@ export const xaiFlow = (): DeviceFlow => ({
         token_endpoint: tokenEndpoint,
         auth_kind: "oauth"
       }
+
       if (email !== "") metadata.email = email
+
       if (subject !== "") metadata.sub = subject
+
       return { _tag: "done" as const, record: { fileName: xaiFileName(email, subject, now), metadata } }
     })
 })

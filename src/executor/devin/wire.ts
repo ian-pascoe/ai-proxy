@@ -15,13 +15,19 @@ import { fieldDouble, fieldFloat, fieldText, ProtoError, ProtoWriter, readFields
 import { devinWireToolDescription, isCodexAppAutomationUpdate } from "./tools.ts"
 
 export const DEVIN_DEFAULT_BASE_URL = "https://server.codeium.com"
+
 export const DEVIN_CHAT_PATH = "/exa.api_server_pb.ApiServerService/GetChatMessage"
+
 export const DEVIN_CLIENT_NAME = "chisel"
+
 export const DEVIN_CLIENT_VERSION = "3000.10.21"
+
 export const DEVIN_FINGERPRINT_HEX_LENGTH = 732
+
 export const DEVIN_DEFAULT_MAX_TOKENS = 128000
 
 export const CONNECT_FLAG_COMPRESSED = 0x01
+
 export const CONNECT_FLAG_END_STREAM = 0x02
 
 export interface DevinTool {
@@ -84,7 +90,9 @@ export const newDevinPrompt = (init: Partial<DevinPrompt> & { readonly source: n
 export const generateDeviceFingerprint = (seed: string): string => {
   if (seed === "") return randomBytes(DEVIN_FINGERPRINT_HEX_LENGTH / 2).toString("hex")
   let out = ""
+
   for (let counter = 0; out.length < DEVIN_FINGERPRINT_HEX_LENGTH; counter++) out += sha256Hex(`${seed}-${counter}`)
+
   return out.slice(0, DEVIN_FINGERPRINT_HEX_LENGTH)
 }
 
@@ -111,6 +119,7 @@ export const wrapConnectEnvelope = (payload: Uint8Array, flag = 0): Uint8Array =
   out[0] = flag
   new DataView(out.buffer).setUint32(1, payload.length, false)
   out.set(payload, 5)
+
   return out
 }
 
@@ -127,15 +136,22 @@ const SYSTEM_PROMPT_DROPS = [
 export const sanitizeDevinSystemPrompt = (prompt: string, matcher: SensitiveWordMatcher | undefined): string => {
   if (prompt === "") return ""
   const kept: string[] = []
+
   for (const line of prompt.replaceAll("\r\n", "\n").split("\n")) {
     const trimmed = line.trim()
+
     if (isClaudeCodeAttributionSystemText(trimmed)) continue
+
     if (trimmed.startsWith("You are Claude Code")) continue
+
     if (SYSTEM_PROMPT_DROPS.some((phrase) => trimmed.includes(phrase))) continue
+
     if (matcher?.matches(trimmed) === true) continue
     kept.push(line)
   }
+
   const result = kept.join("\n").trim()
+
   return matcher !== undefined && result !== "" ? matcher.obfuscate(result) : result
 }
 
@@ -166,6 +182,7 @@ export const buildGetChatMessageRequest = (input: DevinChatRequest): Uint8Array 
 
   if (input.systemPrompt !== "") {
     const sanitized = sanitizeDevinSystemPrompt(input.systemPrompt, input.matcher)
+
     if (sanitized !== "") request.string(2, sanitized)
   }
 
@@ -174,16 +191,23 @@ export const buildGetChatMessageRequest = (input: DevinChatRequest): Uint8Array 
     message.string(1, prompt.messageId !== "" ? prompt.messageId : randomUUID())
     message.varint(2, prompt.source > 0 ? prompt.source : 1)
     message.string(3, prompt.content)
+
     for (const call of prompt.toolCalls) {
       const encoded = new ProtoWriter()
+
       if (call.id !== "") encoded.string(1, call.id)
+
       if (call.name !== "") encoded.string(2, call.name)
+
       if (call.arguments !== "") encoded.string(3, call.arguments)
       message.bytes(6, encoded.toBytes())
     }
+
     if (prompt.toolCallId !== "") message.string(7, prompt.toolCallId)
+
     for (const image of prompt.images) {
       const data = image.base64Data.trim()
+
       if (data === "") continue
       const mime = image.mimeType.trim()
       message.bytes(
@@ -194,8 +218,11 @@ export const buildGetChatMessageRequest = (input: DevinChatRequest): Uint8Array 
           .toBytes()
       )
     }
+
     if (prompt.thinking !== "") message.string(11, prompt.thinking)
+
     if (prompt.signature.length > 0) message.bytes(12, prompt.signature)
+
     if (prompt.signatureType !== "") message.string(18, prompt.signatureType)
     request.bytes(3, message.toBytes())
   }
@@ -217,23 +244,30 @@ export const buildGetChatMessageRequest = (input: DevinChatRequest): Uint8Array 
     if (tool.name === "" || isCodexAppAutomationUpdate("", tool.name)) continue
     const encoded = new ProtoWriter().string(1, tool.name)
     const description = devinWireToolDescription(tool.name, tool.description)
+
     if (description !== "") encoded.string(2, description)
+
     if (tool.parameters !== "") encoded.bytes(3, new TextEncoder().encode(tool.parameters))
     request.bytes(10, encoded.toBytes())
   }
 
   const thread = new ProtoWriter().string(1, sessionId)
+
   if (input.turnIndex > 0) thread.varint(2, input.turnIndex)
   thread.varint(3, 4)
   const last = input.prompts[input.prompts.length - 1]
+
   if (last !== undefined && last.source === 1) {
     const previous = input.prompts[input.prompts.length - 2]
+
     if (input.turnIndex === 0 || previous === undefined || previous.source !== 1) thread.varint(4, 14)
   }
+
   request.bytes(15, thread.toBytes())
   request.string(16, cascadeId)
   request.varint(20, 1)
   request.string(21, input.chatModelUid)
+
   return request.toBytes()
 }
 
@@ -283,10 +317,12 @@ const concatBytes = (parts: ReadonlyArray<Uint8Array>): Uint8Array => {
   if (parts.length === 1) return parts[0] as Uint8Array
   const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
+
   for (const part of parts) {
     out.set(part, offset)
     offset += part.length
   }
+
   return out
 }
 
@@ -297,6 +333,7 @@ const parseToolCallDelta = (data: Uint8Array): DevinToolCallDelta => {
   let invalidJsonStr = ""
   let invalidJsonErr = ""
   let isCustomToolCall = false
+
   for (const field of readFields(data)) {
     if (field.wire === WireType.Varint) {
       if (field.num === 6) isCustomToolCall = field.varint !== 0
@@ -319,17 +356,20 @@ const parseToolCallDelta = (data: Uint8Array): DevinToolCallDelta => {
       }
     }
   }
+
   return { id, name, arguments: args, invalidJsonStr, invalidJsonErr, isCustomToolCall }
 }
 
 /** `parseDevinTimestamp`: field 1 (seconds) of the timestamp message. */
 const parseTimestamp = (data: Uint8Array): number => {
   let seconds = 0
+
   try {
     for (const field of readFields(data)) if (field.wire === WireType.Varint && field.num === 1) seconds = field.varint
   } catch {
     // Go stops at the first malformed byte and keeps what it read.
   }
+
   return seconds
 }
 
@@ -338,15 +378,18 @@ const isPrintableAscii = (data: Uint8Array): boolean => data.every((byte) => byt
 const parseHeaderField = (data: Uint8Array): readonly [string, string] => {
   let key = ""
   let value = ""
+
   try {
     for (const field of readFields(data)) {
       if (field.wire !== WireType.Bytes) continue
+
       if (field.num === 1) key = fieldText(field)
       else if (field.num === 2) value = fieldText(field)
     }
   } catch {
     // Keep the partial pair like Go.
   }
+
   return [key, value]
 }
 
@@ -364,6 +407,7 @@ export const emptyDevinUsage = (): DevinUsage => ({
 /** `parseDevinUsageField` (frame field 7). */
 const parseUsage = (data: Uint8Array): DevinUsage => {
   const usage = emptyDevinUsage()
+
   try {
     for (const field of readFields(data)) {
       if (field.wire === WireType.Varint) {
@@ -386,9 +430,11 @@ const parseUsage = (data: Uint8Array): DevinUsage => {
       } else if (field.wire === WireType.Bytes) {
         if (field.num === 8) {
           const [key, value] = parseHeaderField(field.bytes)
+
           if (key !== "") {
             usage.headers[key] = value
             const lower = key.toLowerCase()
+
             if ((lower === "x-request-id" || lower === "request-id") && value !== "") usage.requestId = value
           } else if (field.bytes.length > 0 && isPrintableAscii(field.bytes) && usage.requestId === "") {
             usage.requestId = fieldText(field)
@@ -401,6 +447,7 @@ const parseUsage = (data: Uint8Array): DevinUsage => {
   } catch {
     // Go returns the usage parsed so far.
   }
+
   return usage
 }
 
@@ -409,6 +456,7 @@ export const parseDevinFrame = (payload: Uint8Array): DevinFrame => {
   const text: Uint8Array[] = []
   const thinking: Uint8Array[] = []
   const signature: Uint8Array[] = []
+
   const frame: DevinFrame = {
     outputId: "",
     timestamp: 0,
@@ -425,6 +473,7 @@ export const parseDevinFrame = (payload: Uint8Array): DevinFrame => {
     dimensionGroups: [],
     unknownFields: []
   }
+
   for (const field of readFields(payload)) {
     switch (field.wire) {
       case WireType.Varint:
@@ -452,6 +501,7 @@ export const parseDevinFrame = (payload: Uint8Array): DevinFrame => {
             } catch {
               // A malformed tool-call delta is skipped (Go ignores its error).
             }
+
             break
           case 7:
             frame.usage = parseUsage(field.bytes)
@@ -476,9 +526,13 @@ export const parseDevinFrame = (payload: Uint8Array): DevinFrame => {
         }
     }
   }
+
   if (text.length > 0) frame.content = concatBytes(text)
+
   if (thinking.length > 0) frame.thinking = concatBytes(thinking)
+
   if (signature.length > 0) frame.deltaSignature = concatBytes(signature)
+
   return frame
 }
 
@@ -492,25 +546,32 @@ export const parseDimensionGroups = (
   for (const original of groups) {
     if (original.length === 0) continue
     let group = original
+
     try {
       // An outer envelope carrying tag 28 is unwrapped.
       const first = readFields(group).next().value
+
       if (first !== undefined && first.num === 28 && first.wire === WireType.Bytes) group = first.bytes
     } catch {
       continue
     }
+
     let title = ""
     const metrics: Array<{ readonly key: string; readonly value: number }> = []
+
     try {
       for (const field of readFields(group)) {
         if (field.wire !== WireType.Bytes) continue
+
         if (field.num === 1) title = fieldText(field)
         else if (field.num === 2) {
           let key = ""
           let value = 0
+
           try {
             for (const metric of readFields(field.bytes)) {
               if (metric.wire !== WireType.Bytes) continue
+
               if (metric.num === 5) key = fieldText(metric)
               else if (metric.num === 4) {
                 for (const detail of readFields(metric.bytes)) {
@@ -521,37 +582,49 @@ export const parseDimensionGroups = (
           } catch {
             // Keep the partial metric.
           }
+
           if (key !== "") metrics.push({ key, value })
         }
       }
     } catch {
       // Keep the partial group.
     }
+
     if (title.toLowerCase() !== "token usage") continue
     let found = false
     let promptTokens = 0
     let completionTokens = 0
     let cachedTokens = 0
+
     for (const metric of metrics) {
       if (metric.key === "input_tokens") [promptTokens, found] = [Math.trunc(metric.value), true]
       else if (metric.key === "output_tokens") [completionTokens, found] = [Math.trunc(metric.value), true]
       else if (metric.key === "cached_input_tokens") [cachedTokens, found] = [Math.trunc(metric.value), true]
     }
+
     if (found) return { promptTokens, completionTokens, cachedTokens }
   }
+
   return undefined
 }
 
 /** Folds the usage of a later frame into the running total (`finalUsage` merge of the Go stream loops). */
 export const mergeDevinUsage = (current: DevinUsage | undefined, next: DevinUsage): DevinUsage => {
   if (current === undefined) return next
+
   if (next.promptTokens > 0) current.promptTokens = next.promptTokens
+
   if (next.completionTokens > 0) current.completionTokens = next.completionTokens
+
   if (next.cachedTokens > 0) current.cachedTokens = next.cachedTokens
+
   if (next.cacheWriteTokens > 0) current.cacheWriteTokens = next.cacheWriteTokens
+
   if (next.requestId !== "") current.requestId = next.requestId
+
   if (next.modelName !== "") current.modelName = next.modelName
   Object.assign(current.headers, next.headers)
+
   return current
 }
 
@@ -561,15 +634,22 @@ export const applyDimensionUsage = (
   groups: ReadonlyArray<Uint8Array>
 ): DevinUsage | undefined => {
   if (groups.length === 0) return usage
+
   if (usage !== undefined && usage.promptTokens !== 0 && usage.completionTokens !== 0 && usage.cachedTokens !== 0) {
     return usage
   }
+
   const parsed = parseDimensionGroups(groups)
+
   if (parsed === undefined) return usage
   const out = usage ?? emptyDevinUsage()
+
   if (out.promptTokens === 0) out.promptTokens = parsed.promptTokens
+
   if (out.completionTokens === 0) out.completionTokens = parsed.completionTokens
+
   if (out.cachedTokens === 0) out.cachedTokens = parsed.cachedTokens
+
   return out
 }
 
@@ -586,15 +666,20 @@ export interface DevinTrailerError {
 /** `ParseDevinTrailerError`: the EOS trailer's `{"error":{code,message}}` mapped to an HTTP status. */
 export const parseTrailerError = (payload: Uint8Array): DevinTrailerError | undefined => {
   const text = new TextDecoder().decode(payload).trim()
+
   if (text === "" || text === "{}") return undefined
   let parsed: unknown
+
   try {
     parsed = JSON.parse(text)
   } catch {
     return undefined
   }
+
   const error = (parsed as { error?: { code?: unknown; message?: unknown } } | null)?.error
+
   if (error === undefined || error === null || typeof error !== "object") return undefined
+
   // Go decodes into string fields: a non-string code or message is a decode failure, i.e. no error.
   if (
     (error.code !== undefined && typeof error.code !== "string") ||
@@ -602,10 +687,12 @@ export const parseTrailerError = (payload: Uint8Array): DevinTrailerError | unde
   ) {
     return undefined
   }
+
   const code = typeof error.code === "string" ? error.code : ""
   const message = typeof error.message === "string" ? error.message : ""
   const lowerMessage = message.toLowerCase()
   let status = 502
+
   switch (code.toLowerCase()) {
     case "invalid_argument":
       status = lowerMessage.includes("internal error") ? 502 : 400
@@ -634,6 +721,7 @@ export const parseTrailerError = (payload: Uint8Array): DevinTrailerError | unde
     case "failed_precondition":
       status = ["quota", "credit", "acu", "exhausted", "limit"].some((word) => lowerMessage.includes(word)) ? 429 : 400
   }
+
   return { status, message: `devin upstream error (${code}): ${message}` }
 }
 

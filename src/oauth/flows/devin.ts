@@ -15,19 +15,26 @@ import { call, parseJsonObject, str, tryCall, tryCallBytes } from "./http.ts"
 import { type CallbackFlow, type CredentialRecord, flowFailure } from "./types.ts"
 
 export const DEVIN_APP_URL = "https://app.devin.ai"
+
 export const DEVIN_API_URL = "https://api.devin.ai"
+
 export const DEVIN_SERVER_URL = "https://server.codeium.com"
+
 export const DEVIN_GET_USER_STATUS_URL = `${DEVIN_SERVER_URL}/exa.seat_management_pb.SeatManagementService/GetUserStatus`
+
 /** The port of the Go server's default listener; Devin only checks scheme, host and path of the redirect URI. */
 export const DEVIN_REDIRECT_URI = "http://127.0.0.1:8317/callback"
 
 const TOKEN_PREFIX = "devin-session-token$"
+
 const EXCHANGE_FAILED = "Failed to exchange authorization code for tokens"
 
 /** `FormatSessionToken`: tokens carry the mandatory `devin-session-token$` prefix. */
 export const formatSessionToken = (raw: string): string => {
   const token = raw.trim()
+
   if (token.startsWith(TOKEN_PREFIX)) return token
+
   return token.startsWith("eyJ") ? `${TOKEN_PREFIX}${token}` : token
 }
 
@@ -35,8 +42,10 @@ export const formatSessionToken = (raw: string): string => {
 export const devinFileName = async (userName: string, userId: string, sessionToken: string): Promise<string> => {
   const identifier = userName || userId || `user-${await sha256Hex(sessionToken, 8)}`
   const sanitized = identifier.replace(/[^A-Za-z0-9\-_.@]/g, "_")
+
   const fileIdentifier =
     sanitized !== identifier || sanitized.length > 160 ? `user-${await sha256Hex(identifier, 8)}` : sanitized
+
   return `devin-${fileIdentifier}.json`
 }
 
@@ -49,6 +58,7 @@ export const devinFlow = (): CallbackFlow => ({
   start: ({ state }) =>
     Effect.promise(async () => {
       const pkce = await generatePkce(64)
+
       // Devin expects its own query order (matches the official CLI).
       const query = [
         `redirect_uri=${queryEscape(DEVIN_REDIRECT_URI)}`,
@@ -57,6 +67,7 @@ export const devinFlow = (): CallbackFlow => ({
         `code_challenge=${queryEscape(pkce.codeChallenge)}`,
         "code_challenge_method=S256"
       ].join("&")
+
       return {
         url: `${DEVIN_APP_URL}/auth/cli/continue?${query}`,
         data: { code_verifier: pkce.codeVerifier } satisfies JsonObject
@@ -71,8 +82,10 @@ export const devinFlow = (): CallbackFlow => ({
         HttpClientRequest.setHeader("accept", "application/json"),
         HttpClientRequest.bodyJsonUnsafe({ code: code.trim(), code_verifier: str(data.code_verifier) })
       )
+
       const reply = yield* call(exchange, EXCHANGE_FAILED)
       const token = reply.status >= 200 && reply.status < 300 ? str(parseJsonObject(reply.text)?.token) : ""
+
       if (token === "") return yield* flowFailure(EXCHANGE_FAILED)
       const sessionToken = formatSessionToken(token)
 
@@ -82,7 +95,9 @@ export const devinFlow = (): CallbackFlow => ({
           HttpClientRequest.setHeaders({ authorization: `Bearer ${sessionToken}`, accept: "application/json" })
         )
       )
+
       const profile = self !== undefined && self.status === 200 ? (parseJsonObject(self.text) ?? {}) : {}
+
       const statusReply = yield* tryCallBytes(
         HttpClientRequest.post(DEVIN_GET_USER_STATUS_URL).pipe(
           HttpClientRequest.setHeaders({
@@ -95,12 +110,14 @@ export const devinFlow = (): CallbackFlow => ({
           HttpClientRequest.bodyUint8Array(buildUserStatusRequest(sessionToken), "application/proto")
         )
       )
+
       const status =
         statusReply !== undefined && statusReply.status === 200 ? parseUserStatus(statusReply.bytes) : undefined
 
       const userName = str(profile.user_name) || (status?.userName ?? "")
       const userId = str(profile.user_id) || (status?.userId ?? "")
       const orgId = str(profile.org_id) || (status?.orgId ?? "")
+
       const metadata: JsonObject = {
         type: "devin",
         api_key: sessionToken,
@@ -110,9 +127,12 @@ export const devinFlow = (): CallbackFlow => ({
         org_id: orgId,
         auth_kind: "oauth"
       }
+
       if ((status?.email ?? "") !== "") metadata.email = status?.email ?? ""
+
       if ((status?.plan ?? "") !== "") metadata.plan = status?.plan ?? ""
       const fileName = yield* Effect.promise(() => devinFileName(userName, userId, sessionToken))
+
       return { fileName, metadata } satisfies CredentialRecord
     })
 })

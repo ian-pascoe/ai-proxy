@@ -7,6 +7,7 @@ import { crossSiteRejection } from "../src/access/csrf.ts"
 import { resetControlPlane } from "./support/management.ts"
 
 const PROXY = "https://proxy.example.com"
+
 type Zone = "protected" | "management"
 
 const check = (method: string, path: string, headers: Record<string, string> = {}, zone: Zone = "protected") =>
@@ -48,6 +49,7 @@ describe("crossSiteRejection", () => {
       expect(check("POST", path, { ...json, "sec-fetch-site": "same-site" }, zone)).toBe(403)
       expect(check("DELETE", path, { origin: "https://evil.test" }, zone)).toBe(403)
     }
+
     // Reads of proxy routes from other origins stay possible (CORS `*` without credentials).
     expect(check("GET", "/v1/models", { origin: "https://app.test", "sec-fetch-site": "cross-site" })).toBeUndefined()
   })
@@ -99,7 +101,9 @@ describe("crossSiteRejection", () => {
 // --- production Worker ----------------------------------------------------------------------------------------------
 
 const LOCAL = "http://localhost"
+
 const worker = (path: string, init: RequestInit = {}) => exports.default.fetch(new Request(`${LOCAL}${path}`, init))
+
 const errorOf = async (response: Response) => ((await response.json()) as { error: unknown }).error
 
 describe("Worker entry point: cross-site protections", () => {
@@ -111,6 +115,7 @@ describe("Worker entry point: cross-site protections", () => {
     const panel = await worker("/management.html", {
       headers: { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" }
     })
+
     expect(panel.status).not.toBe(403)
     expect(panel.headers.get("access-control-allow-origin")).toBeNull()
     await panel.body?.cancel()
@@ -127,6 +132,7 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { ...panelHeaders, "content-type": "application/json" },
       body: JSON.stringify({ url: "https://example.com" })
     })
+
     expect(probe.status).toBe(400)
     expect(await errorOf(probe)).toBe("missing method")
 
@@ -135,6 +141,7 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { ...panelHeaders, "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\n"
     })
+
     expect(yaml.status).toBe(200)
     await yaml.body?.cancel()
   })
@@ -145,6 +152,7 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ routing: { strategy: "fill-first" } })
     })
+
     expect(response.status).toBe(200)
     await response.body?.cancel()
   })
@@ -155,17 +163,20 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { origin: "https://evil.test", "sec-fetch-site": "cross-site", "content-type": "text/plain" },
       body: JSON.stringify({ method: "GET", url: "https://evil.test/steal", header: { a: "$TOKEN$" }, auth_index: "x" })
     })
+
     expect(forged.status).toBe(403)
     expect(await errorOf(forged)).toBe("Cross-site request rejected")
     expect(forged.headers.get("access-control-allow-origin")).toBeNull()
 
     const upload = new FormData()
     upload.append("file", new File(['{"type":"claude","access_token":"x"}'], "claude-evil.json"))
+
     const forgedUpload = await worker("/v8/management/credentials", {
       method: "POST",
       headers: { origin: "https://evil.test" },
       body: upload
     })
+
     expect(forgedUpload.status).toBe(403)
     await forgedUpload.body?.cancel()
     const list = await worker("/v8/management/credentials")
@@ -177,6 +188,7 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: "routing=x"
     })
+
     expect(simple.status).toBe(415)
     await simple.body?.cancel()
 
@@ -185,6 +197,7 @@ describe("Worker entry point: cross-site protections", () => {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" }
     })
+
     expect(preflight.headers.get("access-control-allow-origin")).toBeNull()
   })
 
@@ -194,6 +207,7 @@ describe("Worker entry point: cross-site protections", () => {
       headers: { origin: "https://evil.test", "content-type": "application/json" },
       body: JSON.stringify({ model: "m", messages: [] })
     })
+
     expect(forged.status).toBe(403)
     expect(forged.headers.get("access-control-allow-origin")).toBe("*")
     await forged.body?.cancel()

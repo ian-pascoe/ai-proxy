@@ -45,22 +45,29 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
     const jwks = yield* AccessJwks
     const reader = yield* ConfigReader
     const configAdmins = reader.get.pipe(Effect.map((snapshot) => configAdminLists(snapshot.config)))
+
     return (app) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
         const zone = classifyPath(request.originalUrl)
+
         if (zone === "public") {
           // Public routes have no principal; handlers there must not require `AccessPrincipal`.
           return yield* app as unknown as Effect.Effect<HttpServerResponse.HttpServerResponse>
         }
+
         const rejection = crossSiteRejection(request.method, request.headers, request.originalUrl, zone)
+
         if (rejection !== undefined) return errorResponse(rejection.status, rejection.message)
+
         const authenticated = yield* Effect.result(
           authenticateRequest(request.headers, request.originalUrl, zone, configAdmins).pipe(
             Effect.provideService(AccessJwks, jwks)
           )
         )
+
         if (authenticated._tag === "Failure") return yield* accessErrorResponse(authenticated.failure)
+
         return yield* Effect.provideService(app, AccessPrincipal, authenticated.success)
       })
   }),

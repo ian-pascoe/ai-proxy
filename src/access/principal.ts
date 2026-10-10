@@ -37,7 +37,9 @@ const toHex = (bytes: ArrayBuffer): string =>
 /** `sha256("cli-proxy-api:caller-scope:v1\x00" + value)` as lowercase hex; empty for a blank value (like Go). */
 export const callerScope = (value: string): Effect.Effect<string> => {
   const trimmed = value.trim()
+
   if (trimmed === "") return Effect.succeed("")
+
   return Effect.promise(async () =>
     toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(CALLER_SCOPE_PREFIX + trimmed)))
   )
@@ -46,5 +48,6 @@ export const callerScope = (value: string): Effect.Effect<string> => {
 export const makeIdentity = (principal: Principal): Effect.Effect<AccessIdentity> =>
   Effect.gen(function* () {
     const id = principalId(principal)
+
     return { principal, principalId: id, callerScope: yield* callerScope(id) }
   })

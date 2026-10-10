@@ -18,17 +18,23 @@ import { createHash } from "node:crypto"
 
 /** `SignatureCacheTTL` (3 h), sliding. */
 export const SIGNATURE_CACHE_TTL_MS = 3 * 60 * 60 * 1000
+
 /** `MinValidSignatureLen`. */
 export const MIN_VALID_SIGNATURE_LEN = 50
+
 /** `SignatureTextHashLen`. */
 export const SIGNATURE_TEXT_HASH_LEN = 16
+
 export const GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR = "skip_thought_signature_validator"
 
 /** `GetModelGroup`: gpt / claude / gemini share a cache bucket per family, other models their own. */
 export const getModelGroup = (modelName: string): string => {
   if (modelName.includes("gpt")) return "gpt"
+
   if (modelName.includes("claude")) return "claude"
+
   if (modelName.includes("gemini")) return "gemini"
+
   return modelName
 }
 
@@ -91,19 +97,25 @@ export class MemorySignatureCache implements SignatureCache {
 
   get(modelName: string, text: string): string {
     const miss = getModelGroup(modelName) === "gemini" ? GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR : ""
+
     if (text === "") return miss
     const key = this.#key(modelName, text)
     const entry = this.#entries.get(key)
+
     if (entry === undefined) return miss
     const now = this.now()
+
     if (now - entry.touched > SIGNATURE_CACHE_TTL_MS) {
       this.#entries.delete(key)
+
       return miss
     }
+
     // Sliding expiration; re-insert to keep the map in recency order.
     entry.touched = now
     this.#entries.delete(key)
     this.#entries.set(key, entry)
+
     return entry.signature
   }
 
@@ -116,7 +128,9 @@ export class MemorySignatureCache implements SignatureCache {
     if (text === "" || signature === "" || signature.length < MIN_VALID_SIGNATURE_LEN) return false
     this.#store(modelName, text, signature)
     this.#pending.push({ modelName, text, signature })
+
     if (this.#pending.length > MAX_ENTRIES) this.#pending.splice(0, this.#pending.length - MAX_ENTRIES)
+
     return true
   }
 
@@ -129,8 +143,10 @@ export class MemorySignatureCache implements SignatureCache {
     const key = this.#key(modelName, text)
     this.#entries.delete(key)
     this.#entries.set(key, { signature, touched: this.now() })
+
     while (this.#entries.size > MAX_ENTRIES) {
       const oldest = this.#entries.keys().next().value
+
       if (oldest === undefined) break
       this.#entries.delete(oldest)
     }
@@ -149,6 +165,7 @@ export class MemorySignatureCache implements SignatureCache {
   drainPendingWrites(): SignatureWrite[] {
     const writes = this.#pending
     this.#pending = []
+
     return writes
   }
 }
@@ -164,12 +181,14 @@ interface SignatureContext {
 }
 
 const isolateCache = new MemorySignatureCache()
+
 let current: SignatureContext = { cache: isolateCache, settings: defaultSignatureSettings }
 
 /** The isolate-wide cache (the default of {@link currentSignatureCache}). */
 export const isolateSignatureCache = (): MemorySignatureCache => isolateCache
 
 export const currentSignatureCache = (): SignatureCache => current.cache
+
 export const currentSignatureSettings = (): SignatureSettings => current.settings
 
 /** Runs the synchronous `fn` with the given cache/settings installed and restores the previous context afterwards. */
@@ -182,6 +201,7 @@ export const withSignatureContext = <T>(
     cache: context.cache ?? previous.cache,
     settings: { ...previous.settings, ...context.settings }
   }
+
   try {
     return fn()
   } finally {
@@ -196,10 +216,13 @@ export const setSignatureSettings = (settings: Partial<SignatureSettings>): void
 
 /** `cache.SignatureCacheEnabled()`. */
 export const signatureCacheEnabled = (): boolean => current.settings.cacheEnabled
+
 /** `cache.SignatureBypassStrictMode()`. */
 export const signatureBypassStrictMode = (): boolean => current.settings.bypassStrictMode
+
 /** `cache.GetCachedSignature`. */
 export const getCachedSignature = (modelName: string, text: string): string => current.cache.get(modelName, text)
+
 /** `cache.CacheSignature`. */
 export const cacheSignature = (modelName: string, text: string, signature: string): boolean =>
   current.cache.set(modelName, text, signature)

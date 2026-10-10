@@ -103,6 +103,7 @@ type Inbox =
 
 const addUsage = (total: UsageDetail | undefined, next: UsageDetail): UsageDetail => {
   const base = total ?? emptyUsageDetail
+
   return {
     inputTokens: base.inputTokens + next.inputTokens,
     outputTokens: base.outputTokens + next.outputTokens,
@@ -174,13 +175,17 @@ export const startCodexDuplex = (
       Queue.offerUnsafe(changed, undefined)
       Queue.offerUnsafe(inbox, { _tag: "wake" })
     }
+
     const finish = (error: ExecutionError | undefined): Effect.Effect<void> =>
       Effect.suspend(() => {
         if (finished) return Effect.void
         finished = true
+
         return (error === undefined ? Queue.end(out) : Queue.fail(out, error)).pipe(Effect.asVoid)
       })
+
     const emit = (chunk: string): Effect.Effect<void> => Queue.offer(out, chunk).pipe(Effect.asVoid)
+
     const waitFor = (ready: () => boolean): Effect.Effect<void> =>
       Effect.gen(function* () {
         while (!ready()) yield* Queue.take(changed)
@@ -188,12 +193,16 @@ export const startCodexDuplex = (
 
     const releaseSteeringSettings = (parent: string): void => {
       if (unacknowledgedSteers.includes(parent)) return
+
       for (const target of acceptedSteers.values()) if (target === parent) return
       steeringSettings.delete(parent)
     }
+
     const readyForCreate = (): boolean => {
       if (unacknowledgedSteers.length > 0 || automaticActive) return false
+
       for (const parent of acceptedSteers.values()) if (parent !== waitingParent) return false
+
       return true
     }
 
@@ -214,46 +223,62 @@ export const startCodexDuplex = (
       Effect.gen(function* () {
         if (!credentialEnabled()) {
           yield* finish(duplexConnectionError(DISABLED_MESSAGE))
+
           return false
         }
+
         const sent = yield* Effect.result(turn.send(frame))
+
         if (sent._tag === "Failure") {
           yield* finish(duplexConnectionError(sent.failure))
+
           return false
         }
+
         return true
       })
 
     const processCreate = (text: string): Effect.Effect<boolean, never, Thinking> =>
       Effect.gen(function* () {
         let payload = tryParseJson(text)
+
         if (!isJsonObject(payload)) return true
         const isAppend = asString(payload["type"]) === "response.append"
         let previous = asString(payload["previous_response_id"]).trim()
+
         if (isAppend && previous === "" && responseId !== "") {
           previous = responseId
           payload = set(payload, "previous_response_id", previous)
         }
+
         if (acceptedSteers.size > 0 && previous !== waitingParent) {
           yield* reject("response.create must continue the response waiting for required input")
+
           return true
         }
+
         const originalModel = asString(get(request.payload, "model"))
         let model = asString(get(payload, "model")).trim()
+
         if (model !== "" && model !== request.model && model !== originalModel) {
           yield* finish(duplexConnectionError(replayRequiredError()))
+
           return false
         }
+
         if (model === "") {
           model = request.model !== "" ? request.model : originalModel.trim()
           payload = set(payload, "model", model)
         }
+
         if (isAppend && get(payload, "instructions") === undefined) {
           const target = responseSettings.get(previous) ?? initialSettings
           let instructions = target.instructions ?? target.originalInstructions
           instructions ??= initialSettings.instructions ?? initialSettings.originalInstructions
+
           if (instructions !== undefined) payload = set(payload, "instructions", cloneJson(instructions))
         }
+
         const prepared = yield* Effect.result(
           params.prepare(
             context,
@@ -262,16 +287,23 @@ export const startCodexDuplex = (
             { stream: true, compact: false, websocket: true }
           )
         )
+
         if (prepared._tag === "Failure") {
           yield* finish(duplexConnectionError(prepared.failure))
+
           return false
         }
+
         if (pending.length >= MAX_OUTSTANDING) {
           yield* finish(duplexConnectionError("too many outstanding response.create requests"))
+
           return false
         }
+
         pending.push(settingsOf(prepared.success, undefined))
+
         if (prepared.success.multiAgentV2) connectionMultiAgentV2 = true
+
         return yield* write(params.frame(prepared.success.body))
       })
 
@@ -279,8 +311,10 @@ export const startCodexDuplex = (
       Effect.gen(function* () {
         while (pendingCreates.length > 0 && readyForCreate()) {
           const next = pendingCreates.shift() as string
+
           if (!(yield* processCreate(next))) return false
         }
+
         return true
       })
 
@@ -288,6 +322,7 @@ export const startCodexDuplex = (
       Effect.gen(function* () {
         // Steering carries business input but must not inherit response.create defaults.
         const original = cloneJson(payloadValue)
+
         const finalized = finalizePayload(
           context.config,
           "codex-websockets",
@@ -302,15 +337,20 @@ export const startCodexDuplex = (
           },
           payloadValue
         )
+
         const body = set(finalized, "type", "response.steer")
         const parent = asString(get(body, "previous_response_id"))
         let settings = responseSettings.get(parent)
+
         if (settings === undefined) {
           yield* waitFor(() => pending.length === 0)
           settings = responseSettings.get(parent)
         }
+
         unacknowledgedSteers.push(parent)
+
         if (settings !== undefined) steeringSettings.set(parent, settings)
+
         // Control frames bypass response.create translations and built-in defaults; upstream validates the rest.
         return yield* write(JSON.stringify(body))
       })
@@ -320,27 +360,37 @@ export const startCodexDuplex = (
         if (!credentialEnabled()) {
           // A fresh client connection can select an enabled credential: never send this frame on a disabled account.
           yield* finish(duplexConnectionError(DISABLED_MESSAGE))
+
           return false
         }
+
         const parsed = tryParseJson(text)
+
         if (!isJsonObject(parsed)) {
           yield* reject("invalid websocket request JSON")
+
           return true
         }
+
         switch (asString(parsed["type"])) {
           case "response.steer":
             return yield* processSteer(parsed)
           case "response.create":
           case "response.append":
             if (pendingCreates.length === 0 && readyForCreate()) return yield* processCreate(text)
+
             if (pendingCreates.length >= MAX_OUTSTANDING) {
               yield* finish(duplexConnectionError("too many outstanding response.create requests"))
+
               return false
             }
+
             pendingCreates.push(text)
+
             return true
           default:
             yield* reject(`unsupported websocket request type: ${asString(parsed["type"])}`)
+
             return true
         }
       })
@@ -354,18 +404,25 @@ export const startCodexDuplex = (
           Effect.gen(function* () {
             while (true) {
               const next = yield* Effect.result(duplex.next)
+
               if (next._tag === "Failure") return Queue.offerUnsafe(inbox, { _tag: "error", error: next.failure })
+
               if (next.success === undefined) return Queue.offerUnsafe(inbox, { _tag: "end" })
               Queue.offerUnsafe(inbox, { _tag: "frame", text: next.success })
             }
           })
         )
+
         while (true) {
           if (!(yield* flushPendingCreates())) return
           const item = yield* Queue.take(inbox)
+
           if (item._tag === "wake") continue
+
           if (item._tag === "end") return yield* finish(undefined)
+
           if (item._tag === "error") return yield* finish(item.error)
+
           if (!(yield* handleFrame(item.text))) return
         }
       })
@@ -377,49 +434,66 @@ export const startCodexDuplex = (
         let firstResponse = true
         let collector = new OutputItemCollector()
         let totalUsage: UsageDetail | undefined
+
         while (true) {
           const read = yield* Effect.result(turn.read)
+
           if (read._tag === "Failure") {
             if (!finished) yield* finish(duplexConnectionError(read.failure))
+
             return
           }
+
           const text = read.success
           const nowMs = yield* Clock.currentTimeMillis
           const event = tryParseJson(text)
           const eventType = asString(get(event, "type"))
           const establishing = firstResponse && eventType === "response.created"
+
           if (eventType === "response.created") {
             const previousId = asString(get(event, "response.previous_response_id"))
             const parent = previousId !== "" ? previousId : responseId
+
             if (!firstResponse && pending.length === 0) {
               const settings = steeringSettings.get(parent) ?? responseSettings.get(parent)
+
               if (settings === undefined) {
                 yield* finish(duplexConnectionError("automatic successor has no retained parent settings"))
+
                 return
               }
+
               current = settings
             }
+
             for (const [id, target] of acceptedSteers) if (target === parent) acceptedSteers.delete(id)
             waitingParent = ""
             automaticActive = !firstResponse && pending.length === 0
+
             if (pending.length > 0) current = pending.shift() as Settings
             responseId = asString(get(event, "response.id"))
             // Retain response settings, not request history or authorization headers. In-flight steering pins its
             // parent's settings independently of this window.
             responseSettings.set(responseId, snapshotOf(current))
             responseOrder.push(responseId)
+
             if (responseOrder.length > MAX_OUTSTANDING) responseSettings.delete(responseOrder.shift() as string)
             releaseSteeringSettings(parent)
             wake()
+
             if (!firstResponse) {
               const effort = asString(get(current.reasoning, "effort"))
+
               if (effort !== "") context.usage.setReasoningEffort(effort)
             }
+
             firstResponse = false
             responseActive = true
             collector = new OutputItemCollector()
           }
+
           context.usage.observeResponseModel(responseModelOf(event))
+
           if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
 
           // Steering acknowledgements, pending notifications and failures are opaque: preserve ids, input, sequence
@@ -428,10 +502,13 @@ export const startCodexDuplex = (
             const id = asString(get(event, "steer.id"))
             const previousId = asString(get(event, "steer.previous_response_id"))
             const parent = previousId !== "" ? previousId : responseId
+
             const consumeSubmission = (): void => {
               const index = unacknowledgedSteers.findIndex((target) => target === parent || target === "")
+
               if (index >= 0) unacknowledgedSteers.splice(index, 1)
             }
+
             switch (eventType) {
               case "response.steer.accepted":
                 consumeSubmission()
@@ -448,43 +525,55 @@ export const startCodexDuplex = (
                 waitingParent = parent
                 break
             }
+
             wake()
             yield* emit(text)
             continue
           }
 
           const wsFailure = params.parseWebsocketError(event, { modelLevelCooling: params.modelLevelCooling, nowMs })
+
           const terminal =
             wsFailure ?? codexTerminalFailure(event, { modelLevelCooling: params.modelLevelCooling, nowMs })
+
           if (!firstResponse && (eventType === "error" || eventType === "response.failed")) {
             const credentialStatus = terminal?.error.status
+
             if (credentialStatus === 401 || credentialStatus === 403 || credentialStatus === 429) {
               // Account health is independent of which queued request failed. The conductor records the original
               // classification without replaying this already-started stream on another credential.
               context.usage.fail(terminal?.error.status ?? 500, terminal?.error.message ?? "")
               yield* emit(text)
               yield* finish(terminal?.error)
+
               return
             }
           }
+
           let eventSettings = current
+
           if (!firstResponse && (eventType === "response.failed" || eventType === "error")) {
             const failedId =
               asString(get(event, "response.id")) !== ""
                 ? asString(get(event, "response.id"))
                 : asString(get(event, "response_id"))
+
             // A failure for the running response must not consume a queued create. A rejection before response.created
             // instead owns the oldest pending create, including its reasoning replay scope.
             const currentFailure = failedId !== "" && failedId === responseId
+
             const ambiguous =
               failedId === "" && ((pending.length > 0 && responseActive) || unacknowledgedSteers.length > 0)
+
             if (pending.length > 0 && !currentFailure && !ambiguous) {
               eventSettings = pending.shift() as Settings
             } else if (!ambiguous) {
               responseActive = false
               automaticActive = false
             }
+
             wake()
+
             if (ambiguous) {
               // Without a response id, assigning this failure could corrupt either request: preserve the event and fail
               // the socket without guessing a scope, replaying input or cooling the credential.
@@ -492,25 +581,33 @@ export const startCodexDuplex = (
               yield* finish(
                 duplexConnectionError("cannot associate websocket failure with a response or pending create")
               )
+
               return
             }
           }
+
           const restore = eventSettings.multiAgentV2 || connectionMultiAgentV2
           const normalized = restoreCodexMultiAgentV2Response(text, restore)
           const parsed = tryParseJson(normalized)
+
           // Invalidate replay for every rejected request, with the settings that belong to this event.
           if (terminal !== undefined) {
             if (isThinkingSignatureInvalid(terminal.error.status, terminal.error.message)) {
               yield* params.replayStore.clear(eventSettings.replayScope.modelName, eventSettings.replayScope.sessionKey)
             }
+
             context.usage.fail(terminal.error.status, terminal.error.message)
+
             if (firstResponse) {
               yield* finish(terminal.error)
+
               return
             }
           }
+
           if (eventType === "response.output_item.done") collector.collect(parsed)
           let chunk = normalized
+
           if (
             (eventType === "response.completed" ||
               eventType === "response.done" ||
@@ -521,18 +618,25 @@ export const startCodexDuplex = (
             automaticActive = false
             wake()
             const completed = normalizeCodexCompletion(parsed)
+
             if (!current.nativeOutput) patchCodexCompletedOutput(completed, collector)
+
             if (eventType !== "response.incomplete") {
               yield* cacheReplayFromCompleted(params.replayStore, current.replayScope, completed)
             }
+
             const detail = parseCodexUsage(completed)
+
             if (detail !== undefined) {
               totalUsage = addUsage(totalUsage, detail)
               context.usage.publish(totalUsage)
             }
+
             chunk = JSON.stringify(completed)
           }
+
           yield* emit(chunk.includes('"usage"') ? ensureResponsesUsageDetails(chunk) : chunk)
+
           if (establishing) {
             // Deliver response.created before any locally generated error so the downstream handler also observes a
             // successful bootstrap first.

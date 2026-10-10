@@ -52,46 +52,58 @@ export const prepareReplayPayload = Effect.fnUntraced(function* (
     },
     payload
   )
+
   let scope: ReplayScope = { modelName: modelName.trim(), sessionKey, snapshot: UNLOADED_SNAPSHOT }
   let updated: Json = structuredClone(payload)
   let replayApplied = false
+
   if (replayScopeValid(scope)) {
     const read = yield* ledger.get(scope.modelName, scope.sessionKey)
     scope = { ...scope, snapshot: read.snapshot }
+
     if (read.items !== undefined && read.items.length > 0) {
       const schemas: ToolSchemas =
         options.sourceFormat === "claude"
           ? replayToolSchemasFromRequests(options.originalRequest, request.payload)
           : new Map()
+
       replayApplied = applyReplayItems(updated, read.items, schemas)
+
       if (!replayApplied) updated = structuredClone(payload)
     }
   }
 
   updated = normalizeFunctionResponseRoles(updated)
+
   if (payloadHasToolProvenanceId(updated)) {
     // The ledger could not resolve every tool id (session lane changed, entry expired, a turn never committed):
     // degrade those calls to synthetic ids instead of killing the conversation.
     degradeToolProvenanceIds(updated)
     updated = normalizeFunctionResponseRoles(updated)
   }
+
   // An identity-only restore drops the cached signature, which can leave a model turn's first call unsigned.
   repairUnsignedFirstFunctionCalls(updated)
   const pairingError = validateFunctionCallPairing(updated)
+
   if (pairingError !== undefined) {
     const originalPairingValid = validateFunctionCallPairing(payload) === undefined
+
     if (replayApplied && originalPairingValid && replayScopeValid(scope)) {
       // Replay broke the call/response pairing: invalidate the entry and degrade to the original payload.
       yield* ledger.deleteIfUnchanged(scope.modelName, scope.sessionKey, scope.snapshot)
       yield* Effect.logWarning("antigravity executor: reasoning replay broke Gemini function call pairing; degrading")
+
       return { payload, scope } satisfies PreparedReplay
     }
+
     return yield* new ExecutionError({
       status: 400,
       message: `antigravity executor: invalid Gemini function call history: ${pairingError}`,
       requestScoped: true
     })
   }
+
   return { payload: updated, scope } satisfies PreparedReplay
 })
 
@@ -103,6 +115,7 @@ export const clearReplayOnInvalidSignature = (
   body: string
 ): Effect.Effect<void> => {
   if (!replayScopeValid(scope) || status !== 400 || !body.toLowerCase().includes("signature")) return Effect.void
+
   return ledger.deleteIfUnchanged(scope.modelName, scope.sessionKey, scope.snapshot).pipe(Effect.asVoid)
 }
 

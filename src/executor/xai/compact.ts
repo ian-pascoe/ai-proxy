@@ -32,21 +32,27 @@ const ECHOED_FIELDS = [
 /** `xaiCompactionResponseID`: `resp_<id>` (a `cmp_` prefix is replaced). */
 export const compactionResponseId = (compact: Json, nowMs: number): string => {
   const id = asString(get(compact, "id")).trim()
+
   if (id !== "") return id.startsWith("resp_") ? id : `resp_${id.replace(/^cmp_/, "")}`
+
   return `resp_xai_compaction_${nowMs}000000`
 }
 
 /** `xaiCompactionItemID`. */
 export const compactionItemId = (responseId: string): string => {
   const suffix = responseId.startsWith("resp_") ? responseId.slice("resp_".length) : responseId
+
   return suffix !== "" && suffix !== responseId ? `cmp_${suffix}` : `cmp_${responseId}`
 }
 
 export const compactionOutputItem = (compact: Json, responseId: string): JsonObject => {
   const first = get(compact, "output.0")
   const item: JsonObject = isJsonObject(first) ? cloneJson(first) : { type: "compaction" }
+
   if (item["type"] === undefined) item["type"] = "compaction"
+
   if (item["id"] === undefined) item["id"] = compactionItemId(responseId)
+
   return item
 }
 
@@ -68,13 +74,18 @@ const baseResponse = (
     incomplete_details: null,
     output: []
   }
+
   const model = asString(get(compact, "model"))
+
   if (model !== "") response["model"] = model
   else if (baseModel !== "") response["model"] = baseModel
+
   for (const field of ECHOED_FIELDS) {
     const value = get(body, field)
+
     if (value !== undefined) response[field] = cloneJson(value)
   }
+
   return response
 }
 
@@ -98,8 +109,10 @@ export const buildCompactionTriggerStreamChunks = (input: CompactionStreamInput)
   const nowSec = Math.floor(nowMs / 1000)
   const responseId = compactionResponseId(compact, nowMs)
   let createdAt = asInt(get(compact, "created_at"))
+
   if (createdAt === 0) createdAt = nowSec
   let completedAt = asInt(get(compact, "completed_at"))
+
   if (completedAt === 0) completedAt = nowSec
 
   const item = compactionOutputItem(compact, responseId)
@@ -107,19 +120,24 @@ export const buildCompactionTriggerStreamChunks = (input: CompactionStreamInput)
   const inProgress = baseResponse(body, compact, baseModel, responseId, createdAt, "in_progress")
   const completed = baseResponse(body, compact, baseModel, responseId, createdAt, "completed")
   let requestModelName = input.requestModel !== "" ? input.requestModel : baseModel
+
   if (requestModelName === "") requestModelName = asString(get(compact, "model"))
+
   if (requestModelName !== "") {
     created["model"] = requestModelName
     inProgress["model"] = requestModelName
   }
+
   completed["completed_at"] = completedAt
   completed["output"] = [item]
   const usage = get(compact, "usage")
+
   if (isJsonObject(usage)) completed["usage"] = cloneJson(usage)
 
   const completedEvent = ensureResponsesUsageDetails(
     JSON.stringify({ type: "response.completed", sequence_number: 5, response: completed })
   )
+
   return [
     frame("response.created", { type: "response.created", sequence_number: 0, response: created }),
     frame("response.in_progress", { type: "response.in_progress", sequence_number: 1, response: inProgress }),

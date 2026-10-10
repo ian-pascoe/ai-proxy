@@ -40,16 +40,21 @@ export const parseCreditsReply = (
 ): { readonly record: CreditsRecord | undefined; readonly known: boolean } => {
   const paidTierId = asString(get(body, "paidTier.id")).trim()
   const credits = get(body, "paidTier.availableCredits")
+
   // Not an array: the hint is known and unavailable.
   if (!isJsonArray(credits))
     return { record: { creditAmount: 0, minCreditAmount: 1, paidTierId, updatedAt: now }, known: true }
+
   for (const credit of credits) {
     if (asString(get(credit, "creditType")).toUpperCase() !== "GOOGLE_ONE_AI") continue
     const creditAmount = Number.parseFloat(asString(get(credit, "creditAmount")).trim())
     const minCreditAmount = Number.parseFloat(asString(get(credit, "minimumCreditAmountForUsage")).trim())
+
     if (Number.isNaN(creditAmount) || Number.isNaN(minCreditAmount)) continue
+
     return { record: { creditAmount, minCreditAmount, paidTierId, updatedAt: now }, known: true }
   }
+
   return { record: undefined, known: false }
 }
 
@@ -65,6 +70,7 @@ export const probeCredits = (
     if (accessToken === "") return
     const client = yield* HttpClient.HttpClient
     const url = `${loadCodeAssistBaseUrl(credential.attributes, credential.metadata)}/v1internal:loadCodeAssist`
+
     const request = HttpClientRequest.post(url).pipe(
       HttpClientRequest.setHeaders({
         authorization: `Bearer ${accessToken}`,
@@ -74,9 +80,12 @@ export const probeCredits = (
       }),
       HttpClientRequest.bodyText(JSON.stringify({ metadata: { ideType: "ANTIGRAVITY" } }), "application/json")
     )
+
     const response = yield* client.execute(request).pipe(Effect.timeout("5 seconds"))
+
     if (response.status < 200 || response.status >= 300) return
     const parsed = parseCreditsReply(tryParseJson(yield* response.text), now)
+
     if (parsed.record !== undefined)
       yield* Effect.promise(() => state.setCredits(credential.id, parsed.record as CreditsRecord))
   }).pipe(Effect.catchCause(() => Effect.void))

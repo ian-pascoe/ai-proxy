@@ -22,29 +22,38 @@ export interface ConfigCredential {
 export const openAICompatModelIds = (group: OpenAICompatGroup, forceModelPrefix: boolean): string[] => {
   const prefix = (group.prefix ?? "").trim()
   const ids: string[] = []
+
   const add = (id: string) => {
     if (id !== "" && !ids.includes(id)) ids.push(id)
   }
+
   for (const model of group.models ?? []) {
     const id = (model.alias ?? "").trim() || model.name.trim()
+
     if (id === "") continue
+
     if (prefix === "") {
       add(id)
       continue
     }
+
     if (!forceModelPrefix || prefix === id) add(id)
     add(`${prefix}/${id}`)
   }
+
   return ids
 }
 
 const headerAttributes = (headers: Readonly<Record<string, string>> | undefined): Record<string, string> => {
   const out: Record<string, string> = {}
+
   for (const [name, value] of Object.entries(headers ?? {})) {
     const key = name.trim()
     const val = value.trim()
+
     if (key !== "" && val !== "") out[`header:${key}`] = val
   }
+
   return out
 }
 
@@ -58,6 +67,7 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
     const provider = openAICompatibleProviderKey(providerName)
     const models = new Set(openAICompatModelIds(group, forceModelPrefix))
     const priority = group.priority ?? 0
+
     const base: Record<string, string> = {
       base_url: group["base-url"].trim(),
       compat_name: group.name,
@@ -66,12 +76,15 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
       ...(priority !== 0 ? { priority: String(priority) } : {}),
       ...headerAttributes(group.headers)
     }
+
     const metadata: Record<string, unknown> = {
       ...(group["disable-cooling"] !== undefined ? { disable_cooling: group["disable-cooling"] } : {}),
       ...(group["request-retry"] !== undefined ? { request_retry: group["request-retry"] } : {}),
       ...(group["request-scoped-errors"] !== undefined ? { request_scoped_errors: group["request-scoped-errors"] } : {})
     }
+
     const prefix = (group.prefix ?? "").trim()
+
     const make = (keyIndex: number, apiKey: string, weight: number | undefined): ConfigCredential => ({
       credential: {
         id: `${provider}#${index}.${keyIndex}`,
@@ -90,14 +103,18 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
       models,
       priority
     })
+
     if (group.keys.length === 0) {
       out.push(make(0, "", undefined))
+
       return
     }
+
     group.keys.forEach((key, keyIndex) => {
       out.push(make(keyIndex, key["api-key"].trim(), key.weight))
     })
   })
   out.push(...claudeConfigCredentials(config["api-keys"].claude, forceModelPrefix))
+
   return out
 }

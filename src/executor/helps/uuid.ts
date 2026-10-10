@@ -15,6 +15,7 @@ export const uuidV5 = (namespace: string, name: string): string => {
   bytes[6] = ((bytes[6] as number) & 0x0f) | 0x50
   bytes[8] = ((bytes[8] as number) & 0x3f) | 0x80
   const hex = bytes.toString("hex")
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
@@ -25,5 +26,6 @@ export const uuidV5Oid = (name: string): string => uuidV5(NAMESPACE_OID, name)
 export const providerSessionUuid = (provider: string, kind: string, identity: string | undefined): string => {
   const name = provider.trim().toLowerCase()
   const value = (identity ?? "").trim()
+
   return name === "" || value === "" ? "" : uuidV5Oid(["cli-proxy-api", name, kind, value].join("\u0000"))
 }

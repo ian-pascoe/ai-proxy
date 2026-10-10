@@ -56,17 +56,21 @@ export const xaiPicker = (
             pinnedId: request.pinnedId,
             excluded: [...(request.excludedIds ?? [])]
           })
+
           const credential = credentials.find(
             (candidate) =>
               !(request.excludedIds ?? []).includes(candidate.id) &&
               (request.pinnedId === undefined || candidate.id === request.pinnedId)
           )
+
           if (credential === undefined) {
             return Effect.fail(
               new ExecutionError({ status: 503, code: "auth_not_found", message: "no auth available" })
             )
           }
+
           const leaseId = `lease-${log.picks.length}`
+
           return Effect.succeed({
             credential,
             leaseId,
@@ -108,11 +112,15 @@ export const xaiModels: Layer.Layer<ModelProviders, never, ConfigReader> = Layer
 export const grokCiphertext = (seed: number, bytes = 96): string => {
   let state = seed >>> 0 || 1
   const out = new Uint8Array(bytes)
+
   for (let index = 0; index < bytes; index++) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0
     out[index] = state >>> 24
   }
+
   let binary = ""
+
   for (const byte of out) binary += String.fromCharCode(byte)
+
   return btoa(binary).replaceAll("=", "")
 }

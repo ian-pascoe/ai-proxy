@@ -1,6 +1,9 @@
 export { exists, get } from "./get.ts"
+
 export { del, JsonPathError, set, setRaw } from "./set.ts"
+
 export { asBool, asFloat, asInt, asString, escapePathKey } from "./result.ts"
+
 export {
   cloneJson,
   isJsonArray,
@@ -13,4 +16,5 @@ export {
   jsonEquals,
   tryParseJson
 } from "./value.ts"
+
 export { wildcardMatch } from "./wildcard.ts"

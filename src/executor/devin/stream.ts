@@ -47,19 +47,23 @@ const COMPLETION_BY_STOP_REASON: Readonly<Record<number, { status: string; finis
 
 const usageObject = (usage: DevinUsage | undefined): Event => {
   const out: Event = { total_input_tokens: 0, total_output_tokens: 0, total_cached_tokens: 0 }
+
   if (usage === undefined) return out
   const totalInput = usage.promptTokens + usage.cachedTokens
   out["total_input_tokens"] = totalInput
   out["total_output_tokens"] = usage.completionTokens
   out["total_cached_tokens"] = usage.cachedTokens
+
   if (usage.cacheWriteTokens > 0) out["cache_write_tokens"] = usage.cacheWriteTokens
   out["total_tokens"] = totalInput + usage.completionTokens
+
   return out
 }
 
 const foldUsage = (current: DevinUsage | undefined, frame: DevinFrame): DevinUsage | undefined => {
   let usage = frame.usage === undefined ? current : mergeDevinUsage(current, frame.usage)
   usage = applyDimensionUsage(usage, frame.dimensionGroups)
+
   return usage
 }
 
@@ -114,8 +118,10 @@ export class DevinStreamAssembler {
   #emit(event: Event): void {
     const type = String(event["event_type"])
     const failed = type === "response.failed" || type === "interaction.failed"
+
     // A failure before any stream content is suppressed so the caller can return a proper HTTP status.
     if (failed && !this.#createdSent) return
+
     if (!this.#createdSent && type !== "interaction.created") {
       this.#createdSent = true
       this.#out.push(
@@ -125,6 +131,7 @@ export class DevinStreamAssembler {
         })
       )
     }
+
     if (type === "interaction.created") this.#createdSent = true
     this.#out.push(JSON.stringify(event))
   }
@@ -139,31 +146,39 @@ export class DevinStreamAssembler {
       this.#thoughtStarted = false
       this.#stepIndex++
     }
+
     const actions = this.#pending
     this.#pending = []
+
     for (const action of actions) action()
   }
 
   #emitContentChunk(chunk: string): void {
     if (this.#thoughtStarted) {
       const stopIndex = this.#thoughtStepIndex < 0 ? this.#stepIndex : this.#thoughtStepIndex
+
       if (this.responseFormat === Formats.OpenAIResponse) {
         // Responses items may overlap: keep reasoning open for late signatures.
         this.#deferredThoughtStops.push(stopIndex)
       } else {
         this.#stepStop(stopIndex)
       }
+
       this.#thoughtStarted = false
       this.#stepIndex++
     }
+
     if (this.#toolCallCount > 0) {
       this.#postToolContent.push(chunk)
+
       return
     }
+
     if (!this.#contentStarted) {
       this.#emit({ event_type: "step.start", index: this.#stepIndex, step: { type: "model_output" } })
       this.#contentStarted = true
     }
+
     this.#emit({ event_type: "step.delta", index: this.#stepIndex, delta: { type: "text", text: chunk } })
   }
 
@@ -173,13 +188,16 @@ export class DevinStreamAssembler {
       this.#thoughtStarted = false
       this.#stepIndex++
     }
+
     if (this.#contentStarted) {
       this.#stepStop(this.#stepIndex)
       this.#contentStarted = false
       this.#stepIndex++
     }
+
     const argsChunk = call.arguments !== "" ? call.arguments : call.invalidJsonStr
     let slot: ToolSlot | undefined
+
     if (call.id !== "") slot = this.#slotById.get(call.id)
     else slot = this.#activeSlot
 
@@ -195,25 +213,31 @@ export class DevinStreamAssembler {
       const index = this.#stepIndex++
       slot = { stepIndex: index, id: call.id, name: call.name }
       this.#slots.set(index, slot)
+
       if (call.id !== "") this.#slotById.set(call.id, slot)
       this.#activeSlot = slot
       this.#emit(startEvent(slot))
     } else {
       this.#activeSlot = slot
       let updated = false
+
       if (slot.id === "" && call.id !== "") {
         slot.id = call.id
         this.#slotById.set(call.id, slot)
         updated = true
       }
+
       if (slot.name === "" && call.name !== "") {
         slot.name = call.name
         updated = true
       }
+
       if (updated) this.#emit(startEvent(slot))
     }
+
     if (argsChunk !== "") {
       const delta: Event = { type: "arguments_delta", arguments: argsChunk }
+
       if (call.arguments === "" && call.invalidJsonStr !== "") delta["invalid_json_str"] = true
       this.#emit({ event_type: "step.delta", index: slot.stepIndex, delta })
     }
@@ -227,17 +251,20 @@ export class DevinStreamAssembler {
     if (frame.thinking.length > 0) {
       if (this.#pending.length > 0) this.#flushPending()
       const chunk = this.#thinking.feed(frame.thinking)
+
       if (chunk !== "") {
         if (this.#contentStarted) {
           this.#stepStop(this.#stepIndex)
           this.#contentStarted = false
           this.#stepIndex++
         }
+
         if (!this.#thoughtStarted) {
           this.#thoughtStepIndex = this.#stepIndex
           this.#emit({ event_type: "step.start", index: this.#stepIndex, step: { type: "thought" } })
           this.#thoughtStarted = true
         }
+
         this.#emit({
           event_type: "step.delta",
           index: this.#thoughtStepIndex,
@@ -252,14 +279,18 @@ export class DevinStreamAssembler {
         this.#emit({ event_type: "step.start", index: this.#stepIndex, step: { type: "thought" } })
         this.#thoughtStarted = true
       }
+
       const target = this.#thoughtStepIndex < 0 ? 0 : this.#thoughtStepIndex
       let signature = new TextDecoder().decode(frame.deltaSignature)
+
       if (this.responseFormat === Formats.OpenAIResponse) {
         // The Responses translator accepts complete signatures, not fragments.
         signature = (this.#responseSignatures.get(target) ?? "") + signature
         this.#responseSignatures.set(target, signature)
       }
+
       const delta: Event = { type: "thought_signature", signature }
+
       if (frame.deltaSignatureType !== "") delta["signature_type"] = frame.deltaSignatureType
       this.#emit({ event_type: "step.delta", index: target, delta })
     }
@@ -271,6 +302,7 @@ export class DevinStreamAssembler {
 
     if (frame.content.length > 0) {
       const chunk = this.#content.feed(frame.content)
+
       if (chunk !== "") {
         if (this.#thoughtStarted && (!this.#streamContentEarly || this.#pending.length > 0)) {
           this.#pending.push(() => this.#emitContentChunk(chunk))
@@ -279,6 +311,7 @@ export class DevinStreamAssembler {
         }
       }
     }
+
     return this.#drain()
   }
 
@@ -286,23 +319,30 @@ export class DevinStreamAssembler {
   #closeOpenSteps(): void {
     for (const index of this.#deferredThoughtStops) this.#stepStop(index)
     this.#deferredThoughtStops = []
+
     if (this.#pending.length > 0 || this.#thoughtStarted) this.#flushPending()
+
     if (this.#slots.size > 0) {
       for (const index of [...this.#slots.values()].map((slot) => slot.stepIndex).toSorted((a, b) => a - b)) {
         this.#stepStop(index)
       }
+
       this.#slots.clear()
       this.#slotById.clear()
       this.#activeSlot = undefined
     }
+
     if (this.#postToolContent.length > 0) {
       this.#emit({ event_type: "step.start", index: this.#stepIndex, step: { type: "model_output" } })
       this.#contentStarted = true
+
       for (const chunk of this.#postToolContent) {
         this.#emit({ event_type: "step.delta", index: this.#stepIndex, delta: { type: "text", text: chunk } })
       }
+
       this.#postToolContent = []
     }
+
     if (this.#contentStarted) {
       this.#stepStop(this.#stepIndex)
       this.#contentStarted = false
@@ -312,6 +352,7 @@ export class DevinStreamAssembler {
   #drain(): string[] {
     const events = this.#out
     this.#out = []
+
     return events
   }
 
@@ -319,6 +360,7 @@ export class DevinStreamAssembler {
   fail(status: number, message: string): string[] {
     this.#closeOpenSteps()
     this.#emit({ event_type: "response.failed", error: { message, code: String(status) } })
+
     return this.#drain()
   }
 
@@ -326,6 +368,7 @@ export class DevinStreamAssembler {
   abort(code: "stream_read_error" | "stream_truncated", message: string): string[] {
     this.#closeOpenSteps()
     this.#emit({ event_type: "response.failed", error: { message, code } })
+
     return this.#drain()
   }
 
@@ -334,14 +377,17 @@ export class DevinStreamAssembler {
     this.#sawEos = true
     this.#closeOpenSteps()
     const completion = COMPLETION_BY_STOP_REASON[this.#lastStopReason]
+
     const interaction: Event = {
       id: this.interactionId,
       model: this.model,
       status: completion?.status ?? "completed"
     }
+
     if (completion !== undefined) interaction["finish_reason"] = completion.finishReason
     interaction["usage"] = usageObject(this.#usage)
     this.#emit({ event_type: "interaction.completed", interaction })
+
     return this.#drain()
   }
 }
@@ -368,10 +414,12 @@ export interface DevinAggregate {
 const concat = (parts: ReadonlyArray<Uint8Array>): string => {
   const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
+
   for (const part of parts) {
     out.set(part, offset)
     offset += part.length
   }
+
   return new TextDecoder().decode(out)
 }
 
@@ -394,59 +442,82 @@ export class DevinAggregator {
 
   push(frame: DevinFrame): void {
     if (frame.stopReason !== 0) this.#lastStopReason = frame.stopReason
+
     for (const field of frame.unknownFields) this.unknownFields.add(field)
     this.#usage = foldUsage(this.#usage, frame)
+
     if (frame.deltaSignature.length > 0) this.#signature.push(frame.deltaSignature)
+
     if (frame.thinking.length > 0) this.#thinking.push(frame.thinking)
+
     for (const call of frame.toolCalls) {
       const chunk = call.arguments !== "" ? call.arguments : call.invalidJsonStr
       let index = -1
+
       if (call.id !== "") index = this.#toolIndexById.get(call.id) ?? -1
       else if (this.#lastTool >= 0) index = this.#lastTool
       let builder: ToolBuilder
+
       if (index < 0) {
         if (this.#tools.length >= MAX_DEVIN_TOOL_CALLS) continue
         index = this.#tools.length
         builder = { id: call.id, name: call.name, args: "", legacy: false }
         this.#tools.push(builder)
+
         if (call.id !== "") this.#toolIndexById.set(call.id, index)
       } else {
         builder = this.#tools[index] as ToolBuilder
+
         if (builder.id === "" && call.id !== "") {
           builder.id = call.id
           this.#toolIndexById.set(call.id, index)
         }
+
         if (call.name !== "") builder.name = call.name
       }
+
       this.#lastTool = index
+
       if (call.arguments === "" && call.invalidJsonStr !== "") builder.legacy = true
+
       if (chunk !== "") builder.args += chunk
     }
+
     if (frame.content.length > 0) (this.#tools.length > 0 ? this.#postText : this.#preText).push(frame.content)
   }
 
   finish(model: string, interactionId: string = newInteractionId()): DevinAggregate {
     const completion = COMPLETION_BY_STOP_REASON[this.#lastStopReason]
     const out: Record<string, unknown> = { id: interactionId, model, status: completion?.status ?? "completed" }
+
     if (completion !== undefined) out["finish_reason"] = completion.finishReason
     const steps: Array<Record<string, unknown>> = []
     const signature = this.#signature.length > 0 ? concat(this.#signature) : ""
+
     if (this.#thinking.length > 0 || this.#signature.length > 0) {
       const thought: Record<string, unknown> = { type: "thought" }
+
       if (this.#thinking.length > 0) thought["content"] = [{ type: "text", text: concat(this.#thinking) }]
+
       if (this.#signature.length > 0) {
         thought["signature"] = signature
         thought["thought_signature"] = signature
       }
+
       steps.push(thought)
     }
+
     if (this.#preText.length > 0) {
       steps.push({ type: "model_output", content: [{ type: "text", text: concat(this.#preText) }] })
     }
+
     const legacyToolNames: string[] = []
+
     for (const tool of this.#tools) {
       if (tool.id === "" && tool.name === "" && tool.args === "") continue
+
       if (tool.legacy) legacyToolNames.push(tool.name)
+
       const step: Record<string, unknown> = {
         type: "function_call",
         name: tool.name,
@@ -454,6 +525,7 @@ export class DevinAggregator {
         call_id: tool.id,
         arguments: {}
       }
+
       if (tool.args !== "") {
         try {
           step["arguments"] = JSON.parse(tool.args) as unknown
@@ -461,13 +533,17 @@ export class DevinAggregator {
           step["arguments"] = tool.args
         }
       }
+
       steps.push(step)
     }
+
     if (this.#postText.length > 0) {
       steps.push({ type: "model_output", content: [{ type: "text", text: concat(this.#postText) }] })
     }
+
     out["steps"] = steps
     out["usage"] = usageObject(this.#usage)
+
     return { interaction: out, usage: this.#usage, legacyToolNames }
   }
 }

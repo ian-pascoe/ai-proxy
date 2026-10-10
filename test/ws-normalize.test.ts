@@ -23,8 +23,11 @@ import {
 } from "../src/handlers/responses/websocket/tool-cache.ts"
 
 const user = (text: string) => ({ type: "message", role: "user", content: text })
+
 const assistant = (text: string) => ({ type: "message", role: "assistant", content: text })
+
 const call = (id: string) => ({ type: "function_call", call_id: id, name: "run", arguments: "{}" })
+
 const output = (id: string) => ({ type: "function_call_output", call_id: id, output: "ok" })
 
 const state = (overrides: Partial<Parameters<typeof normalizeSubsequentRequest>[1]> = {}) => ({
@@ -67,6 +70,7 @@ describe("normalizeRequest (HTTP mode transcript)", () => {
       false,
       false
     )
+
     expect(result).toMatchObject({ ok: true, request: { input: [user("a"), assistant("b"), user("c")] } })
     expect(result.ok && "previous_response_id" in result.request).toBe(false)
   })
@@ -77,6 +81,7 @@ describe("normalizeRequest (HTTP mode transcript)", () => {
       ok: true,
       request: { previous_response_id: "resp_1", model: "m", instructions: "sys" }
     })
+
     // Pending tool calls the new input does not answer force a replacement instead.
     const pending = normalizeSubsequentRequest(
       { type: "response.create", input: [user("two")] },
@@ -84,24 +89,29 @@ describe("normalizeRequest (HTTP mode transcript)", () => {
       true,
       false
     )
+
     expect(pending.ok && "previous_response_id" in pending.request).toBe(false)
   })
 
   it("skips the stale merge for compaction transcripts when the target supports replay", () => {
     const compacted = { type: "compaction", encrypted_content: "x" }
+
     const bypass = normalizeSubsequentRequest(
       { type: "response.create", input: [compacted, user("n")] },
       state(),
       false,
       true
     )
+
     expect(bypass).toMatchObject({ ok: true, request: { input: [compacted, user("n")] } })
+
     const merged = normalizeSubsequentRequest(
       { type: "response.create", input: [compacted, user("n")] },
       state(),
       false,
       false
     )
+
     expect(merged).toMatchObject({ ok: true, request: { input: [user("one"), assistant("hi"), user("n")] } })
   })
 
@@ -135,6 +145,7 @@ describe("mergeInput", () => {
       [call("c1"), output("c1")],
       [{ id: "x", type: "message", role: "user", content: "new" }]
     )
+
     expect(merged).toEqual({
       ok: true,
       input: [{ id: "a", ...call("c1") }, output("c1"), { id: "x", type: "message", role: "user", content: "new" }]
@@ -163,6 +174,7 @@ describe("planTurn / commitTurn", () => {
     const socket = newSocketState()
     const first = planTurn(socket, { type: "response.create", model: "gpt-5.4", input: [user("one")] })
     expect(first).toMatchObject({ _tag: "execute", nativePassthrough: false, pinnedId: "", modelName: "gpt-5.4" })
+
     if (first._tag !== "execute") throw new Error("unreachable")
     commitTurn(socket, {
       modelName: "gpt-5.4",
@@ -188,6 +200,7 @@ describe("planTurn / commitTurn", () => {
   it("drops the pin when the model changes and asks for a replay when the continuation needs the lost socket", () => {
     const socket = newSocketState()
     const first = planTurn(socket, { type: "response.create", model: "gpt-5.4", input: [] })
+
     if (first._tag !== "execute") throw new Error("unreachable")
     commitTurn(socket, {
       modelName: "gpt-5.4",
@@ -213,22 +226,26 @@ describe("planTurn / commitTurn", () => {
     const socket = newSocketState()
     const warm = planTurn(socket, { type: "response.create", model: "m", generate: false, input: [user("w")] })
     expect(warm).toMatchObject({ _tag: "prewarm", request: { model: "m", input: [user("w")] } })
+
     if (warm._tag !== "prewarm") throw new Error("unreachable")
     expect("generate" in warm.request).toBe(false)
     commitPrewarm(socket, warm, "resp_prewarm_1")
     const mismatch = planTurn(socket, { type: "response.create", previous_response_id: "other", input: [] })
     expect(mismatch).toMatchObject({ _tag: "error", error: { status: 409 } })
+
     const follow = planTurn(socket, {
       type: "response.create",
       previous_response_id: "resp_prewarm_1",
       input: [user("go")]
     })
+
     expect(follow).toMatchObject({ _tag: "execute", request: { input: [user("w"), user("go")] } })
   })
 
   it("keeps a transcript for HTTP-mode credentials and merges the next append", () => {
     const socket = newSocketState()
     const first = planTurn(socket, { type: "response.create", model: "m", instructions: "sys", input: [user("one")] })
+
     if (first._tag !== "execute") throw new Error("unreachable")
     commitTurn(socket, {
       modelName: "m",
@@ -271,10 +288,12 @@ describe("tool-call repair", () => {
     // Turn 1 records a call and its output.
     const first = prepareFallbackTurn(caches, key, { input: [call("c1"), output("c1")] })
     first.turn?.commit()
+
     // Turn 2 replays the call without its output, and an output without its call, plus orphans.
     const second = prepareFallbackTurn(caches, key, {
       input: [user("x"), call("c1"), output("c1"), output("c9"), call("c8")]
     })
+
     expect(second.request["input"]).toEqual([user("x"), call("c1"), output("c1")])
     const third = prepareFallbackTurn(caches, key, { input: [call("c1")] })
     expect(third.request["input"]).toEqual([call("c1"), output("c1")])

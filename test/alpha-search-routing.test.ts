@@ -23,12 +23,14 @@ api-keys:
 
 describe("POST /v1/alpha/search with API keys", async () => {
   const harness = await makePool(YAML)
+
   const p = makePipeline({
     config: harness.config,
     respond: () => jsonResponse({ ok: true }),
     credentialPicker: poolPickerLayer(harness.pool),
     modelProviders: codexModels
   })
+
   afterAll(p.dispose)
 
   it("forwards the pool's upstream model (prefix and Codex API-key alias resolved)", async () => {

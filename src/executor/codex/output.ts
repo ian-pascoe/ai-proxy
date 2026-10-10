@@ -23,8 +23,10 @@ export class OutputItemCollector {
   /** `collectCodexOutputItemDone`. */
   collect(event: Json | undefined): void {
     const item = get(event, "item")
+
     if (!isJsonObject(item) && !isJsonArray(item)) return
     const outputIndex = get(event, "output_index")
+
     if (outputIndex !== undefined) this.byIndex.set(asInt(outputIndex), item)
     else this.fallback.push(item)
   }
@@ -42,8 +44,10 @@ const hydrateOutputItemIds = (event: JsonObject, outputItems: Json[], collector:
   outputItems.forEach((outputItem, index) => {
     if (hasUsableId(get(outputItem, "id"))) return
     const completed = collector.byIndex.get(index)
+
     if (completed === undefined) return
     const completedId = get(completed, "id")
+
     if (typeof completedId !== "string" || completedId.trim() === "") return
     set(event, `response.output.${index}.id`, completedId)
   })
@@ -52,10 +56,13 @@ const hydrateOutputItemIds = (event: JsonObject, outputItems: Json[], collector:
 /** `patchCodexCompletedOutput`: rebuilds an empty `response.output` from the collected items (in place). */
 export const patchCodexCompletedOutput = (event: JsonObject, collector: OutputItemCollector): void => {
   const output = get(event, "response.output")
+
   if (isJsonArray(output) && output.length > 0) {
     hydrateOutputItemIds(event, output, collector)
+
     return
   }
+
   if (collector.count === 0) return
   const indexes = [...collector.byIndex.keys()].toSorted((a, b) => a - b)
   const items = [...indexes.map((index) => collector.byIndex.get(index) as Json), ...collector.fallback]
@@ -65,6 +72,7 @@ export const patchCodexCompletedOutput = (event: JsonObject, collector: OutputIt
 /** `normalizeCodexWebsocketCompletion`: `response.done` is reported as `response.completed`. */
 export const normalizeCodexCompletion = (event: JsonObject): JsonObject => {
   if (asString(event["type"]).trim() === "response.done") event["type"] = "response.completed"
+
   return event
 }
 
@@ -76,8 +84,10 @@ export const hasMeaningfulOutputDelta = (event: Json | undefined): boolean => {
     case "response.reasoning_summary_text.delta":
     case "response.function_call_arguments.delta": {
       const delta = get(event, "delta")
+
       return delta !== undefined && asString(delta).trim().length > 0
     }
+
     default:
       return false
   }
@@ -90,9 +100,12 @@ export const isTerminalEmptyIncomplete = (
   sawOutputDelta: boolean
 ): boolean => {
   if (asString(get(event, "type")) !== "response.incomplete") return false
+
   if (sawOutputDelta || outputItemsCount > 0) return false
   const output = get(event, "response.output")
+
   if (isJsonArray(output) && output.length > 0) return false
+
   // Require an explicit numeric zero (reject floats like 0.5, non-numbers, missing or null).
   return get(event, "response.usage.output_tokens") === 0
 }
@@ -101,28 +114,34 @@ export const isTerminalEmptyIncomplete = (
 export const parseCodexUsage = (event: Json | undefined): UsageDetail | undefined => {
   const tier = responseServiceTier(event)
   const node = get(event, "response.usage")
+
   if (!hasUsageFields(node)) return tier === undefined ? undefined : { ...emptyUsageDetail, responseServiceTier: tier }
   const detail = parseOpenAIUsageNode(node)
+
   return tier === undefined ? detail : { ...detail, responseServiceTier: tier }
 }
 
 /** `ParseCodexImageToolUsage`. */
 export const parseCodexImageToolUsage = (event: Json | undefined): UsageDetail | undefined => {
   const node = get(event, "response.tool_usage.image_gen")
+
   return hasUsageFields(node) ? parseOpenAIUsageNode(node) : undefined
 }
 
 /** `codexImageGenerationToolModel`: the model of the request's `image_generation` tool (default `gpt-image-2`). */
 export const codexImageGenerationToolModel = (body: Json | undefined): string => {
   const tools = get(body, "tools")
+
   if (isJsonArray(tools)) {
     for (const tool of tools) {
       if (asString(get(tool, "type")) !== "image_generation") continue
       const model = asString(get(tool, "model")).trim()
+
       if (model !== "") return model
       break
     }
   }
+
   return "gpt-image-2"
 }
 
@@ -133,6 +152,7 @@ export const publishCodexImageToolUsage = (
   completed: Json | undefined
 ): void => {
   const detail = parseCodexImageToolUsage(completed)
+
   if (detail !== undefined) usage.publishAdditionalModel(codexImageGenerationToolModel(body), detail)
 }
 
@@ -142,9 +162,11 @@ export const publishCodexImageToolUsage = (
 
 const ensureUsageDetailsAt = (root: JsonObject, path: string): boolean => {
   const usage = get(root, path)
+
   if (!isJsonObject(usage)) return false
   let changed = false
   const outputDetails = get(usage, "output_tokens_details")
+
   if (outputDetails === undefined) {
     set(root, `${path}.output_tokens_details.reasoning_tokens`, 0)
     changed = true
@@ -155,7 +177,9 @@ const ensureUsageDetailsAt = (root: JsonObject, path: string): boolean => {
     outputDetails["reasoning_tokens"] = 0
     changed = true
   }
+
   const inputDetails = get(usage, "input_tokens_details")
+
   if (inputDetails === undefined) {
     set(root, `${path}.input_tokens_details.cached_tokens`, 0)
     changed = true
@@ -166,6 +190,7 @@ const ensureUsageDetailsAt = (root: JsonObject, path: string): boolean => {
     inputDetails["cached_tokens"] = 0
     changed = true
   }
+
   return changed
 }
 
@@ -177,33 +202,44 @@ export const ensureUsageDetailsInEvent = (event: JsonObject): void => {
 
 const ensureDetailsInJson = (text: string): string | undefined => {
   let parsed: Json
+
   try {
     parsed = JSON.parse(text) as Json
   } catch {
     return undefined
   }
+
   if (!isJsonObject(parsed) || asString(parsed["object"]) === "response.compaction") return undefined
   const a = ensureUsageDetailsAt(parsed, "response.usage")
   const b = ensureUsageDetailsAt(parsed, "usage")
+
   return a || b ? JSON.stringify(parsed) : undefined
 }
 
 /** `EnsureResponsesUsageDetails`: Responses usage objects always carry the token detail objects. */
 export const ensureResponsesUsageDetails = (payload: string): string => {
   const trimmed = payload.trim()
+
   if (trimmed === "") return payload
+
   if (trimmed.startsWith("{")) return ensureDetailsInJson(trimmed) ?? payload
+
   if (!payload.includes("data:")) return payload
   let modified = false
+
   const lines = payload.split("\n").map((line) => {
     if (!line.trim().startsWith("data:")) return line
     const prefixLength = line.startsWith("data: ") ? "data: ".length : "data:".length
     const data = line.slice(prefixLength).trim()
+
     if (!data.startsWith("{")) return line
     const updated = ensureDetailsInJson(data)
+
     if (updated === undefined) return line
     modified = true
+
     return line.slice(0, prefixLength) + updated
   })
+
   return modified ? lines.join("\n") : payload
 }

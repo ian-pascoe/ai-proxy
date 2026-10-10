@@ -10,6 +10,7 @@ import type { ApiKeyEntry, ApiKeyGroup, Config } from "../../config/schema.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 
 export const DEFAULT_BASE_URL = "https://api.anthropic.com"
+
 export const FINGERPRINT_PROFILE_CLAUDE_CODE_CLI = "claude-code-cli"
 
 /** `isClaudeOAuthToken`. */
@@ -33,12 +34,14 @@ export const isAnthropicUpstreamBase = (baseURL: string): boolean => {
 
 const metadataString = (credential: CredentialSnapshot, key: string): string => {
   const value = credential.metadata[key]
+
   return typeof value === "string" ? value.trim() : ""
 }
 
 /** `claudeCreds`: attributes first (`api_key`, `base_url`), then the OAuth access token. */
 export const claudeCreds = (credential: CredentialSnapshot): { apiKey: string; baseURL: string } => {
   const apiKey = credential.attributes["api_key"] ?? ""
+
   return {
     apiKey: apiKey !== "" ? apiKey : metadataString(credential, "access_token"),
     baseURL: credential.attributes["base_url"] ?? ""
@@ -48,7 +51,9 @@ export const claudeCreds = (credential: CredentialSnapshot): { apiKey: string; b
 /** `claudeCredentialUsesOAuth`: OAuth token -> Bearer; API-key credentials use `x-api-key` on first-party hosts. */
 export const claudeCredentialUsesOAuth = (credential: CredentialSnapshot, apiKey: string): boolean => {
   if (isClaudeOAuthToken(apiKey)) return true
+
   if (credential.kind === "apikey") return false
+
   return (credential.attributes["api_key"] ?? "").trim() === ""
 }
 
@@ -58,21 +63,28 @@ export const resolveClaudeKeyConfig = (
   credential: CredentialSnapshot
 ): { readonly entry: ApiKeyEntry; readonly group: ApiKeyGroup; readonly baseUrl: string } | undefined => {
   const { apiKey, baseURL } = claudeCreds(credential)
+
   if (apiKey === "") return undefined
+
   for (const group of config["api-keys"].claude) {
     const groupBase = (group["base-url"] ?? "").trim()
+
     for (const entry of group.keys) {
       if (entry["api-key"].trim().toLowerCase() !== apiKey.toLowerCase()) continue
+
       if (baseURL !== "" && groupBase !== "" && groupBase.toLowerCase() !== baseURL.toLowerCase()) continue
+
       return { entry, group, baseUrl: groupBase }
     }
   }
+
   return undefined
 }
 
 /** Attribute first, then credential metadata (Go `lookupCloakAttr`). */
 const lookupAttr = (credential: CredentialSnapshot, key: string): string => {
   const attribute = (credential.attributes[key] ?? "").trim()
+
   return attribute !== "" ? attribute : metadataString(credential, key)
 }
 
@@ -94,8 +106,10 @@ export const resolveFingerprintPolicy = (
 ): FingerprintPolicy => {
   const authIsOAuth = isClaudeOAuthToken(apiKey)
   let profile = lookupAttr(credential, "fingerprint_profile") || lookupAttr(credential, "fingerprint-profile")
+
   if (profile === "") profile = resolveClaudeKeyConfig(config, credential)?.entry["fingerprint-profile"] ?? ""
   const cli = authIsOAuth || profile.trim().toLowerCase() === FINGERPRINT_PROFILE_CLAUDE_CODE_CLI
+
   return {
     authIsOAuthToken: authIsOAuth,
     profileClaudeCodeCLI: cli,
@@ -138,22 +152,32 @@ export const resolveWirePolicy = (
   let strictMode = attrStrict
   let sensitiveWords: ReadonlyArray<string> = attrWords
   let cacheUserID = attrCache
+
   if (attrMode !== "") cloakMode = attrMode
+
   if (cloakCfg !== undefined) {
     const mode = (cloakCfg.mode ?? "").trim()
+
     if (mode !== "") cloakMode = mode
+
     if (cloakCfg["strict-mode"] === true) strictMode = true
+
     if ((cloakCfg["sensitive-words"]?.length ?? 0) > 0) sensitiveWords = cloakCfg["sensitive-words"] ?? []
+
     if (cloakCfg["cache-user-id"] !== undefined) cacheUserID = cloakCfg["cache-user-id"]
   }
+
   const fp = resolveFingerprintPolicy(config, credential, apiKey)
   const cloakConfigured = cloakCfg !== undefined || attrMode !== "" || attrStrict || attrWords.length > 0 || attrCache
   let cloak = (fp.profileClaudeCodeCLI || cloakConfigured) && !confirmedClaudeCode
+
   if (!confirmedClaudeCode) {
     const mode = cloakMode.trim().toLowerCase()
+
     if (mode === "always") cloak = true
     else if (mode === "never") cloak = false
   }
+
   return {
     policy: { oauth: fp.authIsOAuthToken, profileClaudeCodeCLI: fp.profileClaudeCodeCLI, confirmedClaudeCode, cloak },
     settings: { strictMode, sensitiveWords, cacheUserID }

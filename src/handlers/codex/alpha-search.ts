@@ -33,12 +33,14 @@ const sanitizeBody = (text: string, json: Json | undefined): string => {
   if (!isJsonObject(json)) return text
   const payload = { ...json }
   let removed = false
+
   for (const field of ["prompt_cache_key", "prompt_cache_retention"]) {
     if (field in payload) {
       delete payload[field]
       removed = true
     }
   }
+
   return removed ? JSON.stringify(payload) : text
 }
 
@@ -52,14 +54,20 @@ const upstreamHeaders = (
     accept: "application/json",
     originator: "codex_cli_rs"
   }
+
   for (const name of ["version", "user-agent", "session_id", "x-client-request-id"]) {
     const value = (clientHeaders.get(name) ?? "").trim()
+
     if (value !== "") headers[name] = value
   }
+
   const accountId = credential.metadata["account_id"]
+
   if (typeof accountId === "string" && accountId.trim() !== "") headers["chatgpt-account-id"] = accountId
   const { apiKey } = codexCreds(credential)
+
   if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`
+
   return applyCustomHeaders(headers, credential, clientHeaders, sessionId)
 }
 
@@ -67,11 +75,14 @@ const handle = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const identity = yield* AccessPrincipal
   const configResult = yield* Effect.result(currentConfig)
+
   if (configResult._tag === "Failure") return errorJson(configResult.failure.status, configResult.failure.message)
   const config = configResult.success
 
   const read = yield* Effect.result(readRequestBody(request))
+
   if (read._tag === "Failure") return errorJson(read.failure.status, "Failed to read search request")
+
   if (read.success.text.length > MAX_BODY_BYTES) return errorJson(413, "Failed to read search request")
   const routing = read.success.json
   const sessionId = asString(get(routing, "id")).trim()
@@ -80,6 +91,7 @@ const handle = Effect.gen(function* () {
 
   const base = yield* CredentialPicker
   const picker = withCredentialPolicy(base, allowsCodexAlphaSearch, "Codex auth unavailable")
+
   const picked = yield* Effect.result(
     picker.pick({
       providers: ["codex"],
@@ -88,15 +100,18 @@ const handle = Effect.gen(function* () {
       ...(sessionId !== "" ? { session: { id: sessionId } } : {})
     })
   )
+
   if (picked._tag === "Failure") {
     const failure = picked.failure
     const retryAfter = failure.safeHeaders?.["retry-after"] ?? failure.safeHeaders?.["Retry-After"]
+
     return errorJson(
       failure.status > 0 ? failure.status : 503,
       failure.message,
       retryAfter !== undefined ? { "retry-after": retryAfter } : {}
     )
   }
+
   const { credential, lease, route } = picked.success
   const reportContext = { provider: "codex" }
   const fail = (error: ExecutionError) => picker.report(lease, failureReport(error, reportContext))
@@ -116,6 +131,7 @@ const handle = Effect.gen(function* () {
     serviceTier: "auto",
     requestedAt: yield* Clock.currentTimeMillis
   })
+
   const client = yield* HttpClient.HttpClient
   const clientHeaders = new Headers(request.headers as Record<string, string>)
 
@@ -126,8 +142,10 @@ const handle = Effect.gen(function* () {
       const target = current.credential
       let url = `${CODEX_DEFAULT_BASE_URL}/alpha/search`
       let body = upstreamBody
+
       if (target.kind === "apikey") {
         const baseUrl = (target.attributes["base_url"] ?? "").trim()
+
         if (baseUrl === "") {
           return yield* new ExecutionError({
             status: 503,
@@ -136,27 +154,33 @@ const handle = Effect.gen(function* () {
             requestScoped: true
           })
         }
+
         url = `${baseUrl.replace(/\/+$/, "")}/alpha/search`
         // API-key search reuses the credential-aware model resolution of the pick (prefixes, `oauth.model-alias`,
         // API-key aliases) so routing names are not forwarded (`ResolveExecutionModel` + rewriteCodexAlphaSearchModel).
         const upstreamModel = (route.upstreamModels[0] ?? "").trim()
         const parsed = tryParseJson(upstreamBody)
+
         if (upstreamModel !== "" && isJsonObject(parsed) && "model" in parsed && parsed.model !== upstreamModel) {
           body = JSON.stringify({ ...parsed, model: upstreamModel })
         }
       }
+
       const httpRequest = HttpClientRequest.post(url).pipe(
         HttpClientRequest.bodyText(body, "application/json"),
         HttpClientRequest.setHeaders(upstreamHeaders(target, clientHeaders, sessionId))
       )
+
       const response = yield* client.execute(httpRequest).pipe(
         Effect.provideService(HttpClient.TracerPropagationEnabled, false),
         Effect.mapError(
           () => new ExecutionError({ status: 502, code: "transient_transport", message: "upstream request failed" })
         )
       )
+
       const bytes = yield* response.arrayBuffer.pipe(Effect.orElseSucceed(() => new ArrayBuffer(0)))
       const contentType = response.headers["content-type"]
+
       if (response.status === 401) {
         return yield* new ExecutionError({
           status: 401,
@@ -164,22 +188,28 @@ const handle = Effect.gen(function* () {
           ...(contentType !== undefined ? { headers: { "content-type": contentType } } : {})
         })
       }
+
       return { status: response.status, bytes, contentType }
     })
 
   const outcome = yield* Effect.result(withCredentialRefresh({ credential, config, usage }, attempt))
+
   if (outcome._tag === "Failure") {
     const error = outcome.failure
     yield* fail(error)
+
     if (error.status === 401) {
       const contentType = error.headers?.["content-type"]
+
       return HttpServerResponse.text(error.message, {
         status: 401,
         ...(contentType !== undefined ? { contentType } : {})
       })
     }
+
     return errorJson(error.status, error.message)
   }
+
   const result = outcome.success
   yield* picker.report(
     lease,
@@ -190,6 +220,7 @@ const handle = Effect.gen(function* () {
           reportContext
         )
   )
+
   return HttpServerResponse.uint8Array(new Uint8Array(result.bytes), {
     status: result.status,
     ...(result.contentType !== undefined ? { contentType: result.contentType } : {})

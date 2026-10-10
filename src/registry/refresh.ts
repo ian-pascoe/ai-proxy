@@ -51,17 +51,23 @@ type Source =
 /** `models.<catalog>` config value: empty = official URLs, `embed`/`disabled` as in Go, otherwise one http(s) URL. */
 export const resolveSource = (configured: string, name: CatalogName): Source => {
   const value = configured.trim()
+
   if (value === "") return { mode: "fetch", urls: DEFAULT_CATALOG_URLS[name] }
+
   if (value === "embed") return { mode: "embed" }
+
   if (value === "disabled") return { mode: "disabled" }
+
   try {
     const url = new URL(value)
+
     if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "") {
       return { mode: "fetch", urls: [value] }
     }
   } catch {
     // Falls through to the rejection below.
   }
+
   return { mode: "disabled", reason: "must be an http(s) URL" }
 }
 
@@ -93,27 +99,36 @@ const fetchValid = (
         Effect.flatMap((response) => response.text),
         Effect.option
       )
+
       if (text._tag === "None") continue
+
       if (new TextEncoder().encode(text.value).length > MAX_CATALOG_BYTES) continue
+
       if (validateCatalogText(name, text.value) === undefined) return { url, text: text.value }
     }
+
     return undefined
   })
 
 /** `publishCatalogBytes`: a catalog without `meta` keeps the previous one. Returns the text to store. */
 const carryOverMeta = (text: string, previousText: string | undefined): string => {
   const next = JSON.parse(text) as Record<string, unknown>
+
   if (Array.isArray(next.meta) && next.meta.length > 0) return text
+
   const previous = (previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText)) as {
     readonly meta?: unknown
   }
+
   if (!Array.isArray(previous.meta) || previous.meta.length === 0) return text
+
   return JSON.stringify({ ...next, meta: previous.meta })
 }
 
 const changedProvidersOf = (previousText: string | undefined, nextText: string): ReadonlyArray<string> => {
   const previous = parseModelsCatalog(previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText))
   const next = parseModelsCatalog(JSON.parse(nextText))
+
   return previous.ok && next.ok ? detectChangedProviders(previous.value, next.value) : []
 }
 
@@ -138,11 +153,13 @@ export const refreshCatalogs: Effect.Effect<
       )
     )
   )
+
   const current: CatalogTexts = yield* store.stored.pipe(Effect.catch(() => Effect.succeed({} as CatalogTexts)))
 
   const refreshOne = (name: CatalogName): Effect.Effect<RefreshOutcome> =>
     Effect.gen(function* () {
       const source = resolveSource(configured[catalogConfigKey[name]], name)
+
       if (source.mode === "disabled") {
         return makeOutcome({
           catalog: name,
@@ -150,23 +167,32 @@ export const refreshCatalogs: Effect.Effect<
           ...(source.reason === undefined ? {} : { message: `models.${catalogConfigKey[name]} ${source.reason}` })
         })
       }
+
       const key = CATALOG_KEYS[name]
+
       if (source.mode === "embed") {
         if (current[name] === undefined || current[name] === null)
           return makeOutcome({ catalog: name, status: "unchanged" })
         yield* Effect.tryPromise(() => env.CACHE.delete(key))
+
         return makeOutcome({ catalog: name, status: "updated", message: "reverted to the embedded catalog" })
       }
+
       const fetched = yield* fetchValid(client, name, source.urls)
+
       if (fetched === undefined) {
         yield* Effect.logWarning(`model catalog refresh failed for ${name}; keeping last valid catalog`)
+
         return makeOutcome({ catalog: name, status: "failed", message: "no valid catalog source" })
       }
+
       const previous = current[name] ?? undefined
       const text = name === "models" ? carryOverMeta(fetched.text, previous) : fetched.text
+
       if (text === previous) return makeOutcome({ catalog: name, status: "unchanged", source: fetched.url })
       yield* Effect.tryPromise(() => env.CACHE.put(key, text))
       const changedProviders = name === "models" ? changedProvidersOf(previous, text) : undefined
+
       return makeOutcome({
         catalog: name,
         status: "updated",
@@ -180,6 +206,7 @@ export const refreshCatalogs: Effect.Effect<
     )
 
   const outcomes: RefreshOutcome[] = []
+
   for (const name of ["models", "codexClient", "devin"] as const) outcomes.push(yield* refreshOne(name))
 
   const now = yield* Clock.currentTimeMillis
@@ -187,6 +214,7 @@ export const refreshCatalogs: Effect.Effect<
     Effect.ignore
   )
   yield* store.invalidate
+
   for (const outcome of outcomes) {
     yield* Effect.logInfo(
       `model catalog ${outcome.catalog}: ${outcome.status}` +
@@ -195,5 +223,6 @@ export const refreshCatalogs: Effect.Effect<
           : ` (changed providers: ${outcome.changedProviders.join(", ")})`)
     )
   }
+
   return outcomes
 })

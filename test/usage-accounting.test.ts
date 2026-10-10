@@ -78,6 +78,7 @@ describe("token breakdown constructors (accounting_test.go)", () => {
     const separate = separateReasoningTokenBreakdown(MAX, MAX, MAX, 0, 0, MAX)
     expect(separate.quality).not.toBe("complete")
     expect(separate.input.uncachedTokens).toBeGreaterThanOrEqual(0)
+
     const overflowing = {
       schemaVersion: 2,
       quality: "complete" as const,
@@ -86,6 +87,7 @@ describe("token breakdown constructors (accounting_test.go)", () => {
       output: { totalTokens: 0, nonReasoningTokens: 0, reasoningTokens: 0 },
       unclassifiedTokens: 0
     }
+
     expect(isValidTokenBreakdown(overflowing)).toBe(false)
   })
 })
@@ -98,6 +100,7 @@ describe("ensureTokenBreakdown per provider semantics", () => {
     cacheReadTokens: 40,
     cacheCreationTokens: 10
   })
+
   it.each([
     {
       name: "OpenAI subsets cache and reasoning",
@@ -166,6 +169,7 @@ describe("ensureTokenBreakdown per provider semantics", () => {
       detail({ inputTokens: 100, outputTokens: 30, reasoningTokens: 12 }),
       "plugin-provider"
     )
+
     expect(result.totalTokens).toBe(130)
     expect(result.tokenBreakdown).toMatchObject({ quality: "unclassified", unclassifiedTokens: 130 })
   })
@@ -211,6 +215,7 @@ describe("OpenAI-style parsers", () => {
     const parsed = parseOpenAIUsage(
       '{"usage":{"prompt_tokens":10,"completion_tokens":6,"total_tokens":16,"prompt_tokens_details":{"cached_tokens":4},"completion_tokens_details":{"reasoning_tokens":5}}}'
     )
+
     expect(parsed).toMatchObject({
       inputTokens: 10,
       outputTokens: 6,
@@ -230,6 +235,7 @@ describe("OpenAI-style parsers", () => {
     const parsed = parseOpenAIUsage(
       '{"service_tier":"default","usage":{"input_tokens":10,"output_tokens":20,"total_tokens":30,"input_tokens_details":{"cached_tokens":7},"output_tokens_details":{"reasoning_tokens":9}}}'
     )
+
     expect(parsed).toMatchObject({
       cachedTokens: 7,
       cacheReadTokens: 7,
@@ -271,6 +277,7 @@ describe("OpenAI-style parsers", () => {
         }
       }
     })
+
     expect(parsed).toMatchObject({
       cacheReadTokens: 30,
       cacheCreationTokens: 40,
@@ -294,9 +301,11 @@ describe("OpenAI-style parsers", () => {
     expect(
       parseOpenAIStreamUsage('data: {"choices":[{"index":0,"delta":{"content":"hi"}}],"usage":null}')
     ).toBeUndefined()
+
     const parsed = parseOpenAIStreamUsage(
       'data: {"service_tier":"flex","choices":[],"usage":{"input_tokens":8,"output_tokens":5,"total_tokens":13,"input_tokens_details":{"cached_tokens":3},"output_tokens_details":{"reasoning_tokens":2}}}'
     )
+
     expect(parsed).toMatchObject({
       inputTokens: 8,
       outputTokens: 5,
@@ -313,6 +322,7 @@ describe("Claude parsers", () => {
     const parsed = parseClaudeUsage(
       '{"usage":{"input_tokens":3085,"output_tokens":253,"cache_read_input_tokens":7,"cache_creation_input_tokens":19514}}'
     )
+
     expect(parsed).toMatchObject({
       cacheReadTokens: 7,
       cacheCreationTokens: 19514,
@@ -326,12 +336,14 @@ describe("Claude parsers", () => {
     const parsed = parseClaudeUsage(
       '{"usage":{"input_tokens":3085,"output_tokens":253,"cache_creation_input_tokens":19514}}'
     )
+
     expect(parsed).toMatchObject({ cachedTokens: 19514, totalTokens: 22852 })
   })
 
   it("thinking tokens are a subset of the output", () => {
     const body =
       '"usage":{"input_tokens":2,"cache_creation_input_tokens":831,"cache_read_input_tokens":44225,"output_tokens":244,"output_tokens_details":{"thinking_tokens":40}}'
+
     const parsed = parseClaudeUsage(`{${body}}`)
     expect(parsed).toMatchObject({ outputTokens: 244, reasoningTokens: 40, totalTokens: 45302 })
     expect(parsed.tokenBreakdown).toMatchObject({
@@ -346,6 +358,7 @@ describe("Claude parsers", () => {
     const parsed = parseClaudeStreamUsage(
       'data: {"type":"message_start","message":{"id":"msg_123","model":"claude-opus-5","usage":{"input_tokens":2095,"cache_creation_input_tokens":7185,"cache_read_input_tokens":355598,"output_tokens":1}}}'
     )
+
     expect(parsed).toMatchObject({
       inputTokens: 2095,
       cacheReadTokens: 355598,
@@ -364,9 +377,11 @@ describe("Claude parsers", () => {
     const start = parseClaudeStreamUsage(
       'data: {"type":"message_start","message":{"usage":{"input_tokens":100,"cache_read_input_tokens":20,"cache_creation_input_tokens":5,"output_tokens":1}}}'
     ) as UsageDetail
+
     const delta = parseClaudeStreamUsage(
       'data: {"type":"message_delta","usage":{"output_tokens":50,"output_tokens_details":{"thinking_tokens":10}}}'
     ) as UsageDetail
+
     const merged = mergeStreamUsageDetail(start, delta)
     expect(merged).toMatchObject({
       inputTokens: 100,
@@ -391,6 +406,7 @@ describe("Gemini family parsers", () => {
     const parsed = parseGeminiUsage(
       '{"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"cachedContentTokenCount":4,"totalTokenCount":12}}'
     )
+
     expect(parsed).toMatchObject({ cachedTokens: 4, cacheReadTokens: 4 })
     expect(parsed.tokenBreakdown).toMatchObject({ input: { uncachedTokens: 6 }, totalTokens: 12 })
   })
@@ -399,6 +415,7 @@ describe("Gemini family parsers", () => {
     const parsed = parseGeminiUsage(
       '{"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"thoughtsTokenCount":3,"toolUsePromptTokenCount":5,"totalTokenCount":20}}'
     )
+
     expect(parsed).toMatchObject({ inputTokens: 15, totalTokens: 20 })
     expect(parsed.tokenBreakdown).toMatchObject({
       quality: "complete",
@@ -412,6 +429,7 @@ describe("Gemini family parsers", () => {
       'data: {"usageMetadata":{"promptTokenCount":0,"candidatesTokenCount":0,"thoughtsTokenCount":0,"totalTokenCount":0}}',
       'data: {"usageMetadata":{"promptTokenCount":17984,"candidatesTokenCount":2668,"thoughtsTokenCount":1028,"totalTokenCount":21680}}'
     ]
+
     const accepted = lines.flatMap((line) => parseGeminiStreamUsage(line) ?? [])
     expect(accepted).toHaveLength(1)
     expect(accepted[0]).toMatchObject({
@@ -453,6 +471,7 @@ describe("Interactions parsers", () => {
     const parsed = parseInteractionsUsage(
       '{"usage":{"input_tokens":3,"output_tokens":4,"reasoning_tokens":5,"cached_tokens":2}}'
     )
+
     expect(parsed).toMatchObject({
       inputTokens: 3,
       outputTokens: 4,
@@ -466,9 +485,11 @@ describe("Interactions parsers", () => {
 
   it("normalises the cache write alias and includes tool-use tokens", () => {
     expect(parseInteractionsUsage('{"usage":{"input_tokens":3,"cache_write_tokens":2}}').cacheCreationTokens).toBe(2)
+
     const parsed = parseInteractionsUsage(
       '{"usage":{"total_input_tokens":2,"total_output_tokens":6,"total_thought_tokens":3,"total_tool_use_tokens":4,"total_tokens":15}}'
     )
+
     expect(parsed).toMatchObject({ inputTokens: 6, outputTokens: 6, reasoningTokens: 3, totalTokens: 15 })
     expect(parsed.tokenBreakdown).toMatchObject({
       quality: "complete",
@@ -481,10 +502,13 @@ describe("Interactions parsers", () => {
     const completed = parseInteractionsStreamUsage(
       '{"type":"interaction.completed","interaction":{"usage":{"input_tokens":2,"output_tokens":6,"total_tokens":8}}}'
     )
+
     expect(completed?.totalTokens).toBe(8)
+
     const finish = parseInteractionsStreamUsage(
       'data: {"event_type":"finish","metadata":{"total_usage":{"total_input_tokens":2,"total_output_tokens":6,"total_thought_tokens":3,"total_cached_tokens":1,"total_tokens":11}}}'
     )
+
     expect(finish).toMatchObject({
       inputTokens: 2,
       outputTokens: 6,
@@ -499,6 +523,7 @@ describe("Interactions parsers", () => {
     const parsed = parseInteractionsUsage(
       '{"service_tier":"priority","usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":1,"totalTokenCount":6}}'
     )
+
     expect(parsed).toMatchObject({ inputTokens: 5, totalTokens: 6, responseServiceTier: "priority" })
   })
 })

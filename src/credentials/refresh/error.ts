@@ -37,6 +37,7 @@ export const refreshError = (init: RefreshErrorInit): RefreshError =>
 export const isUnauthorized = (error: { readonly message: string; readonly status?: number | undefined }): boolean => {
   if (error.status === 401) return true
   const raw = error.message.toLowerCase()
+
   return raw.includes("status 401") || raw.includes("401 unauthorized")
 }
 
@@ -44,5 +45,6 @@ export const isUnauthorized = (error: { readonly message: string; readonly statu
 export const isInvalidGrant = (error: { readonly message: string; readonly status?: number | undefined }): boolean => {
   if (!error.message.toLowerCase().includes("invalid_grant")) return false
   const status = error.status ?? 0
+
   return status === 0 || status === 400 || status === 401
 }

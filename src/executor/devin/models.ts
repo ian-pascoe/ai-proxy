@@ -51,12 +51,14 @@ const SPECIAL_ALIASES: Readonly<Record<string, string>> = {
 
 export const hasDevinEffortSuffix = (model: string): boolean => {
   const lower = model.trim().toLowerCase()
+
   return KNOWN_SUFFIXES.some((suffix) => lower.endsWith(suffix))
 }
 
 /** `NormalizeThinkingLevel`: loose effort strings or a token budget to a canonical effort. */
 export const normalizeDevinThinkingLevel = (level: string, budgetTokens: number): string => {
   const normalized = level.trim().toLowerCase()
+
   switch (normalized) {
     case "minimal":
     case "low":
@@ -74,12 +76,17 @@ export const normalizeDevinThinkingLevel = (level: string, budgetTokens: number)
     case "adaptive":
       return "high"
   }
+
   if (budgetTokens > 0) {
     if (budgetTokens <= 4096) return "low"
+
     if (budgetTokens <= 16384) return "medium"
+
     if (budgetTokens <= 32768) return "high"
+
     return "max"
   }
+
   return ""
 }
 
@@ -92,17 +99,23 @@ const clampEffort = (requested: string, allowed: ReadonlyArray<string>, defaultE
   if (requested === "") return defaultEffort
   const wanted = requested.trim().toLowerCase()
   const exact = allowed.find((candidate) => candidate.trim().toLowerCase() === wanted)
+
   if (exact !== undefined) return exact
+
   if (wanted === "none") return defaultEffort
   const wantedIndex = levelIndex(wanted)
+
   if (wantedIndex === -1) return defaultEffort
   let best = defaultEffort
   let bestDistance = 999
   let bestIndex = -1
+
   for (const candidate of allowed) {
     const index = levelIndex(candidate)
+
     if (index === -1) continue
     const distance = Math.abs(wantedIndex - index)
+
     if (distance < bestDistance) {
       bestDistance = distance
       best = candidate
@@ -112,22 +125,29 @@ const clampEffort = (requested: string, allowed: ReadonlyArray<string>, defaultE
       bestIndex = index
     }
   }
+
   return best
 }
 
 const defaultEffortFor = (baseModel: string, levels: ReadonlyArray<string>): string => {
   if (baseModel.includes("swe-2")) return "high"
   const has = (level: string): boolean => levels.includes(level)
+
   if (has("none") && has("low") && baseModel.startsWith("gpt-5")) return "low"
+
   if (
     has("high") &&
     ["gemini", "grok", "glm", "deepseek", "kimi", "nemotron"].some((family) => baseModel.includes(family))
   ) {
     return "high"
   }
+
   if (has("medium")) return "medium"
+
   if (has("high")) return "high"
+
   if (has("low")) return "low"
+
   return levels[0] ?? ""
 }
 
@@ -142,31 +162,40 @@ export const resolveDevinChatModelUid = (
   levelsOf: DevinLevelLookup
 ): string => {
   const model = rawModel.trim()
+
   if (model === "") return "swe-2-high"
   let clean = model
+
   if (clean.toLowerCase().startsWith("devin/")) clean = clean.slice(6)
+
   if (hasDevinEffortSuffix(clean)) return clean
 
   let thinkingLevel = thinkingLevelIn
   const parsed = parseSuffix(clean)
   let baseModel = parsed.modelName.trim()
+
   if (parsed.hasSuffix) {
     thinkingLevel = parsed.rawSuffix
   } else {
     const colon = clean.lastIndexOf(":")
+
     if (colon !== -1) {
       baseModel = clean.slice(0, colon).trim()
       thinkingLevel = clean.slice(colon + 1).trim()
     }
   }
+
   const effort = normalizeDevinThinkingLevel(thinkingLevel, budgetTokens)
   const lowerBase = baseModel.toLowerCase()
   let canonicalBase = lowerBase.replaceAll(".", "-")
 
   const alias = SPECIAL_ALIASES[canonicalBase]
+
   if (alias !== undefined) return alias
+
   if (canonicalBase.includes("sonnet-4-5"))
     return effort !== "" && effort !== "none" ? "MODEL_PRIVATE_3" : "MODEL_PRIVATE_2"
+
   if (canonicalBase === "gemini-3-flash") canonicalBase = "gemini-3-8-flash"
 
   switch (canonicalBase.replaceAll("-", "_")) {
@@ -179,6 +208,7 @@ export const resolveDevinChatModelUid = (
   }
 
   const thinks = effort !== "" && effort !== "none"
+
   switch (canonicalBase) {
     case "swe-1-7":
       return effort === "medium" ? "swe-1-7-medium" : "swe-1-7"
@@ -198,6 +228,8 @@ export const resolveDevinChatModelUid = (
   }
 
   const allowed = levelsOf(canonicalBase) ?? (canonicalBase !== lowerBase ? levelsOf(lowerBase) : undefined) ?? []
+
   if (allowed.length === 0) return canonicalBase
+
   return `${canonicalBase}-${clampEffort(effort, allowed, defaultEffortFor(canonicalBase, allowed))}`
 }

@@ -23,10 +23,15 @@ import { parseSuffix } from "../suffix.ts"
 import type { OutputItemCollector } from "./output.ts"
 
 export const CODEX_IMAGE_SOURCE_FORMAT = "openai-image"
+
 export const CODEX_DEFAULT_IMAGE_TOOL_MODEL = "gpt-image-2"
+
 export const CODEX_IMAGES_MAIN_MODEL = "gpt-5.4-mini"
+
 const GENERATIONS_PATH = "/v1/images/generations"
+
 const EDITS_PATH = "/v1/images/edits"
+
 const DIRECT_MODELS = new Set([
   "gpt-image-1.5",
   CODEX_DEFAULT_IMAGE_TOOL_MODEL,
@@ -38,6 +43,7 @@ const DIRECT_MODELS = new Set([
 /** `codexIsImagesEndpointPath`. */
 export const isImagesEndpointPath = (rawPath: string): boolean => {
   const path = rawPath.trim()
+
   return path.endsWith(GENERATIONS_PATH) || path.endsWith(EDITS_PATH)
 }
 
@@ -49,7 +55,9 @@ export const isCodexImageRequest = (sourceFormat: string, requestPath: string): 
 const imageBaseModel = (model: string): string => {
   let name = parseSuffix(model).modelName.trim()
   const slash = name.lastIndexOf("/")
+
   if (slash >= 0 && slash < name.length - 1) name = name.slice(slash + 1).trim()
+
   return name.toLowerCase()
 }
 
@@ -57,8 +65,10 @@ const imageBaseModel = (model: string): string => {
 export const directImageModel = (payload: Json, routeModel: string): string => {
   for (const model of [asString(get(payload, "model")), routeModel]) {
     const base = imageBaseModel(model)
+
     if (DIRECT_MODELS.has(base)) return base
   }
+
   return ""
 }
 
@@ -66,18 +76,25 @@ export const directImageModel = (payload: Json, routeModel: string): string => {
 export const directImageEndpoint = (payload: Json, routeModel: string, requestPath: string): string => {
   if (directImageModel(payload, routeModel) === "") return ""
   const path = requestPath.trim()
+
   if (path.endsWith(GENERATIONS_PATH)) return "/images/generations"
+
   if (path.endsWith(EDITS_PATH)) return "/images/edits"
+
   return ""
 }
 
 /** `prepareOpenAICompatImagesPayload` for JSON bodies: set `model`; `stream: true` or removed. */
 export const prepareDirectImageBody = (payload: Json, model: string, stream: boolean): Json => {
   const body = cloneJson(payload)
+
   if (!isJsonObject(body)) return body
+
   if (model.trim() !== "") body["model"] = model.trim()
+
   if (stream) body["stream"] = true
   else delete body["stream"]
+
   return body
 }
 
@@ -96,6 +113,7 @@ const normalizeResponseFormat = (value: string): "url" | "b64_json" =>
 
 const toolModel = (requestModel: string, routeModel: string): string => {
   const model = requestModel.trim() !== "" ? requestModel.trim() : routeModel.trim()
+
   return model !== "" ? model : CODEX_DEFAULT_IMAGE_TOOL_MODEL
 }
 
@@ -111,21 +129,28 @@ const buildTool = (
     action,
     model: toolModel(asString(get(payload, "model")), routeModel)
   }
+
   for (const field of stringFields) {
     const value = asString(get(payload, field)).trim()
+
     if (value !== "") tool[field] = value
   }
+
   for (const field of numberFields) {
     const value = get(payload, field)
+
     if (typeof value === "number") tool[field] = Math.trunc(value)
   }
+
   return tool
 }
 
 /** `codexBuildImagesResponsesRequest`. */
 const buildImagesResponsesRequest = (prompt: string, images: readonly string[], tool: Json): Json => {
   const content: Json[] = [{ type: "input_text", text: prompt }]
+
   for (const image of images) if (image.trim() !== "") content.push({ type: "input_image", image_url: image })
+
   return {
     instructions: "",
     stream: true,
@@ -147,6 +172,7 @@ export const prepareImageRequest = (
   requestPath: string
 ): PreparedImageRequest | string => {
   const path = requestPath.trim()
+
   if (path.endsWith(GENERATIONS_PATH)) {
     const tool = buildTool(
       payload,
@@ -155,21 +181,26 @@ export const prepareImageRequest = (
       ["size", "quality", "background", "output_format", "moderation"],
       ["output_compression", "partial_images"]
     )
+
     return {
       body: buildImagesResponsesRequest(asString(get(payload, "prompt")).trim(), [], tool),
       responseFormat: normalizeResponseFormat(asString(get(payload, "response_format"))),
       streamPrefix: "image_generation"
     }
   }
+
   if (!path.endsWith(EDITS_PATH)) return `unsupported OpenAI image endpoint path "${requestPath}"`
   const images: string[] = []
   const list = get(payload, "images")
+
   if (isJsonArray(list)) {
     for (const image of list) {
       const url = asString(get(image, "image_url")).trim()
+
       if (url !== "") images.push(url)
     }
   }
+
   const tool = buildTool(
     payload,
     routeModel,
@@ -177,8 +208,11 @@ export const prepareImageRequest = (
     ["size", "quality", "background", "output_format", "input_fidelity", "moderation"],
     ["output_compression", "partial_images"]
   )
+
   const mask = asString(get(payload, "mask.image_url")).trim()
+
   if (mask !== "") set(tool, "input_image_mask.image_url", mask)
+
   return {
     body: buildImagesResponsesRequest(asString(get(payload, "prompt")).trim(), images, tool),
     responseFormat: normalizeResponseFormat(asString(get(payload, "response_format"))),
@@ -190,11 +224,15 @@ export const prepareImageRequest = (
 export const finishImageResponsesBody = (body: Json, mainModel: string): Json => {
   set(body, "model", mainModel)
   set(body, "stream", true)
+
   for (const field of ["previous_response_id", "prompt_cache_retention", "safety_identifier", "stream_options"]) {
     del(body, field)
   }
+
   const instructions = get(body, "instructions")
+
   if (instructions === undefined || instructions === null) set(body, "instructions", "")
+
   return body
 }
 
@@ -216,8 +254,10 @@ export interface ExtractedImages {
 const imageResultOf = (item: Json): ImageCallResult | undefined => {
   if (asString(get(item, "type")) !== "image_generation_call") return undefined
   const result = asString(get(item, "result")).trim()
+
   if (result === "") return undefined
   const field = (name: string) => asString(get(item, name)).trim()
+
   return {
     result,
     revisedPrompt: field("revised_prompt"),
@@ -235,21 +275,28 @@ export const extractImageResults = (
   nowSeconds: number
 ): ExtractedImages => {
   let createdAt = asInt(get(completed, "response.created_at"))
+
   if (createdAt <= 0) createdAt = nowSeconds
   const results: ImageCallResult[] = []
   const output = get(completed, "response.output")
+
   const append = (item: Json) => {
     const result = imageResultOf(item)
+
     if (result !== undefined) results.push(result)
   }
+
   if (isJsonArray(output) && output.length > 0) {
     for (const item of output) append(item)
   } else {
     for (const index of [...collector.byIndex.keys()].toSorted((a, b) => a - b))
       append(collector.byIndex.get(index) as Json)
+
     for (const item of collector.fallback) append(item)
   }
+
   const usage = get(completed, "response.tool_usage.image_gen")
+
   return { results, createdAt, usage: isJsonObject(usage) ? usage : undefined }
 }
 
@@ -270,21 +317,30 @@ const mimeTypeFromOutputFormat = (outputFormat: string): string => {
 export const buildImagesApiResponse = (extracted: ExtractedImages, responseFormat: "url" | "b64_json"): string => {
   const first = extracted.results[0]
   const out: JsonObject = { created: extracted.createdAt }
+
   if (first !== undefined) {
     if (first.background !== "") out["background"] = first.background
+
     if (first.outputFormat !== "") out["output_format"] = first.outputFormat
+
     if (first.quality !== "") out["quality"] = first.quality
+
     if (first.size !== "") out["size"] = first.size
   }
+
   if (extracted.usage !== undefined) out["usage"] = extracted.usage
   out["data"] = extracted.results.map((image) => {
     const item: JsonObject = {}
+
     if (image.revisedPrompt !== "") item["revised_prompt"] = image.revisedPrompt
+
     if (responseFormat === "url")
       item["url"] = `data:${mimeTypeFromOutputFormat(image.outputFormat)};base64,${image.result}`
     else item["b64_json"] = image.result
+
     return item
   })
+
   return JSON.stringify(out)
 }
 
@@ -297,14 +353,17 @@ export const imagePartialFrame = (
   streamPrefix: string
 ): string | undefined => {
   const b64 = asString(get(payload, "partial_image_b64")).trim()
+
   if (b64 === "") return undefined
   const eventName = `${streamPrefix.trim()}.partial_image`
   const data: JsonObject = { type: eventName, partial_image_index: asInt(get(payload, "partial_image_index")) }
+
   if (responseFormat === "url") {
     data["url"] = `data:${mimeTypeFromOutputFormat(asString(get(payload, "output_format")))};base64,${b64}`
   } else {
     data["b64_json"] = b64
   }
+
   return frame(eventName, data)
 }
 
@@ -317,9 +376,12 @@ export const imageCompletedFrame = (
 ): string => {
   const eventName = `${streamPrefix.trim()}.completed`
   const data: JsonObject = { type: eventName }
+
   if (usage !== undefined) data["usage"] = usage
+
   if (responseFormat === "url")
     data["url"] = `data:${mimeTypeFromOutputFormat(image.outputFormat)};base64,${image.result}`
   else data["b64_json"] = image.result
+
   return frame(eventName, data)
 }

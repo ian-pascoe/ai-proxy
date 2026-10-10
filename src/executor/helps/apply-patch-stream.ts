@@ -16,6 +16,7 @@ export { APPLY_PATCH_UPSTREAM_ERROR_MESSAGE }
 /** `ApplyPatchRequested`: the original request declares a winning custom `apply_patch` tool. */
 export const applyPatchRequested = (original: Json | undefined): boolean => {
   for (const identity of responsesToolReverseIdentityMap(original).values()) if (identity.applyPatch) return true
+
   return false
 }
 
@@ -35,5 +36,6 @@ export const endApplyPatchStream = (
   state: TranslationState
 ): { readonly chunks: ReadonlyArray<string>; readonly failed: boolean } => {
   const chunks = state.finalizeToolInput?.() ?? []
+
   return { chunks, failed: state.toolInputError !== undefined }
 }

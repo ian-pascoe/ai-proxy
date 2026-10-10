@@ -26,36 +26,48 @@ export const shellCallItem = (
   status: string
 ): { readonly item: JsonObject } | { readonly error: string } => {
   let action: Json
+
   try {
     action = JSON.parse(argumentsText) as Json
   } catch {
     return { error: INVALID_SHELL_ACTION_MESSAGE }
   }
+
   if (!isJsonObject(action)) return { error: INVALID_SHELL_ACTION_MESSAGE }
   const commands = get(action, "commands")
+
   if (!isArr(commands) || commands.length === 0) return { error: INVALID_SHELL_ACTION_MESSAGE }
+
   for (const command of commands) {
     if (typeof command !== "string" || command.trim() === "") return { error: INVALID_SHELL_ACTION_MESSAGE }
   }
+
   for (const [key, value] of Object.entries(action)) {
     if (key === "commands") continue
+
     if (key === "timeout_ms" || key === "max_output_length") {
       if (value !== null && (typeof value !== "number" || asFloat(value) <= 0 || Math.trunc(value) !== value)) {
         return { error: INVALID_SHELL_ACTION_MESSAGE }
       }
+
       continue
     }
+
     return { error: INVALID_SHELL_ACTION_MESSAGE }
   }
+
   const item = shellCallPlaceholder(callId)
   item.status = status
   item.action = action
+
   return { item }
 }
 
 /** `responsesToolInputFailure`. */
 export const responsesToolInputFailure = (responseId: string, sequence: number, error: string): Json => {
   const failure = applyPatchFailure(responseId, sequence)
+
   if (error === INVALID_SHELL_ACTION_MESSAGE) set(failure, "response.error.message", INVALID_SHELL_ACTION_MESSAGE)
+
   return failure
 }

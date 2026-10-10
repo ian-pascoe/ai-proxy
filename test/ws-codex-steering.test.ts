@@ -16,6 +16,7 @@ const created = (id: string, extra: Record<string, unknown> = {}) => ({
   type: "response.created",
   response: { id, model: "gpt-5.4", status: "in_progress", ...extra }
 })
+
 const done = (id: string, tokens = 5) => ({
   type: "response.completed",
   response: {
@@ -26,6 +27,7 @@ const done = (id: string, tokens = 5) => ({
     usage: { input_tokens: tokens, output_tokens: 1, total_tokens: tokens + 1 }
   }
 })
+
 const create = (text = "hi", extra: Record<string, unknown> = {}) => ({
   type: "response.create",
   model: "gpt-5.4",
@@ -34,8 +36,11 @@ const create = (text = "hi", extra: Record<string, unknown> = {}) => ({
 })
 
 const STEERING = "upstream:\n  codex:\n    response-steering: true\n"
+
 let steering: Config
+
 let plain: Config
+
 beforeAll(async () => {
   steering = await loadConfig(STEERING)
   plain = await loadConfig("requests: {}")
@@ -51,6 +56,7 @@ const setup = (
 ) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const mock = mockUpstream(upstream)
+
   const p = makePipeline({
     config: configOverride,
     respond: () => sseResponse([]),
@@ -58,8 +64,10 @@ const setup = (
     modelProviders: codexModels,
     websocketConnector: mock.layer
   })
+
   afterAll(p.dispose)
   const connect = async () => connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }))
+
   return { ...p, log, mock, connect }
 }
 
@@ -96,6 +104,7 @@ describe("response steering (full duplex)", () => {
         expect(frame["type"]).toBe("response.create")
       })
     })
+
     const client = await s.connect()
     client.send(create("one"))
     expect((await client.nextJson())["type"]).toBe("response.created")
@@ -131,6 +140,7 @@ describe("response steering (full duplex)", () => {
         }
       })
     })
+
     const client = await s.connect()
     client.send(create("work"))
     expect((await client.nextJson())["type"]).toBe("response.created")
@@ -185,6 +195,7 @@ describe("response steering (full duplex)", () => {
         }
       })
     })
+
     const client = await s.connect()
     client.send(create("go"))
     await client.until("response.completed")
@@ -207,6 +218,7 @@ describe("response steering (full duplex)", () => {
     const s = setup([wsCredential()], {
       onConnection: scripted((_frame, _index, send) => send(created("resp_1")))
     })
+
     const client = await s.connect()
     client.send(create("go"))
     await client.nextJson()
@@ -227,13 +239,16 @@ describe("response steering (full duplex)", () => {
 
   it("delivers a failure that precedes the first response as a failover, and closes on credential failures later", async () => {
     let connections = 0
+
     const second = wsCredential({
       id: "codex-oauth-2",
       metadata: { access_token: "access-token-2", account_id: "acct_2" }
     })
+
     const s = setup([wsCredential(), second], {
       onConnection: scripted((frame, index, send) => {
         connections += 1
+
         if (connections === 1) {
           send({ type: "error", status: 429, error: { type: "usage_limit_reached", message: "limit" } })
         } else if (index === 0) {
@@ -243,9 +258,11 @@ describe("response steering (full duplex)", () => {
           send(created("resp_2"))
           send({ type: "error", status: 401, error: { type: "invalid_request_error", message: "expired" } })
         }
+
         expect(frame["type"]).toBe("response.create")
       })
     })
+
     const client = await s.connect()
     client.send(create("go"))
     // The first credential's rejection never reached the client; the second one served.
@@ -275,6 +292,7 @@ describe("response steering (full duplex)", () => {
       },
       plain
     )
+
     const client = await s.connect()
     client.send(create("one"))
     await client.until("response.completed")
@@ -306,9 +324,11 @@ describe("non-stream execution over the upstream WebSocket", () => {
         })
       })
     })
+
     const h = await harness(wsCredential(), () => new Response(""), undefined, false)
     const layers = Layer.merge(h.layers, mock.layer)
     const executor = makeCodexExecutor()
+
     const response = await Effect.runPromise(
       executor
         .execute(
@@ -325,12 +345,14 @@ describe("non-stream execution over the upstream WebSocket", () => {
         )
         .pipe(Effect.provide(layers))
     )
+
     const body = JSON.parse(response.payload) as {
       id: string
       status: string
       output: Array<{ id: string }>
       usage: { input_tokens: number }
     }
+
     expect(body).toMatchObject({ id: "resp_1", status: "completed", usage: { input_tokens: 3 } })
     expect(body.output.map((item) => item.id)).toEqual(["msg_1"])
     expect(frames(mock.connections[0])[0]).toMatchObject({ type: "response.create", stream: true })
@@ -346,9 +368,11 @@ describe("non-stream execution over the upstream WebSocket", () => {
         send({ type: "error", status: 429, error: { type: "usage_limit_reached", message: "limit" } })
       )
     })
+
     const h = await harness(wsCredential(), () => new Response(""), undefined, false)
     const layers = Layer.merge(h.layers, mock.layer)
     const executor = makeCodexExecutor()
+
     const run = (websocket: { sessionId: string; requireUpstream: boolean }) =>
       Effect.runPromise(
         Effect.flip(
@@ -359,6 +383,7 @@ describe("non-stream execution over the upstream WebSocket", () => {
           )
         ).pipe(Effect.provide(layers))
       )
+
     expect((await run({ sessionId: "ns-error", requireUpstream: false })).status).toBe(429)
     // Without a retained socket a continuation cannot be served: the client must replay.
     const replay = await run({ sessionId: "ns-missing", requireUpstream: true })

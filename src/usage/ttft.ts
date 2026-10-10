@@ -20,59 +20,85 @@ const stringOf = (value: Json | undefined): string => (typeof value === "string"
 /** Strips an optional `data:` prefix; `undefined` for an empty payload. */
 const stripData = (text: string): string | undefined => {
   let payload = text.trim()
+
   if (payload.startsWith("data:")) payload = payload.slice(5).trim()
+
   return payload === "" ? undefined : payload
 }
 
 /** `IsChatTokenEvent`. */
 export const isChatTokenEvent = (text: string): boolean => {
   const trimmed = text.trim()
+
   if (trimmed === "") return false
+
   if (trimmed === "data: [DONE]" || trimmed === "[DONE]") return true
   const payload = stripData(trimmed)
+
   if (payload === undefined) return false
+
   if (payload === "[DONE]") return true
   const root = tryParseJson(payload)
+
   if (exists(get(root, "error"))) return true
+
   for (const choice of array(get(root, "choices"))) {
     const delta = get(choice, "delta")
+
     if (exists(delta)) {
       if (hasText(get(delta, "content")) || hasText(get(delta, "reasoning_content"))) return true
+
       if (hasText(get(delta, "reasoning")) || hasText(get(delta, "refusal"))) return true
+
       for (const call of array(get(delta, "tool_calls"))) {
         if (hasText(get(call, "function.arguments")) || hasText(get(call, "function.name"))) return true
+
         if (hasText(get(call, "custom.input"))) return true
       }
     }
+
     const message = get(choice, "message")
+
     if (exists(message)) {
       if (hasText(get(message, "content")) || hasText(get(message, "reasoning_content"))) return true
+
       if (hasText(get(message, "refusal"))) return true
+
       for (const call of array(get(message, "tool_calls"))) {
         if (hasText(get(call, "function.arguments")) || hasText(get(call, "function.name"))) return true
       }
     }
+
     if (hasText(get(choice, "finish_reason"))) return true
   }
+
   return false
 }
 
 /** `IsClaudeTokenEvent`. */
 export const isClaudeTokenEvent = (text: string): boolean => {
   let payload = text.trim()
+
   if (payload === "") return false
+
   if (payload.startsWith("event:")) {
     const newline = payload.indexOf("\n")
+
     if (newline !== -1) payload = payload.slice(newline + 1).trim()
   }
+
   if (payload.startsWith("data:")) {
     payload = payload.slice(5).trim()
+
     if (payload === "") return false
   }
+
   const root = tryParseJson(payload)
+
   switch (stringOf(get(root, "type"))) {
     case "content_block_delta": {
       const delta = get(root, "delta")
+
       return (
         hasText(get(delta, "text")) ||
         hasText(get(delta, "thinking")) ||
@@ -80,10 +106,13 @@ export const isClaudeTokenEvent = (text: string): boolean => {
         hasText(get(delta, "signature"))
       )
     }
+
     case "content_block_start": {
       const block = get(root, "content_block")
+
       return hasText(get(block, "text")) || hasText(get(block, "thinking"))
     }
+
     case "message_delta":
       return hasText(get(root, "delta.stop_reason"))
     case "message_stop":
@@ -106,19 +135,26 @@ export const isClaudeTokenEvent = (text: string): boolean => {
 /** `IsGeminiTokenEvent` (Gemini, Antigravity and Interactions-over-Gemini frames). */
 export const isGeminiTokenEvent = (text: string): boolean => {
   const payload = stripData(text)
+
   if (payload === undefined) return false
   const root = tryParseJson(payload)
+
   if (exists(get(root, "error")) || exists(get(root, "response.error"))) return true
   const candidates = array(get(root, "candidates") ?? get(root, "response.candidates"))
+
   for (const candidate of candidates) {
     for (const part of array(get(candidate, "content.parts"))) {
       if (hasText(get(part, "text")) || hasText(get(part, "thoughtText"))) return true
       const thought = get(part, "thought")
+
       if (typeof thought === "string" && thought.length > 0) return true
+
       if (hasText(get(part, "functionCall.name")) || hasText(get(part, "inlineData.data"))) return true
     }
+
     if (hasText(get(candidate, "finishReason"))) return true
   }
+
   return false
 }
 
@@ -162,13 +198,18 @@ const RESPONSES_TERMINAL_EVENTS = new Set([
 /** `IsResponsesTokenEvent` (Responses API / Codex SSE events). */
 export const isResponsesTokenEvent = (text: string): boolean => {
   const payload = stripData(text)
+
   if (payload === undefined) return false
   const root = tryParseJson(payload)
   const type = stringOf(get(root, "type"))
+
   if (RESPONSES_DELTA_EVENTS.has(type)) return hasText(get(root, "delta"))
   const doneField = RESPONSES_DONE_FIELDS[type]
+
   if (doneField !== undefined) return hasText(get(root, doneField))
+
   if (RESPONSES_TERMINAL_EVENTS.has(type)) return true
+
   switch (type) {
     case "response.audio.delta":
       return hasText(get(root, "delta")) || hasText(get(root, "data"))
@@ -191,6 +232,7 @@ export const isResponsesTokenEvent = (text: string): boolean => {
         default:
           return false
       }
+
     default:
       return false
   }

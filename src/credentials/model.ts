@@ -15,14 +15,17 @@ import { ModelEntry, OAuthModelAlias } from "../config/schema.ts"
 import { RecentBucket } from "./cooldown/recent-requests.ts"
 
 const optional = Schema.optionalKey
+
 const StringMap = Schema.Record(Schema.String, Schema.String)
 
 /** `Auth.AuthKind()` (classification.go). Credentials without any recognisable kind (key-less compat) omit it. */
 export const AuthKind = Schema.Literals(["oauth", "apikey"])
+
 export type AuthKind = typeof AuthKind.Type
 
 /** Where a credential came from: an imported auth JSON file or an `api-keys` config entry. */
 export const CredentialSource = Schema.Literals(["file", "config"])
+
 export type CredentialSource = typeof CredentialSource.Type
 
 export const Credential = Schema.Struct({
@@ -59,6 +62,7 @@ export const Credential = Schema.Struct({
   createdAt: Schema.Number,
   updatedAt: Schema.Number
 })
+
 export type Credential = typeof Credential.Type
 
 export const CredentialError = Schema.Struct({
@@ -67,9 +71,11 @@ export const CredentialError = Schema.Struct({
   retryable: Schema.Boolean,
   httpStatus: optional(Schema.Int)
 })
+
 export type CredentialError = typeof CredentialError.Type
 
 export const CredentialStatus = Schema.Literals(["unknown", "active", "pending", "refreshing", "error", "disabled"])
+
 export type CredentialStatus = typeof CredentialStatus.Type
 
 /** Go `QuotaState`. `reason`: `quota`, `credential_quota` or `cloudflare challenge`. */
@@ -81,6 +87,7 @@ export const QuotaState = Schema.Struct({
   observedAt: optional(Schema.Number),
   signals: optional(StringMap)
 })
+
 export type QuotaState = typeof QuotaState.Type
 
 /** Go `ModelState`: per-(credential, model) cooldown state. */
@@ -93,6 +100,7 @@ export const ModelState = Schema.Struct({
   quota: QuotaState,
   updatedAt: Schema.Number
 })
+
 export type ModelState = typeof ModelState.Type
 
 /** Runtime state of one credential (Go `Auth` runtime fields). */
@@ -114,6 +122,7 @@ export const CredentialState = Schema.Struct({
   recentRequests: optional(Schema.Array(RecentBucket)),
   updatedAt: Schema.Number
 })
+
 export type CredentialState = typeof CredentialState.Type
 
 export const emptyQuota = (): QuotaState => ({ exceeded: false, nextRecoverAt: 0, backoffLevel: 0 })
@@ -137,18 +146,25 @@ export const emptyState = (): CredentialState => ({
  */
 export const executorKey = (credential: Pick<Credential, "provider" | "label" | "attributes">): string => {
   const compatName = credential.attributes.compat_name?.trim() ?? ""
+
   if (compatName !== "") return openAICompatibleProviderKey(credential.attributes.provider_key?.trim() || compatName)
   const provider = credential.provider.trim().toLowerCase()
+
   if (provider === "openai-compatibility") return openAICompatibleProviderKey(credential.label.trim())
+
   if (provider === "kimi.com") return "kimi"
+
   if (provider === "kimi.ai") return "kimi-ai"
+
   return provider
 }
 
 /** `util.OpenAICompatibleProviderKey` (internal/util/provider.go). */
 export const openAICompatibleProviderKey = (name: string): string => {
   const key = name.trim().toLowerCase()
+
   if (key === "" || key === "openai-compatibility" || key.startsWith("openai-compatible-"))
     return key || "openai-compatibility"
+
   return `openai-compatible-${key}`
 }

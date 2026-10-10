@@ -31,6 +31,7 @@ export interface FailureInput {
 const refreshLastError = (input: FailureInput): CredentialError => {
   const unauthorized = isUnauthorized(input)
   const status = input.status ?? (unauthorized ? 401 : undefined)
+
   return {
     message: input.message,
     retryable: false,
@@ -58,6 +59,7 @@ export const applyRefreshFailure = (
 
   if (hasUnauthorizedFailure(state)) {
     if (!input.force) return { state, schedule: "none" }
+
     const next: CredentialState = {
       ...base,
       unavailable: true,
@@ -68,6 +70,7 @@ export const applyRefreshFailure = (
         ? { lastError: UNAUTHORIZED_ERROR(input.message), statusMessage: "unauthorized (refresh token invalid)" }
         : {})
     }
+
     return { state: next, schedule: "unschedule" }
   }
 
@@ -87,6 +90,7 @@ export const applyRefreshFailure = (
       schedule: "unschedule"
     }
   }
+
   if (isDisabled) {
     return {
       state: {
@@ -99,6 +103,7 @@ export const applyRefreshFailure = (
       schedule: "reschedule"
     }
   }
+
   if (input.accessTokenRejected && invalidGrant) {
     // Neither token can recover without a new login: stop selecting the credential until its tokens change.
     return {
@@ -115,8 +120,10 @@ export const applyRefreshFailure = (
       schedule: "unschedule"
     }
   }
+
   if (!input.hasValidAccessToken || input.accessTokenRejected) {
     const unavailable: CredentialState = { ...failed, unavailable: true, status: "error" }
+
     if (unauthorized) {
       return {
         state: {
@@ -129,8 +136,10 @@ export const applyRefreshFailure = (
         schedule: "none"
       }
     }
+
     if (invalidGrant) {
       const failures = state.refreshFailures + 1
+
       return {
         state: {
           ...unavailable,
@@ -141,6 +150,7 @@ export const applyRefreshFailure = (
         schedule: "reschedule"
       }
     }
+
     return {
       state: {
         ...unavailable,
@@ -155,13 +165,16 @@ export const applyRefreshFailure = (
   // The access token is still valid: keep serving it and retry later (never later than its expiry).
   let nextRetry = now + REFRESH_FAILURE_BACKOFF_MS
   let failures = 0
+
   if (invalidGrant) {
     failures = state.refreshFailures + 1
     nextRetry = now + invalidGrantBackoffMs(failures)
   }
+
   if (input.tokenExpiry !== undefined && input.tokenExpiry > 0 && nextRetry > input.tokenExpiry) {
     nextRetry = input.tokenExpiry
   }
+
   return { state: { ...failed, refreshFailures: failures, nextRefreshAfter: nextRetry }, schedule: "reschedule" }
 }
 
@@ -175,12 +188,15 @@ const isUnauthorizedModelError = (error: CredentialError | undefined, statusMess
 export const clearUnauthorizedModelStates = (state: CredentialState, now: number): CredentialState => {
   const modelStates: Record<string, ModelState> = {}
   let changed = false
+
   for (const [model, modelState] of Object.entries(state.modelStates)) {
     if (!isUnauthorizedModelError(modelState.lastError, modelState.statusMessage)) {
       modelStates[model] = modelState
       continue
     }
+
     changed = true
+
     if (modelState.quota.exceeded && (modelState.quota.nextRecoverAt === 0 || modelState.quota.nextRecoverAt > now)) {
       const { lastError: _dropped, ...rest } = modelState
       modelStates[model] = {
@@ -194,6 +210,7 @@ export const clearUnauthorizedModelStates = (state: CredentialState, now: number
     }
     // Otherwise the state is reset: an absent entry is a healthy model.
   }
+
   return changed ? { ...state, modelStates } : state
 }
 
@@ -212,6 +229,7 @@ export const applyRefreshSuccess = (
   const currentStatus = current.status === "disabled" && !disabled ? "active" : current.status
   const cleared = clearUnauthorizedModelStates(current, now)
   const { rejectedAccessToken: _rejected, lastError: _lastError, statusMessage: _message, ...rest } = cleared
+
   const next: CredentialState = {
     ...rest,
     refreshFailures: 0,
@@ -225,9 +243,12 @@ export const applyRefreshSuccess = (
     current.lastError !== undefined &&
     current.lastError.message !== "" &&
     current.lastError.message !== base.lastError?.message
+
   const keepCredentialQuota =
     current.quota.exceeded && current.quota.reason === "credential_quota" && current.quota.nextRecoverAt > now
+
   const keepCooldown = current.unavailable && current.nextRetryAfter > now
+
   if (hasNewConcurrentError) {
     return {
       ...next,
@@ -237,6 +258,7 @@ export const applyRefreshSuccess = (
       ...(current.statusMessage === undefined ? {} : { statusMessage: current.statusMessage })
     }
   }
+
   if (keepCredentialQuota || keepCooldown) {
     return {
       ...next,
@@ -245,5 +267,6 @@ export const applyRefreshSuccess = (
       ...(current.statusMessage === undefined ? {} : { statusMessage: current.statusMessage })
     }
   }
+
   return next
 }

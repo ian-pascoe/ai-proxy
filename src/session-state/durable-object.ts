@@ -30,7 +30,9 @@ export class SessionState extends DurableObject<Env> {
    */
   async run(ops: StateOp[], now: number = Date.now()): Promise<StateResult[]> {
     const results = this.ctx.storage.transactionSync(() => this.#engine.run(ops, now))
+
     if (ops.some((op) => op.op === "put" || op.op === "incr")) await this.#arm(this.#engine.nextExpiry())
+
     return results
   }
 
@@ -38,13 +40,16 @@ export class SessionState extends DurableObject<Env> {
   async sweep(now: number = Date.now()): Promise<void> {
     const next = this.ctx.storage.transactionSync(() => this.#engine.sweep(now))
     this.#armedAt = undefined
+
     if (next === undefined) {
       await this.ctx.storage.deleteAlarm()
       await this.ctx.storage.deleteAll()
       // `deleteAll` drops the SQLite tables too.
       this.#engine = this.#newEngine()
+
       return
     }
+
     await this.#arm(next)
   }
 

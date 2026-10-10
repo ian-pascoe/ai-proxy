@@ -10,7 +10,9 @@ import type { CredentialSnapshot } from "../picker.ts"
 import { isCliChatProxyBaseUrl, xaiChatBaseUrl, xaiCreds, xaiUsingAPI } from "./credentials.ts"
 
 export const XAI_TOKEN_AUTH_VALUE = "xai-grok-cli"
+
 export const XAI_CLIENT_IDENTIFIER = "grok-shell"
+
 export const XAI_AUTHENTICATE_RESPONSE = "authenticate-response"
 
 export interface XaiHeaderInput {
@@ -27,17 +29,22 @@ export interface XaiHeaderInput {
 const defaultHeaders = (input: XaiHeaderInput): Record<string, string> => {
   const { token } = xaiCreds(input.credential)
   const headers: Record<string, string> = { "content-type": "application/json" }
+
   if (token.trim() !== "") headers["authorization"] = `Bearer ${token}`
   headers["accept"] = input.stream ? "text/event-stream" : "application/json"
   headers["connection"] = "Keep-Alive"
+
   if (input.convId !== undefined && input.convId !== "") headers["x-grok-conv-id"] = input.convId
+
   return headers
 }
 
 const withCustom = (headers: Record<string, string>, input: XaiHeaderInput): Record<string, string> => {
   applyCustomHeaders(headers, input.credential, input.clientHeaders, input.sessionId)
   const out: Record<string, string> = {}
+
   for (const [name, value] of Object.entries(headers)) out[name.toLowerCase()] = value
+
   return out
 }
 
@@ -51,6 +58,7 @@ export const buildXaiChatHeaders = (
 ): Record<string, string> => {
   if (xaiUsingAPI(input.credential)) return buildXaiHeaders(input)
   const headers = defaultHeaders(input)
+
   if (isCliChatProxyBaseUrl(xaiChatBaseUrl(input.credential))) {
     headers["x-xai-token-auth"] = XAI_TOKEN_AUTH_VALUE
     headers["x-grok-client-version"] = input.clientVersion
@@ -58,6 +66,7 @@ export const buildXaiChatHeaders = (
     headers["x-grok-client-identifier"] = XAI_CLIENT_IDENTIFIER
     headers["x-authenticateresponse"] = XAI_AUTHENTICATE_RESPONSE
   }
+
   return withCustom(headers, input)
 }
 
@@ -68,7 +77,10 @@ export const buildXaiChatHeaders = (
 export const buildXaiWebsocketHeaders = (input: XaiHeaderInput): Record<string, string> => {
   const { token } = xaiCreds(input.credential)
   const headers: Record<string, string> = { "content-type": "application/json" }
+
   if (token.trim() !== "") headers["authorization"] = `Bearer ${token}`
+
   if (input.convId !== undefined && input.convId !== "") headers["x-grok-conv-id"] = input.convId
+
   return withCustom(headers, input)
 }

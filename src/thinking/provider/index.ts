@@ -29,6 +29,7 @@ const APPLIERS: ReadonlyMap<string, ProviderApplier> = new Map([
 /** The applier for a provider format (case-insensitive); `undefined` for unknown providers (passthrough). */
 export const getProviderApplier = (provider: string): ProviderApplier | undefined => {
   const name = provider.trim().toLowerCase()
+
   return name === "" ? undefined : APPLIERS.get(name)
 }
 

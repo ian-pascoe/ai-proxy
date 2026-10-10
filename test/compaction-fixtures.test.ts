@@ -74,12 +74,15 @@ describe("compaction capsule helpers (Go parity)", () => {
 
   it("expands compaction items like ExpandAntigravityCompactionCapsules", async () => {
     const capsule = helpers.expandCapsule
+
     for (const entry of helpers.expand) {
       const input = JSON.parse(entry.input.replaceAll("{{capsule}}", capsule))
+
       if (entry.error !== undefined) {
         await expect(expandCompactionCapsules(input)).rejects.toThrow(entry.error)
         continue
       }
+
       const out = await expandCompactionCapsules(input)
       expect(JSON.stringify(out)).toBe(JSON.stringify(JSON.parse(entry.output.replaceAll("{{capsule}}", capsule))))
     }
@@ -88,6 +91,7 @@ describe("compaction capsule helpers (Go parity)", () => {
   it("extracts summary text from Responses, Gemini, Claude and Chat bodies", () => {
     for (const entry of helpers.extract) {
       const input = JSON.parse(entry.input)
+
       if (entry.error !== undefined) expect(() => extractSummaryText(input), entry.name).toThrow(entry.error)
       else expect(extractSummaryText(input), entry.name).toBe(entry.output)
     }
@@ -105,6 +109,7 @@ describe("compaction capsule helpers (Go parity)", () => {
 const CLAUDE = credential("claude", "claude-compaction-key", {
   attributes: { api_key: "key-compaction", base_url: "http://claude.test" }
 })
+
 const ANTIGRAVITY = credential("antigravity", "antigravity-compaction.json", {
   kind: "oauth",
   metadata: { access_token: "test-token", project_id: "test-proj", email: "dev@example.com" }
@@ -117,7 +122,9 @@ const models = {
 }
 
 let baseConfig: Config
+
 let ruleConfig: Config
+
 beforeAll(async () => {
   baseConfig = await loadConfig("")
   ruleConfig = await loadConfig(`
@@ -135,6 +142,7 @@ type Scenario = (typeof fixtures.scenarios)[number]
 
 const respond = (scenario: Scenario) => (call: UpstreamCall) => {
   const body = tryParseJson(call.body) as Record<string, unknown> | undefined
+
   if (scenario.provider === "claude") {
     if (body?.["stream"] === true) {
       return sseResponse([
@@ -148,27 +156,33 @@ const respond = (scenario: Scenario) => (call: UpstreamCall) => {
         ].join("")
       ])
     }
+
     return jsonResponse(
       scenario.upstreamJson ??
         '{"id":"msg_compact","type":"message","role":"assistant","model":"claude-haiku-4-5-20251001","content":[{"type":"text","text":"Sealed summary of the build."}],"stop_reason":"end_turn","usage":{"input_tokens":11,"output_tokens":7}}'
     )
   }
+
   const contents = ((body?.["request"] as { contents?: Array<{ role?: string }> } | undefined)?.contents ??
     []) as Array<{
     role?: string
   }>
+
   const last = contents.at(-1)?.role
+
   if (last === "model" || last === "assistant") {
     return new Response('{"error":{"code":400,"message":"Requests ending with a model turn are not supported."}}', {
       status: 400,
       headers: { "content-type": "application/json" }
     })
   }
+
   if (scenario.upstreamSse === true) {
     return sseResponse([
       'data: {"response":{"candidates":[{"content":{"parts":[{"text":"Claude summary of previous conversation"}],"role":"model"}}],"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":10,"totalTokenCount":30}}}\n\n'
     ])
   }
+
   return jsonResponse(
     '{"response":{"candidates":[{"content":{"parts":[{"text":"Summary of previous conversation"}],"role":"model"}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15}}}'
   )
@@ -182,6 +196,7 @@ const frames = (text: string): Array<[string, unknown]> =>
     .map((frame) => {
       const event = /^event: (.*)$/m.exec(frame)?.[1] ?? ""
       const data = /^data: (.*)$/m.exec(frame)?.[1] ?? ""
+
       return [event, tryParseJson(data)]
     })
 
@@ -189,28 +204,36 @@ describe("compaction scenarios against the Go executors", () => {
   for (const scenario of fixtures.scenarios) {
     it(scenario.name, async () => {
       resetMemoryAntigravityState()
+
       const h = makeGeminiHarness({
         config: scenario.rule === true ? ruleConfig : baseConfig,
         respond: respond(scenario),
         credential: scenario.provider === "claude" ? CLAUDE : ANTIGRAVITY,
         models
       })
+
       afterAll(h.dispose)
       const payload = JSON.parse(scenario.payload) as Record<string, unknown>
       const compact = scenario.alt === "responses/compact"
+
       if (compact && scenario.stream !== true) delete payload["stream"]
+
       if (compact && scenario.stream === true) payload["stream"] = true
       const response = await h.call(compact ? "/v1/responses/compact" : "/v1/responses", postJson(payload))
       const text = await response.text()
 
       if (scenario.status !== undefined) {
         expect(response.status).toBe(scenario.status)
+
         if (scenario.errMessage !== undefined && scenario.errMessage.startsWith("invalid compaction capsule")) {
           expect(text).toContain("invalid compaction capsule")
         }
+
         expect(h.calls).toHaveLength(0)
+
         return
       }
+
       expect(response.status).toBe(200)
       expect(h.calls).toHaveLength(scenario.seen.length)
       h.calls.forEach((call, index) => {
@@ -222,6 +245,7 @@ describe("compaction scenarios against the Go executors", () => {
       const summaries = await Promise.all(capsulesIn(text).map(unsealCompaction))
       expect(summaries).toEqual(scenario.summaries ?? [])
       const got = normalize(text)
+
       if (scenario.stream === true && scenario.capsules === undefined) {
         expect(frames(got)).toEqual(frames(normalize(scenario.output)))
       } else {

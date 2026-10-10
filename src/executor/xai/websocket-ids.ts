@@ -18,12 +18,15 @@ export class XaiIdState {
 
   upstreamIdForDownstream(downstreamId: string): string {
     const id = downstreamId.trim()
+
     if (id === "") return id
+
     return (this.downstreamToUpstream.get(id) ?? id).trim()
   }
 
   mapDownstreamToUpstream(downstreamId: string, upstreamId: string): void {
     const id = downstreamId.trim()
+
     if (id !== "") this.downstreamToUpstream.set(id, upstreamId.trim())
   }
 
@@ -42,12 +45,14 @@ export class XaiIdState {
   prependTranscriptInput(payload: JsonObject): JsonObject {
     if (this.transcriptInput.length === 0) return payload
     const current = isJsonArray(payload["input"]) ? payload["input"] : []
+
     return { ...payload, input: [...cloneJson(this.transcriptInput), ...current] }
   }
 
   /** `prependCompactedTranscriptOnReset`. */
   prependCompactedTranscriptOnReset(payload: JsonObject): { readonly payload: JsonObject; readonly replayed: boolean } {
     if (!this.replayCompactedTranscriptOnReset || this.transcriptInput.length === 0) return { payload, replayed: false }
+
     return { payload: this.prependTranscriptInput(payload), replayed: true }
   }
 
@@ -55,12 +60,15 @@ export class XaiIdState {
   recordTranscriptTurn(request: Json, completed: Json, reset: boolean): void {
     const inputItems = get(request, "input")
     const outputItems = get(completed, "response.output")
+
     if (reset) {
       this.transcriptInput = []
       this.replayCompactedTranscriptOnReset = false
     }
+
     const input = isJsonArray(inputItems) ? inputItems : []
     const output = isJsonArray(outputItems) ? outputItems : []
+
     if (input.length === 0 && output.length === 0) return
     this.transcriptInput.push(...cloneJson(input), ...cloneJson(output))
   }
@@ -72,12 +80,15 @@ export class XaiIdStateStore {
 
   get(sessionId: string): XaiIdState | undefined {
     const id = sessionId.trim()
+
     if (id === "") return undefined
     let state = this.states.get(id)
+
     if (state === undefined) {
       state = new XaiIdState()
       this.states.set(id, state)
     }
+
     return state
   }
 
@@ -107,6 +118,7 @@ const rewriteIdString = (
       return ids.downstreamPrevious
     }
   }
+
   return value
 }
 
@@ -116,20 +128,26 @@ const rewriteIds = (
 ): boolean => {
   if (isJsonArray(value)) {
     let changed = false
+
     for (const child of value) if (rewriteIds(child, ids)) changed = true
+
     return changed
   }
+
   if (!isJsonObject(value)) return false
   let changed = false
+
   for (const [childKey, child] of Object.entries(value)) {
     if (typeof child === "string") {
       const replaced = rewriteIdString(child, childKey, ids)
+
       if (replaced !== child) {
         value[childKey] = replaced
         changed = true
       }
     } else if (rewriteIds(child, ids)) changed = true
   }
+
   return changed
 }
 
@@ -156,27 +174,36 @@ export class XaiRequestIdMapper {
       if (this.downstreamPreviousId === "" && asString(payload["type"]).trim() === "response.append") {
         const out = this.state.prependCompactedTranscriptOnReset(payload)
         this.replayedCompactedTranscript = out.replayed
+
         return out.payload
       }
+
       return payload
     }
+
     if (this.upstreamPreviousId === "") {
       const { previous_response_id: _dropped, ...rest } = payload
+
       if (this.downstreamPreviousId === "") return rest
       this.replayedCompactedTranscript = true
+
       return this.state.prependTranscriptInput(rest)
     }
+
     return { ...payload, previous_response_id: this.upstreamPreviousId }
   }
 
   /** `downstreamIDForUpstreamResponse`. */
   private downstreamIdFor(upstreamResponseId: string): string {
     const upstream = upstreamResponseId.trim()
+
     if (this.upstreamResponseId !== "") return this.downstreamResponseId
+
     if (upstream === "") return ""
     this.upstreamResponseId = upstream
     this.downstreamResponseId = upstream
     const seen = this.state.downstreamToUpstream.has(upstream)
+
     if (
       (this.downstreamPreviousId !== "" && this.upstreamPreviousId !== "" && upstream === this.upstreamPreviousId) ||
       seen
@@ -184,23 +211,29 @@ export class XaiRequestIdMapper {
       this.state.sequence += 1
       this.downstreamResponseId = `${upstream}-xai-${this.state.sequence}`
     }
+
     this.state.downstreamToUpstream.set(upstream, upstream)
     this.state.downstreamToUpstream.set(this.downstreamResponseId, upstream)
+
     return this.downstreamResponseId
   }
 
   /** `downstreamResponsePayload`: rewrites response/item ids in an upstream event (in place). */
   downstreamResponsePayload(payload: JsonObject): JsonObject {
     const downstream = this.downstreamIdFor(asString(get(payload, "response.id")))
+
     if (downstream === "") return payload
+
     const ids = {
       upstream: this.upstreamResponseId.trim(),
       downstream: downstream.trim(),
       upstreamPrevious: this.upstreamPreviousId.trim(),
       downstreamPrevious: this.downstreamPreviousId.trim()
     }
+
     if (ids.upstream === ids.downstream && ids.upstreamPrevious === ids.downstreamPrevious) return payload
     rewriteIds(payload, ids)
+
     return payload
   }
 }

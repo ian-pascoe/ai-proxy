@@ -12,6 +12,7 @@ import { mockHttp, routes, T0 } from "./support/refresh.ts"
 import { makeServiceAccount, verifyJwt, wrapPem, type TestServiceAccount } from "./support/vertex.ts"
 
 let sa: TestServiceAccount
+
 beforeAll(async () => {
   sa = await makeServiceAccount()
 })
@@ -48,6 +49,7 @@ const mint = (
   handler = routes({ [TOKEN]: { body: { access_token: "ya29.token", expires_in: 3599 } } })
 ) => {
   const http = mockHttp(handler)
+
   const result = Effect.runPromise(
     mintVertexToken(metadata as never, T0).pipe(
       Effect.provide(http.layer),
@@ -55,6 +57,7 @@ const mint = (
       Effect.catch((error) => Effect.succeed({ ok: false as const, error }))
     )
   )
+
   return { http, result }
 }
 
@@ -88,10 +91,12 @@ describe("mintVertexToken", () => {
     expect(JSON.stringify(broken)).not.toContain("garbage")
     const insecure = await mint({ service_account: sa.account(sa.pem.pkcs8, { token_uri: "http://x/token" }) }).result
     expect(insecure).toMatchObject({ ok: false })
+
     const denied = await mint(
       { service_account: sa.account(sa.pem.pkcs8) },
       routes({ [TOKEN]: { status: 400, body: '{"error":"invalid_grant"}' } })
     ).result
+
     expect(denied).toMatchObject({ ok: false, error: { status: 400 } })
   })
 })

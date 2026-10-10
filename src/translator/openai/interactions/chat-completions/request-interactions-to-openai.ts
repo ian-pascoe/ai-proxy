@@ -18,16 +18,21 @@ import {
 
 const interactionsMediaDataUrl = (part: Json, fallbackMimeType: string): string => {
   const url = firstNonEmpty(getStr(part, "image_url"), getStr(part, "file_data"), getStr(part, "url"))
+
   if (url !== "") return url
   const data = getStr(part, "data")
+
   if (data === "") return ""
   const mimeType = firstNonEmpty(getStr(part, "mime_type"), fallbackMimeType)
+
   return `data:${mimeType};base64,${data}`
 }
 
 const interactionsContentPartToOpenAI = (part: Json): JsonObject | undefined => {
   let partType = getStr(part, "type")
+
   if (partType === "" && get(part, "text") !== undefined) partType = "text"
+
   switch (partType) {
     case "text":
       return { type: "text", text: getStr(part, "text") }
@@ -46,13 +51,17 @@ const interactionsContentPartToOpenAI = (part: Json): JsonObject | undefined => 
         filename: firstNonEmpty(getStr(part, "filename"), interactionsFileNameFromMime(getStr(part, "mime_type"))),
         file_data: getStr(part, "data")
       }
+
       const url = firstNonEmpty(getStr(part, "file_url"), getStr(part, "url"))
+
       if (url !== "") {
         delete file.file_data
         file.file_url = url
       }
+
       return { type: "file", file }
     }
+
     default:
       return undefined
   }
@@ -60,28 +69,37 @@ const interactionsContentPartToOpenAI = (part: Json): JsonObject | undefined => 
 
 const appendInteractionsContentToOpenAIMessage = (msg: JsonObject, content: Json | undefined, _role: string): void => {
   if (content === undefined) return
+
   if (typeof content === "string") {
     msg.content = content
+
     return
   }
+
   const contentItems: JsonObject[] = []
   let textOnly = true
   let text = ""
+
   const appendPart = (part: Json): void => {
     const converted = interactionsContentPartToOpenAI(part)
+
     if (converted === undefined) return
+
     if (converted.type === "text") text += str(converted.text)
     else textOnly = false
     contentItems.push(converted)
   }
+
   if (isArr(content)) for (const part of content) appendPart(part)
   else if (isJsonObject(content)) appendPart(content)
+
   if (contentItems.length > 0) msg.content = textOnly ? text : contentItems
 }
 
 const appendInteractionsMessageToOpenAI = (items: Json[], step: Json, role: string): void => {
   const msg: JsonObject = { role, content: "" }
   const content = get(step, "content")
+
   if (typeof content === "string") msg.content = content
   else appendInteractionsContentToOpenAIMessage(msg, content, role)
   items.push(msg)
@@ -106,6 +124,7 @@ const appendInteractionsStepToOpenAI = (
     case "function_call": {
       const callId = firstNonEmpty(getStr(step, "call_id"), getStr(step, "id"), "call_0")
       let name = getStr(step, "name")
+
       if (forAntigravity) name = antigravityUpstreamToolNameToClient(name)
       items.push({
         role: "assistant",
@@ -120,6 +139,7 @@ const appendInteractionsStepToOpenAI = (
       })
       break
     }
+
     case "function_result":
       items.push({
         role: "tool",
@@ -134,17 +154,23 @@ const appendInteractionsStepToOpenAI = (
 
 const openAIToolFromInteractionsTool = (tool: Json, forAntigravity: boolean): JsonObject | undefined => {
   let name = firstNonEmpty(getStr(tool, "name"), getStr(tool, "function.name"))
+
   if (name === "") return undefined
+
   if (forAntigravity) name = antigravityUpstreamToolNameToClient(name)
   const fn: JsonObject = { name }
   const desc = firstExisting(get(tool, "description"), get(tool, "function.description"))
+
   if (desc !== undefined) fn.description = str(desc)
+
   const params = firstExisting(
     get(tool, "parameters"),
     get(tool, "function.parameters"),
     get(tool, "parametersJsonSchema")
   )
+
   if (params !== undefined) fn.parameters = cloneJson(params)
+
   return { type: "function", function: fn }
 }
 
@@ -159,6 +185,7 @@ const interactionsReasoningEffort = (root: Json, gen: Json | undefined): string 
   ]) {
     if (typeof value === "string") return value.trim().toLowerCase()
   }
+
   return ""
 }
 
@@ -167,14 +194,17 @@ export const convertInteractionsRequestToOpenAI = (modelName: string, root: Json
   const out: JsonObject = { model: "", messages: [] }
   const model = firstNonEmpty(modelName, getStr(root, "model"))
   out.model = model
+
   if (stream || asBool(get(root, "stream"))) out.stream = true
 
   const messageItems: Json[] = []
   const systemText = interactionsText(get(root, "system_instruction"))
+
   if (systemText !== "") messageItems.push({ role: "system", content: systemText })
 
   const forAntigravity = isAntigravityModel(model)
   const input = get(root, "input")
+
   if (typeof input === "string") {
     messageItems.push({ role: "user", content: input })
   } else if (isArr(input)) {
@@ -182,31 +212,41 @@ export const convertInteractionsRequestToOpenAI = (modelName: string, root: Json
   } else if (isJsonObject(input)) {
     appendInteractionsStepToOpenAI(messageItems, input, "user", forAntigravity)
   }
+
   if (messageItems.length > 0) out.messages = messageItems
 
   const tools = get(root, "tools")
+
   if (isArr(tools)) {
     const toolItems: Json[] = []
+
     for (const tool of tools) {
       const converted = openAIToolFromInteractionsTool(tool, forAntigravity)
+
       if (converted !== undefined) toolItems.push(converted)
       const decls = firstExisting(get(tool, "function_declarations"), get(tool, "functionDeclarations"))
+
       if (isArr(decls)) {
         for (const decl of decls) {
           const c = openAIToolFromInteractionsTool(decl, forAntigravity)
+
           if (c !== undefined) toolItems.push(c)
         }
       }
     }
+
     if (toolItems.length > 0) out.tools = toolItems
   }
 
   // Generation config.
   let gen = get(root, "generation_config")
+
   if (gen === undefined) gen = get(root, "generationConfig")
+
   const copyNumber = (path: string, value: Json | undefined): void => {
     if (value !== undefined) set(out, path, cloneJson(value))
   }
+
   copyNumber("temperature", firstExisting(get(gen, "temperature"), get(root, "temperature")))
   copyNumber(
     "max_tokens",
@@ -221,28 +261,40 @@ export const convertInteractionsRequestToOpenAI = (modelName: string, root: Json
   copyNumber("top_k", firstExisting(get(gen, "top_k"), get(gen, "topK")))
   copyNumber("n", firstExisting(get(gen, "candidate_count"), get(gen, "candidateCount"), get(root, "n")))
   const stop = firstExisting(get(gen, "stop_sequences"), get(gen, "stopSequences"), get(root, "stop"))
+
   if (stop !== undefined) out.stop = cloneJson(stop)
   const toolChoice = firstExisting(get(gen, "tool_choice"), get(root, "tool_choice"))
+
   if (toolChoice !== undefined) out.tool_choice = cloneJson(toolChoice)
   const effort = interactionsReasoningEffort(root, gen)
+
   if (effort !== "") out.reasoning_effort = effort
   const responseModalities = get(root, "response_modalities")
+
   if (responseModalities !== undefined) out.modalities = cloneJson(responseModalities)
 
   // Top level OpenAI fields.
   const format = get(root, "response_format")
+
   if (format !== undefined) out.response_format = cloneJson(format)
   const serviceTier = get(root, "service_tier")
+
   if (typeof serviceTier === "string") out.service_tier = serviceTier
   const previous = firstNonEmpty(getStr(root, "previous_interaction_id"), getStr(root, "previous_response_id"))
+
   if (previous !== "") out.previous_response_id = previous
   const environmentId = firstNonEmpty(getStr(root, "environment_id"), getStr(root, "environment.id"))
+
   if (environmentId !== "") out.environment_id = environmentId
   const agentConfig = get(root, "agent_config")
+
   if (agentConfig !== undefined) out.agent_config = cloneJson(agentConfig)
+
   for (const key of ["parallel_tool_calls", "seed", "user"]) {
     const value = get(root, key)
+
     if (value !== undefined) out[key] = cloneJson(value)
   }
+
   return out
 }

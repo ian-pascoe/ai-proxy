@@ -27,6 +27,7 @@ describe("shouldNormalizeToolResults (Go parity)", () => {
       expect(shouldNormalizeToolResults(group, entry.upstream, entry.requested)).toBe(entry.normalize)
     })
   }
+
   it("is false without a config group", () => {
     expect(shouldNormalizeToolResults(undefined, "m", "m")).toBe(false)
   })
@@ -86,6 +87,7 @@ const toolRequest = (model: string) =>
 describe("OpenAI-compatible executor parity", () => {
   it("flattens tool results for text-only models and leaves vision models untouched", async () => {
     const executor = makeOpenAICompatExecutor("openai-compatible-mock")
+
     for (const [model, expected] of [
       ["text-model", "a\n\nb"],
       [
@@ -107,11 +109,13 @@ describe("OpenAI-compatible executor parity", () => {
       const executor = makeOpenAICompatExecutor(entry.provider)
       const h = await harness(mockCredential(), completion, YAML)
       const base = options().metadata
+
       const metadata = {
         ...base,
         ...(entry.derived !== undefined ? { derivedSessionId: entry.derived } : {}),
         ...(entry.execution !== undefined ? { websocket: { sessionId: entry.execution, requireUpstream: false } } : {})
       }
+
       await execute(
         executor,
         h,
@@ -125,10 +129,12 @@ describe("OpenAI-compatible executor parity", () => {
 
   it("keeps client keys, skips unknown sessions and respects support-prompt-cache-key", async () => {
     const executor = makeOpenAICompatExecutor("openai-compatible-mock")
+
     const request = (extra: Record<string, unknown>) => ({
       model: "m",
       payload: json({ model: "m", messages: [{ role: "user", content: "x" }], ...extra })
     })
+
     const withSession = options({ metadata: { ...options().metadata, derivedSessionId: "s" } })
     const h1 = await harness(mockCredential(), completion, YAML)
     await execute(executor, h1, request({ prompt_cache_key: " client " }), withSession)

@@ -7,25 +7,32 @@ import { controlPlane, jsonInit, makeHarness, resetControlPlane, token } from ".
 // The ControlPlane talks to providers through Effect's FetchHttpClient, which resolves `globalThis.fetch` once:
 // install one stable fetch that delegates to the current test's upstream table.
 type Upstream = (request: { method: string; url: string; body: string }) => Response | undefined
+
 let upstream: Upstream = () => undefined
+
 const realFetch = globalThis.fetch
+
 const upstreamCalls: string[] = []
 
 const harness = makeHarness()
+
 beforeAll(() => {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init)
     const body = new TextDecoder().decode(await request.arrayBuffer())
     upstreamCalls.push(`${request.method} ${request.url}`)
+
     return (
       upstream({ method: request.method, url: request.url, body }) ?? new Response("no upstream route", { status: 599 })
     )
   }) as typeof fetch
 })
+
 afterAll(async () => {
   globalThis.fetch = realFetch
   await harness.dispose()
 })
+
 beforeEach(async () => {
   upstream = () => undefined
   upstreamCalls.length = 0
@@ -36,16 +43,20 @@ const { call, json } = harness
 
 const claudeUpstream: Upstream = ({ method, url }) => {
   const key = `${method} ${url}`
+
   if (key === "POST https://platform.claude.com/v1/oauth/token") {
     return Response.json({ access_token: "sk-ant-oat-access", refresh_token: "sk-ant-ort-refresh", expires_in: 28800 })
   }
+
   if (key === "GET https://api.anthropic.com/api/oauth/profile") {
     return Response.json({
       account: { uuid: "acc-1", email: "me@x.com" },
       organization: { uuid: "org-1", name: "Org" }
     })
   }
+
   if (key === "GET https://api.anthropic.com/api/oauth/claude_cli/roles") return Response.json({})
+
   return undefined
 }
 
@@ -57,11 +68,14 @@ interface Started {
   readonly user_code?: string
   readonly expires_in?: number
 }
+
 const start = async (query: string): Promise<Started> => {
   const reply = await json(`/v8/management/oauth/auth-url?${query}`)
   expect(reply.status).toBe(200)
+
   return reply.body as Started
 }
+
 const status = async (state: string) => (await json(`/v8/management/oauth/status?state=${state}`)).body
 
 describe("management oauth routes", () => {
@@ -90,6 +104,7 @@ describe("management oauth routes", () => {
         redirect_url: `http://localhost:54545/callback?code=auth-code%23frag&state=${started.state}`
       })
     )
+
     expect(posted).toMatchObject({ status: 200, body: { status: "ok" } })
     expect(await status(started.state)).toEqual({ status: "ok" })
 
@@ -116,6 +131,7 @@ describe("management oauth routes", () => {
       "/v8/management/oauth/callback",
       jsonInit("POST", { provider: "claude", state: started.state, code: "again" })
     )
+
     expect(replay).toMatchObject({ status: 409, body: { status: "error", error: "oauth flow is already completed" } })
   })
 
@@ -170,19 +186,23 @@ describe("management oauth routes", () => {
       status: "ok",
       cancelled: false
     })
+
     const posted = await json(
       "/v8/management/oauth/callback",
       jsonInit("POST", { provider: "codex", state: started.state, code: "c" })
     )
+
     expect(posted.status).toBe(404)
     expect((await json("/v8/management/credentials")).body).toMatchObject({ files: [] })
   })
 
   it("accepts the callback as GET query parameters too and records provider errors", async () => {
     const started = await start("provider=antigravity")
+
     const reply = await json(
       `/v8/management/oauth/callback?provider=antigravity&state=${started.state}&error=access_denied`
     )
+
     expect(reply).toMatchObject({ status: 200, body: { status: "ok" } })
     expect(await status(started.state)).toEqual({ status: "error", error: "Authentication failed" })
   })
@@ -193,10 +213,12 @@ describe("management oauth routes", () => {
       state.storage.sql.exec("UPDATE oauth_sessions SET deadline_at = ? WHERE state = ?", Date.now() - 1, started.state)
     })
     expect(await status(started.state)).toEqual({ status: "error", error: "Timeout waiting for OAuth callback" })
+
     const late = await json(
       "/v8/management/oauth/callback",
       jsonInit("POST", { provider: "claude", state: started.state, code: "c" })
     )
+
     expect(late).toMatchObject({ status: 409, body: { status: "error", error: "Timeout waiting for OAuth callback" } })
     expect(upstreamCalls).toEqual([])
   })
@@ -205,12 +227,14 @@ describe("management oauth routes", () => {
     let tokenCalls = 0
     upstream = ({ method, url }) => {
       const key = `${method} ${url}`
+
       if (key === "GET https://auth.x.ai/.well-known/openid-configuration") {
         return Response.json({
           device_authorization_endpoint: "https://auth.x.ai/oauth2/device/code",
           token_endpoint: "https://auth.x.ai/oauth2/token"
         })
       }
+
       if (key === "POST https://auth.x.ai/oauth2/device/code") {
         return Response.json({
           device_code: "dc",
@@ -219,14 +243,18 @@ describe("management oauth routes", () => {
           expires_in: 900
         })
       }
+
       if (key === "POST https://auth.x.ai/oauth2/token") {
         tokenCalls++
+
         return tokenCalls === 1
           ? Response.json({ error: "authorization_pending" })
           : Response.json({ access_token: "xai-at", refresh_token: "xai-rt", expires_in: 3600 })
       }
+
       return undefined
     }
+
     const started = await start("provider=xai")
     expect(started).toMatchObject({
       status: "ok",
@@ -262,9 +290,11 @@ describe("public browser callbacks", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     const html = await response.text()
     expect(html).toContain("Authentication successful!")
+
     for (const secret of ["SECRET-CODE", started.state, "sk-ant-oat-access", "sk-ant-ort-refresh"]) {
       expect(html).not.toContain(secret)
     }
+
     expect(await status(started.state)).toEqual({ status: "ok" })
     expect(((await json("/v8/management/credentials")).body as { files: unknown[] }).files).toHaveLength(1)
   })
@@ -272,6 +302,7 @@ describe("public browser callbacks", () => {
   it("only accepts the state of a pending login of that route's provider", async () => {
     upstream = claudeUpstream
     const started = await start("provider=claude")
+
     const rejected = async (path: string) => {
       const response = await get(path)
       expect(response.status, path).toBe(400)
@@ -279,6 +310,7 @@ describe("public browser callbacks", () => {
       expect(html).toContain("Invalid request")
       expect(html).not.toContain("SECRET")
     }
+
     await rejected(`/anthropic/callback?code=SECRET&state=${"a".repeat(32)}`) // unknown state
     await rejected(`/codex/callback?code=SECRET&state=${started.state}`) // another provider's route
     await rejected(`/antigravity/callback?code=SECRET&state=${started.state}`)
@@ -332,6 +364,7 @@ describe("production wiring", () => {
     const response = await exports.default.fetch(
       new Request(`https://proxy.test/anthropic/callback?code=c&state=${"a".repeat(32)}`)
     )
+
     expect(response.status).toBe(400)
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(await response.text()).toContain("Invalid request")

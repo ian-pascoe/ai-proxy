@@ -61,6 +61,7 @@ const ACTIONS: ReadonlySet<string> = new Set(["stop", "stop-and-cooldown", "cont
 
 const asRules = (value: unknown): RequestScopedErrorRule[] => {
   if (!Array.isArray(value)) return []
+
   return value.filter((item): item is RequestScopedErrorRule => typeof item === "object" && item !== null)
 }
 
@@ -70,8 +71,11 @@ const asRules = (value: unknown): RequestScopedErrorRule[] => {
  */
 export const requestScopedRules = (config: Config, credential: CredentialSnapshot): RequestScopedErrorRule[] => {
   const own = asRules(credential.metadata["request_scoped_errors"] ?? credential.metadata["request-scoped-errors"])
+
   if (own.length > 0) return own
+
   if (credential.kind !== "oauth") return []
+
   return asRules(config.oauth["request-scoped-errors"][credential.provider.trim().toLowerCase()])
 }
 
@@ -82,16 +86,21 @@ export const matchRequestScopedAction = (
 ): RequestScopedAction | undefined => {
   const status = error.status
   const body = error.message
+
   for (const rule of rules) {
     const ruleStatus = rule.status ?? 0
+
     if (ruleStatus <= 0 || ruleStatus !== status) continue
     const substrings = rule.match ?? []
     const patterns = rule["match-regexr"] ?? []
+
     if (substrings.length === 0 && patterns.length === 0) continue
     let matched = substrings.some((text) => text !== "" && body.includes(text))
+
     if (!matched) {
       matched = patterns.some((pattern) => {
         if (pattern === "") return false
+
         try {
           return new RegExp(pattern).test(body)
         } catch {
@@ -99,10 +108,13 @@ export const matchRequestScopedAction = (
         }
       })
     }
+
     if (!matched) continue
     const action = (rule.action ?? "").trim().toLowerCase()
+
     if (ACTIONS.has(action)) return action as RequestScopedAction
   }
+
   return undefined
 }
 
@@ -131,6 +143,7 @@ const headerRecord = (
 ): Record<string, string> | undefined => {
   if (headers === undefined) return undefined
   const out: Record<string, string> = {}
+
   if (headers instanceof Headers) {
     headers.forEach((value, name) => {
       out[name] = value
@@ -138,6 +151,7 @@ const headerRecord = (
   } else {
     Object.assign(out, headers)
   }
+
   return Object.keys(out).length === 0 ? undefined : out
 }
 
@@ -147,6 +161,7 @@ const withProviderHeaders = (
 ): { headers?: Record<string, string> } => {
   if (!SIGNAL_PROVIDERS.has(provider.trim().toLowerCase())) return {}
   const record = headerRecord(headers)
+
   return record === undefined ? {} : { headers: record }
 }
 
@@ -160,18 +175,24 @@ export const successReport = (context: ReportContext): ReportResult => ({
 /** `resultErrorFromError`: the code a failed attempt is reported with. */
 const resultCode = (error: ExecutionError, classified: ClassifiableError): string | undefined => {
   if (isExplicitModelNotFound(classified)) return ErrorCode.modelNotFound
+
   if (isRequestInvalidError(classified)) return ErrorCode.requestScoped
+
   if (isConnectionLifecycleError(classified)) return ErrorCode.connectionLifecycle
+
   if (isTransientTransportError(classified)) return ErrorCode.transientTransport
+
   return error.code
 }
 
 /** Whether a `responses/compact` failure leaves availability untouched (`isResponsesCompactAvailabilityNeutralError`). */
 const compactNeutral = (error: ExecutionError, classified: ClassifiableError, code: string | undefined): boolean => {
   if (code === ErrorCode.forceCooldown) return false
+
   if (error.credentialScoped === true || isCloudflareChallengeError(classified) || isInvalidGrantError(classified)) {
     return false
   }
+
   return ![401, 402, 403, 429].includes(classified.status)
 }
 
@@ -179,10 +200,12 @@ const compactNeutral = (error: ExecutionError, classified: ClassifiableError, co
 export const failureReport = (error: ExecutionError, context: ReportContext): ReportResult => {
   const classified = classifiable(error)
   let code = resultCode(error, classified)
+
   if (context.action === "stop" || context.action === "continue") code = ErrorCode.requestScoped
   else if (context.action === "stop-and-cooldown" || context.action === "continue-and-cooldown")
     code = ErrorCode.forceCooldown
   const status = classified.status
+
   const neutral =
     (context.compact === true && compactNeutral(error, classified, code)) ||
     // `isCountTokensEndpointNotFoundError`: upstreams without a count_tokens route answer a generic 404.
@@ -190,6 +213,7 @@ export const failureReport = (error: ExecutionError, context: ReportContext): Re
       classified.status === 404 &&
       !isExplicitModelNotFound(classified) &&
       code !== ErrorCode.forceCooldown)
+
   return {
     success: false,
     ...(status > 0 ? { httpStatus: status } : {}),
@@ -212,9 +236,12 @@ export const failureReport = (error: ExecutionError, context: ReportContext): Re
 export const isCompactRequestFault = (error: ExecutionError, alt: string): boolean => {
   if (alt !== "responses/compact") return false
   const classified = classifiable(error)
+
   if (error.credentialScoped === true || isCloudflareChallengeError(classified) || isInvalidGrantError(classified)) {
     return false
   }
+
   if (isRequestFault(classified.status, error.message)) return true
+
   return [400, 404, 405, 409, 413, 422, 501].includes(classified.status)
 }

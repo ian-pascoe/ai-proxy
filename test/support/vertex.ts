@@ -6,6 +6,7 @@ const b64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes))
 const wrapPem = (kind: string, der: Uint8Array, lineLength = 64): string => {
   const body = b64(der)
   const lines = lineLength === 0 ? [body] : (body.match(new RegExp(`.{1,${lineLength}}`, "g")) ?? [])
+
   return `-----BEGIN ${kind}-----\n${lines.join("\n")}\n-----END ${kind}-----\n`
 }
 
@@ -14,12 +15,15 @@ const readTlv = (bytes: Uint8Array, offset: number): [number, number, number] =>
   const tag = bytes[offset] as number
   let length = bytes[offset + 1] as number
   let start = offset + 2
+
   if (length & 0x80) {
     const count = length & 0x7f
     length = 0
+
     for (let i = 0; i < count; i++) length = length * 256 + (bytes[start + i] as number)
     start += count
   }
+
   return [tag, start, start + length]
 }
 
@@ -29,6 +33,7 @@ export const pkcs8ToPkcs1 = (pkcs8: Uint8Array): Uint8Array => {
   const [, , versionEnd] = readTlv(pkcs8, seqStart)
   const [, , algEnd] = readTlv(pkcs8, versionEnd)
   const [, octetStart, octetEnd] = readTlv(pkcs8, algEnd)
+
   return pkcs8.slice(octetStart, octetEnd)
 }
 
@@ -47,8 +52,10 @@ export const makeServiceAccount = async (): Promise<TestServiceAccount> => {
     true,
     ["sign", "verify"]
   )) as CryptoKeyPair
+
   const pkcs8 = new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer)
   const pkcs1 = pkcs8ToPkcs1(pkcs8)
+
   return {
     publicKey: pair.publicKey,
     pkcs8,
@@ -73,6 +80,7 @@ const decodeSegment = (segment: string): unknown => {
     .replace(/-/g, "+")
     .replace(/_/g, "/")
     .padEnd(Math.ceil(segment.length / 4) * 4, "=")
+
   return JSON.parse(atob(padded))
 }
 
@@ -82,17 +90,21 @@ export const verifyJwt = async (
   publicKey: CryptoKey
 ): Promise<{ header: Record<string, unknown>; claims: Record<string, unknown>; valid: boolean }> => {
   const [header, claims, signature] = token.split(".") as [string, string, string]
+
   const padded = signature
     .replace(/-/g, "+")
     .replace(/_/g, "/")
     .padEnd(Math.ceil(signature.length / 4) * 4, "=")
+
   const sig = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0))
+
   const valid = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     publicKey,
     sig,
     new TextEncoder().encode(`${header}.${claims}`)
   )
+
   return {
     header: decodeSegment(header) as Record<string, unknown>,
     claims: decodeSegment(claims) as Record<string, unknown>,

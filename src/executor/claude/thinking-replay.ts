@@ -23,6 +23,7 @@ import { isArr, isObj, str } from "../../translator/common/gjson.ts"
 import { ssePayloadObject } from "../../usage/record.ts"
 
 const TTL_MS = 3 * 3600_000
+
 const MAX_ENTRIES_PER_SESSION = 64
 
 export interface ReplaySnapshot {
@@ -66,6 +67,7 @@ export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions 
   const backend = options.backend ?? resolveBackend()
   const address = (session: string): SessionAddress => ({ store: storeName, scope: "", session })
   const expected = (snapshot: ReplaySnapshot | undefined): number => snapshot?.generation ?? 0
+
   return {
     get: (family, session) =>
       bestEffort(
@@ -74,8 +76,10 @@ export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions 
         Effect.gen(function* () {
           const state = yield* backend
           const [result] = yield* state.run(address(session), [{ op: "get", key: family }])
+
           if (result?.status !== "ok" || result.value === undefined) return undefined
           const content = tryParseJson(result.value)
+
           return content === undefined
             ? undefined
             : { contents: [content], snapshot: { generation: result.generation } }
@@ -87,6 +91,7 @@ export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions 
         false,
         Effect.gen(function* () {
           const state = yield* backend
+
           const [result] = yield* state.run(address(session), [
             {
               op: "put",
@@ -97,6 +102,7 @@ export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions 
               maxEntries: MAX_ENTRIES_PER_SESSION
             }
           ])
+
           return result?.status === "ok"
         })
       ),
@@ -106,9 +112,11 @@ export const makeSessionStateReplayStore = (options: ThinkingReplayStoreOptions 
         false,
         Effect.gen(function* () {
           const state = yield* backend
+
           const [result] = yield* state.run(address(session), [
             { op: "delete", key: family, ifGeneration: expected(snapshot) }
           ])
+
           return result?.status === "ok"
         })
       )
@@ -142,19 +150,24 @@ export const replayScopeValid = (scope: ReplayScope | undefined): scope is Repla
 export const replayModelFamily = (credentialId: string, baseURL: string, apiKey: string, baseModel: string): string => {
   if (baseModel === "") return ""
   const identity = credentialId.trim() || baseURL.trim() || apiKey.trim()
+
   if (identity === "") return `claude:${baseModel}`
+
   return `claude:${createHash("sha256").update(identity).digest("hex").slice(0, 16)}:${baseModel}`
 }
 
 const canonical = (value: Json): string => JSON.stringify(sortKeys(value))
+
 const sortKeys = (value: Json): Json => {
   if (isArr(value)) return value.map(sortKeys)
+
   if (isObj(value))
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()
         .map((key) => [key, sortKeys(value[key] as Json)])
     )
+
   return value
 }
 
@@ -166,15 +179,20 @@ const nonThinkingParts = (content: Json | undefined): string[] | undefined => {
   if (!isArr(content)) return undefined
   const parts: string[] = []
   let hasToolUse = false
+
   for (const part of content) {
     const type = str(get(part, "type")).trim()
+
     if (type === "thinking" || type === "redacted_thinking") continue
+
     if (type === "tool_use") {
       if (str(get(part, "id")).trim() === "") return undefined
       hasToolUse = true
     }
+
     parts.push(canonical(part))
   }
+
   return hasToolUse ? parts : undefined
 }
 
@@ -183,11 +201,15 @@ export const replayContentIsReplayable = (content: Json | undefined): boolean =>
   if (!isArr(content)) return false
   let signedThinking = false
   let toolUse = false
+
   for (const part of content) {
     const type = str(get(part, "type")).trim()
+
     if (type === "thinking" && str(get(part, "signature")).trim() !== "") signedThinking = true
+
     if (type === "tool_use" && str(get(part, "id")).trim() !== "") toolUse = true
   }
+
   return signedThinking && toolUse
 }
 
@@ -195,14 +217,20 @@ export const replayContentIsReplayable = (content: Json | undefined): boolean =>
 export const restoreReplayContent = (body: JsonObject, cached: Json): boolean => {
   const cachedParts = nonThinkingParts(cached)
   const messages = body.messages
+
   if (cachedParts === undefined || !isArr(messages)) return false
+
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]
+
     if (str(get(message, "role")).trim().toLowerCase() !== "assistant" || !isObj(message)) continue
     const current = message.content
+
     if (current !== undefined && canonical(current) === canonical(cached)) return false
+
     if (hasThinking(current)) continue
     const currentParts = nonThinkingParts(current)
+
     if (
       currentParts === undefined ||
       currentParts.length !== cachedParts.length ||
@@ -210,9 +238,12 @@ export const restoreReplayContent = (body: JsonObject, cached: Json): boolean =>
     ) {
       continue
     }
+
     message.content = structuredClone(cached)
+
     return true
   }
+
   return false
 }
 
@@ -236,12 +267,16 @@ export class ReplayStreamAccumulator {
 
   observe(line: string): void {
     const payload = ssePayloadObject(line)
+
     if (payload === undefined || this.#failed) return
     const index = Math.trunc(Number(get(payload, "index") ?? -1))
+
     switch (str(get(payload, "type"))) {
       case "content_block_start": {
         const block = get(payload, "content_block")
+
         if (!isObj(block)) return
+
         const accumulated: AccumulatedBlock = {
           raw: structuredClone(block),
           text: str(block.text),
@@ -253,34 +288,45 @@ export class ReplayStreamAccumulator {
           hasSignature: typeof block.signature === "string",
           hasInput: false
         }
+
         this.#blocks.set(index, accumulated)
+
         return
       }
+
       case "content_block_delta": {
         const block = this.#blocks.get(index)
         const delta = get(payload, "delta")
+
         if (block === undefined || !isObj(delta)) return
+
         switch (str(delta.type)) {
           case "text_delta":
             block.text += str(delta.text)
             block.hasText = true
+
             return
           case "thinking_delta":
             block.thinking += str(delta.thinking)
             block.hasThinking = true
+
             return
           case "signature_delta":
             block.signature += str(delta.signature)
             block.hasSignature = true
+
             return
           case "input_json_delta":
             block.input += str(delta.partial_json)
             block.hasInput = true
         }
+
         return
       }
+
       case "message_stop":
         this.#complete = true
+
         return
       case "error":
         this.#failed = true
@@ -291,19 +337,27 @@ export class ReplayStreamAccumulator {
   content(): Json[] | undefined {
     if (!this.#complete || this.#failed) return undefined
     const out: Json[] = []
+
     for (const index of [...this.#blocks.keys()].toSorted((a, b) => a - b)) {
       const block = this.#blocks.get(index) as AccumulatedBlock
       const raw = block.raw
+
       if (block.hasText) raw.text = block.text
+
       if (block.hasThinking) raw.thinking = block.thinking
+
       if (block.hasSignature) raw.signature = block.signature
+
       if (block.hasInput) {
         const parsed = block.input === "" ? {} : tryParseJson(block.input)
+
         if (parsed === undefined) return undefined
         raw.input = parsed
       }
+
       out.push(raw)
     }
+
     return out
   }
 }

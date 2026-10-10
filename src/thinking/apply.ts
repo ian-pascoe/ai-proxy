@@ -85,20 +85,25 @@ const shouldMapConfiguredHighIntent = (
 ): boolean => {
   const fromFormat = normalize(fromFormatRaw)
   const toFormat = normalize(toFormatRaw)
+
   if (fromFormat !== toFormat) return true
   const modelType = normalize(modelInfo.type ?? "")
+
   return modelType !== "" && !isSameProviderFamily(toFormat, modelType)
 }
 
 /** For xhigh/max crossing families, prefers a supported level in order xhigh,max,high / max,xhigh,high. */
 const mapConfiguredHighIntent = (levelRaw: string, modelInfo: ThinkingModelInfo): string => {
   const levels = modelInfo.thinking?.levels ?? []
+
   if (levels.length === 0) return levelRaw
   const level = normalize(levelRaw)
   let candidates: readonly string[]
+
   if (level === Level.xhigh) candidates = [Level.xhigh, Level.max, Level.high]
   else if (level === Level.max) candidates = [Level.max, Level.xhigh, Level.high]
   else return level
+
   return candidates.find((candidate) => isLevelSupported(candidate, levels)) ?? level
 }
 
@@ -106,6 +111,7 @@ const mapConfiguredHighIntent = (levelRaw: string, modelInfo: ThinkingModelInfo)
 const normalizeUserDefinedConfig = (config: ThinkingConfig, toFormat: string): ThinkingConfig => {
   if (config.mode !== "level" || toFormat === "claude" || !isBudgetCapableProvider(toFormat)) return config
   const budget = convertLevelToBudget(config.level)
+
   return budget === undefined ? config : { mode: "budget", budget, level: "" }
 }
 
@@ -126,6 +132,7 @@ const applyUserDefinedModel = (
   resolved: Resolved
 ): ApplyThinkingResult => {
   const modelId = modelInfo?.id ?? suffix.modelName
+
   const summarize = (target: Json | undefined) =>
     applySummaryConfigForProvider(
       target,
@@ -138,22 +145,28 @@ const applyUserDefinedModel = (
     )
 
   let config: ThinkingConfig
+
   if (suffix.hasSuffix) {
     config = parseSuffixToConfig(suffix.rawSuffix)
   } else {
     config = sourceConfig
+
     if (!hasThinkingConfig(config)) config = extractThinkingConfig(body, fromFormat)
+
     if (!hasThinkingConfig(config) && fromFormat !== toFormat) config = extractThinkingConfig(body, toFormat)
   }
 
   if (!hasThinkingConfig(config)) return { body: summarize(body) }
 
   const applier = getProviderApplier(toFormat)
+
   if (applier === undefined) return { body }
 
   config = normalizeUserDefinedConfig(config, toFormat)
   const applied = applier.apply(body, config, modelInfo)
+
   if (thinkingIsFullyDisabled(config) || nativeResponses) return { body: applied }
+
   return { body: summarize(applied) }
 }
 
@@ -166,49 +179,61 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
   let body = bodyIn
   const model = options.model
   let providerFormat = normalize(options.toFormat)
+
   if (providerFormat === "openai-response") providerFormat = "codex"
   let providerKey = normalize(options.providerKey ?? "")
+
   if (providerKey === "") providerKey = providerFormat
   let fromFormat = normalize(options.fromFormat)
+
   if (fromFormat === "") fromFormat = providerFormat
 
   const modelInfoResolved = options.modelInfo !== undefined
+
   // The in-place mutations below must not leak into the source snapshot the Go code reads from a separate buffer.
   const sourceBody =
     options.sourceBody !== undefined && options.sourceBody === body ? cloneJson(options.sourceBody) : options.sourceBody
 
   let summaryConfig = options.summaryConfig
+
   if (summaryConfig === undefined) {
     summaryConfig =
       modelInfoResolved && sourceBody !== undefined
         ? extractSummaryConfig(sourceBody, options.fromFormat)
         : extractSummaryConfig(body, options.toFormat)
   }
+
   const resolved: Resolved = { lookup: options.lookupModelInfo, providerKey, summaryConfig }
 
   // 1. Parse the suffix and resolve the model.
   const suffix = parseSuffix(model)
   const baseModel = suffix.modelName
   let modelInfo: ThinkingModelInfo | undefined
+
   if (modelInfoResolved) modelInfo = options.modelInfo ?? undefined
   else modelInfo = baseModel.trim() === "" ? undefined : options.lookupModelInfo?.(baseModel.trim(), providerKey)
 
   // Resolve source intent before stripping unsupported target input items.
   const updatesChanged = options.normalizedUpdatesChanged === true
   let sourceConfig = EMPTY_CONFIG
+
   if (isResponsesFormat(fromFormat)) {
     const sourceRequest = !updatesChanged && sourceBody !== undefined ? sourceBody : body
+
     if (!updatesChanged || providerFormat === "codex" || providerFormat === "xai") {
       sourceConfig = extractCodexUsageConfig(sourceRequest)
     }
   }
+
   const responseTarget = providerFormat === "codex" || providerFormat === "xai"
   const supportsUpdates = modelInfo?.supportConfigurationUpdate === true
+
   if (responseTarget && !supportsUpdates) body = stripConfigurationUpdates(body)
   const nativeResponses = responseTarget && isResponsesFormat(fromFormat) && supportsUpdates
 
   // 2. Route check.
   const applier = getProviderApplier(providerFormat)
+
   if (applier === undefined) return { body }
 
   // 3. Model capability check.
@@ -222,6 +247,7 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
     // Do not rebuild a malformed target from a separate source update.
     return { body }
   }
+
   // Native Responses keeps the top-level baseline and in-turn updates as-is.
   if (nativeResponses && !suffix.hasSuffix) return { body }
 
@@ -237,28 +263,35 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
       resolved
     )
   }
+
   if (modelInfo.thinking === undefined) {
     const config = extractThinkingConfig(body, providerFormat)
+
     if (hasThinkingConfig(config) || summaryConfig.mode !== "unspecified") {
       return { body: responseTarget ? stripResponsesEffort(body) : stripThinkingConfig(body, providerFormat) }
     }
+
     return { body }
   }
 
   // 4. Config: the suffix has priority over the body.
   let config: ThinkingConfig
+
   if (suffix.hasSuffix) {
     config = parseSuffixToConfig(suffix.rawSuffix)
   } else {
     config = sourceConfig
+
     if (!hasThinkingConfig(config) && !updatesChanged && modelInfoResolved && sourceBody !== undefined) {
       config = extractSourceThinkingConfig(sourceBody, fromFormat)
     }
+
     if (!hasThinkingConfig(config)) config = extractThinkingConfig(body, providerFormat)
   }
 
   if (!hasThinkingConfig(config)) {
     if (nativeResponses) return { body }
+
     if (
       modelInfoResolved &&
       providerFormat === "claude" &&
@@ -270,6 +303,7 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
       // drop that inferred activation when it supports only manual extended thinking.
       body = stripInferredClaudeSummaryActivation(body, modelInfo)
     }
+
     return {
       body: applySummaryConfigForProvider(
         body,
@@ -282,6 +316,7 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
       )
     }
   }
+
   if (
     modelInfoResolved &&
     config.mode === "level" &&
@@ -292,12 +327,15 @@ export const applyThinking = (bodyIn: Json | undefined, options: ApplyThinkingOp
 
   // 5. Validate and normalise.
   const validation = validateConfig(config, modelInfo, fromFormat, providerFormat, suffix.hasSuffix)
+
   if (validation.error !== undefined) return { body, error: validation.error }
 
   // 6. Apply with the provider applier, then restore the target summary intent that was explicit before suffix
   // processing. A fully disabled amount takes precedence over visibility.
   const applied = applier.apply(body, validation.config, modelInfo)
+
   if (thinkingIsFullyDisabled(validation.config) || nativeResponses) return { body: applied }
+
   return {
     body: applySummaryConfigForProvider(
       applied,

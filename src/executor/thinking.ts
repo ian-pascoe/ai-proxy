@@ -64,15 +64,20 @@ const translatedSummaryConfig = (
   const from = lowerFormat(request.from)
   const to = lowerFormat(request.to)
   const target = from === to ? extractSummaryConfig(request.body, to) : extractExplicitSummaryConfig(request.body, to)
+
   if (target.mode !== "unspecified") return target
 
   const current = extractTranslatedSummaryConfig(source, from, to)
   const original = extractTranslatedSummaryConfig(originalSource, from, to)
+
   if (current.mode === "unspecified") return original
+
   if (!translators.hasRequestTransformer(request.from, request.to)) return UNSPECIFIED_SUMMARY
 
   const candidate = applySummaryConfigForModel(cloneJson(request.body), to, request.model, current)
+
   if (extractExplicitSummaryConfig(candidate, to).mode !== "unspecified") return UNSPECIFIED_SUMMARY
+
   return current
 }
 
@@ -109,6 +114,7 @@ export function makeLiveThinking(translators: TranslatorRegistry) {
     apply: (request) => {
       const source = request.source ?? request.originalSource
       const originalSource = request.originalSource ?? source
+
       const result = applyThinking(request.body, {
         model: request.model,
         fromFormat: request.from,
@@ -120,11 +126,13 @@ export function makeLiveThinking(translators: TranslatorRegistry) {
         ...(request.modelInfo === undefined ? {} : { modelInfo: request.modelInfo }),
         ...(request.lookupModelInfo === undefined ? {} : { lookupModelInfo: request.lookupModelInfo })
       })
+
       if (result.error !== undefined) {
         return Effect.fail(
           new ExecutionError({ status: result.error.statusCode, message: result.error.message, requestScoped: true })
         )
       }
+
       return Effect.succeed(result.body ?? request.body)
     }
   })

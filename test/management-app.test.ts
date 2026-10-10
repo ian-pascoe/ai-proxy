@@ -8,10 +8,13 @@ import { requestContext } from "../src/platform/env.ts"
 import { claudeFile, resetControlPlane } from "./support/management.ts"
 
 const app = makeWebHandler()
+
 afterAll(app.dispose)
 
 const PANEL_HTML = "<!doctype html><html><head><title>cliproxy panel</title></head><body></body></html>"
+
 const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`)
+
 const bindings = {
   ...env,
   ACCESS_DEV_BYPASS: "admin@example.com",
@@ -19,7 +22,9 @@ const bindings = {
     fetch: async () => new Response(PANEL_HTML, { headers: { "content-type": "text/html" } })
   } as unknown as Fetcher
 }
+
 const ctx = {} as unknown as ExecutionContext
+
 const get = (path: string, base = "http://localhost:8787") =>
   app.handler(new Request(`${base}${path}`), requestContext(bindings, ctx))
 

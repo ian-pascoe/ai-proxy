@@ -18,12 +18,15 @@ const equalFold = (a: string, b: string): boolean => a.toLowerCase() === b.toLow
 export const matchModelPattern = (rawPattern: string, rawModel: string): boolean => {
   const pattern = rawPattern.trim()
   const model = rawModel.trim()
+
   if (pattern === "") return false
+
   if (pattern === "*") return true
   let pi = 0
   let si = 0
   let starIdx = -1
   let matchIdx = 0
+
   while (si < model.length) {
     if (pi < pattern.length && pattern[pi] === model[si]) {
       pi++
@@ -40,14 +43,18 @@ export const matchModelPattern = (rawPattern: string, rawModel: string): boolean
       return false
     }
   }
+
   while (pi < pattern.length && pattern[pi] === "*") pi++
+
   return pi === pattern.length
 }
 
 /** Mirrors thinking.ParseSuffix: `name(value)` -> base name and whether a suffix was present. */
 const parseThinkingSuffix = (model: string): { modelName: string; hasSuffix: boolean } => {
   const lastOpen = model.lastIndexOf("(")
+
   if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false }
+
   return { modelName: model.slice(0, lastOpen), hasSuffix: true }
 }
 
@@ -57,25 +64,33 @@ export const payloadModelCandidates = (rawModel: string, rawRequestedModel: stri
   const requestedModel = rawRequestedModel.trim()
   const candidates: string[] = []
   const seen = new Set<string>()
+
   const add = (raw: string): void => {
     const value = raw.trim()
+
     if (value === "") return
     const key = value.toLowerCase()
+
     if (seen.has(key)) return
     seen.add(key)
     candidates.push(value)
   }
+
   add(model)
+
   if (requestedModel !== "") {
     const parsed = parseThinkingSuffix(requestedModel)
     add(parsed.modelName)
+
     if (parsed.hasSuffix) add(requestedModel)
   }
+
   return candidates
 }
 
 const normalizeFromProtocol = (protocol: string): string => {
   const normalized = protocol.trim().toLowerCase()
+
   return normalized === "openai-response" || normalized === "openai-responses" || normalized === "response"
     ? "responses"
     : normalized
@@ -83,25 +98,34 @@ const normalizeFromProtocol = (protocol: string): string => {
 
 const fromProtocolMatches = (pattern: string | undefined, fromProtocol: string | undefined): boolean => {
   const wanted = normalizeFromProtocol(pattern ?? "")
+
   if (wanted === "") return true
   const actual = normalizeFromProtocol(fromProtocol ?? "")
+
   return actual !== "" && wanted === actual
 }
 
 const headerValues = (headers: HeaderInput | undefined, key: string): string[] => {
   if (headers === undefined) return []
+
   if (headers instanceof Headers) {
     const joined = headers.get(key)
+
     if (joined === null) return []
+
     // The Fetch API folds repeated headers into one comma-separated value; any single value may match too.
     return [joined, ...joined.split(",").map((value) => value.trim())]
   }
+
   const values: string[] = []
+
   for (const [name, value] of Object.entries(headers)) {
     if (!equalFold(name, key) || value === undefined) continue
+
     if (typeof value === "string") values.push(value)
     else values.push(...value)
   }
+
   return values
 }
 
@@ -110,25 +134,32 @@ const headersMatch = (
   rules: Readonly<Record<string, string>> | undefined
 ): boolean => {
   if (rules === undefined) return true
+
   for (const [rawKey, pattern] of Object.entries(rules)) {
     const key = rawKey.trim()
+
     if (key === "") continue
     const values = headerValues(headers, key)
+
     if (values.length === 0) return false
+
     if (!values.some((value) => matchModelPattern(pattern, value))) return false
   }
+
   return true
 }
 
 const pathMatchesValue = (payload: Json, path: string, value: Json): boolean =>
   resolvePayloadRulePaths(payload, path).some((resolved) => {
     const current = get(payload, resolved)
+
     return current !== undefined && jsonEquals(current, value)
   })
 
 const pathExists = (payload: Json, path: string): boolean =>
   resolvePayloadRulePaths(payload, path).some((resolved) => {
     const current = get(payload, resolved)
+
     return current !== undefined && current !== null
   })
 
@@ -136,23 +167,31 @@ const conditionsMatch = (payload: Json, root: string, rule: PayloadModelRule): b
   for (const condition of rule.match ?? []) {
     for (const [path, value] of Object.entries(condition)) {
       if (path.trim() === "") continue
+
       if (!pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false
     }
   }
+
   for (const condition of rule["not-match"] ?? []) {
     for (const [path, value] of Object.entries(condition)) {
       if (path.trim() === "") continue
+
       if (pathMatchesValue(payload, buildPayloadPath(root, path), value)) return false
     }
   }
+
   for (const path of rule.exist ?? []) {
     if (path.trim() === "") continue
+
     if (!pathExists(payload, buildPayloadPath(root, path))) return false
   }
+
   for (const path of rule["not-exist"] ?? []) {
     if (path.trim() === "") continue
+
     if (pathExists(payload, buildPayloadPath(root, path))) return false
   }
+
   return true
 }
 
@@ -171,17 +210,25 @@ export const payloadModelRulesMatch = (
   payload: Json
 ): boolean => {
   if (rules === undefined || rules.length === 0 || context.candidates.length === 0) return false
+
   for (const model of context.candidates) {
     for (const entry of rules) {
       const name = (entry.name ?? "").trim()
+
       if (name === "") continue
       const entryProtocol = (entry.protocol ?? "").trim()
+
       if (entryProtocol !== "" && context.protocol !== "" && !equalFold(entryProtocol, context.protocol)) continue
+
       if (!fromProtocolMatches(entry["from-protocol"], context.fromProtocol)) continue
+
       if (!headersMatch(context.headers, entry.headers)) continue
+
       if (!matchModelPattern(name, model)) continue
+
       if (conditionsMatch(payload, context.root, entry)) return true
     }
   }
+
   return false
 }

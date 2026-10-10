@@ -14,26 +14,36 @@ const RELEASE_URL = "https://api.github.com/repos/router-for-me/CLIProxyAPI/rele
 
 const latestVersion = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient
+
   const request = HttpClientRequest.get(RELEASE_URL).pipe(
     HttpClientRequest.setHeaders({ accept: "application/vnd.github+json", "user-agent": "CLIProxyAPI" })
   )
+
   const outcome = yield* Effect.gen(function* () {
     const response = yield* client.execute(request).pipe(Effect.timeout("10 seconds"))
+
     return { status: response.status, text: yield* response.text.pipe(Effect.timeout("10 seconds")) }
   }).pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.result)
+
   if (outcome._tag === "Failure") {
     return yield* replyError(502, "request_failed", { message: "failed to reach the release API" })
   }
+
   const { status, text } = outcome.success
+
   if (status < 200 || status >= 300) {
     return yield* replyError(502, "unexpected_status", { message: `unexpected release API status ${status}` })
   }
+
   const release = yield* Effect.try({
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(502, "decode_failed", { message: "release response is not JSON" })
   })
+
   const tag = isJsonObject(release) ? String(release.tag_name ?? "").trim() || String(release.name ?? "").trim() : ""
+
   if (tag === "") return yield* replyError(502, "invalid_response", { message: "release has no tag" })
+
   return jsonReply(200, { "latest-version": tag })
 })
 
@@ -46,9 +56,11 @@ export const logsDisabledHandler = handled(Effect.fail(replyError(400, "logging 
 export const errorLogsHandler = handled(
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
+
     const rest = new URL(request.originalUrl, "http://localhost").pathname
       .slice("/v8/management/observability/logs/errors".length)
       .replace(/^\/+/, "")
+
     return rest === "" ? jsonReply(200, { files: [] }) : yield* replyError(404, "log file not found")
   })
 )

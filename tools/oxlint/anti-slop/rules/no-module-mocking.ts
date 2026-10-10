@@ -8,6 +8,7 @@ const moduleMockMethods = new Set(["doMock", "mock", "unstable_mockModule"]);
 
 function importedName(node: ESTree.Node): string | null {
   if (node.type !== "ImportSpecifier") return null;
+
   return node.imported.type === "Identifier" ? node.imported.name : node.imported.value;
 }
 
@@ -16,6 +17,7 @@ function isTestFrameworkObject(
   expression: ESTree.Expression,
 ): expression is ESTree.IdentifierReference {
   if (expression.type !== "Identifier") return false;
+
   if (
     (expression.name === "vi" || expression.name === "jest") &&
     sourceCode.isGlobalReference(expression)
@@ -24,23 +26,29 @@ function isTestFrameworkObject(
   }
 
   const variable = resolveVariable(sourceCode, expression);
+
   if (variable === null || variable.defs.length === 0) {
     return expression.name === "vi" || expression.name === "jest";
   }
+
   return variable.defs.some((definition) => {
     if (definition.type !== "ImportBinding" || definition.parent?.type !== "ImportDeclaration") {
       return false;
     }
+
     const source = definition.parent.source.value;
     const name = importedName(definition.node);
+
     return (source === "vitest" && name === "vi") || (source === "@jest/globals" && name === "jest");
   });
 }
 
 function moduleMockCall(sourceCode: SourceCode, callee: ESTree.Expression): boolean {
   if (!("property" in callee) || !("object" in callee) || !("computed" in callee)) return false;
+
   if (!isTestFrameworkObject(sourceCode, callee.object)) return false;
   const property = callee.property;
+
   const method = callee.computed
     ? property.type === "Literal" &&
       (property.value === "doMock" ||
@@ -51,6 +59,7 @@ function moduleMockCall(sourceCode: SourceCode, callee: ESTree.Expression): bool
     : property.type === "Identifier"
       ? property.name
       : null;
+
   return method !== null && moduleMockMethods.has(method);
 }
 
@@ -71,6 +80,7 @@ export const noModuleMockingRule = defineRule({
     return {
       CallExpression(node) {
         if (node.callee.type === "Super" || node.callee.type === "V8IntrinsicExpression") return;
+
         if (moduleMockCall(context.sourceCode, node.callee)) {
           context.report({ node, messageId: "moduleMock" });
         }

@@ -11,13 +11,17 @@ import { applyCustomHeaders } from "../helps/custom-headers.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 
 export const KIMI_VERSION = "cliproxy-workers"
+
 const DEVICE_NAME = "cliproxy-workers"
+
 const DEVICE_MODEL = "Cloudflare Workers"
 
 /** `resolveKimiDeviceID`, then a stable per-credential fallback. */
 export const kimiDeviceId = (credential: CredentialSnapshot): string => {
   const stored = credential.metadata["device_id"]
+
   if (typeof stored === "string" && stored.trim() !== "") return stored.trim()
+
   return uuidV5Oid(`cli-proxy-api:kimi:device:${credential.id}`)
 }
 
@@ -39,5 +43,6 @@ export const kimiHeaders = (
     "x-msh-device-id": kimiDeviceId(credential),
     accept: stream ? "text/event-stream" : "application/json"
   }
+
   return applyCustomHeaders(headers, credential, clientHeaders, sessionId)
 }

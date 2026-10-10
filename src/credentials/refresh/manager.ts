@@ -104,10 +104,13 @@ export interface RunSummary {
 }
 
 const DEFAULT_WORKERS = 16
+
 /** Cap of one whole refresh: three attempts of 30 s plus the retry sleeps (each HTTP call has its own 30 s bound). */
 const DEFAULT_TIMEOUT_MS = 120_000
+
 /** A credential whose refresh is running is looked at again after this long (Go `refreshPendingBackoff`). */
 const PENDING_RECHECK_MS = 60_000
+
 /** After an alarm run a credential that is still due signals a bug: never spin faster than this. */
 export const ANOMALY_REARM_MS = 30_000
 
@@ -167,12 +170,15 @@ export class RefreshManager {
   nextDueAt(): number | undefined {
     const now = this.#now()
     let next: number | undefined
+
     for (const target of this.#host.refreshTargets()) {
       const at = this.#inflight.has(target.credential.id)
         ? now + PENDING_RECHECK_MS
         : nextRefreshCheckAt(now, subjectOf(target.credential), target.state)
+
       if (at !== undefined && (next === undefined || at < next)) next = at
     }
+
     return next
   }
 
@@ -182,37 +188,47 @@ export class RefreshManager {
    */
   async rearm(dueDelayMs = 0): Promise<number | undefined> {
     const next = this.nextDueAt()
+
     if (next === undefined) {
       await this.#alarm.clear()
+
       return undefined
     }
+
     const now = this.#now()
     const at = next <= now ? now + dueDelayMs : next
     await this.#alarm.set(at)
+
     return at
   }
 
   /** Refreshes every credential that is due now (bounded concurrency). Never throws. */
   async runDue(): Promise<RunSummary> {
     const now = this.#now()
+
     const due = this.#host
       .refreshTargets()
       .filter((target) => shouldRefresh(now, subjectOf(target.credential), target.state))
       .map((target) => target.credential.id)
+
     let succeeded = 0
     let failed = 0
     const queue = [...due]
+
     const worker = async (): Promise<void> => {
       for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
         const result = await this.#start(id, false).catch(() =>
           failure("refresh_failed", "refresh failed unexpectedly")
         )
+
         if (result.ok) succeeded += 1
         else failed += 1
       }
     }
+
     const workers = Math.max(1, Math.min(this.#workers() || DEFAULT_WORKERS, queue.length))
     await Promise.all(Array.from({ length: queue.length === 0 ? 0 : workers }, worker))
+
     return { attempted: due.length, succeeded, failed }
   }
 
@@ -246,16 +262,23 @@ export class RefreshManager {
   async refreshNow(id: string, options: RefreshOptions = {}): Promise<RefreshResult> {
     const rejected = options.rejectedAccessToken?.trim() ?? ""
     const target = this.#host.refreshTarget(id)
+
     if (target === undefined) return failure("not_found", "credential not found")
+
     if (rejected !== "") this.#markRejected(target, rejected)
 
     const joined = this.#inflight.get(id)
+
     if (joined === undefined && rejected !== "") {
       const current = accessTokenOf(target.credential.metadata)
+
       if (current !== "" && current !== rejected) return this.#unchanged(target)
     }
+
     const result = await (joined ?? this.#start(id, options.force === true, rejected))
+
     if (joined === undefined) await this.rearm().catch(() => undefined)
+
     return result
   }
 
@@ -268,13 +291,16 @@ export class RefreshManager {
    */
   async ensureFresh(id: string): Promise<RefreshResult> {
     const target = this.#host.refreshTarget(id)
+
     if (target === undefined) return failure("not_found", "credential not found")
     const { credential, state } = target
     const executor = executorKey(credential)
+
     if (executor === "vertex") return this.#ensureVertex(credential)
 
     const now = this.#now()
     let needsRefresh = false
+
     if (executor === "meta") {
       needsRefresh = metaNeedsMint(credential.metadata)
     } else if (hasRefreshCredential(subjectOf(credential))) {
@@ -282,6 +308,7 @@ export class RefreshManager {
       const safety = credential.provider === "antigravity" ? ANTIGRAVITY_REQUEST_SAFETY_MS : 0
       needsRefresh = accessTokenOf(credential.metadata) === "" || (expiry !== undefined && expiry <= now + safety)
     }
+
     return needsRefresh ? this.refreshNow(id) : this.#unchanged(target)
   }
 
@@ -289,6 +316,7 @@ export class RefreshManager {
   decorate = (credential: Credential): Credential => {
     if (executorKey(credential) !== "vertex") return credential
     const token = this.#vertexTokens.get(credential.id, this.#fingerprint(credential), this.#now())
+
     return token === undefined ? credential : this.#withToken(credential, token)
   }
 
@@ -301,7 +329,9 @@ export class RefreshManager {
   /** `markRejectedAccessToken`: only when the token carries no expiry information of its own. */
   #markRejected(target: RefreshTarget, token: string): void {
     const { credential, state } = target
+
     if (accessTokenOf(credential.metadata) !== token || state.rejectedAccessToken === token) return
+
     if (accessTokenExpiry(credential.metadata) !== undefined) return
     this.#host.commitRefresh(credential.id, { state: { ...state, rejectedAccessToken: token, updatedAt: this.#now() } })
   }
@@ -309,13 +339,17 @@ export class RefreshManager {
   /** Starts (or joins) the refresh of `id`. */
   #start(id: string, force: boolean, failedAccessToken = ""): Promise<RefreshResult> {
     const running = this.#inflight.get(id)
+
     if (running !== undefined) return running
+
     const promise = this.#execute(id, force, failedAccessToken)
       .catch((): RefreshResult => failure("refresh_failed", "refresh failed unexpectedly"))
       .finally(() => {
         this.#inflight.delete(id)
       })
+
     this.#inflight.set(id, promise)
+
     return promise
   }
 
@@ -329,6 +363,7 @@ export class RefreshManager {
       Effect.catch((error) => Effect.succeed<Outcome<A>>({ ok: false, error })),
       Effect.provide(this.#http)
     )
+
     try {
       return await Effect.runPromise(bounded)
     } catch {
@@ -338,13 +373,17 @@ export class RefreshManager {
 
   async #execute(id: string, force: boolean, failedAccessToken: string): Promise<RefreshResult> {
     const target = this.#host.refreshTarget(id)
+
     if (target === undefined) return failure("not_found", "credential not found")
     const { credential, state: baseState } = target
     const subject = subjectOf(credential)
+
     if (!hasRefreshCredential(subject)) return failure("not_refreshable", "credential has no refresh token")
     const executor = executorKey(credential)
     const protocol = refreshProtocolFor(executor)
+
     if (protocol === undefined) return failure("not_refreshable", `provider ${executor} has no token refresh`)
+
     if (!force && isTerminalRefreshState(baseState, credential.disabled)) {
       return hasUnauthorizedFailure(baseState)
         ? failure("unauthorized", "credential is unauthorized: log in again", { httpStatus: 401, terminal: true })
@@ -353,6 +392,7 @@ export class RefreshManager {
 
     const now = this.#now()
     const blockedUntil = this.#blockedUntil.get(id) ?? 0
+
     const effect: RefreshEffect<JsonObject> =
       blockedUntil > now
         ? Effect.fail(
@@ -366,11 +406,14 @@ export class RefreshManager {
             retryDelayMs: this.#retryDelayMs,
             metaMintUrl: this.#metaMintUrl
           })
+
     const outcome = await this.#run(effect)
     const finishedAt = this.#now()
 
     const current = this.#host.refreshTarget(id)
+
     if (current === undefined) return failure("not_found", "credential was removed during refresh")
+
     // Material replaced while the refresh ran (re-login, re-import): the outcome describes the old tokens.
     const replaced =
       current.credential.credentialVersion !== credential.credentialVersion ||
@@ -378,10 +421,13 @@ export class RefreshManager {
 
     if (!outcome.ok) {
       const error = outcome.error
+
       if (error.blockMs !== undefined) this.#blockedUntil.set(id, finishedAt + error.blockMs)
       this.#logFailure(executor, error)
+
       if (replaced) return this.#unchanged(current)
       const currentToken = accessTokenOf(current.credential.metadata)
+
       const result = applyRefreshFailure(current.state, {
         now: finishedAt,
         message: redactSecrets(error.message),
@@ -393,13 +439,17 @@ export class RefreshManager {
         force,
         tokenExpiry: accessTokenExpiry(current.credential.metadata, current.state.rejectedAccessToken)
       })
+
       let committed = current
+
       try {
         committed = this.#host.commitRefresh(id, { state: result.state }) ?? current
       } catch {
         return failure("persist_failed", "refresh failed and its state could not be saved")
       }
+
       const terminal = isTerminalRefreshState(committed.state, committed.credential.disabled)
+
       return failure(
         terminal && hasUnauthorizedFailure(committed.state) ? "unauthorized" : "refresh_failed",
         redactSecrets(error.message),
@@ -409,19 +459,24 @@ export class RefreshManager {
 
     if (replaced) return this.#unchanged(current)
     const merged = mergeRefreshedMetadata(credential.metadata, current.credential.metadata, outcome.value)
+
     // Ineffective-refresh guard: a refresh that leaves the credential due again must not be retried in a tight loop.
     const probe = {
       ...subjectOf(current.credential),
       metadata: merged,
       disabled: current.credential.disabled
     }
+
     const { rejectedAccessToken: _rejected, ...probeState } = current.state
     const stillDue = shouldRefresh(finishedAt, probe, { ...probeState, nextRefreshAfter: 0 })
     const nextState = applyRefreshSuccess(baseState, current.state, finishedAt, stillDue, current.credential.disabled)
+
     try {
       const committed = this.#host.commitRefresh(id, { metadata: merged, state: nextState })
+
       if (committed === undefined) return failure("not_found", "credential was removed during refresh")
       this.#blockedUntil.delete(id)
+
       return { ok: true, refreshed: true, credential: toSnapshot(this.decorate(committed.credential)) }
     } catch {
       // Go: "persist refreshed auth failed". The rotated token is lost; the next refresh will report invalid_grant.
@@ -432,6 +487,7 @@ export class RefreshManager {
   #hasValidAccessToken(target: RefreshTarget, now: number): boolean {
     if (accessTokenOf(target.credential.metadata) === "") return false
     const expiry = accessTokenExpiry(target.credential.metadata, target.state.rejectedAccessToken)
+
     return expiry === undefined || expiry > now
   }
 
@@ -460,21 +516,28 @@ export class RefreshManager {
   async #ensureVertex(credential: Credential): Promise<RefreshResult> {
     const fingerprint = this.#fingerprint(credential)
     const cached = this.#vertexTokens.get(credential.id, fingerprint, this.#now())
+
     if (cached !== undefined) return this.#vertexSnapshot(credential, cached, false)
 
     let pending = this.#vertexInflight.get(credential.id)
+
     if (pending === undefined) {
       pending = this.#run(mintVertexToken(credential.metadata, this.#now())).finally(() => {
         this.#vertexInflight.delete(credential.id)
       })
       this.#vertexInflight.set(credential.id, pending)
     }
+
     const outcome = await pending
+
     if (!outcome.ok) {
       this.#logFailure("vertex", outcome.error)
+
       return failure("refresh_failed", redactSecrets(outcome.error.message), { httpStatus: outcome.error.status })
     }
+
     this.#vertexTokens.set(credential.id, fingerprint, outcome.value)
+
     return this.#vertexSnapshot(credential, outcome.value, true)
   }
 

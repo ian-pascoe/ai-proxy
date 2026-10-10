@@ -22,6 +22,7 @@ let devBypassRefusalLogged = false
 const warnDevBypassRefused = Effect.suspend(() => {
   if (devBypassRefusalLogged) return Effect.void
   devBypassRefusalLogged = true
+
   return Effect.logWarning(
     "ACCESS_DEV_BYPASS is ignored because ACCESS_TEAM_DOMAIN/ACCESS_AUD are set; remove it from this environment"
   )
@@ -31,12 +32,16 @@ const warnDevBypassRefused = Effect.suspend(() => {
 const isAdminPrincipal = (env: AdminLists, principal: Principal, extra: ExtraAdmins | undefined) =>
   Effect.gen(function* () {
     if (isAdmin(env, principal)) return true
+
     if (extra === undefined) return false
     const lists = yield* Effect.result(extra)
+
     if (lists._tag === "Failure") {
       yield* Effect.logWarning("config admin allow-list unavailable; only ACCESS_ADMIN_* apply")
+
       return false
     }
+
     return isAdmin(lists.success, principal)
   })
 
@@ -56,19 +61,24 @@ export const authenticateRequest = (
   Effect.gen(function* () {
     const env = yield* WorkerEnv
     const bypass = devBypass(env, requestUrl)
+
     if (bypass?._tag === "Active") {
       // Local `alchemy dev` only; the bypass principal is an administrator.
       return yield* makeIdentity({ kind: "user", email: bypass.email, sub: "dev-bypass" })
     }
+
     if (bypass?._tag === "Refused") yield* warnDevBypassRefused
 
     const config = yield* loadAccessConfig(env)
     const token = headers[ACCESS_JWT_HEADER]?.trim() ?? ""
+
     if (token === "") return yield* new UnauthorizedError({ message: "Missing API key" })
 
     const principal: Principal = yield* verifyAccessJwt(token, config)
+
     if (zone === "management" && !(yield* isAdminPrincipal(config, principal, extraAdmins))) {
       return yield* new ForbiddenError({ message: "Forbidden" })
     }
+
     return yield* makeIdentity(principal)
   })

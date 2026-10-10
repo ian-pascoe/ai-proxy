@@ -35,24 +35,31 @@ export const isTokenPayloadKey = (key: string): boolean => TOKEN_KEYS.has(key.tr
 export const mergeExistingMetadata = (provider: string, incoming: JsonObject, existing: JsonObject): JsonObject => {
   const merged: JsonObject = { ...incoming }
   const isMeta = provider.trim().toLowerCase() === "meta"
+
   for (const [key, value] of Object.entries(existing)) {
     if (isTokenPayloadKey(key)) continue
+
     if (isMeta && META_SECRET_KEYS.has(canonicalMetadataKey(key))) continue
+
     if (!Object.hasOwn(merged, key)) merged[key] = value
   }
+
   return merged
 }
 
 const stringOf = (meta: JsonObject, key: string): string => {
   const value = meta[key]
+
   return typeof value === "string" ? value.trim() : ""
 }
 
 const firstString = (meta: JsonObject, ...keys: string[]): string => {
   for (const key of keys) {
     const value = stringOf(meta, key)
+
     if (value !== "") return value
   }
+
   return ""
 }
 

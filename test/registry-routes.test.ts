@@ -15,6 +15,7 @@ import { catalogs } from "./support/registry.ts"
 import { configOf, source } from "./support/registry-sources.ts"
 
 const key = await makeKey("models-kid")
+
 const accessEnv = {
   ...env,
   ACCESS_TEAM_DOMAIN: "team",
@@ -22,11 +23,14 @@ const accessEnv = {
   ACCESS_ADMIN_EMAILS: "",
   ACCESS_DEV_BYPASS: ""
 }
+
 const ctx = {} as unknown as ExecutionContext
+
 const NOW = 1_800_000_000_000
 
 const makeHandler = (registryLayer: Layer.Layer<ModelRegistry>) => {
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
+
   return HttpRouter.toWebHandler(
     Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(ModelRoutes.pipe(Layer.provide(registryLayer)))),
     { disableLogger: true }
@@ -56,6 +60,7 @@ describe("model routes with a fixed registry", () => {
       source("gem.json", "gemini", { excludedModels: ["gemini-3*", "*preview*"] })
     ]
   })
+
   const registry = Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: Effect.succeed(snapshot) }))
   const handler = makeHandler(registry)
   afterAll(handler.dispose)
@@ -73,10 +78,12 @@ describe("model routes with a fixed registry", () => {
     expect(openai.status).toBe(200)
     expect(openai.headers.get("content-type")).toBe("application/json; charset=utf-8")
     expect(openai.headers.get("access-control-allow-origin")).toBe("*")
+
     const body = (await openai.json()) as {
       object: string
       data: Array<{ id: string; object: string; owned_by: string }>
     }
+
     expect(body.object).toBe("list")
     const ids = body.data.map((model) => model.id)
     expect(ids).toContain("team/claude-sonnet-4-5-20250929")
@@ -87,18 +94,22 @@ describe("model routes with a fixed registry", () => {
 
     for (const headers of [{ "anthropic-version": "2023-06-01" }, { "user-agent": "claude-cli/1.0" }]) {
       const claude = await call("/v1/models", headers)
+
       const parsed = (await claude.json()) as {
         data: Array<{ id: string; type: string }>
         has_more: boolean
         first_id: string
       }
+
       expect(parsed.has_more).toBe(false)
       expect(parsed.data[0]?.type).toBe("model")
       expect(parsed.data.some((model) => model.id.startsWith("claude-fable-5-dd-"))).toBe(true)
     }
+
     const grok = (await (await call("/v1/models", { "user-agent": "Grok-Shell/9" })).json()) as {
       data: Array<{ api_backend: string }>
     }
+
     expect(grok.data[0]?.api_backend).toBe("responses")
   })
 
@@ -108,6 +119,7 @@ describe("model routes with a fixed registry", () => {
       expect(response.status, path).toBe(200)
       expect(await response.json()).toMatchObject({ id: "team/claude-sonnet-4-5-20250929", object: "model" })
     }
+
     for (const path of ["/v1/models/nope", "/v1/models/"]) {
       const response = await call(path)
       expect(response.status, path).toBe(404)
@@ -124,9 +136,11 @@ describe("model routes with a fixed registry", () => {
       now: NOW,
       sources: [source("codex-a.json", "codex", { planType: "pro" }), source("claude-a.json", "claude")]
     })
+
     const codexHandler = makeHandler(
       Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: Effect.succeed(codexSnapshot) }))
     )
+
     const codexCall = caller(codexHandler)
     const response = await codexCall("/v1/models?client_version=0.150.0")
     expect(response.status).toBe(200)
@@ -155,12 +169,15 @@ describe("model routes with a fixed registry", () => {
     const list = (await (await call("/v1beta/models")).json()) as {
       models: Array<{ name: string; supportedGenerationMethods: string[] }>
     }
+
     expect(list.models.map((model) => model.name)).toContain("models/gemini-2.5-pro")
+
     for (const path of ["/v1beta/models/gemini-2.5-pro", "/v1beta/models/models/gemini-2.5-pro"]) {
       const response = await call(path)
       expect(response.status, path).toBe(200)
       expect(await response.json()).toMatchObject({ name: "models/gemini-2.5-pro" })
     }
+
     const missing = await call("/v1beta/models/nope")
     expect(missing.status).toBe(404)
     expect(await missing.text()).toBe('{"error":{"message":"Not Found","type":"not_found"}}')
@@ -174,10 +191,12 @@ describe("model routes when the registry is unavailable", () => {
       ModelRegistry.of({ snapshot: Effect.fail(new ModelRegistryError({ message: "failed to read model sources" })) })
     )
   )
+
   afterAll(handler.dispose)
 
   it("answers 500 with a generic error body", async () => {
     const call = caller(handler)
+
     for (const path of ["/v1/models", "/v1beta/models"]) {
       const response = await call(path)
       expect(response.status).toBe(500)
@@ -231,6 +250,7 @@ oauth:
     })
 
     const handler = makeHandler(registry)
+
     try {
       const response = await caller(handler)("/v1/models")
       expect(response.status).toBe(200)

@@ -18,10 +18,15 @@ import { antigravityUserAgent, currentAntigravityVersion } from "./version.ts"
 import { ANTIGRAVITY_BASE_URL_DAILY } from "./envelope.ts"
 
 export const MODELS_PATH = "/v1internal:fetchAvailableModels"
+
 const MAX_CATALOG_BYTES = 8 * 1024 * 1024
+
 const MAX_FAILURES = 5
+
 const BASE_BACKOFF_MS = 2 * 60_000
+
 const MAX_BACKOFF_MS = 30 * 60_000
+
 /** Failure counters older than 2x the refresh interval start over (`registry.ModelsRefreshInterval` = 3 h). */
 const FAILURE_RESET_MS = 2 * 3 * 60 * 60_000
 
@@ -47,13 +52,17 @@ export type ProbeOutcome =
 /** `parseAntigravityModelCapabilityHints`. */
 export const parseModelHints = (body: string): AntigravityModelHints | undefined => {
   const root = tryParseJson(body)
+
   if (!isJsonObject(root)) return undefined
+
   const ids = (list: unknown): string[] =>
     Array.isArray(list)
       ? list.map((id) => normalizeFetchedModelId(asString(id as never))).filter((id) => id !== "")
       : []
+
   const models = root["models"]
   const webSearchModelIds = ids(root["webSearchModelIds"])
+
   if (isJsonObject(models)) {
     return {
       modelIds: Object.keys(models)
@@ -62,6 +71,7 @@ export const parseModelHints = (body: string): AntigravityModelHints | undefined
       webSearchModelIds
     }
   }
+
   return { webSearchModelIds }
 }
 
@@ -74,10 +84,13 @@ export const modelsBaseUrl = (
     .split(",")
     .map((url) => url.trim().replace(/\/+$/, ""))
     .filter((url) => url !== "")
+
   if (list.length > 0) return list[0] as string
+
   const single =
     (attributes["base_url"] ?? "").trim() ||
     (typeof metadata["base_url"] === "string" ? metadata["base_url"].trim() : "")
+
   return single !== "" ? single.replace(/\/+$/, "") : ANTIGRAVITY_BASE_URL_DAILY
 }
 
@@ -90,6 +103,7 @@ export const probeAvailableModels = (input: {
 }): Effect.Effect<ProbeOutcome, never, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
+
     const request = HttpClientRequest.post(`${input.baseUrl}${MODELS_PATH}`).pipe(
       HttpClientRequest.setHeaders({
         "content-type": "application/json",
@@ -98,12 +112,17 @@ export const probeAvailableModels = (input: {
       }),
       HttpClientRequest.bodyText(JSON.stringify({ project: input.projectId }), "application/json")
     )
+
     const response = yield* client.execute(request).pipe(Effect.timeout("30 seconds"))
+
     if (response.status === 401 || response.status === 403) return { status: "auth_error" } as const
+
     if (response.status < 200 || response.status >= 300) return { status: "transient" } as const
     const text = yield* response.text
+
     if (text.length > MAX_CATALOG_BYTES) return { status: "transient" } as const
     const hints = parseModelHints(text)
+
     return hints === undefined ? ({ status: "transient" } as const) : ({ status: "success", hints } as const)
   }).pipe(Effect.catchCause(() => Effect.succeed({ status: "transient" } as const)))
 
@@ -113,12 +132,14 @@ export const nextFailure = (previous: FailureState | undefined, now: number, ran
   count = Math.min(count + 1, MAX_FAILURES)
   const window = Math.min(BASE_BACKOFF_MS * 2 ** (count - 1), MAX_BACKOFF_MS)
   const half = window / 2
+
   return { count, lastFailureAt: now, nextRetryAt: now + Math.floor(half + random * half) }
 }
 
 const readRecord = async (kv: KVNamespace, credentialId: string): Promise<ModelsRecord | undefined> => {
   try {
     const raw = await kv.get(modelsKey(credentialId))
+
     return raw === null ? undefined : (JSON.parse(raw) as ModelsRecord)
   } catch {
     return undefined
@@ -131,13 +152,16 @@ export const loadAntigravityHints = async (
   credentialIds: ReadonlyArray<string>
 ): Promise<ReadonlyMap<string, AntigravityModelHints>> => {
   const out = new Map<string, AntigravityModelHints>()
+
   if (kv === undefined) return out
   await Promise.all(
     credentialIds.map(async (id) => {
       const record = await readRecord(kv, id)
+
       if (record?.hints !== undefined) out.set(id, record.hints)
     })
   )
+
   return out
 }
 
@@ -149,11 +173,15 @@ export const withAntigravityHints = async (
   const ids = sources
     .filter((source) => source.provider.trim().toLowerCase() === "antigravity")
     .map((source) => source.id)
+
   if (ids.length === 0) return sources
   const hints = await loadAntigravityHints(kv, ids)
+
   if (hints.size === 0) return sources
+
   return sources.map((source) => {
     const found = hints.get(source.id)
+
     return found === undefined ? source : { ...source, antigravityHints: found }
   })
 }
@@ -169,21 +197,26 @@ export const refreshAntigravityModels = Effect.gen(function* () {
   const now = Date.now()
   const version = yield* currentAntigravityVersion(env.CACHE, now)
   const results: Array<{ readonly id: string; readonly status: string }> = []
+
   for (const source of sources) {
     if (source.provider.trim().toLowerCase() !== "antigravity" || source.disabled) continue
     const previous = yield* Effect.promise(() => readRecord(env.CACHE, source.id))
+
     if (previous?.failure !== undefined && previous.failure.nextRetryAt > now) {
       results.push({ id: source.id, status: "backoff" })
       continue
     }
+
     const prepared = yield* Effect.tryPromise(async () => await plane.ensureFresh(source.id)).pipe(Effect.option)
     const credential = prepared._tag === "Some" && prepared.value.ok ? prepared.value.credential : undefined
     const token = typeof credential?.metadata["access_token"] === "string" ? credential.metadata["access_token"] : ""
     const project = typeof credential?.metadata["project_id"] === "string" ? credential.metadata["project_id"] : ""
+
     if (credential === undefined || token === "") {
       results.push({ id: source.id, status: "no_token" })
       continue
     }
+
     // The probe always uses the global user agent and ignores a per-credential override.
     const outcome = yield* probeAvailableModels({
       baseUrl: modelsBaseUrl(credential.attributes, credential.metadata),
@@ -191,6 +224,7 @@ export const refreshAntigravityModels = Effect.gen(function* () {
       projectId: project,
       userAgent: antigravityUserAgent(version)
     })
+
     const record: ModelsRecord =
       outcome.status === "success"
         ? { hints: outcome.hints, fetchedAt: now }
@@ -199,10 +233,12 @@ export const refreshAntigravityModels = Effect.gen(function* () {
             ...(previous?.fetchedAt === undefined ? {} : { fetchedAt: previous.fetchedAt }),
             failure: nextFailure(previous?.failure, now, Math.random())
           }
+
     yield* Effect.tryPromise(() => env.CACHE.put(modelsKey(source.id), JSON.stringify(record))).pipe(
       Effect.catch(() => Effect.logWarning("antigravity model catalog could not be stored"))
     )
     results.push({ id: source.id, status: outcome.status })
   }
+
   return results
 })

@@ -18,6 +18,7 @@ interface FlatEntry {
 /** The `api-keys.codex` keys in the flat order the credential synthesiser numbers them (`config_index`). */
 const flatEntries = (config: Config): FlatEntry[] => {
   const out: FlatEntry[] = []
+
   for (const group of config["api-keys"].codex) {
     for (const key of group.keys as ReadonlyArray<ApiKeyEntry>) {
       out.push({
@@ -27,6 +28,7 @@ const flatEntries = (config: Config): FlatEntry[] => {
       })
     }
   }
+
   return out
 }
 
@@ -38,8 +40,10 @@ export const resolveCodexKeyConfig = (config: Config, credential: CredentialSnap
   const attrBase = (credential.attributes["base_url"] ?? "").trim()
   const entries = flatEntries(config)
   const rawIndex = (credential.attributes["config_index"] ?? "").trim()
+
   if (/^\d+$/.test(rawIndex)) {
     const entry = entries[Number(rawIndex)]
+
     if (
       entry !== undefined &&
       (attrKey === "" || eq(entry.apiKey, attrKey)) &&
@@ -47,16 +51,21 @@ export const resolveCodexKeyConfig = (config: Config, credential: CredentialSnap
     )
       return entry
   }
+
   for (const entry of entries) {
     if (attrKey !== "" && attrBase !== "") {
       if (eq(entry.apiKey, attrKey) && eq(entry.baseUrl, attrBase)) return entry
       continue
     }
+
     if (attrKey !== "" && eq(entry.apiKey, attrKey) && (entry.baseUrl === "" || eq(entry.baseUrl, attrBase)))
       return entry
+
     if (attrKey === "" && attrBase !== "" && eq(entry.baseUrl, attrBase)) return entry
   }
+
   if (attrKey !== "") return entries.find((entry) => eq(entry.apiKey, attrKey))
+
   return undefined
 }
 
@@ -64,20 +73,28 @@ export const resolveCodexKeyConfig = (config: Config, credential: CredentialSnap
 const configModelIsCompat = (config: Config, credential: CredentialSnapshot, model: string): boolean => {
   if (credential.provider.trim().toLowerCase() !== "codex") return false
   const entry = resolveCodexKeyConfig(config, credential)
+
   if (entry === undefined || entry.models.length === 0) return false
   const requested = model.trim()
+
   if (requested === "") return false
   const stripped = parseSuffix(requested).modelName.trim()
   const base = stripped === "" ? requested : stripped
+
   for (const candidate of entry.models) {
     let name = candidate.name.trim()
     let alias = (candidate.alias ?? "").trim()
+
     if (name === "") name = alias
+
     if (alias === "") alias = name
+
     if (name === "") continue
+
     if (eq(name, requested) || eq(name, base) || eq(alias, requested) || eq(alias, base))
       return candidate["is-compat"] === true
   }
+
   return false
 }
 
@@ -93,19 +110,24 @@ export const resolveCodexModelIsCompat = (
 ): boolean => {
   if (request.modelInfo !== undefined) return request.modelInfo.isCompat === true
   const entry = resolveCodexKeyConfig(config, credential)
+
   if (entry !== undefined && entry.models.length > 0) {
     const requested = request.model.trim()
     const target = baseModel.trim()
+
     for (const model of entry.models) {
       const name = model.name.trim()
       const alias = (model.alias ?? "").trim()
+
       if (
         (target !== "" && (eq(name, target) || eq(alias, target))) ||
         (requested !== "" && (eq(name, requested) || eq(alias, requested)))
       )
         return model["is-compat"] === true
     }
+
     return false
   }
+
   return configModelIsCompat(config, credential, baseModel) || configModelIsCompat(config, credential, request.model)
 }

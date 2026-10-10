@@ -21,14 +21,18 @@ export const devinCredentials = (
   credential: CredentialSnapshot
 ): { readonly apiKey: string; readonly baseUrl: string; readonly deviceSeed: string } => {
   const { attributes, metadata } = credential
+
   const apiKey =
     text(attributes["api_key"]) ||
     text(attributes["session_token"]) ||
     text(attributes["token"]) ||
     text(metadata["api_key"]) ||
     text(metadata["session_token"])
+
   let baseUrl = text(attributes["base_url"]) || DEVIN_DEFAULT_BASE_URL
+
   if (baseUrl === DEVIN_DEFAULT_BASE_URL) baseUrl = text(metadata["base_url"]) || baseUrl
+
   return {
     apiKey,
     baseUrl,
@@ -37,7 +41,9 @@ export const devinCredentials = (
 }
 
 const TURN_STORE = "devin-turns"
+
 const TURN_KEY = "turn"
+
 const TURN_TTL_MS = 24 * 3_600_000
 
 const turnAddress = (sessionId: string, callerScope: string): SessionAddress => ({
@@ -57,14 +63,17 @@ export const nextSessionTurnIndex = (
   backend: BackendResolver = resolveBackend()
 ): Effect.Effect<number> => {
   if (sessionId.trim() === "") return Effect.succeed(0)
+
   return bestEffort(
     "devin turn counter",
     0,
     Effect.gen(function* () {
       const state = yield* backend
+
       const [result] = yield* state.run(turnAddress(sessionId, callerScope), [
         { op: "incr", key: TURN_KEY, ttlMs: TURN_TTL_MS, maxEntries: 1 }
       ])
+
       return result?.status === "ok" ? Math.max(0, Number.parseInt(result.value ?? "1", 10) - 1) : 0
     })
   )
@@ -82,19 +91,24 @@ export const resolveSessionIds = (
   fallbackSessionId: string | undefined
 ): { readonly sessionId: string; readonly cascadeId: string } => {
   const session = normalizeDevinUuid(sessionId !== "" ? sessionId : (fallbackSessionId ?? ""))
+
   return { sessionId: session, cascadeId: cascadeId === "" ? session : normalizeDevinUuid(cascadeId) }
 }
 
 /** `newDevinStatusError`: non-2xx answers keep the body; a 429 carries `Retry-After` (seconds or HTTP date). */
 export const devinStatusError = (status: number, headers: Headers, body: string, nowMs: number): ExecutionError => {
   let retryAfterMs: number | undefined
+
   if (status === 429) {
     const rawValue = (headers.get("retry-after") ?? "").trim()
+
     if (/^\d+$/.test(rawValue)) retryAfterMs = Number(rawValue) * 1000
     else if (rawValue !== "") {
       const date = Date.parse(rawValue)
+
       if (!Number.isNaN(date) && date - nowMs > 0) retryAfterMs = date - nowMs
     }
   }
+
   return new ExecutionError({ status, message: body, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) })
 }

@@ -40,6 +40,7 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
       isFork: false,
       isSubagent: false
     })
+
     const sub = extractSessionInfo(
       headers({
         "x-claude-code-session-id": "s1",
@@ -48,6 +49,7 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
       }),
       undefined
     )
+
     assert.strictEqual(sub?.sessionId, "claude:s1:agent:a1")
     assert.strictEqual(sub?.parentSessionId, "claude:s1:agent:p1")
     assert.strictEqual(sub?.agentName, "a1")
@@ -55,9 +57,11 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
 
   it("Claude metadata.user_id (JSON and legacy suffix) outranks generic headers", () => {
     const uuid = "123e4567-e89b-12d3-a456-426614174000"
+
     const json = extractSessionInfo(headers({ "x-session-id": "ignored" }), {
       metadata: { user_id: JSON.stringify({ session_id: "sess", agent_id: "ag" }) }
     })
+
     assert.strictEqual(json?.sessionId, "claude:sess:agent:ag")
     assert.strictEqual(json?.parentSessionId, "claude:sess")
     const legacy = extractSessionInfo(headers({}), { metadata: { user_id: `user_abc_account__session_${uuid}` } })
@@ -70,10 +74,12 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
     assert.deepInclude(thread, { sessionId: "codex:t2", parentSessionId: "codex:c1", isSubagent: true })
     const fork = extractSessionInfo(headers({ "session-id": "c1" }), { forked_from_thread_id: "c0" })
     assert.deepInclude(fork, { sessionId: "codex:c1", parentSessionId: "codex:c0", isFork: true })
+
     const meta = extractSessionInfo(
       headers({ "x-codex-turn-metadata": JSON.stringify({ session_id: "m1", subagent_kind: "thread_spawn" }) }),
       undefined
     )
+
     assert.strictEqual(meta?.isSubagent, true)
   })
 
@@ -130,6 +136,7 @@ describe("force-mapping rewrite (response_model_rewriter.go)", () => {
         "alias"
       )
     ) as Record<string, unknown>
+
     assert.deepStrictEqual(out, {
       model: "alias",
       response: { model: "alias", modelVersion: "alias" },
@@ -176,6 +183,7 @@ describe("executor snapshots", () => {
       baseUrl: "https://e.example",
       executor: "openai-compatible-l"
     })
+
     assert.deepStrictEqual(snapshot, {
       id: "x",
       provider: "openai-compatible-l",
@@ -209,6 +217,7 @@ oauth:
       - { status: 400, match: ["oauth rule"], action: stop }
 `)
       )
+
       const own = snapshot({ metadata: { request_scoped_errors: [{ status: 429, match: ["x"], action: "continue" }] } })
       assert.deepStrictEqual(requestScopedRules(config, own), [{ status: 429, match: ["x"], action: "continue" }])
       const rules = requestScopedRules(config, snapshot())
@@ -226,6 +235,7 @@ oauth:
       { status: 400, match: ["context"], action: "bogus" },
       { status: 429, match: ["slow"], action: "stop" }
     ]
+
     const error = (status: number, message: string) => new ExecutionError({ status, message })
     assert.strictEqual(matchRequestScopedAction(rules, error(400, "context window exceeded")), "continue-and-cooldown")
     assert.isUndefined(matchRequestScopedAction(rules, error(400, "context only")))
@@ -236,6 +246,7 @@ oauth:
   it("builds report payloads with the Go error codes", () => {
     const report = (error: ExecutionError, extra = {}) =>
       failureReport(error, { provider: "openai-compatible-x", ...extra })
+
     assert.deepInclude(report(new ExecutionError({ status: 400, message: "bad" })).error, { code: "request_scoped" })
     assert.deepInclude(
       report(new ExecutionError({ status: 404, message: '{"error":{"code":"model_not_found"}}' })).error,
@@ -256,10 +267,12 @@ oauth:
     assert.deepInclude(report(new ExecutionError({ status: 500, message: "bad" }), { action: "continue" }).error, {
       code: "request_scoped"
     })
+
     const quota = report(
       new ExecutionError({ status: 429, message: "q", retryAfterMs: 5000, credentialScoped: true }),
       { stateModel: "up-1" }
     )
+
     assert.deepInclude(quota, { retryAfterMs: 5000, credentialScoped: true, model: "up-1", httpStatus: 429 })
   })
 
@@ -272,8 +285,10 @@ oauth:
   it("responses/compact failures are availability-neutral unless they are credential failures", () => {
     const report = (status: number, extra = {}) =>
       failureReport(new ExecutionError({ status, message: "x", ...extra }), { provider: "codex", compact: true })
+
     assert.isTrue(report(500).availabilityNeutral)
     assert.isTrue(report(503).availabilityNeutral)
+
     for (const status of [401, 402, 403, 429]) assert.isUndefined(report(status).availabilityNeutral)
     assert.isUndefined(report(500, { credentialScoped: true }).availabilityNeutral)
     assert.isUndefined(
@@ -284,6 +299,7 @@ oauth:
   it("count_tokens: a generic 404 is availability-neutral, model-not-found is not; no quota snapshot", () => {
     const report = (message: string) =>
       failureReport(new ExecutionError({ status: 404, message }), { provider: "claude", countTokens: true })
+
     assert.isTrue(report("Not Found").availabilityNeutral)
     assert.isUndefined(report('{"error":{"code":"model_not_found"}}').availabilityNeutral)
     assert.isTrue(report("x").skipQuotaObservation)
@@ -317,6 +333,7 @@ describe("live thinking layer", () => {
         provider: "openai-compatible-x",
         modelInfo: levels
       })
+
       assert.strictEqual((body as { reasoning_effort?: string }).reasoning_effort, "high")
     })
   )
@@ -331,6 +348,7 @@ describe("live thinking layer", () => {
         provider: "openai-compatible-x",
         modelInfo: { id: "m", type: "openai-compatibility", thinking: { levels: ["low"] } }
       })
+
       assert.strictEqual((body as { reasoning_effort?: string }).reasoning_effort, "low")
     })
   )
@@ -347,6 +365,7 @@ describe("live thinking layer", () => {
           modelInfo: { id: "m", type: "openai", thinking: { levels: ["low"] } }
         })
       )
+
       assert.strictEqual(error.status, 400)
       assert.strictEqual(error.requestScoped, true)
       assert.include(error.message, "not supported")
@@ -363,6 +382,7 @@ describe("live thinking layer", () => {
         provider: "openai-compatible-x",
         modelInfo: { id: "m", type: "openai-compatibility" }
       })
+
       assert.isUndefined((body as { reasoning_effort?: string }).reasoning_effort)
     })
   )
@@ -376,6 +396,7 @@ describe("live thinking layer", () => {
         to: Formats.OpenAI,
         provider: "openai-compatible-x"
       })
+
       assert.strictEqual((body as { reasoning_effort?: string }).reasoning_effort, "medium")
     })
   )
@@ -386,6 +407,7 @@ describe("live thinking layer", () => {
       { name: "up", alias: "friendly", thinking: { levels: ["None", "auto", "high"], max: 100 } },
       { name: "img", image: true }
     ]
+
     assert.deepStrictEqual(compatModelInfo(models, "plain(high)")?.thinking?.levels, ["low", "medium", "high"])
     const configured = compatModelInfo(models, "friendly")
     assert.deepInclude(configured?.thinking, {
@@ -404,8 +426,10 @@ describe("live thinking layer", () => {
 
 describe("credential preparation rules (needsPreparation)", () => {
   const NOW = 1_800_000_000_000
+
   const oauth = (provider: string, metadata: Record<string, unknown>): CredentialSnapshot =>
     snapshot({ provider, kind: "oauth", metadata })
+
   const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString()
 
   it("API keys never need it; OAuth tokens only when missing or expired", () => {

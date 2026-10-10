@@ -28,7 +28,9 @@ const badRequest = (message: string, status = 400): HttpServerResponse.HttpServe
 const rewriteModel = (body: Json): Json => {
   const model = asString(get(body, "model"))
   const resolved = resolveClaudeModelIdPrefix(model)
+
   if (resolved === model) return body
+
   try {
     return set(body, "model", resolved)
   } catch {
@@ -40,17 +42,22 @@ const handle = (kind: "messages" | "count") =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const configResult = yield* Effect.result(currentConfig)
+
     if (configResult._tag === "Failure")
       return errorResponse("claude", configResult.failure, { passthroughHeaders: false })
     const config = configResult.success
+
     const onError = (error: ExecutionError) =>
       errorResponse("claude", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
+
     if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
+
     // Go forwards an unparsable body to model resolution, which answers with a model error; JSON is required here.
     if (read.success.json === undefined) return badRequest("request body is not valid JSON")
     const body = rewriteModel(read.success.json)
+
     const input: ExecutionInput = {
       entryProtocol: Formats.Claude,
       model: asString(get(body, "model")),
@@ -58,12 +65,17 @@ const handle = (kind: "messages" | "count") =>
       alt: altOf(request),
       request
     }
+
     if (kind === "count") {
       const result = yield* Effect.result(executeCountTokens(input))
+
       if (result._tag === "Failure") return onError(result.failure)
+
       return jsonResponse(result.success.payload, result.success.headers)
     }
+
     const streamField = get(body, "stream")
+
     if (streamField !== undefined && streamField !== false) {
       return yield* streamResponse(executeStream({ ...input, alt: "" }), {
         framer: claudeFramer(),
@@ -71,11 +83,14 @@ const handle = (kind: "messages" | "count") =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
+
     return yield* withNonStreamKeepAlive(
       config.requests["nonstream-keepalive-interval"],
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(input))
+
         if (result._tag === "Failure") return onError(result.failure)
+
         return jsonResponse(result.success.payload, result.success.headers)
       })
     )

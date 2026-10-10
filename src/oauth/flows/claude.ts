@@ -21,7 +21,9 @@ import { call, parseJsonObject, rfc3339, seconds, str, tryCall } from "./http.ts
 import { type CallbackFlow, type CredentialRecord, flowFailure } from "./types.ts"
 
 export const CLAUDE_AUTH_URL = "https://claude.ai/oauth/authorize"
+
 export const CLAUDE_ROLES_URL = "https://api.anthropic.com/api/oauth/claude_cli/roles"
+
 export const CLAUDE_REDIRECT_URI = "http://localhost:54545/callback"
 
 const AXIOS_HEADERS = {
@@ -36,7 +38,9 @@ const EXCHANGE_FAILED = "Failed to exchange authorization code for tokens"
 export const claudeFileName = async (email: string, organizationUuid: string, accountUuid: string): Promise<string> => {
   const cleanEmail = email.trim()
   const identity = organizationUuid.trim() || accountUuid.trim()
+
   if (identity === "") return `claude-${cleanEmail}.json`
+
   return `claude-${await sha256Hex(identity, 4)}-${cleanEmail}.json`
 }
 
@@ -49,6 +53,7 @@ interface Identity {
 
 const nested = (value: unknown, key: string): string => {
   if (typeof value !== "object" || value === null) return ""
+
   return str((value as Record<string, unknown>)[key])
 }
 
@@ -56,12 +61,16 @@ const nested = (value: unknown, key: string): string => {
 const inspectAccount = (accessToken: string, identity: Identity) =>
   Effect.gen(function* () {
     const headers = { ...AXIOS_HEADERS, authorization: `Bearer ${accessToken}`, "cache-control": "no-cache" }
+
     const profile = yield* tryCall(
       HttpClientRequest.get(CLAUDE_PROFILE_URL).pipe(HttpClientRequest.setHeaders(headers))
     )
+
     yield* tryCall(HttpClientRequest.get(CLAUDE_ROLES_URL).pipe(HttpClientRequest.setHeaders(headers)))
+
     if (profile === undefined || profile.status < 200 || profile.status >= 300) return
     const body = parseJsonObject(profile.text)
+
     // The profile is only trusted with an account UUID (`FetchOAuthProfile`).
     if (body === undefined || nested(body.account, "uuid") === "") return
     identity.accountUuid = nested(body.account, "uuid")
@@ -79,6 +88,7 @@ export const claudeFlow = (): CallbackFlow => ({
   start: ({ state }) =>
     Effect.promise(async () => {
       const pkce = await generatePkce(96)
+
       const query = encodeQuery({
         code: "true",
         client_id: CLAUDE_CLIENT_ID,
@@ -89,12 +99,14 @@ export const claudeFlow = (): CallbackFlow => ({
         code_challenge_method: "S256",
         state
       })
+
       return { url: `${CLAUDE_AUTH_URL}?${query}`, data: { code_verifier: pkce.codeVerifier } satisfies JsonObject }
     }),
   complete: ({ state, code, data, now }) =>
     Effect.gen(function* () {
       // Claude's code page shows `code#state`; like the Go handler only the part before `#` is the code.
       const plainCode = code.split("#")[0] ?? ""
+
       const request = HttpClientRequest.post(CLAUDE_TOKEN_URL).pipe(
         HttpClientRequest.setHeaders(AXIOS_HEADERS),
         // Key order reproduces the body Claude Code sends.
@@ -107,9 +119,11 @@ export const claudeFlow = (): CallbackFlow => ({
           state
         })
       )
+
       const reply = yield* call(request, EXCHANGE_FAILED)
       const body = reply.status === 200 ? parseJsonObject(reply.text) : undefined
       const accessToken = str(body?.access_token)
+
       if (body === undefined || accessToken === "") return yield* flowFailure(EXCHANGE_FAILED)
 
       const identity: Identity = {
@@ -118,6 +132,7 @@ export const claudeFlow = (): CallbackFlow => ({
         organizationUuid: nested(body.organization, "uuid"),
         organizationName: nested(body.organization, "name")
       }
+
       yield* inspectAccount(accessToken, identity)
 
       const metadata: JsonObject = {
@@ -127,15 +142,20 @@ export const claudeFlow = (): CallbackFlow => ({
         last_refresh: rfc3339(now),
         email: identity.email
       }
+
       if (identity.accountUuid !== "") metadata.account_uuid = identity.accountUuid
+
       if (identity.organizationUuid !== "") metadata.organization_uuid = identity.organizationUuid
+
       if (identity.organizationName !== "") metadata.organization_name = identity.organizationName
       metadata.claude_device_ids = [randomHex(32)]
       metadata.type = "claude"
       metadata.expired = rfc3339(now + seconds(body.expires_in) * 1000)
+
       const fileName = yield* Effect.promise(() =>
         claudeFileName(identity.email, identity.organizationUuid, identity.accountUuid)
       )
+
       return { fileName, metadata } satisfies CredentialRecord
     })
 })

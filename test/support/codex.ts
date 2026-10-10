@@ -54,17 +54,21 @@ export const fixedPicker = (
             excluded: [...(request.excludedIds ?? [])],
             disallowFree: request.disallowFreeAuth === true
           })
+
           const credential = credentials.find(
             (candidate) =>
               !(request.excludedIds ?? []).includes(candidate.id) &&
               !(request.disallowFreeAuth === true && candidate.attributes["plan_type"] === "free")
           )
+
           if (credential === undefined) {
             return Effect.fail(
               new ExecutionError({ status: 503, code: "auth_not_found", message: "no auth available" })
             )
           }
+
           const leaseId = `lease-${log.picks.length}`
+
           return Effect.succeed({
             credential,
             leaseId,

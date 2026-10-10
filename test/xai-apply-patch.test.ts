@@ -10,6 +10,7 @@ const created = {
   type: "response.created",
   response: { id: "resp_1", object: "response", model: "grok-4.3", status: "in_progress" }
 }
+
 const completed = (output: unknown[]) => ({
   type: "response.completed",
   response: {
@@ -20,11 +21,14 @@ const completed = (output: unknown[]) => ({
     usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 }
   }
 })
+
 const frame = (event: unknown): string =>
   `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`
 
 const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+
 const ARGS = JSON.stringify({ input: PATCH })
+
 const call = (name: string, args: string, extra: Record<string, unknown> = {}) => ({
   id: "fc_1",
   type: "function_call",
@@ -42,6 +46,7 @@ interface Item {
 }
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig("requests: {}")
 })
@@ -50,6 +55,7 @@ const pipeline = (respond: UpstreamResponder) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const p = makePipeline({ config, respond, credentialPicker: xaiPicker([xaiOauth()], log), modelProviders: xaiModels })
   afterAll(p.dispose)
+
   return p
 }
 
@@ -65,6 +71,7 @@ describe("xAI apply_patch bridge", () => {
   it("declares the custom tool as a strict function and restores custom_tool_call items (non-stream)", async () => {
     const item = call("apply_patch", ARGS)
     const p = pipeline(() => stream({ type: "response.output_item.done", output_index: 0, item }, completed([item])))
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -77,11 +84,14 @@ describe("xAI apply_patch bridge", () => {
         tools: [{ type: "custom", name: "apply_patch", description: "Patch files", format: { type: "grammar" } }]
       })
     )
+
     expect(response.status).toBe(200)
+
     const upstream = JSON.parse(p.calls[0]!.body) as {
       tools: Array<Item>
       input: Array<Item>
     }
+
     expect(upstream.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
     expect(upstream.tools[0]?.parameters?.required).toEqual(["input"])
     expect(upstream.tools[0]?.format).toBeUndefined()
@@ -100,6 +110,7 @@ describe("xAI apply_patch bridge", () => {
   it("streams custom_tool_call_input deltas and rewrites the item events", async () => {
     const added = { ...call("apply_patch", ""), status: "in_progress" }
     const done = call("apply_patch", ARGS)
+
     const p = pipeline(() =>
       stream(
         { type: "response.output_item.added", output_index: 0, item: added },
@@ -110,10 +121,12 @@ describe("xAI apply_patch bridge", () => {
         completed([done])
       )
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "go", stream: true, tools: [{ type: "custom", name: "apply_patch" }] })
     )
+
     const events = payloads(await response.text())
     const types = events.map((event) => event["type"])
     expect(types).toContain("response.custom_tool_call_input.delta")
@@ -130,6 +143,7 @@ describe("xAI apply_patch bridge", () => {
 
   it("fails the stream with a sanitised error when the arguments are not a patch input", async () => {
     const bad = call("apply_patch", '{"patch":"secret text"}')
+
     const p = pipeline(() =>
       stream(
         { type: "response.output_item.added", output_index: 0, item: { ...bad, arguments: "" } },
@@ -138,10 +152,12 @@ describe("xAI apply_patch bridge", () => {
         completed([bad])
       )
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "go", stream: true, tools: [{ type: "custom", name: "apply_patch" }] })
     )
+
     const text = await response.text()
     expect(text).toContain("invalid_tool_arguments")
     expect(text).not.toContain("secret text")
@@ -150,13 +166,16 @@ describe("xAI apply_patch bridge", () => {
 
   it("answers 502 without leaking arguments for a malformed non-stream call", async () => {
     const bad = call("apply_patch", '{"nope":"secret text"}')
+
     const p = pipeline(() =>
       stream({ type: "response.output_item.done", output_index: 0, item: bad }, completed([bad]))
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "go", tools: [{ type: "custom", name: "apply_patch" }] })
     )
+
     expect(response.status).toBe(502)
     expect(await response.text()).not.toContain("secret text")
   })
@@ -164,6 +183,7 @@ describe("xAI apply_patch bridge", () => {
   it("leaves ordinary function calls untouched when no apply_patch tool is declared", async () => {
     const item = call("lookup", '{"q":1}')
     const p = pipeline(() => stream({ type: "response.output_item.done", output_index: 0, item }, completed([item])))
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -172,6 +192,7 @@ describe("xAI apply_patch bridge", () => {
         tools: [{ type: "function", name: "lookup", parameters: { type: "object" } }]
       })
     )
+
     const body = (await response.json()) as { output: Array<Item> }
     expect(body.output[0]).toMatchObject({ type: "function_call", name: "lookup", arguments: '{"q":1}' })
   })
@@ -182,9 +203,11 @@ describe("xAI apply_patch bridge", () => {
       name: `t${index}`,
       parameters: { type: "object" }
     }))
+
     const wrapper = JSON.stringify({ name: "apply_patch", arguments: { input: PATCH } })
     const added = { ...call("big", ""), status: "in_progress" }
     const done = call("big", wrapper)
+
     const p = pipeline(() =>
       stream(
         { type: "response.output_item.added", output_index: 0, item: added },
@@ -193,6 +216,7 @@ describe("xAI apply_patch bridge", () => {
         completed([done])
       )
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -202,6 +226,7 @@ describe("xAI apply_patch bridge", () => {
         tools: [{ type: "namespace", name: "big", tools: [{ type: "custom", name: "apply_patch" }, ...children] }]
       })
     )
+
     const upstream = JSON.parse(p.calls[0]!.body) as { tools: Array<Item> }
     expect(upstream.tools).toHaveLength(1)
     expect(upstream.tools[0]?.name).toBe("big")

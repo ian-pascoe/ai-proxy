@@ -39,11 +39,15 @@ const statusOf = (error: ExecutionError): number => (error.status > 0 ? error.st
 /** `chunkHasFinishReason`: some choice carries a non-empty, non-null `finish_reason`. */
 export const chunkHasFinishReason = (chunk: string): boolean => {
   let text = chunk.trim()
+
   if (text.startsWith("data:")) text = text.slice(5).trim()
   const choices = get(tryParseJson(text), "choices")
+
   if (!isJsonArray(choices)) return false
+
   return choices.some((choice) => {
     const reason = get(choice, "finish_reason")
+
     return reason !== undefined && reason !== null && reason !== ""
   })
 }
@@ -51,13 +55,16 @@ export const chunkHasFinishReason = (chunk: string): boolean => {
 /** OpenAI Chat Completions (and legacy Completions): `data: <json>\n\n`, terminated by `data: [DONE]`. */
 export const openAIFramer = (): StreamFramer => {
   let sawFinishReason = false
+
   return {
     chunk: (payload) => {
       if (!sawFinishReason && chunkHasFinishReason(payload)) sawFinishReason = true
+
       return sseData(payload)
     },
     terminalError: (error) => {
       const status = statusOf(error)
+
       return sseData(openAIErrorBody(status, errorText(error, status)))
     },
     closeError: () =>
@@ -75,6 +82,7 @@ export const claudeFramer = (): StreamFramer => ({
   chunk: (payload) => payload,
   terminalError: (error) => {
     const status = statusOf(error)
+
     return sseEvent("error", claudeErrorBody(status, errorText(error, status)))
   },
   closeError: () => undefined,
@@ -89,6 +97,7 @@ export const geminiFramer = (alt: string): StreamFramer => ({
   terminalError: (error) => {
     const status = statusOf(error)
     const body = openAIErrorBody(status, errorText(error, status))
+
     return alt === "" ? sseEvent("error", body) : body
   },
   closeError: () => undefined,
@@ -101,12 +110,16 @@ export const geminiFramer = (alt: string): StreamFramer => ({
 export const interactionsFramer = (): StreamFramer => ({
   chunk: (payload) => {
     let out = payload
+
     if (!out.startsWith("data:") && !out.startsWith("event:")) out = `data: ${out}`
+
     if (!out.endsWith("\n\n")) out = out.endsWith("\n") ? `${out}\n` : `${out}\n\n`
+
     return out
   },
   terminalError: (error) => {
     const status = statusOf(error)
+
     return sseEvent("error", openAIErrorBody(status, errorText(error, status)))
   },
   closeError: () => undefined,

@@ -11,6 +11,7 @@ const created = (id: string) => ({
   sequence_number: 0,
   response: { id, model: "grok-4.3", status: "in_progress", output: [] }
 })
+
 const completed = (id: string, output: unknown[] = []) => ({
   type: "response.completed",
   response: {
@@ -21,6 +22,7 @@ const completed = (id: string, output: unknown[] = []) => ({
     usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 }
   }
 })
+
 const ITEM = { id: "msg_1", type: "message", role: "assistant", content: [{ type: "output_text", text: "Hi" }] }
 
 const wsCredential = (overrides: Partial<CredentialSnapshot> = {}) =>
@@ -33,6 +35,7 @@ interface Item {
 }
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(`
 requests:
@@ -51,6 +54,7 @@ const setup = (
 ) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const mock = mockUpstream(upstream)
+
   const p = makePipeline({
     config: cfg ?? config,
     respond,
@@ -58,8 +62,10 @@ const setup = (
     modelProviders: xaiModels,
     websocketConnector: mock.layer
   })
+
   afterAll(p.dispose)
   const connect = async () => connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }))
+
   return { ...p, log, mock, connect }
 }
 
@@ -69,6 +75,7 @@ const frames = (mock: ReturnType<typeof mockUpstream>) =>
 describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
   it("dials the official API (not the CLI chat proxy) and frames the request like Go", async () => {
     const plain = await loadConfig("requests: {}")
+
     const s = setup(
       {
         onConnection: (connection) => {
@@ -83,6 +90,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
       [wsCredential()],
       plain
     )
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -93,10 +101,12 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
     })
     const types: string[] = []
     let last: Record<string, unknown> = {}
+
     for (let i = 0; i < 3; i++) {
       last = await client.nextJson()
       types.push(String(last["type"]))
     }
+
     expect(types).toEqual(["response.created", "response.output_item.done", "response.completed"])
     // The rebuilt output reaches the client even though the upstream's completed event had none.
     expect((last["response"] as { output: unknown[] }).output).toEqual([ITEM])
@@ -127,6 +137,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "grok-4.3", input: [] })
     await client.until("response.completed")
@@ -157,6 +168,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -192,6 +204,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "grok-4.3", input: [] })
     const error = await client.nextJson()
@@ -205,10 +218,12 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
     const mock = mockUpstream()
     const bodies: string[] = []
     const log: XaiPickerLog = { picks: [], reports: [] }
+
     const p = makePipeline({
       config: plain,
       respond: (call) => {
         bodies.push(call.body)
+
         return sseResponse([
           `event: response.created\ndata: ${JSON.stringify(created("resp_http"))}\n\n`,
           `event: response.completed\ndata: ${JSON.stringify(completed("resp_http", [ITEM]))}\n\n`
@@ -218,6 +233,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
       modelProviders: xaiModels,
       websocketConnector: mock.layer
     })
+
     afterAll(p.dispose)
     const client = connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }))
     client.send({
@@ -235,6 +251,7 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
 describe("apply_patch over the xAI upstream socket", () => {
   const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
   const ARGS = JSON.stringify({ input: PATCH })
+
   const call = (args: string) => ({
     id: "fc_1",
     type: "function_call",
@@ -243,6 +260,7 @@ describe("apply_patch over the xAI upstream socket", () => {
     arguments: args,
     status: "completed"
   })
+
   const request = {
     type: "response.create",
     model: "grok-4.3",
@@ -252,6 +270,7 @@ describe("apply_patch over the xAI upstream socket", () => {
 
   it("declares the strict function upstream and restores custom tool events for the client", async () => {
     const item = call(ARGS)
+
     const s = setup({
       onConnection: (connection) => {
         void (async () => {
@@ -281,6 +300,7 @@ describe("apply_patch over the xAI upstream socket", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send(request)
     const done = await client.until("response.completed")
@@ -289,9 +309,11 @@ describe("apply_patch over the xAI upstream socket", () => {
     expect(sent.tools[0]?.parameters?.required).toEqual(["input"])
     const output = (done["response"] as { output: Array<Item> }).output
     expect(output[0]).toMatchObject({ type: "custom_tool_call", name: "apply_patch", input: PATCH })
+
     const types = client.messages.map((message) =>
       String((JSON.parse(String(message)) as Record<string, unknown>)["type"])
     )
+
     expect(types).toContain("response.custom_tool_call_input.delta")
     expect(types).toContain("response.custom_tool_call_input.done")
     expect(types).not.toContain("response.function_call_arguments.delta")
@@ -300,6 +322,7 @@ describe("apply_patch over the xAI upstream socket", () => {
 
   it("delivers the local failure frame and ends the turn when the arguments are not a patch input", async () => {
     const bad = call('{"nope":"secret text"}')
+
     const s = setup({
       onConnection: (connection) => {
         void (async () => {
@@ -310,6 +333,7 @@ describe("apply_patch over the xAI upstream socket", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send(request)
     const failed = await client.until("response.failed")
@@ -346,6 +370,7 @@ describe("compaction_trigger over the xAI socket", () => {
       undefined,
       () => jsonResponse(compaction)
     )
+
     const client = await s.connect()
     client.send({
       type: "response.create",

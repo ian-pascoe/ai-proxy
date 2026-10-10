@@ -14,22 +14,31 @@ export const KIMI_REASONING_UNAVAILABLE = "[reasoning unavailable]"
 
 const usableReasoning = (reasoning: string): boolean => {
   const trimmed = reasoning.trim()
+
   return trimmed !== "" && trimmed !== KIMI_REASONING_UNAVAILABLE
 }
 
 const contentPartEmpty = (part: Json | undefined): boolean => {
   if (part === undefined || part === null) return true
+
   if (typeof part === "string") return part.trim() === ""
+
   if (!isJsonObject(part)) return false
+
   if (part["text"] !== undefined) return asString(part["text"]).trim() === ""
+
   if (asString(part["type"]).trim() === "text") return true
+
   return Object.keys(part).length === 0
 }
 
 const assistantContentEmpty = (content: Json | undefined): boolean => {
   if (content === undefined || content === null) return true
+
   if (typeof content === "string") return content.trim() === ""
+
   if (!isJsonArray(content)) return false
+
   return content.every(contentPartEmpty)
 }
 
@@ -38,29 +47,39 @@ const hasToolCalls = (message: JsonObject): boolean =>
 
 const hasLegacyFunctionCall = (message: JsonObject): boolean => {
   const call = message["function_call"]
+
   if (call === undefined || call === null) return false
+
   return !(isJsonObject(call) && Object.keys(call).length === 0)
 }
 
 /** `shouldDropKimiAssistantMessage`: assistant turns without content, calls or reasoning. */
 const shouldDropAssistant = (message: Json): boolean => {
   if (!isJsonObject(message) || asString(message["role"]).trim() !== "assistant") return false
+
   if (hasToolCalls(message) || hasLegacyFunctionCall(message)) return false
+
   if (message["reasoning_content"] !== undefined && asString(message["reasoning_content"]).trim() !== "") return false
+
   return assistantContentEmpty(message["content"])
 }
 
 const fallbackReasoning = (message: JsonObject, latest: string | undefined): string => {
   if (latest !== undefined && usableReasoning(latest)) return latest
   const content = message["content"]
+
   if (typeof content === "string") {
     const text = content.trim()
+
     if (text !== "") return text
   }
+
   if (isJsonArray(content)) {
     const parts = content.map((item) => asString(get(item, "text")).trim()).filter((text) => text !== "")
+
     if (parts.length > 0) return parts.join("\n")
   }
+
   return KIMI_REASONING_UNAVAILABLE
 }
 
@@ -71,45 +90,60 @@ const fallbackReasoning = (message: JsonObject, latest: string | undefined): str
  */
 export const normalizeKimiToolMessageLinks = (body: Json): Json => {
   const messages = get(body, "messages")
+
   if (!isJsonArray(messages)) return body
   const kept: Json[] = []
   let pending: string[] = []
   let latestReasoning: string | undefined
+
   for (const message of messages) {
     if (shouldDropAssistant(message)) continue
     kept.push(message)
+
     if (!isJsonObject(message)) continue
     const role = asString(message["role"]).trim()
+
     if (role === "assistant") {
       const reasoning = message["reasoning_content"]
+
       if (reasoning !== undefined && usableReasoning(asString(reasoning))) latestReasoning = asString(reasoning)
       const calls = message["tool_calls"]
+
       if (isJsonArray(calls) && calls.length > 0) {
         if (reasoning === undefined || !usableReasoning(asString(reasoning))) {
           message["reasoning_content"] = fallbackReasoning(message, latestReasoning)
         }
+
         for (const call of calls) {
           const id = asString(get(call, "id")).trim()
+
           if (id !== "") pending.push(id)
         }
       }
     } else if (role === "tool") {
       let id = asString(message["tool_call_id"]).trim()
+
       if (id === "") {
         id = asString(message["call_id"]).trim()
+
         if (id !== "") message["tool_call_id"] = id
       }
+
       if (id === "" && pending.length === 1) {
         id = pending[0] as string
         message["tool_call_id"] = id
       }
+
       if (id !== "") {
         const index = pending.indexOf(id)
+
         if (index >= 0) pending = [...pending.slice(0, index), ...pending.slice(index + 1)]
       }
     }
   }
+
   if (kept.length !== messages.length) (body as JsonObject)["messages"] = kept
+
   return body
 }
 
@@ -119,22 +153,29 @@ const normalizeParameters = (params: JsonObject): JsonObject => {
   const out = isJsonObject(inlined) ? inlined : params
   delete out["$defs"]
   delete out["definitions"]
+
   if (out["type"] === undefined) out["type"] = "object"
+
   return out
 }
 
 const normalizeToolList = (body: JsonObject, key: string, isTools: boolean): void => {
   const items = body[key]
+
   if (!isJsonArray(items)) return
+
   for (const item of items) {
     if (!isJsonObject(item)) continue
     let holder: JsonObject | undefined
+
     if (isTools && get(item, "function.parameters") !== undefined && isJsonObject(item["function"])) {
       holder = item["function"]
     } else if (item["parameters"] !== undefined) {
       holder = item
     }
+
     const params = holder?.["parameters"]
+
     if (holder !== undefined && isJsonObject(params)) holder["parameters"] = normalizeParameters(params)
   }
 }
@@ -144,6 +185,7 @@ export const normalizeKimiTools = (body: Json): Json => {
   if (!isJsonObject(body)) return body
   normalizeToolList(body, "tools", true)
   normalizeToolList(body, "functions", false)
+
   return body
 }
 
@@ -153,19 +195,24 @@ export const normalizeKimiTools = (body: Json): Json => {
  */
 export const normalizeKimiTemperature = (body: Json): Json => {
   const temperature = get(body, "temperature")
+
   if (temperature === undefined) return body
   const disabled = asString(get(body, "thinking.type")).toLowerCase() === "disabled"
+
   if (asFloat(temperature) !== (disabled ? 0.6 : 1.0)) return del(body, "temperature")
+
   return body
 }
 
 const isToolCall = (item: Json): boolean => {
   const type = asString(get(item, "type")).trim()
+
   return type === "function_call" || type === "custom_tool_call"
 }
 
 const isToolOutput = (item: Json): boolean => {
   const type = asString(get(item, "type")).trim()
+
   return type === "function_call_output" || type === "custom_tool_call_output"
 }
 
@@ -175,43 +222,57 @@ const isToolOutput = (item: Json): boolean => {
  */
 export const normalizeKimiResponsesInput = (body: Json): Json => {
   const input = get(body, "input")
+
   if (!isJsonArray(input) || input.length === 0) return body
   const items = input
   const result: Json[] = []
   let reordered = false
   let i = 0
+
   while (i < items.length) {
     const first = items[i] as Json
+
     if (!isToolCall(first)) {
       result.push(first)
       i++
       continue
     }
+
     const startCalls = i
     let endCalls = i
     const callIds = new Map<string, number>()
     let callIdCount = 0
+
     while (endCalls < items.length && isToolCall(items[endCalls] as Json)) {
       const callId = extractResponsesCallID(items[endCalls])
+
       if (callId !== "") {
         callIds.set(callId, (callIds.get(callId) ?? 0) + 1)
         callIdCount++
       }
+
       endCalls++
     }
+
     result.push(...items.slice(startCalls, endCalls))
+
     if (callIdCount === 0) {
       i = endCalls
       continue
     }
+
     const needed = new Map(callIds)
     let remaining = callIdCount
     let lastMatching = -1
+
     for (let j = endCalls; j < items.length && remaining > 0; j++) {
       const item = items[j] as Json
+
       if (isToolCall(item)) break
+
       if (isToolOutput(item)) {
         const callId = extractResponsesCallID(item)
+
         if ((needed.get(callId) ?? 0) > 0) {
           needed.set(callId, (needed.get(callId) ?? 0) - 1)
           remaining--
@@ -219,22 +280,28 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
         }
       }
     }
+
     if (remaining === 0 && lastMatching >= endCalls) {
       const outputs: Json[] = []
       const intervening: Json[] = []
       const consumed = new Map(callIds)
+
       for (let j = endCalls; j <= lastMatching; j++) {
         const item = items[j] as Json
+
         if (isToolOutput(item)) {
           const callId = extractResponsesCallID(item)
+
           if ((consumed.get(callId) ?? 0) > 0) {
             consumed.set(callId, (consumed.get(callId) ?? 0) - 1)
             outputs.push(item)
             continue
           }
         }
+
         intervening.push(item)
       }
+
       if (intervening.length > 0) reordered = true
       result.push(...outputs, ...intervening)
       i = lastMatching + 1
@@ -242,6 +309,8 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
       i = endCalls
     }
   }
+
   if (reordered) (body as JsonObject)["input"] = result
+
   return body
 }

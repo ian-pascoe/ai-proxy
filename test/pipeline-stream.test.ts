@@ -21,10 +21,12 @@ const decoder = new TextDecoder()
 
 const collectBody = (body: unknown) => {
   const stream = (body as { readonly stream: Stream.Stream<Uint8Array> }).stream
+
   return Stream.runCollect(stream).pipe(Effect.map((parts) => parts.map((part) => decoder.decode(part)).join("")))
 }
 
 const onError = (error: ExecutionError) => errorResponse("openai", error, { passthroughHeaders: false })
+
 const finished = JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })
 
 describe("streamResponse", () => {
@@ -35,18 +37,22 @@ describe("streamResponse", () => {
           Stream.make('{"choices":[]}'),
           Stream.fromEffect(Effect.sleep("25 seconds").pipe(Effect.as(finished)))
         )
+
         const response = yield* streamResponse(Effect.succeed({ chunks, headers: undefined }), {
           framer: openAIFramer(),
           onError,
           keepAliveSeconds: 10
         })
+
         assert.strictEqual(response.status, 200)
         const fiber = yield* Effect.forkChild(collectBody(response.body))
+
         // Advance in small steps so the forked body fiber registers its timers before time moves on.
         for (let second = 0; second < 30; second++) {
           yield* Effect.yieldNow
           yield* TestClock.adjust("1 second")
         }
+
         const text = yield* Fiber.join(fiber)
         assert.strictEqual(
           text,
@@ -60,11 +66,13 @@ describe("streamResponse", () => {
     Effect.scoped(
       Effect.gen(function* () {
         const chunks = Stream.fail(new ExecutionError({ status: 429, message: "busy" }))
+
         const response = yield* streamResponse(Effect.succeed({ chunks, headers: undefined }), {
           framer: openAIFramer(),
           onError,
           keepAliveSeconds: 0
         })
+
         assert.strictEqual(response.status, 429)
       })
     )
@@ -80,6 +88,7 @@ describe("streamResponse", () => {
           }),
           { framer: openAIFramer(), onError, keepAliveSeconds: 0 }
         )
+
         assert.strictEqual(response.headers["content-type"], "text/event-stream")
         assert.strictEqual(response.headers["x-request-id"], "r1")
         assert.strictEqual(yield* collectBody(response.body), `data: ${finished}\n\ndata: [DONE]\n\n`)
@@ -164,16 +173,19 @@ describe("TranslatorRegistry", () => {
         },
         {}
       )
+
     const hooks: SummaryHooks = {
       extract: (body) => get(body, "summary"),
       apply: (body, _to, _model, summary) => set(body, "applied", summary as Json)
     }
+
     const out = registry.translateRequest(
       "a",
       "b",
       { format: "a", model: "m", stream: false, body: { summary: "s" } },
       hooks
     )
+
     expect(out.body).toEqual({ summary: "s", model: "m", translated: true, applied: "s" })
     expect(registry.hasResponseTransformer("a", "b")).toBe(false)
     const refused = registry.translateRequest("a", "c", { format: "a", model: "m", stream: false, body: {} })
@@ -185,9 +197,11 @@ describe("TranslatorRegistry", () => {
     const registry = new TranslatorRegistry().register("a", "b", undefined, {
       nonStream: (context, body) => {
         context.state.toolInputError = "bad"
+
         return body
       }
     })
+
     expect(registry.translateNonStream("a", "b", ctx(), "x")).toBeUndefined()
   })
 })

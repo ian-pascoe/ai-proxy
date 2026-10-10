@@ -31,12 +31,15 @@ type WireCredential = Extract<WirePickResult, { ok: true }>["credential"]
 /** Maps the DO snapshot to the executor view: `kind`, Go-style `header:<Name>` attributes and `base_url`. */
 export const toExecutorSnapshot = (credential: WireCredential): CredentialSnapshot => {
   const attributes: Record<string, string> = { ...credential.attributes }
+
   if (credential.baseUrl !== undefined && (attributes["base_url"] ?? "").trim() === "") {
     attributes["base_url"] = credential.baseUrl
   }
+
   for (const [name, value] of Object.entries(credential.headers)) attributes[`header:${name}`] = value
   const hasKey = (attributes["api_key"] ?? "").trim() !== ""
   const kind = credential.authKind ?? (hasKey ? "apikey" : "oauth")
+
   return {
     id: credential.id,
     provider: credential.executor,
@@ -52,6 +55,7 @@ export const toExecutorSnapshot = (credential: WireCredential): CredentialSnapsh
 /** `PickFailure` -> client-facing error (`model_cooldown` carries its JSON body and `Retry-After`). */
 export const pickFailureError = (failure: PickFailure): ExecutionError => {
   const status = failure.httpStatus ?? 503
+
   return new ExecutionError({
     status,
     code: failure.code,
@@ -73,6 +77,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
     pick: (request: PickRequest) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv
+
         const wire: WirePickRequest = {
           providers: request.providers,
           model: request.selectionModel ?? request.model,
@@ -118,14 +123,18 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
                 }
               })
         }
+
         const result = yield* Effect.tryPromise({ try: async () => await api(env).pick(wire), catch: unavailable })
+
         if (!result.ok) return yield* pickFailureError(result.failure)
         const route = result.route
+
         // `selectionModel` selects credentials for another model than the one executed: only the prefix is stripped.
         const upstreamModels =
           request.selectionModel === undefined || request.selectionModel === request.model
             ? route.upstreamModels
             : [stripPrefix(request.model, result.credential.prefix)]
+
         return {
           credential: toExecutorSnapshot(result.credential),
           lease: result.lease,
@@ -153,6 +162,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
     planRetry: (query) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv
+
         return yield* Effect.tryPromise({
           try: async () => await api(env).planRetry(query),
           catch: (cause) => cause
@@ -165,6 +175,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
 
 const stripPrefix = (model: string, prefix: string | undefined): string => {
   const needle = prefix === undefined || prefix.trim() === "" ? "" : `${prefix.trim()}/`
+
   return needle !== "" && model.startsWith(needle) ? model.slice(needle.length) : model
 }
 

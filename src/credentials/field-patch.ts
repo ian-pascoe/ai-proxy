@@ -20,6 +20,7 @@ const PROTECTED_ROOTS = new Set(["type", "disabled", "api_key", "dca_token", "dc
 
 const rootOf = (path: string): string => {
   const dot = path.indexOf(".")
+
   return (dot < 0 ? path : path.slice(0, dot)).trim()
 }
 
@@ -29,21 +30,28 @@ const normalizePath = (key: string): string => {
     .trim()
     .split(".")
     .map((part) => part.trim())
+
   parts[0] = canonicalMetadataKey(parts[0] ?? "")
+
   return parts.join(".")
 }
 
 const setAt = (metadata: JsonObject, path: string, value: Json): string | undefined => {
   const parts = path.split(".").map((part) => part.trim())
+
   if (parts.some((part) => part === "")) return `invalid field path: ${path}`
   let current = metadata
+
   for (const [index, part] of parts.entries()) {
     if (index === parts.length - 1) {
       if (value === null) delete current[part]
       else current[part] = value
+
       return undefined
     }
+
     const next = current[part]
+
     if (isJsonObject(next)) {
       current = next
     } else {
@@ -53,6 +61,7 @@ const setAt = (metadata: JsonObject, path: string, value: Json): string | undefi
       current = created
     }
   }
+
   return undefined
 }
 
@@ -61,20 +70,27 @@ const patchHeaders = (metadata: JsonObject, value: Json): void => {
   if (!isJsonObject(value) || !Object.values(value).every((item) => typeof item === "string")) {
     if (value === null) delete metadata.headers
     else metadata.headers = value
+
     return
   }
+
   const next: Record<string, string> = {}
+
   if (isJsonObject(metadata.headers)) {
     for (const [key, item] of Object.entries(metadata.headers)) {
       if (typeof item === "string" && key.trim() !== "" && item.trim() !== "") next[key.trim()] = item.trim()
     }
   }
+
   for (const [key, item] of Object.entries(value as Record<string, string>)) {
     const name = key.trim()
+
     if (name === "") continue
+
     if (item.trim() === "") delete next[name]
     else next[name] = item.trim()
   }
+
   if (Object.keys(next).length === 0) delete metadata.headers
   else metadata.headers = next
 }
@@ -87,23 +103,30 @@ export const applyFieldPatch = (existing: JsonObject, fields: Readonly<Record<st
   const metadata = structuredClone(existing)
   const normalized = new Map<string, Json>()
   const spelled = new Map<string, string>()
+
   for (const [key, value] of Object.entries(fields)) {
     if (key.trim() === "") return { ok: false, message: "field name is required" }
     const path = normalizePath(key)
     const previous = spelled.get(path)
+
     if (previous !== undefined) {
       return { ok: false, message: `auth file fields "${previous}" and "${key}" refer to the same field` }
     }
+
     spelled.set(path, key)
     normalized.set(path, value)
   }
+
   if (normalized.size === 0) return { ok: false, message: "no fields to update" }
 
   for (const [path, value] of normalized) {
     const root = rootOf(path)
+
     if (PROTECTED_ROOTS.has(root) || isTokenPayloadKey(root)) return { ok: false, message: `invalid field ${path}` }
+
     if (root === "request_retry") {
       if (path !== root) return { ok: false, message: "request_retry does not support nested fields" }
+
       if (value === null) {
         delete metadata.request_retry
       } else if (typeof value === "number" && Number.isSafeInteger(value)) {
@@ -119,6 +142,7 @@ export const applyFieldPatch = (existing: JsonObject, fields: Readonly<Record<st
       } else {
         if (typeof value !== "number") return { ok: false, message: "weight must be an integer" }
         const weight = parseWeightValue(value)
+
         if (!weight.ok) return { ok: false, message: weight.message }
         metadata.weight = weight.value
       }
@@ -128,8 +152,10 @@ export const applyFieldPatch = (existing: JsonObject, fields: Readonly<Record<st
       patchHeaders(metadata, value)
     } else {
       const error = setAt(metadata, path, value)
+
       if (error !== undefined) return { ok: false, message: error }
     }
   }
+
   return { ok: true, metadata }
 }

@@ -112,6 +112,7 @@ describe("credential routing", () => {
 
   it("only accepts strict numeric versions at or above the server floor", () => {
     for (const ok of ["1.0.13", "1.0.46", "2.0.0", "1.10.0"]) expect(acceptableXaiClientVersion(ok)).toBe(true)
+
     for (const bad of ["1.0.12", "1.0", "1.0.46-beta", "v1.0.46", "", "1.0.x"])
       expect(acceptableXaiClientVersion(bad)).toBe(false)
   })
@@ -130,6 +131,7 @@ describe("error rules", () => {
     expect(xaiStatusError(403, '{"code":"bad-credentials"}').status).toBe(401)
     expect(xaiStatusError(403, "nope").status).toBe(403)
     expect(xaiStatusError(429, "slow").retryAfterMs).toBeUndefined()
+
     for (const body of [
       '{"code":"subscription:free-usage-exhausted"}',
       '{"error":"You hit the included free usage limit"}',
@@ -137,6 +139,7 @@ describe("error rules", () => {
     ]) {
       expect(xaiStatusError(429, body).retryAfterMs).toBe(86_400_000)
     }
+
     expect(xaiStatusError(500, "").status).toBe(500)
   })
 
@@ -153,6 +156,7 @@ describe("tool normalisation", () => {
     for (const model of ["grok-4.6", "grok-4.7-fast", "xai/grok-5", "grok-4.10", "GROK-4.6(high)"]) {
       expect(supportsNativeImageGeneration(model)).toBe(true)
     }
+
     for (const model of ["grok-4.5", "grok-4.20", "grok-4.20-beta", "grok-3", "gpt-5", "", "grok-composer-2"]) {
       expect(supportsNativeImageGeneration(model)).toBe(false)
     }
@@ -164,6 +168,7 @@ describe("tool normalisation", () => {
       tools: [{ type: "image_generation" }, { type: "function", name: "f", parameters: { type: "object" } }],
       tool_choice: { type: "image_generation" }
     }
+
     normalizeTools(body, false)
     normalizeForcedImageGenerationToolChoice(body)
     expect(body.tools).toEqual([{ type: "image_generation" }])
@@ -200,10 +205,13 @@ describe("tool normalisation", () => {
         }
       ]
     }
+
     normalizeTools(body, false)
+
     const byName = Object.fromEntries(
       body.tools.map((tool) => [(tool as { name: string }).name, tool as Record<string, unknown>])
     )
+
     expect(byName["ref"]?.["parameters"]).toEqual({ type: "object", properties: { a: { type: "string" } } })
     expect(byName["union"]?.["parameters"]).toEqual({
       type: "object",
@@ -217,6 +225,7 @@ describe("tool normalisation", () => {
 
   it("counts flattened tools, folds namespaces and keeps dispatchers when clamping", () => {
     const children = Array.from({ length: 150 }, (_, index) => ({ type: "function", name: `c${index}` }))
+
     const body = {
       model: "grok-4.3",
       tools: [
@@ -226,6 +235,7 @@ describe("tool normalisation", () => {
         { type: "function", name: "plain" }
       ]
     }
+
     expect(totalFlattenedToolsCount(body, false, false)).toBe(301)
     expect(totalFlattenedToolsCount(body, true, false)).toBe(302)
     const refs = collectNamespaceToolRefs(body, true)
@@ -241,6 +251,7 @@ describe("tool normalisation", () => {
       ],
       tool_choice: { type: "function", name: "r4" }
     }
+
     clampToolsLimit(many, 3, new Map([["disp", { namespace: "disp", name: "", isDispatcher: true }]]))
     expect(many.tools.map((tool) => tool.name)).toEqual(["disp", "r0", "r1"])
     // The choice pointed at a clamped tool, so it is dropped.
@@ -258,6 +269,7 @@ describe("tool normalisation", () => {
         { type: "namespace", name: "ns", tools: [{ type: "function", name: "a" }] }
       ]
     }
+
     const keys = collectClientDeclaredToolKeys(body)
     expect([...keys].map((key) => key.split("\u0000"))).toEqual(
       expect.arrayContaining([
@@ -284,6 +296,7 @@ describe("tool normalisation", () => {
         ]
       }
     }
+
     normalizeNamespaceToolChoice(body, false)
     pruneOrphanedToolChoice(body)
     expect(body["tool_choice"]).toEqual({
@@ -301,6 +314,7 @@ describe("tool normalisation", () => {
       tools: [{ type: "function", name: "f" }],
       tool_choice: { type: "allowed_tools", tools: [{ type: "function", name: "f" }] }
     }
+
     ensureNativeXSearchTool(body)
     ensureNativeXSearchTool(body)
     expect(body["tools"]).toEqual([{ type: "function", name: "f" }, { type: "x_search" }])
@@ -325,12 +339,14 @@ describe("tool normalisation", () => {
         { type: "function_call", name: "web_search", namespace: "x", call_id: "2" }
       ]
     }
+
     const alias = resolveClientWebSearchAlias(body)
     expect(alias).toBe("clientfn_web_search_1")
     aliasClientWebSearchFunction(body, alias, new Map())
     expect((body["tools"] as Array<{ name: string }>).map((tool) => tool.name)).toEqual([alias, "clientfn_web_search"])
     expect((body["tool_choice"] as { name: string }).name).toBe(alias)
     expect((body["input"] as Array<{ name: string }>).map((item) => item.name)).toEqual([alias, "web_search"])
+
     const event = {
       type: "response.completed",
       response: {
@@ -340,6 +356,7 @@ describe("tool normalisation", () => {
         ]
       }
     }
+
     restoreClientWebSearchName(event, alias)
     expect(event.response.output.map((item) => item.name)).toEqual(["web_search", alias])
   })
@@ -352,6 +369,7 @@ describe("input normalisation", () => {
       { max_completion_tokens: 5, max_tokens: 9, temperature: 0, top_p: null, top_k: 3 },
       "openai"
     )
+
     expect(chat).toEqual({ max_output_tokens: 5, temperature: 0, top_k: 3 })
     expect(preserveOutputControls({}, { max_tokens: 9 }, "openai")).toEqual({ max_output_tokens: 9 })
     expect(preserveOutputControls({}, { max_output_tokens: 7 }, "openai-response")).toEqual({ max_output_tokens: 7 })
@@ -370,6 +388,7 @@ describe("input normalisation", () => {
         { type: "custom_tool_call_output", output: "orphan" }
       ]
     }
+
     normalizeInputCustomToolCalls(body)
     expect(body.input.map((item) => (item as { arguments?: string }).arguments)).toEqual([
       '{"x":1}',
@@ -391,6 +410,7 @@ describe("input normalisation", () => {
         { type: "reasoning", summary: [] }
       ]
     }
+
     normalizeInputReasoningItems(body)
     expect(body.input).toEqual([
       {
@@ -408,6 +428,7 @@ describe("input normalisation", () => {
 
   it("sanitises encrypted content: invalid reasoning loses it, invalid compaction items are dropped", () => {
     const good = grokCiphertext(5)
+
     const body = {
       input: [
         { type: "reasoning", summary: [{ type: "summary_text", text: "a" }], encrypted_content: null },
@@ -417,6 +438,7 @@ describe("input normalisation", () => {
         { type: "compaction", encrypted_content: 42 }
       ]
     }
+
     sanitizeInputEncryptedContent(body)
     expect(body.input).toHaveLength(3)
     expect(body.input[0]).toEqual({ type: "reasoning", summary: [{ type: "summary_text", text: "a" }] })
@@ -431,6 +453,7 @@ describe("input normalisation", () => {
       nested: { reference_images: [{ image_url: "https://a.test/4.png" }] },
       messages: [{ content: [{ type: "image_url", image_url: { url: "https://a.test/5.png" } }] }]
     }
+
     normalizeImageRefs(body)
     expect(body).toEqual({
       image: { url: "https://a.test/1.png" },
@@ -450,11 +473,13 @@ describe("response events", () => {
       summary_index: 2,
       delta: "x"
     })
+
     const [textDone, partDone] = normalizeReasoningSummaryEvents({
       type: "response.reasoning_text.done",
       content_index: 1,
       text: "full"
     })
+
     expect(textDone).toEqual({ type: "response.reasoning_summary_text.done", summary_index: 1, text: "full" })
     expect(partDone).toEqual({
       type: "response.reasoning_summary_part.done",
@@ -467,6 +492,7 @@ describe("response events", () => {
       type: "response.content_part.done",
       part: { type: "output_text" }
     })
+
     const item = normalizeReasoningSummaryEvent({
       type: "response.output_item.done",
       item: {
@@ -475,6 +501,7 @@ describe("response events", () => {
         content: [{ type: "reasoning_text", text: "b" }]
       }
     })
+
     expect(item).toEqual({
       type: "response.output_item.done",
       item: { type: "reasoning", summary: [{ type: "summary_text", text: "b" }] }
@@ -500,34 +527,43 @@ describe("response events", () => {
       ["disp", { namespace: "disp", name: "", isDispatcher: true }],
       ["ns__run", { namespace: "ns", name: "run", isDispatcher: false }]
     ])
+
     const pipeline = new EventPipeline({
       namespaceTools: refs,
       webSearchAlias: "",
       filterInternalXSearch: false,
       clientDeclaredTools: new Set()
     })
+
     const added = pipeline.process({
       type: "response.output_item.added",
       item: { type: "function_call", id: "fc", name: "disp" }
     }) as {
       item: Record<string, unknown>
     }
+
     expect(added.item["namespace"]).toBe("disp")
+
     const done = pipeline.process({
       type: "response.function_call_arguments.done",
       item_id: "fc",
       arguments: '{"name":"child","arguments":{"a":1}}'
     })
+
     expect(done).toMatchObject({ arguments: '{"a":1}' })
+
     const item = pipeline.process({
       type: "response.output_item.done",
       item: { type: "function_call", name: "disp", arguments: '{"name":"child","arguments":"{}"}' }
     })
+
     expect(item).toMatchObject({ item: { name: "child", namespace: "disp", arguments: "{}" } })
+
     const flat = pipeline.process({
       type: "response.completed",
       response: { output: [{ type: "function_call", name: "ns__run" }] }
     })
+
     expect(flat).toMatchObject({ response: { output: [{ name: "run", namespace: "ns" }] } })
   })
 
@@ -550,6 +586,7 @@ describe("response events", () => {
 })
 
 const completed = (items: Json[]) => ({ type: "response.completed", response: { output: items } })
+
 const reasoning = (seed: number) => ({
   type: "reasoning",
   id: "rs",
@@ -565,10 +602,12 @@ describe("reasoning replay store", () => {
       normalizeReplayItems([{ type: "message", role: "assistant", content: [{ type: "output_text", text: "x" }] }])
     ).toBeUndefined()
     expect(normalizeReplayItems([{ type: "reasoning", encrypted_content: "bad" }])).toBeUndefined()
+
     const normalized = normalizeReplayItems([
       reasoning(1),
       { type: "function_call", call_id: "c", name: "f", arguments: "{}", extra: 1 }
     ])
+
     expect(normalized).toEqual([
       { type: "reasoning", summary: [], content: null, encrypted_content: grokCiphertext(1) },
       { type: "function_call", call_id: "c", name: "f", arguments: "{}" }
@@ -598,6 +637,7 @@ describe("reasoning replay store", () => {
     expect(isolateSessionKey("prompt-cache:x", "alice")).not.toBe(isolateSessionKey("prompt-cache:x", "bob"))
     expect(isolateSessionKey("execution:1", "")).toBe("execution:1")
     expect(isolateSessionKey("prompt-cache:x", "")).toBe("")
+
     const input = {
       from: "openai-response",
       model: "grok-4.3(high)",
@@ -606,6 +646,7 @@ describe("reasoning replay store", () => {
       headers: new Headers(),
       callerScope: "alice"
     }
+
     expect(replayScopeFromRequest(input).modelName).toBe("grok-4.3")
     expect(replayScopeFromRequest(input).sessionKey).toContain("prompt-cache:k")
     expect(replayScopeFromRequest({ ...input, from: "openai" }).sessionKey).toBe("")
@@ -614,18 +655,22 @@ describe("reasoning replay store", () => {
 
   it("skips replay when the client's history diverged from the cached assistant message", async () => {
     const cachedMessage = { type: "message", role: "assistant", content: [{ type: "output_text", text: "cached" }] }
+
     const items = [
       { type: "reasoning", summary: [], content: null, encrypted_content: grokCiphertext(3) },
       cachedMessage
     ]
+
     const diverged = { input: [{ type: "message", role: "assistant", content: "other" }] }
     expect(filterReplayItemsForInput(diverged, items)).toEqual([])
+
     const matching = {
       input: [
         { type: "message", role: "user", content: "q" },
         { type: "message", role: "assistant", content: "cached" }
       ]
     }
+
     expect(filterReplayItemsForInput(matching, items)).toEqual([items[0]])
     const store = makeInMemoryXaiReplayStore(() => 1)
     const scope = { modelName: "m", sessionKey: "s" }
@@ -640,11 +685,13 @@ describe("inlineLocalRefs", () => {
   it("returns schemas without refs untouched and breaks cycles with a hint", () => {
     const plain = { type: "object" }
     expect(inlineLocalRefs(plain)).toBe(plain)
+
     const cyclic = {
       type: "object",
       properties: { next: { $ref: "#/$defs/Node" } },
       $defs: { Node: { type: "object", description: "a node", properties: { next: { $ref: "#/$defs/Node" } } } }
     }
+
     const out = inlineLocalRefs(cyclic) as { properties: { next: { properties: { next: Record<string, unknown> } } } }
     expect(out.properties.next.properties.next).toEqual({ type: "object", description: "a node (See: Node)" })
   })
@@ -656,6 +703,7 @@ describe("inlineLocalRefs", () => {
       b: { $ref: "#/$defs/Missing" },
       c: { $ref: "https://x.test/s" }
     }
+
     const out = inlineLocalRefs(schema) as Record<string, unknown>
     expect(out["a"]).toEqual({ type: "string", description: "mine" })
     expect(out["b"]).toEqual({ $ref: "#/$defs/Missing" })

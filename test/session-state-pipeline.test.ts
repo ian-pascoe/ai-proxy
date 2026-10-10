@@ -6,6 +6,7 @@ import { credential, makeGeminiHarness } from "./support/gemini.ts"
 import { jsonResponse, loadConfig, postJson, sseResponse } from "./support/pipeline.ts"
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig("")
 })
@@ -17,7 +18,9 @@ describe("Antigravity reasoning replay across invocations", () => {
     kind: "oauth",
     metadata: { access_token: "ya29.token", project_id: "proj-1" }
   })
+
   const models = { "gemini-2.5-flash": ["antigravity"] }
+
   const tools = [
     {
       type: "function",
@@ -31,12 +34,14 @@ describe("Antigravity reasoning replay across invocations", () => {
 
   it("re-attaches the thought signature the client dropped (non-stream)", async () => {
     let turn = 0
+
     const h = makeGeminiHarness({
       config,
       credential: cred,
       models,
       respond: () => {
         turn++
+
         return turn === 1
           ? jsonResponse({
               response: {
@@ -60,15 +65,20 @@ describe("Antigravity reasoning replay across invocations", () => {
             })
       }
     })
+
     afterAll(h.dispose)
     const user = `read the file ${crypto.randomUUID()}`
+
     const first = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", tools, messages: [{ role: "user", content: user }] })
     )
+
     expect(first.status).toBe(200)
+
     const call = ((await first.json()) as { choices: Array<{ message: { tool_calls: Array<{ id: string }> } }> })
       .choices[0]?.message.tool_calls[0]
+
     expect(call).toBeDefined()
 
     // Signatures never reach OpenAI clients: the second turn arrives without one.
@@ -90,22 +100,27 @@ describe("Antigravity reasoning replay across invocations", () => {
         ]
       })
     )
+
     expect(second.status).toBe(200)
+
     const sent = JSON.parse(h.calls[1]?.body ?? "{}") as {
       request: { contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> }
     }
+
     const modelTurn = sent.request.contents.find((content) => content.role === "model")
     expect(modelTurn?.parts[0]?.["thoughtSignature"]).toBe(SIG)
   })
 
   it("commits the ledger before a Responses stream completes", async () => {
     let turn = 0
+
     const h = makeGeminiHarness({
       config,
       credential: cred,
       models,
       respond: () => {
         turn++
+
         return turn === 1
           ? sseResponse([
               `data: ${JSON.stringify({
@@ -130,15 +145,19 @@ describe("Antigravity reasoning replay across invocations", () => {
             })
       }
     })
+
     afterAll(h.dispose)
     const prompt = `read b ${crypto.randomUUID()}`
+
     const responsesTools = [
       { type: "function", name: "read_file", parameters: { type: "object", properties: { path: { type: "string" } } } }
     ]
+
     const first = await h.call(
       "/v1/responses",
       postJson({ model: "gemini-2.5-flash", stream: true, tools: responsesTools, input: prompt })
     )
+
     const text = await first.text()
     expect(text).toContain("response.completed")
     const callId = /"call_id":"([^"]+)"/.exec(text)?.[1]
@@ -156,10 +175,13 @@ describe("Antigravity reasoning replay across invocations", () => {
         ]
       })
     )
+
     expect(second.status).toBe(200)
+
     const sent = JSON.parse(h.calls[1]?.body ?? "{}") as {
       request: { contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> }
     }
+
     expect(sent.request.contents.find((content) => content.role === "model")?.parts[0]?.["thoughtSignature"]).toBe(SIG)
   })
 })
@@ -168,16 +190,19 @@ describe("Antigravity Interactions continuation across invocations", () => {
   const cred = credential("gemini-interactions", `gemini-interactions:${crypto.randomUUID()}`, {
     attributes: { api_key: "AIza-native", base_url: "https://gl.test" }
   })
+
   const models = { "antigravity-preview-05-2026": ["gemini-interactions"] }
 
   it("continues a requires_action interaction with only the tool results (non-stream and stream)", async () => {
     let turn = 0
+
     const h = makeGeminiHarness({
       config,
       credential: cred,
       models,
       respond: () => {
         turn++
+
         if (turn === 1) {
           return jsonResponse({
             id: "int_1",
@@ -186,17 +211,22 @@ describe("Antigravity Interactions continuation across invocations", () => {
             steps: [{ type: "function_call", id: "call_1", name: "f", arguments: {} }]
           })
         }
+
         return jsonResponse({ id: "int_2", status: "completed", steps: [] })
       }
     })
+
     afterAll(h.dispose)
     const prompt = `hello ${crypto.randomUUID()}`
     const user = { type: "user_input", content: [{ type: "text", text: prompt }] }
+
     const first = await h.call(
       "/v1beta/interactions",
       postJson({ model: "antigravity-preview-05-2026", input: [user] })
     )
+
     expect(first.status).toBe(200)
+
     const second = await h.call(
       "/v1beta/interactions",
       postJson({
@@ -208,6 +238,7 @@ describe("Antigravity Interactions continuation across invocations", () => {
         ]
       })
     )
+
     expect(second.status).toBe(200)
     const sent = JSON.parse(h.calls[1]?.body ?? "{}") as Record<string, unknown>
     expect(sent["previous_interaction_id"]).toBe("int_1")
@@ -223,6 +254,7 @@ describe("Antigravity Interactions continuation across invocations", () => {
       respond: () =>
         jsonResponse({ id: "int_x", status: "requires_action", steps: [{ type: "function_call", id: "c" }] })
     })
+
     afterAll(h.dispose)
     const user = { type: "user_input", content: [{ type: "text", text: `x ${crypto.randomUUID()}` }] }
     await h.call("/v1beta/interactions", postJson({ model: "gemini-2.5-pro", input: [user] }))

@@ -38,44 +38,58 @@ interface Registration {
 
 const withWebSearch = (model: ModelInfo, supported: boolean): ModelInfo => {
   const copy = cloneModelInfo(model)
+
   if (supported) return { ...copy, supportsWebSearch: true }
+
   return copy
 }
 
 /** `modelRegistrationAvailability` (without the cache expiry). */
 const isRegistrationAvailable = (registration: Registration, now: number): boolean => {
   let expired = 0
+
   for (const since of registration.quotaExceeded.values()) {
     if (now < since + MODEL_QUOTA_EXCEEDED_WINDOW_MS) expired += 1
   }
+
   let cooldownSuspended = 0
   let otherSuspended = 0
   let quotaAndOtherSuspended = 0
+
   for (const [clientId, reason] of registration.suspended) {
     if (reason.toLowerCase() === "quota") {
       cooldownSuspended += 1
       continue
     }
+
     otherSuspended += 1
     const since = registration.quotaExceeded.get(clientId)
+
     if (since !== undefined && now < since + MODEL_QUOTA_EXCEEDED_WINDOW_MS) quotaAndOtherSuspended += 1
   }
+
   const effective = Math.max(0, registration.count - expired - otherSuspended + quotaAndOtherSuspended)
+
   return effective > 0 || (registration.count > 0 && (expired > 0 || cooldownSuspended > 0) && otherSuspended === 0)
 }
 
 /** `GetModelCount`: clients that can currently serve the registration. */
 const registrationCount = (registration: Registration, now: number): number => {
   let expired = 0
+
   for (const since of registration.quotaExceeded.values()) {
     if (now - since < MODEL_QUOTA_EXCEEDED_WINDOW_MS) expired += 1
   }
+
   let suspended = 0
+
   for (const clientId of registration.suspended.keys()) {
     const since = registration.quotaExceeded.get(clientId)
+
     if (since !== undefined && now < since + MODEL_QUOTA_EXCEEDED_WINDOW_MS) continue
     suspended += 1
   }
+
   return Math.max(0, registration.count - expired - suspended)
 }
 
@@ -88,6 +102,7 @@ export interface NativeCapabilityRoute {
 
 const providerPathSupportsWebSearch = (provider: string): boolean | undefined => {
   const key = provider.trim().toLowerCase()
+
   switch (key) {
     case "codex":
     case "xai":
@@ -117,16 +132,21 @@ export const resolveResponsesWebSearchCapability = (
 ): boolean | undefined => {
   if (routes.length === 0) return undefined
   let unknown = false
+
   for (const route of routes) {
     if (route.webSearch === false) return false
     const path = providerPathSupportsWebSearch(route.provider)
+
     if (path === undefined) {
       unknown = true
       continue
     }
+
     if (!path) return false
+
     if (route.webSearch === undefined || route.webSearch === null) unknown = true
   }
+
   return unknown ? undefined : true
 }
 
@@ -139,19 +159,24 @@ export class ModelRegistryIndex {
   /** `now` (epoch ms) is the instant projections are evaluated at; availability queries take their own `now`. */
   constructor(clients: ReadonlyArray<ClientRegistration>, now: number) {
     this.#now = now
+
     for (const client of clients) this.#register(client)
   }
 
   #register(client: ClientRegistration): void {
     const provider = client.provider.toLowerCase()
     const models = client.models.filter((model) => model.id !== "")
+
     if (models.length === 0) return
     this.#clientModels.set(client.id, models)
+
     if (provider !== "") this.#clientProviders.set(client.id, provider)
 
     const projected = new Set<string>()
+
     for (const model of models) {
       let registration = this.#models.get(model.id)
+
       if (registration === undefined) {
         registration = {
           info: cloneModelInfo(model),
@@ -165,27 +190,37 @@ export class ModelRegistryIndex {
         }
         this.#models.set(model.id, registration)
       }
+
       registration.count += 1
+
       if (model.supportsWebSearch === true) {
         registration.webSearch = true
+
         if (provider !== "") registration.webSearchProviders.add(provider)
       }
+
       registration.info = withWebSearch(model, registration.webSearch)
+
       if (provider !== "") {
         registration.providers.set(provider, (registration.providers.get(provider) ?? 0) + 1)
         registration.infoByProvider.set(provider, withWebSearch(model, registration.webSearchProviders.has(provider)))
       }
+
       if (projected.has(model.id)) continue
       projected.add(model.id)
       const projection = client.projection?.(model) ?? NOT_PROJECTED
+
       if (projection.suspended) registration.suspended.set(client.id, projection.suspendReason)
+
       if (projection.quotaExceeded) registration.quotaExceeded.set(client.id, projection.quotaSince ?? this.#now)
     }
+
     // A later client can add web search support for models registered earlier: keep the flag consistent.
     for (const registration of this.#models.values()) {
       if (registration.webSearch && registration.info.supportsWebSearch !== true) {
         registration.info = { ...registration.info, supportsWebSearch: true }
       }
+
       for (const [name, info] of registration.infoByProvider) {
         if (registration.webSearchProviders.has(name) && info.supportsWebSearch !== true) {
           registration.infoByProvider.set(name, { ...info, supportsWebSearch: true })
@@ -197,7 +232,9 @@ export class ModelRegistryIndex {
   /** `GetModelProviders`: providers ordered by registration count (descending), then name. */
   providersForModel(modelId: string): string[] {
     const registration = this.#models.get(modelId)
+
     if (registration === undefined) return []
+
     return [...registration.providers]
       .filter(([, count]) => count > 0)
       .toSorted(([nameA, countA], [nameB, countB]) => countB - countA || compareStrings(nameA, nameB))
@@ -207,39 +244,49 @@ export class ModelRegistryIndex {
   /** `GetModelInfo`: the provider-specific record when the provider serves the model, else the last registered. */
   modelInfo(modelId: string, provider: string): ModelInfo | undefined {
     const registration = this.#models.get(modelId)
+
     if (registration === undefined) return undefined
+
     if (provider !== "" && (registration.providers.get(provider) ?? 0) > 0) {
       const specific = registration.infoByProvider.get(provider)
+
       if (specific !== undefined) return cloneModelInfo(specific)
     }
+
     return cloneModelInfo(registration.info)
   }
 
   /** `GetAvailableModelInfos`: models with at least one usable client, sorted by id. */
   availableModels(now: number = this.#now): ModelInfo[] {
     const out: ModelInfo[] = []
+
     for (const registration of this.#models.values()) {
       if (isRegistrationAvailable(registration, now)) out.push(cloneModelInfo(registration.info))
     }
+
     return out.toSorted((a, b) => compareStrings(a.id.trim(), b.id.trim()))
   }
 
   /** `GetModelCount`. */
   modelCount(modelId: string, now: number = this.#now): number {
     const registration = this.#models.get(modelId)
+
     return registration === undefined ? 0 : registrationCount(registration, now)
   }
 
   /** `GetFirstAvailableModel`: the newest available model that still has a usable client (ties: smallest id). */
   firstAvailableModel(now: number = this.#now): string | undefined {
     const candidates = this.availableModels(now).toSorted((a, b) => b.created - a.created)
+
     return candidates.find((model) => this.modelCount(model.id, now) > 0)?.id
   }
 
   /** `ClientSupportsModel`: case-insensitive, thinking suffix not considered. */
   clientSupportsModel(clientId: string, modelId: string): boolean {
     const id = modelId.trim().toLowerCase()
+
     if (clientId.trim() === "" || id === "") return false
+
     return (this.#clientModels.get(clientId.trim()) ?? []).some((model) => model.id.trim().toLowerCase() === id)
   }
 
@@ -258,11 +305,14 @@ export class ModelRegistryIndex {
    */
   responsesWebSearchCapability(modelId: string): boolean | undefined {
     const id = modelId.trim()
+
     if (id === "") return undefined
     const routes: NativeCapabilityRoute[] = []
+
     for (const [clientId, models] of this.#clientModels) {
       const matching = models.filter((model) => model.id.trim() === id)
       const last = matching[matching.length - 1]
+
       for (let count = 0; count < matching.length; count += 1) {
         routes.push({
           provider: this.#clientProviders.get(clientId) ?? "",
@@ -270,6 +320,7 @@ export class ModelRegistryIndex {
         })
       }
     }
+
     return resolveResponsesWebSearchCapability(routes)
   }
 
@@ -279,7 +330,9 @@ export class ModelRegistryIndex {
    */
   lookupModelInfo(catalogs: ModelCatalogs, modelId: string, provider = ""): ModelInfo | undefined {
     const id = modelId.trim()
+
     if (id === "") return undefined
+
     return this.modelInfo(id, provider.trim().toLowerCase()) ?? lookupStaticModelInfo(catalogs, id)
   }
 }

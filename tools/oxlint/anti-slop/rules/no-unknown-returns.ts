@@ -37,10 +37,13 @@ export const noUnknownReturnsRule = defineRule({
       environment !== null &&
       resolvedTypeMatches(type, environment, (resolved, matches) => {
         if (resolved.type === "TSUnknownKeyword") return true;
+
         if (resolved.type === "TSParenthesizedType") {
           return matches(resolved.typeAnnotation);
         }
+
         if (resolved.type === "TSUnionType") return resolved.types.some(matches);
+
         if (
           resolved.type !== "TSTypeReference" ||
           resolved.typeName.type !== "Identifier" ||
@@ -49,13 +52,17 @@ export const noUnknownReturnsRule = defineRule({
         ) {
           return false;
         }
+
         const value = resolved.typeArguments?.params[0];
+
         return value !== undefined && matches(value);
       });
 
     const checkReturnType = (node: FunctionWithReturnType) => {
       const annotation = node.returnType;
+
       if (annotation === null || annotation === undefined) return;
+
       if (!resolvesToUnknown(annotation.typeAnnotation)) return;
       context.report({ node: annotation.typeAnnotation, messageId: "unknownReturn" });
     };

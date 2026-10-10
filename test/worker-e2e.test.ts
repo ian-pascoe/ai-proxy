@@ -10,8 +10,11 @@ import { zstdRleBomb } from "./support/zstd.ts"
 // Effect's FetchHttpClient resolves `globalThis.fetch` once: install one stable fetch that delegates to the current
 // test's upstream.
 type Upstream = (request: Request) => Response | Promise<Response>
+
 let upstream: Upstream = () => new Response("no upstream", { status: 599 })
+
 const upstreamCalls: string[] = []
+
 const realFetch = globalThis.fetch
 
 const YAML = `
@@ -69,6 +72,7 @@ const controlPlane = () => env.CONTROL_PLANE.getByName("global")
 /** Counters the ControlPlane keeps for the config API key (written by `report`). */
 const reportedCounts = async () => {
   const entry = (await controlPlane().listCredentials()).find((summary) => summary.id.startsWith(CONFIG_KEY_ID))
+
   return { success: entry?.success ?? 0, failed: entry?.failed ?? 0 }
 }
 
@@ -88,13 +92,16 @@ const chatRequest = (body: Record<string, unknown>, init: RequestInit = {}) =>
 const openStream = (maxChunks = 5_000) => {
   const state = { cancelled: false, produced: 0 }
   const encoder = new TextEncoder()
+
   const response = new Response(
     new ReadableStream<Uint8Array>({
       pull(controller) {
         if (state.produced >= maxChunks) {
           controller.close()
+
           return
         }
+
         controller.enqueue(encoder.encode(chunk(state.produced === 0 ? "partial" : `more-${state.produced}`)))
         state.produced++
       },
@@ -104,6 +111,7 @@ const openStream = (maxChunks = 5_000) => {
     }),
     { status: 200, headers: { "content-type": "text/event-stream" } }
   )
+
   return { state, response }
 }
 
@@ -112,12 +120,16 @@ const readFirstFrameAndCancel = async (response: Response): Promise<string> => {
   const reader = (response.body as ReadableStream<Uint8Array>).getReader()
   const decoder = new TextDecoder()
   let text = ""
+
   while (!text.includes("partial")) {
     const { value, done } = await reader.read()
+
     if (done) break
     text += decoder.decode(value, { stream: true })
   }
+
   await reader.cancel()
+
   return text
 }
 
@@ -125,6 +137,7 @@ beforeAll(async () => {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init)
     upstreamCalls.push(`${request.method} ${request.url}`)
+
     return await upstream(request)
   }) as typeof fetch
   const stored = await controlPlane().putConfig(YAML)
@@ -147,8 +160,10 @@ describe("production Worker end to end", () => {
     upstream = async (request) => {
       upstreamBody = (await request.json()) as Record<string, unknown>
       upstreamAuth = request.headers.get("authorization") ?? ""
+
       return Response.json(COMPLETION)
     }
+
     const before = await reportedCounts()
 
     // A non-browser client: no Origin, no Sec-Fetch-* headers.
@@ -189,6 +204,7 @@ describe("production Worker end to end", () => {
     upstream = () => stream.response
     const before = await reportedCounts()
     const pending: Array<Promise<unknown>> = []
+
     const ctx = {
       waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
       passThroughOnException: () => undefined,
@@ -207,11 +223,13 @@ describe("production Worker end to end", () => {
     // Only wait for what the Worker handed to `waitUntil` (as the runtime does after a disconnect): the report and
     // the D1 write must be complete once those promises settle.
     let settled = 0
+
     while (settled < pending.length) {
       const batch = pending.slice(settled)
       settled = pending.length
       await Promise.allSettled(batch)
     }
+
     expect(released).toBe(true)
     expect(pending.length).toBeGreaterThanOrEqual(2)
     const rows = await usageRows()
@@ -226,6 +244,7 @@ describe("production Worker end to end", () => {
 
   it("answers 413 for zstd bodies that decompress beyond the limit", async () => {
     upstream = () => Response.json(COMPLETION)
+
     const response = await exports.default.fetch(
       new Request("http://localhost/v1/chat/completions", {
         method: "POST",
@@ -233,6 +252,7 @@ describe("production Worker end to end", () => {
         body: zstdRleBomb(33 * 1024 * 1024)
       })
     )
+
     expect(response.status).toBe(413)
     expect(await response.text()).toContain("exceeds")
     expect(upstreamCalls).toEqual([])

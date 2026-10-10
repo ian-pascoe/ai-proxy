@@ -43,6 +43,7 @@ export class CredentialRefresher extends Context.Service<
     const call = (run: (api: RefreshApi) => PromiseLike<RefreshResult>) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv
+
         return yield* Effect.tryPromise({ try: async () => await run(api(env)), catch: (cause) => cause }).pipe(
           Effect.orElseSucceed((): RefreshResult => ({
             ok: false,
@@ -51,6 +52,7 @@ export class CredentialRefresher extends Context.Service<
           }))
         )
       })
+
     return Layer.succeed(
       CredentialRefresher,
       CredentialRefresher.of({
@@ -85,6 +87,7 @@ export class CredentialRefresher extends Context.Service<
 
 const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => {
   const token = metadata["access_token"]
+
   return typeof token === "string" ? token.trim() : ""
 }
 
@@ -95,6 +98,7 @@ const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => {
 export const needsPreparation = (credential: CredentialSnapshot, now: number): boolean => {
   if (credential.kind !== "oauth") return false
   const metadata = credential.metadata
+
   switch (credential.provider) {
     case "vertex":
       // Pick injects a cached service-account token; without one it has to be minted.
@@ -103,9 +107,11 @@ export const needsPreparation = (credential: CredentialSnapshot, now: number): b
       return metaNeedsMint(metadata as JsonObject)
     default: {
       const token = accessTokenOf(metadata)
+
       if (token === "") return true
       const expiry = accessTokenExpiry(metadata as JsonObject)
       const safety = credential.provider === "antigravity" ? ANTIGRAVITY_REQUEST_SAFETY_MS : 0
+
       return expiry !== undefined && expiry <= now + safety
     }
   }
@@ -144,8 +150,10 @@ export const withCredentialRefresh = <A, R>(
     const refresher = yield* CredentialRefresher
     let current = context
     const now = yield* Clock.currentTimeMillis
+
     if (needsPreparation(context.credential, now)) {
       const prepared = yield* refresher.ensureFresh(context.credential.id)
+
       if (prepared.ok) {
         current = { ...current, credential: toExecutorSnapshot(prepared.credential) }
       } else if (!BENIGN.has(prepared.error.code)) {
@@ -154,18 +162,24 @@ export const withCredentialRefresh = <A, R>(
     }
 
     const first = yield* Effect.result(use(current))
+
     if (first._tag === "Success") return first.success
     const error = first.failure
+
     if (error.status !== 401) return yield* error
 
     const rejected = accessTokenOf(current.credential.metadata)
     const refreshed = yield* refresher.refreshNow(current.credential.id, rejected === "" ? undefined : rejected)
+
     if (!refreshed.ok) {
       return yield* refreshed.terminal ? withErrorFields(error, { terminalAuth: true }) : error
     }
+
     const snapshot = toExecutorSnapshot(refreshed.credential)
+
     // The token did not change: repeating the request would only repeat the rejection.
     if (rejected !== "" && accessTokenOf(snapshot.metadata) === rejected) return yield* error
     const next = hooks.retry === undefined ? { ...current, credential: snapshot } : yield* hooks.retry(error, snapshot)
+
     return yield* use(next)
   })

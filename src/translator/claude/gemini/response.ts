@@ -41,6 +41,7 @@ interface Template {
 const newTemplate = (): Template => {
   const parts: JsonObject[] = []
   const candidate: JsonObject = { content: { role: "model", parts } }
+
   return {
     out: {
       candidates: [candidate],
@@ -61,10 +62,13 @@ const usageMetadata = (usage: Json | undefined, target: JsonObject): void => {
   target.candidatesTokenCount = outputTokens
   target.totalTokenCount = inputTokens + outputTokens
   const creation = get(usage, "cache_creation_input_tokens")
+
   if (exists(creation)) target.cachedContentTokenCount = asInt(creation)
   const read = get(usage, "cache_read_input_tokens")
+
   if (exists(read)) target.cachedContentTokenCount = asInt(creation) + asInt(read)
   const thinking = get(usage, "thinking_tokens")
+
   if (exists(thinking)) target.thoughtsTokenCount = asInt(thinking)
   target.trafficType = "PROVISIONED_THROUGHPUT"
 }
@@ -73,21 +77,28 @@ const functionCallPart = (params: Params, idx: number): JsonObject | undefined =
   const name = params.toolUseNames.get(idx) ?? ""
   const argsTrim = (params.toolUseArgs.get(idx) ?? "").trim()
   const toolId = params.toolUseIds.get(idx) ?? ""
+
   if (name === "" && argsTrim === "") return undefined
   const functionCall: JsonObject = { name: "", args: {} }
+
   if (name !== "") functionCall.name = name
+
   if (argsTrim !== "") functionCall.args = tryParseJson(argsTrim) ?? {}
+
   if (toolId !== "") functionCall.id = toolId
   params.toolUseArgs.delete(idx)
   params.toolUseNames.delete(idx)
   params.toolUseIds.delete(idx)
+
   return { functionCall }
 }
 
 const recordToolUseStart = (params: Params, idx: number, block: Json | undefined): void => {
   const name = get(block, "name")
+
   if (exists(name)) params.toolUseNames.set(idx, str(name))
   const toolId = str(get(block, "id"))
+
   if (toolId !== "") params.toolUseIds.set(idx, toolId)
 }
 
@@ -96,98 +107,132 @@ export const convertClaudeResponseToGemini = (context: ResponseContext, line: st
   const state = context.state
   state.value ??= newParams(context.model)
   const params = state.value as Params
+
   if (!line.startsWith("data:")) return []
   const root = tryParseJson(line.slice(5).trim())
   const eventType = str(get(root, "type"))
 
   const template = newTemplate()
   const { out, parts, candidate } = template
+
   if (params.model !== "") out.modelVersion = params.model
+
   if (params.responseId !== "") out.responseId = params.responseId
+
   if (params.createdAt === 0) params.createdAt = nowSeconds()
   out.createTime = formatCreateTime(params.createdAt)
 
   switch (eventType) {
     case "message_start": {
       const message = get(root, "message")
+
       if (exists(message)) {
         params.responseId = str(get(message, "id"))
         params.model = str(get(message, "model"))
       }
+
       return []
     }
+
     case "content_block_start": {
       const block = get(root, "content_block")
+
       if (exists(block)) {
         const type = str(get(block, "type"))
+
         if (type === "tool_use") {
           recordToolUseStart(params, asInt(get(root, "index")), block)
         } else if (type === "thinking") {
           const sig = get(block, "signature")
+
           if (exists(sig) && str(sig) !== "") {
             parts.push({ thought: true, thoughtSignature: geminiReplaySignatureOrBypass(str(sig)) })
+
             return [JSON.stringify(out)]
           }
         }
       }
+
       return []
     }
+
     case "content_block_delta": {
       const delta = get(root, "delta")
+
       if (exists(delta)) {
         switch (str(get(delta, "type"))) {
           case "text_delta": {
             const text = get(delta, "text")
+
             if (exists(text) && str(text) !== "") parts.push({ text: str(text) })
             break
           }
+
           case "thinking_delta": {
             const text = get(delta, "thinking")
+
             if (exists(text) && str(text) !== "") parts.push({ thought: true, text: str(text) })
             break
           }
+
           case "signature_delta": {
             const sig = get(delta, "signature")
+
             if (exists(sig) && str(sig) !== "") {
               parts.push({ thought: true, thoughtSignature: geminiReplaySignatureOrBypass(str(sig)) })
             }
+
             break
           }
+
           case "input_json_delta": {
             const idx = asInt(get(root, "index"))
             const partial = get(delta, "partial_json")
             params.toolUseArgs.set(idx, (params.toolUseArgs.get(idx) ?? "") + (exists(partial) ? str(partial) : ""))
+
             return []
           }
         }
       }
+
       return [JSON.stringify(out)]
     }
+
     case "content_block_stop": {
       const part = functionCallPart(params, asInt(get(root, "index")))
+
       if (part === undefined) return []
       parts.push(part)
       candidate.finishReason = "STOP"
+
       return [JSON.stringify(out)]
     }
+
     case "message_delta": {
       const delta = get(root, "delta")
+
       if (exists(delta) && exists(get(delta, "stop_reason"))) {
         candidate.finishReason = str(get(delta, "stop_reason")) === "max_tokens" ? "MAX_TOKENS" : "STOP"
       }
+
       const usage = get(root, "usage")
+
       if (exists(usage)) usageMetadata(usage, out.usageMetadata as JsonObject)
       candidate.finishReason = "STOP"
+
       return [JSON.stringify(out)]
     }
+
     case "error": {
       const message = str(get(root, "error.message"))
+
       return [
         JSON.stringify({
           error: { code: 400, message: message === "" ? "Unknown error occurred" : message, status: "INVALID_ARGUMENT" }
         })
       ]
     }
+
     default:
       return []
   }
@@ -196,6 +241,7 @@ export const convertClaudeResponseToGemini = (context: ResponseContext, line: st
 /** `ConvertClaudeResponseToGeminiNonStream`: aggregates the upstream event stream into one Gemini response. */
 export const convertClaudeResponseToGeminiNonStream = (context: ResponseContext, body: string): string => {
   const candidate: JsonObject = { content: { role: "model", parts: [] }, finishReason: "STOP" }
+
   const out: JsonObject = {
     candidates: [candidate],
     usageMetadata: { trafficType: "PROVISIONED_THROUGHPUT" },
@@ -203,6 +249,7 @@ export const convertClaudeResponseToGeminiNonStream = (context: ResponseContext,
     createTime: "",
     responseId: ""
   }
+
   const params = newParams(context.model)
   const allParts: JsonObject[] = []
   let finalUsage: JsonObject | undefined
@@ -211,13 +258,17 @@ export const convertClaudeResponseToGeminiNonStream = (context: ResponseContext,
 
   for (const rawLine of body.split("\n")) {
     const line = rawLine.replace(/\r+$/u, "")
+
     if (!line.startsWith("data:")) continue
     const data = line.slice(5).trim()
+
     if (data === "") continue
     const root = tryParseJson(data)
+
     switch (str(get(root, "type"))) {
       case "message_start": {
         const message = get(root, "message")
+
         if (exists(message)) {
           responseId = str(get(message, "id"))
           params.responseId = responseId
@@ -225,42 +276,58 @@ export const convertClaudeResponseToGeminiNonStream = (context: ResponseContext,
           createdAt = nowSeconds()
           params.createdAt = createdAt
         }
+
         break
       }
+
       case "content_block_start": {
         const block = get(root, "content_block")
+
         if (!exists(block)) break
         const type = str(get(block, "type"))
+
         if (type === "tool_use") recordToolUseStart(params, asInt(get(root, "index")), block)
         else if (type === "thinking") {
           const sig = get(block, "signature")
+
           if (exists(sig) && str(sig) !== "") {
             allParts.push({ thought: true, thoughtSignature: geminiReplaySignatureOrBypass(str(sig)) })
           }
         }
+
         break
       }
+
       case "content_block_delta": {
         const delta = get(root, "delta")
+
         if (!exists(delta)) break
+
         switch (str(get(delta, "type"))) {
           case "text_delta": {
             const text = get(delta, "text")
+
             if (exists(text) && str(text) !== "") allParts.push({ text: str(text) })
             break
           }
+
           case "thinking_delta": {
             const text = get(delta, "thinking")
+
             if (exists(text) && str(text) !== "") allParts.push({ thought: true, text: str(text) })
             break
           }
+
           case "signature_delta": {
             const sig = get(delta, "signature")
+
             if (exists(sig) && str(sig) !== "") {
               allParts.push({ thought: true, thoughtSignature: geminiReplaySignatureOrBypass(str(sig)) })
             }
+
             break
           }
+
           case "input_json_delta": {
             const idx = asInt(get(root, "index"))
             const partial = get(delta, "partial_json")
@@ -268,30 +335,40 @@ export const convertClaudeResponseToGeminiNonStream = (context: ResponseContext,
             break
           }
         }
+
         break
       }
+
       case "content_block_stop": {
         const part = functionCallPart(params, asInt(get(root, "index")))
+
         if (part !== undefined) allParts.push(part)
         break
       }
+
       case "message_delta": {
         const usage = get(root, "usage")
+
         if (exists(usage)) {
           const target: JsonObject = {}
           usageMetadata(usage, target)
           finalUsage = target
         }
+
         break
       }
     }
   }
 
   if (responseId !== "") out.responseId = responseId
+
   if (createdAt > 0) out.createTime = formatCreateTime(createdAt)
   const consolidated = consolidateParts(allParts)
+
   if (consolidated.length > 0) (candidate.content as JsonObject).parts = consolidated
+
   if (finalUsage !== undefined) out.usageMetadata = finalUsage
+
   return JSON.stringify(out)
 }
 
@@ -315,9 +392,11 @@ const consolidateParts = (parts: readonly JsonObject[]): JsonObject[] => {
       hasText = false
     }
   }
+
   const flushThought = (): void => {
     if (hasThought && (thought.length > 0 || signature !== "")) {
       const part: JsonObject = { thought: true, text: thought }
+
       if (signature !== "") part.thoughtSignature = signature
       consolidated.push(part)
       thought = ""
@@ -333,12 +412,15 @@ const consolidateParts = (parts: readonly JsonObject[]): JsonObject[] => {
       consolidated.push(part)
       continue
     }
+
     if (part.thought === true) {
       flushText()
+
       if (typeof part.text === "string") {
         thought += part.text
         hasThought = true
       }
+
       if (typeof part.thoughtSignature === "string" && part.thoughtSignature !== "") {
         signature = part.thoughtSignature
         hasThought = true
@@ -353,8 +435,10 @@ const consolidateParts = (parts: readonly JsonObject[]): JsonObject[] => {
       consolidated.push(part)
     }
   }
+
   flushThought()
   flushText()
+
   return consolidated
 }
 

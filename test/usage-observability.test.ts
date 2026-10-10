@@ -33,6 +33,7 @@ interface LogLine {
 }
 
 const logs: Array<LogLine> = []
+
 const capture = Logger.layer([
   Logger.make((options) => {
     logs.push({
@@ -44,6 +45,7 @@ const capture = Logger.layer([
 ])
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
@@ -53,6 +55,7 @@ const TRACE = /^(\d{14})-([0-9a-f]{16})-([0-9a-f-]{36})$/
 const pipeline = (respond: Parameters<typeof makePipeline>[0]["respond"]) => {
   const p = makePipeline({ config, respond, extraLayers: Layer.mergeAll(TraceLayer, capture) })
   afterAll(p.dispose)
+
   return p
 }
 
@@ -81,6 +84,7 @@ describe("X-CPA-TRACE-ID", () => {
         "data: [DONE]\n\n"
       ])
     )
+
     const response = await p.call("/v1/chat/completions", postJson({ ...chat, stream: true }))
     expect(response.headers.get("x-cpa-trace-id")).toMatch(TRACE)
     await response.text()
@@ -107,11 +111,13 @@ describe("X-CPA-TRACE-ID", () => {
   it("gives every request its own id", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     const ids = new Set<string>()
+
     for (let index = 0; index < 3; index += 1) {
       const response = await p.call("/v1/chat/completions", postJson(chat))
 
       ids.add(response.headers.get("x-cpa-trace-id") ?? "")
     }
+
     expect(ids.size).toBe(3)
   })
 })
@@ -120,10 +126,12 @@ describe("structured request log", () => {
   it("logs one line per request without secrets, bodies or query strings", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     logs.length = 0
+
     const response = await p.call(
       "/v1/chat/completions?key=QUERY-SECRET",
       postJson(chat, { authorization: "Bearer HEADER-SECRET" })
     )
+
     expect(response.status).toBe(200)
     const lines = logs.filter((line) => Array.isArray(line.message) && line.message[0] === "request")
     expect(lines).toHaveLength(1)
@@ -142,6 +150,7 @@ describe("structured request log", () => {
     expect(line.annotations["authIndex"]).toMatch(/^[0-9a-f]{16}$/)
     expect(typeof line.annotations["latencyMs"]).toBe("number")
     const serialised = JSON.stringify(logs)
+
     for (const secret of ["QUERY-SECRET", "HEADER-SECRET", "sk-test-1", "secret prompt text", "eyJ"]) {
       expect(serialised).not.toContain(secret)
     }

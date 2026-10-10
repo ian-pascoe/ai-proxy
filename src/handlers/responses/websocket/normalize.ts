@@ -16,6 +16,7 @@
 import { asString, cloneJson, get, isJsonArray, isJsonObject, type Json, type JsonObject } from "../../../json/index.ts"
 
 export const REQUEST_TYPE_CREATE = "response.create"
+
 export const REQUEST_TYPE_APPEND = "response.append"
 
 /** Go `codexLocalCompactionSummaryPrefix`. */
@@ -52,6 +53,7 @@ export const previousResponseNotFoundError = (): WsRequestError => ({
 const metadataString = (item: Json, name: string): string => {
   if (!isJsonObject(item)) return ""
   let value = ""
+
   // encoding/json keeps the last of several keys that match case-insensitively.
   for (const [key, candidate] of Object.entries(item)) {
     if (key.toLowerCase() !== name) continue
@@ -62,6 +64,7 @@ const metadataString = (item: Json, name: string): string => {
           ? candidate.trim()
           : JSON.stringify(candidate).trim()
   }
+
   return value
 }
 
@@ -87,11 +90,13 @@ export const isToolCallOutputType = (itemType: string): boolean =>
 
 const dedupeFunctionCalls = (items: ReadonlyArray<MergeItem>): MergeItem[] => {
   const seen = new Set<string>()
+
   return items.filter((item) => {
     if (isToolCallType(item.itemType) && item.callId !== "") {
       if (seen.has(item.callId)) return false
       seen.add(item.callId)
     }
+
     return true
   })
 }
@@ -104,22 +109,27 @@ export const dedupeInputItems = <T extends { readonly id: string; readonly callI
   items: ReadonlyArray<T>
 ): T[] => {
   const referenced = new Set<string>()
+
   for (const item of items) if (isToolCallOutputType(item.itemType) && item.callId !== "") referenced.add(item.callId)
   const keepIndex = new Map<string, number>()
   const keepReferenced = new Map<string, boolean>()
   items.forEach((item, index) => {
     if (item.id === "") return
     const isReferenced = item.callId !== "" && referenced.has(item.callId)
+
     if (!keepIndex.has(item.id)) {
       keepIndex.set(item.id, index)
       keepReferenced.set(item.id, isReferenced)
+
       return
     }
+
     if (isReferenced || keepReferenced.get(item.id) !== true) {
       keepIndex.set(item.id, index)
       keepReferenced.set(item.id, isReferenced)
     }
   })
+
   return items.filter((item, index) => item.id === "" || keepIndex.get(item.id) === index)
 }
 
@@ -130,12 +140,14 @@ export const inputContainsFullTranscript = (input: Json | undefined): boolean =>
   isJsonArray(input) &&
   input.some((item) => {
     const type = asString(get(item, "type"))
+
     return type === "compaction" || type === "compaction_summary"
   })
 
 const inputWithoutCompactionItems = (input: Json[]): Json[] =>
   input.filter((item) => {
     const type = asString(get(item, "type"))
+
     return type !== "compaction" && type !== "compaction_summary"
   })
 
@@ -143,8 +155,11 @@ const inputWithoutCompactionItems = (input: Json[]): Json[] =>
 
 const previousInput = (lastRequest: JsonObject): { readonly items?: Json[]; readonly error?: string } => {
   let input: Json | undefined
+
   for (const [key, value] of Object.entries(lastRequest)) if (key.toLowerCase() === "input") input = value
+
   if (input === undefined || input === null) return { items: [] }
+
   return isJsonArray(input) ? { items: input } : { error: "invalid previous request input" }
 }
 
@@ -155,12 +170,16 @@ export const mergeInput = (
   append: ReadonlyArray<Json>
 ): { readonly ok: true; readonly input: Json[] } | { readonly ok: false; readonly message: string } => {
   const previous = previousInput(lastRequest)
+
   if (previous.items === undefined) return { ok: false, message: previous.error ?? "invalid previous request input" }
   let items = previous.items.map(toMergeItem)
+
   if (inputContainsFullTranscript(lastResponseOutput as Json[])) {
     items = items.filter((item) => item.itemType !== "compaction_trigger")
   }
+
   items.push(...lastResponseOutput.map(toMergeItem), ...append.map(toMergeItem))
+
   return { ok: true, input: dedupeInputItems(dedupeFunctionCalls(items)).map((item) => item.raw) }
 }
 
@@ -168,31 +187,41 @@ export const mergeInput = (
 
 const withoutKey = (object: JsonObject, ...keys: string[]): JsonObject => {
   const out: JsonObject = {}
+
   for (const [key, value] of Object.entries(object)) if (!keys.includes(key)) out[key] = value
+
   return out
 }
 
 /** Copies `model` and `instructions` from the previous request when the new one omits them. */
 const inheritFromLast = (normalized: JsonObject, lastRequest: JsonObject | undefined): JsonObject => {
   const out = { ...normalized }
+
   if (out["model"] === undefined) {
     const model = trimmed(lastRequest?.["model"])
+
     if (model !== "") out["model"] = model
   }
+
   if (out["instructions"] === undefined && lastRequest?.["instructions"] !== undefined) {
     out["instructions"] = cloneJson(lastRequest["instructions"])
   }
+
   return out
 }
 
 /** `normalizeResponseCreateRequest`: the first create of a socket (or a root of a new transcript). */
 export const normalizeCreateRequest = (raw: JsonObject): Normalized => {
   const input = raw["input"]
+
   if (input !== undefined && !isJsonArray(input))
     return failure("websocket request requires array field: input", undefined)
   const normalized: JsonObject = { ...withoutKey(raw, "type"), stream: true }
+
   if (normalized["input"] === undefined) normalized["input"] = []
+
   if (trimmed(normalized["model"]) === "") return failure("missing model in response.create request", undefined)
+
   return { ok: true, request: normalized, last: cloneJson(normalized) }
 }
 
@@ -203,26 +232,37 @@ export const normalizeTranscriptReplacement = (raw: JsonObject, lastRequest: Jso
 /** `inputHasCodexLocalCompactionSummary`. */
 const hasLocalCompactionSummary = (input: Json[]): boolean => {
   let hasSummary = false
+
   for (const [index, item] of input.entries()) {
     const itemType = trimmed(get(item, "type"))
+
     if (itemType === "additional_tools") {
       const tools = get(item, "tools")
+
       if (index !== 0 || trimmed(get(item, "role")) !== "developer" || !isJsonArray(tools)) return false
+
       if (!tools.every((tool) => isJsonObject(tool) && trimmed(tool["type"]) !== "")) return false
       continue
     }
+
     if (itemType !== "" && itemType !== "message") return false
     const role = trimmed(get(item, "role"))
+
     if (role !== "user" && role !== "developer") return false
+
     if (role === "user" && messageText(item).startsWith(`${CODEX_LOCAL_COMPACTION_SUMMARY_PREFIX}\n`)) hasSummary = true
   }
+
   return hasSummary
 }
 
 const messageText = (message: Json): string => {
   const content = get(message, "content")
+
   if (typeof content === "string") return content
+
   if (!isJsonArray(content)) return ""
+
   return content
     .map((part) => (trimmed(get(part, "type")) === "input_text" ? asString(get(part, "text")) : ""))
     .join("")
@@ -231,8 +271,11 @@ const messageText = (message: Json): string => {
 /** `shouldReplaceWebsocketTranscript`: compact replays carry historical model output. */
 const shouldReplaceTranscript = (raw: JsonObject, nextInput: Json[]): boolean => {
   const requestType = trimmed(raw["type"])
+
   if (requestType !== REQUEST_TYPE_CREATE && requestType !== REQUEST_TYPE_APPEND) return false
+
   if (trimmed(raw["previous_response_id"]) !== "") return false
+
   if (
     requestType === REQUEST_TYPE_CREATE &&
     raw["previous_response_id"] === undefined &&
@@ -240,6 +283,7 @@ const shouldReplaceTranscript = (raw: JsonObject, nextInput: Json[]): boolean =>
   ) {
     return true
   }
+
   return nextInput.some((item) => {
     switch (trimmed(get(item, "type"))) {
       case "function_call":
@@ -257,13 +301,17 @@ const shouldReplaceTranscript = (raw: JsonObject, nextInput: Json[]): boolean =>
 export const inputSatisfiesPendingToolCalls = (input: Json[], pendingCallIds: ReadonlyArray<string>): boolean => {
   if (pendingCallIds.length === 0) return true
   const outputs = new Set<string>()
+
   for (const item of input) {
     const type = trimmed(get(item, "type"))
+
     if (type === "function_call_output" || type === "custom_tool_call_output") {
       const callId = trimmed(get(item, "call_id"))
+
       if (callId !== "") outputs.add(callId)
     }
   }
+
   return pendingCallIds.every((callId) => callId.trim() === "" || outputs.has(callId.trim()))
 }
 
@@ -282,44 +330,56 @@ export const normalizeSubsequentRequest = (
   allowCompactionReplayBypass: boolean
 ): Normalized => {
   const { lastRequest } = state
+
   if (lastRequest === undefined) return failure("websocket request received before response.create", lastRequest)
   const nextInput = raw["input"]
+
   if (!isJsonArray(nextInput)) return failure("websocket request requires array field: input", lastRequest)
 
   if (shouldReplaceTranscript(raw, nextInput)) {
     const normalized = normalizeTranscriptReplacement(raw, lastRequest)
+
     return { ok: true, request: normalized, last: cloneJson(normalized) }
   }
 
   if (allowIncrementalInputWithPreviousResponseId) {
     let previous = trimmed(raw["previous_response_id"])
+
     if (previous === "") {
       if (!inputSatisfiesPendingToolCalls(nextInput, state.pendingToolCallIds)) {
         const normalized = normalizeTranscriptReplacement(raw, lastRequest)
+
         return { ok: true, request: normalized, last: cloneJson(normalized) }
       }
+
       previous = state.lastResponseId.trim()
     }
+
     if (previous !== "") {
       const normalized = inheritFromLast({ ...withoutKey(raw, "type"), previous_response_id: previous }, lastRequest)
       normalized["stream"] = true
+
       return { ok: true, request: normalized, last: cloneJson(normalized) }
     }
   }
 
   let merged: Json[]
+
   if (allowCompactionReplayBypass && inputContainsFullTranscript(nextInput)) {
     // The input already carries the canonical history: merging stale state would break call/output pairings.
     merged = nextInput
   } else {
     const append = inputContainsFullTranscript(nextInput) ? inputWithoutCompactionItems(nextInput) : nextInput
     const result = mergeInput(lastRequest, state.lastResponseOutput, append)
+
     if (!result.ok) return failure(result.message, lastRequest)
     merged = result.input
   }
+
   const normalized = inheritFromLast(withoutKey(raw, "type", "previous_response_id"), lastRequest)
   normalized["stream"] = true
   normalized["input"] = merged
+
   return { ok: true, request: normalized, last: cloneJson(normalized) }
 }
 
@@ -331,6 +391,7 @@ export const normalizeRequest = (
   allowCompactionReplayBypass: boolean
 ): Normalized => {
   const requestType = trimmed(raw["type"])
+
   switch (requestType) {
     case REQUEST_TYPE_CREATE:
       return state.lastRequest === undefined
@@ -359,16 +420,22 @@ export const normalizePassthroughRequest = (
   modelName: string
 ): { readonly ok: true; readonly request: JsonObject } | { readonly ok: false; readonly error: WsRequestError } => {
   const requestType = trimmed(raw["type"])
+
   if (requestType !== REQUEST_TYPE_CREATE && requestType !== REQUEST_TYPE_APPEND) {
     return { ok: false, error: { status: 400, message: `unsupported websocket request type: ${requestType}` } }
   }
+
   const normalized: JsonObject = { ...raw }
+
   if (trimmed(normalized["model"]) === "") {
     const model = modelName.trim()
+
     if (model === "") return { ok: false, error: { status: 400, message: "missing model in response.create request" } }
     normalized["model"] = model
   }
+
   normalized["stream"] = true
+
   return { ok: true, request: normalized }
 }
 
@@ -384,14 +451,19 @@ export const shouldHandlePrewarmLocally = (raw: JsonObject): boolean =>
  */
 export const normalizePrewarmFollowup = (raw: JsonObject, warmupRequest: JsonObject): Normalized => {
   const requestType = trimmed(raw["type"])
+
   if (requestType !== REQUEST_TYPE_CREATE && requestType !== REQUEST_TYPE_APPEND) {
     return failure(`unsupported websocket request type: ${requestType}`, warmupRequest)
   }
+
   const input = raw["input"]
+
   if (!isJsonArray(input)) return failure("websocket request requires array field: input", warmupRequest)
   const merged = mergeInput(warmupRequest, [], input)
+
   if (!merged.ok) return failure(merged.message, warmupRequest)
   const normalized = { ...normalizeTranscriptReplacement(raw, warmupRequest), input: merged.input }
+
   return { ok: true, request: normalized, last: cloneJson(normalized) }
 }
 
@@ -402,6 +474,7 @@ export const syntheticPrewarmPayloads = (
 ): [JsonObject, JsonObject] => {
   const responseId = `resp_prewarm_${now.id}`
   const model = trimmed(request["model"])
+
   const created: JsonObject = {
     type: "response.created",
     sequence_number: 0,
@@ -416,6 +489,7 @@ export const syntheticPrewarmPayloads = (
       ...(model !== "" ? { model } : {})
     }
   }
+
   const completed: JsonObject = {
     type: "response.completed",
     sequence_number: 1,
@@ -437,5 +511,6 @@ export const syntheticPrewarmPayloads = (
       ...(model !== "" ? { model } : {})
     }
   }
+
   return [created, completed]
 }

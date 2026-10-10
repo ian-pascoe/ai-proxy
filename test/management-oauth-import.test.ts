@@ -7,14 +7,19 @@ import { controlPlane, makeHarness, resetControlPlane } from "./support/manageme
 import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts"
 
 const harness = makeHarness()
+
 const { json } = harness
+
 let sa: TestServiceAccount
+
 beforeAll(async () => {
   sa = await makeServiceAccount()
 })
+
 afterAll(async () => {
   await harness.dispose()
 })
+
 beforeEach(async () => {
   await resetControlPlane()
 })
@@ -24,7 +29,9 @@ const IMPORT = "/v8/management/oauth/import"
 const upload = (account: unknown, fields: Record<string, string> = {}, name = "sa.json") => {
   const body = new FormData()
   body.append("file", new File([typeof account === "string" ? account : JSON.stringify(account)], name))
+
   for (const [key, value] of Object.entries(fields)) body.append(key, value)
+
   return { method: "POST", body }
 }
 
@@ -32,6 +39,7 @@ describe("Vertex private key normalisation (Go parity)", () => {
   for (const entry of fixtures.vertex) {
     it(entry.name, async () => {
       const result = await normalizePrivateKey(entry.privateKey)
+
       if (entry.error !== undefined) {
         // The failure reasons are worded by the Go crypto packages; only the rejection is compared.
         expect(result.ok).toBe(false)
@@ -77,6 +85,7 @@ describe("POST /v8/management/oauth/import", () => {
       `${IMPORT}?provider=VERTEX`,
       upload(sa.account(sa.pem.pkcs8, { project_id: "my proj/1" }))
     )
+
     expect(result).toMatchObject({
       status: 200,
       body: {
@@ -112,6 +121,7 @@ describe("POST /v8/management/oauth/import", () => {
       `${IMPORT}?provider=vertex&location=ignored`,
       upload(sa.account(sa.pem.pkcs1), { location: "asia-east1" })
     )
+
     expect(fromForm.body).toMatchObject({ location: "asia-east1" })
     expect(await controlPlane().getCredentialFile(name)).toMatchObject({
       location: "asia-east1",

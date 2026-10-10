@@ -19,13 +19,16 @@ export const field = (value: Json | undefined, key: string): Json | undefined =>
 /** `Result.Array()`: array items; a scalar/object becomes a single item; missing/null becomes empty. */
 export const toArray = (value: Json | undefined): Json[] => {
   if (value === undefined || value === null) return []
+
   return isJsonArray(value) ? value : [value]
 }
 
 /** `Result.ForEach` values: array items or object values. */
 export const eachValue = (value: Json | undefined): Json[] => {
   if (isJsonArray(value)) return value
+
   if (isJsonObject(value)) return Object.values(value)
+
   return []
 }
 
@@ -34,7 +37,9 @@ export const entries = (value: Json | undefined): Array<[string, Json]> =>
   isJsonObject(value) ? Object.entries(value) : []
 
 export const isStr = (value: Json | undefined): value is string => typeof value === "string"
+
 export const isObj = (value: Json | undefined): value is JsonObject => isJsonObject(value)
+
 export const isArr = (value: Json | undefined): value is Json[] => isJsonArray(value)
 
 /** Go `strings.TrimSpace` semantic is close enough to `String.prototype.trim` for translators. */

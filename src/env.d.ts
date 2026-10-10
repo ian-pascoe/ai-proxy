@@ -24,13 +24,16 @@ interface __BaseEnv_Env {
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>
 }
+
 declare namespace Cloudflare {
   interface GlobalProps {
     mainModule: typeof import("./index")
     durableNamespaces: "ControlPlane" | "SessionState"
   }
+
   interface Env extends __BaseEnv_Env {}
 }
+
 interface Env extends __BaseEnv_Env {}
 
 // Non-JavaScript modules (Workers module rules; `*.bin` is in src/tokenizer/bin.d.ts).
@@ -38,10 +41,12 @@ declare module "*.txt" {
   const value: string
   export default value
 }
+
 declare module "*.html" {
   const value: string
   export default value
 }
+
 declare module "*.sql" {
   const value: string
   export default value

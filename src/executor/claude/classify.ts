@@ -15,27 +15,33 @@ export const DEFAULT_USER_AGENT = "claude-cli/2.1.280 (external, cli)"
 export const headerValue = (headers: Headers | undefined, name: string): string => headers?.get(name)?.trim() ?? ""
 
 const NATIVE_ENTRYPOINTS = new Set(["cli", "sdk-cli", "claude-vscode"])
+
 const NATIVE_USER_AGENT =
   /^claude-cli\/[0-9]+\.[0-9]+\.[0-9]+\s+\(external,\s*[^,)]+(?:,\s*agent-sdk\/[0-9]+\.[0-9]+\.[0-9]+)?\)$/i
+
 const USER_AGENT_DETAILS = /^claude-cli\/\S+\s+\(external,\s*([^,)]+)(?:,\s*agent-sdk\/([^,)]+))?/i
 
 const parseVersion = (userAgent: string): [number, number, number] | undefined => {
   const match = /^claude-cli\/(\d+)\.(\d+)\.(\d+)/.exec(userAgent)
+
   return match === null ? undefined : [Number(match[1]), Number(match[2]), Number(match[3])]
 }
 
 /** Claude Code CLI version used in the billing header (`DefaultClaudeVersion`). */
 export const defaultClaudeVersion = (userAgent: string): string => {
   const version = parseVersion(userAgent) ?? parseVersion(DEFAULT_USER_AGENT)
+
   return (version ?? [2, 1, 280]).join(".")
 }
 
 /** `plausibleClaudeCodeUserAgent`: native pattern with the baseline's major.minor and a patch >= baseline. */
 export const plausibleClaudeCodeUserAgent = (userAgent: string, baselineUserAgent: string): boolean => {
   const ua = userAgent.trim()
+
   if (!/^claude-cli\//i.test(ua) || !NATIVE_USER_AGENT.test(ua)) return false
   const candidate = parseVersion(ua)
   const baseline = parseVersion(baselineUserAgent)
+
   return (
     candidate !== undefined &&
     baseline !== undefined &&
@@ -46,20 +52,26 @@ export const plausibleClaudeCodeUserAgent = (userAgent: string, baselineUserAgen
 }
 
 const HEX64 = /^[0-9a-f]{64}$/
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** `isValidUserID`: JSON `{device_id: 64 hex, account_uuid: ""|uuid, session_id: uuid}`. */
 export const isValidUserID = (userID: string): boolean => {
   let value: Json
+
   try {
     value = JSON.parse(userID) as Json
   } catch {
     return false
   }
+
   if (!isObj(value)) return false
+
   if (!HEX64.test(str(value.device_id))) return false
+
   if (!UUID.test(str(value.session_id))) return false
   const account = str(value.account_uuid)
+
   return account === "" || UUID.test(account)
 }
 
@@ -81,13 +93,16 @@ export const detectClaudeCodeRequest = (
   const entrypoint = match === null ? "" : (match[1] ?? "").trim().toLowerCase()
   const xAppCli = headerValue(headers, "x-app") === "cli"
   const uaOk = plausibleClaudeCodeUserAgent(userAgent, baselineUserAgent)
+
   const betasPresent = (headers?.get("anthropic-beta") ?? "")
     .split(",")
     .some((beta) => beta.trim() === "claude-code-20250219")
+
   const metadataUserId = get(payload, "metadata.user_id")
   const metadataOk = typeof metadataUserId === "string" && isValidUserID(metadataUserId)
   const nativeClient = NATIVE_ENTRYPOINTS.has(entrypoint)
   const strong = xAppCli && uaOk && betasPresent && (countTokens || metadataOk)
+
   return { confirmed: strong && nativeClient, nativeClient, entrypoint: entrypoint === "" ? "cli" : entrypoint }
 }
 
@@ -95,27 +110,39 @@ const PROBE_TEXTS = new Set(["quota", "test", ".", "probe"])
 
 const isProbeRequest = (body: JsonObject): boolean => {
   const maxTokens = get(body, "max_tokens")
+
   if (maxTokens === undefined || Math.trunc(Number(maxTokens)) !== 1) return false
   const tools = get(body, "tools")
+
   if (isArr(tools) && tools.length > 0) return false
   const messages = get(body, "messages")
+
   if (!isArr(messages) || messages.length === 0) return true
+
   if (messages.length !== 1) return false
   const first = messages[0]
+
   if (str(get(first, "role")) !== "user") return false
   const content = get(first, "content")
+
   if (typeof content === "string") return PROBE_TEXTS.has(content.trim())
+
   if (isArr(content)) {
     let nonReminder = 0
     let matched = false
+
     for (const part of content) {
       const text = str(get(part, "text")).trim()
+
       if (text.includes("<system-reminder>")) continue
       nonReminder++
+
       if (PROBE_TEXTS.has(text) || (text === "Hi" && get(part, "cache_control") !== undefined)) matched = true
     }
+
     return nonReminder === 1 && matched
   }
+
   return false
 }
 
@@ -126,21 +153,29 @@ const matchesTitleInstruction = (text: string): boolean =>
 
 const anyText = (value: Json | undefined, predicate: (text: string) => boolean): boolean => {
   if (isArr(value)) return value.some((part) => predicate(str(get(part, "text"))))
+
   return predicate(str(value))
 }
 
 const isTitleHelperRequest = (body: JsonObject): boolean => {
   const props = get(body, "output_config.format.schema.properties")
+
   if (props !== undefined) {
     if (isJsonObject(props) && get(props, "title") !== undefined && Object.keys(props).length === 1) {
       const titlePrompt = (text: string): boolean => matchesTitleInstruction(text) || text.includes("<session>")
+
       if (anyText(body.system, titlePrompt)) return true
+
       return toArray(body.messages).some((message) => anyText(get(message, "content"), titlePrompt))
     }
+
     return false
   }
+
   if (get(body, "output_config") === undefined) return false
+
   if (anyText(body.system, matchesTitleInstruction)) return true
+
   return toArray(body.messages).some(
     (message) => str(get(message, "role")) === "system" && anyText(get(message, "content"), matchesTitleInstruction)
   )
@@ -152,12 +187,17 @@ export const isProbeOrHelperRequest = (body: JsonObject): boolean => isProbeRequ
 /** `IsClaudeSubagentRequest`. */
 export const isSubagentRequest = (headers: Headers | undefined, body: JsonObject): boolean => {
   if (headerValue(headers, "x-claude-code-agent-id") !== "") return true
+
   if (headerValue(headers, "x-claude-code-parent-agent-id") !== "") return true
+
   if (get(body, "metadata.user_id.parent_session_id") !== undefined) return true
   const userId = str(get(body, "metadata.user_id"))
+
   if (userId.includes('"parent_session_id"')) return true
   const system = body.system
+
   if (isArr(system) && system.length > 0) return str(get(system[0], "text")).includes("cc_is_subagent=true")
+
   return typeof system === "string" && system.includes("cc_is_subagent=true")
 }
 
@@ -168,16 +208,20 @@ export const subagentRequests1h = (headers: Headers | undefined, body: JsonObjec
 /** `IsClaudeNewPromptTurn`: the last message is a user turn without tool results. */
 export const isNewPromptTurn = (body: JsonObject): boolean => {
   const messages = body.messages
+
   if (!isArr(messages) || messages.length === 0) return true
   const last = messages[messages.length - 1]
+
   if (str(get(last, "role")) !== "user") return false
   const content = get(last, "content")
+
   return !(isArr(content) && content.some((part) => str(get(part, "type")) === "tool_result"))
 }
 
 const canonicalModel = (model: string): string => {
   const lower = model.trim().toLowerCase()
   const slash = lower.lastIndexOf("/")
+
   return slash >= 0 ? lower.slice(slash + 1) : lower
 }
 
@@ -185,29 +229,37 @@ export const isHaikuModel = (model: string): boolean => model.toLowerCase().incl
 
 export const isOpus55Model = (model: string): boolean => {
   const m = canonicalModel(model)
+
   return m === "claude-opus-5-5" || m.startsWith("claude-opus-5-5[")
 }
 
 export const isSonnet55Model = (model: string): boolean => {
   const m = canonicalModel(model)
+
   return m === "claude-sonnet-5-5" || m.startsWith("claude-sonnet-5-5-") || m.startsWith("claude-sonnet-5-5[")
 }
 
 export const isSonnet5Model = (model: string): boolean => {
   const m = canonicalModel(model)
+
   if (isSonnet55Model(m)) return false
+
   return m === "claude-sonnet-5" || m.startsWith("claude-sonnet-5-") || m.startsWith("claude-sonnet-5[")
 }
 
 /** `isClaudeFable51Model`: fable/mythos 5.1 not followed by a digit. */
 export const isFable51Model = (model: string): boolean => {
   const m = model.trim().toLowerCase()
+
   for (const target of ["fable-5-1", "fable-5.1", "mythos-5-1", "mythos-5.1"]) {
     const index = m.indexOf(target)
+
     if (index === -1) continue
     const next = m[index + target.length]
+
     if (next === undefined || next < "0" || next > "9") return true
   }
+
   return false
 }
 
@@ -250,18 +302,25 @@ export const usesLegacySystemReminder = (body: JsonObject): boolean =>
 export const extractBillingTags = (body: JsonObject): { prevReq: string; promptId: string } => {
   const system = body.system
   let text = ""
+
   if (isArr(system) && system.length > 0) text = str(get(system[0], "text"))
   else if (typeof system === "string") text = system
+
   if (!text.startsWith("x-anthropic-billing-header:")) return { prevReq: "", promptId: "" }
+
   const tag = (name: string): string => {
     const index = text.indexOf(name)
+
     if (index < 0) return ""
     const rest = text.slice(index + name.length)
     const end = rest.indexOf(";")
+
     return end >= 0 ? rest.slice(0, end) : rest
   }
+
   const prev = tag("cc_prev_req=")
   const prompt = tag("cc_prompt_id=")
+
   return {
     prevReq: /^req_[A-Za-z0-9_-]{1,36}$/.test(prev) ? prev : "",
     promptId: /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(prompt)

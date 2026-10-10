@@ -34,7 +34,9 @@ const rfc3339 = (seconds: number): string => new Date(seconds * 1000).toISOStrin
 
 const mimeTypeFromOutputFormat = (outputFormat: string): string => {
   if (outputFormat === "") return "image/png"
+
   if (outputFormat.includes("/")) return outputFormat
+
   switch (outputFormat.toLowerCase()) {
     case "jpg":
     case "jpeg":
@@ -63,14 +65,18 @@ const incompleteFinishReason = (reason: string): string => {
 /** `buildReverseMapFromGeminiOriginal`: shortened -> original tool names. */
 const reverseNames = (original: Json | undefined): Map<string, string> => {
   const reverse = new Map<string, string>()
+
   for (const [name, short] of geminiShortNameMap(original)) reverse.set(short, name)
+
   return reverse
 }
 
 const setFunctionCallId = (functionCall: Json, item: Json | undefined): Json => {
   const callId = asString(get(item, "call_id")).trim()
+
   if (callId !== "") return set(functionCall, "functionCall.id", callId)
   const id = asString(get(item, "id")).trim()
+
   return id !== "" ? set(functionCall, "functionCall.id", id) : functionCall
 }
 
@@ -81,15 +87,20 @@ const inlineDataPart = (b64: string, outputFormat: string): JsonObject => ({
 const functionCallPart = (item: Json | undefined, original: Json | undefined, argsFirst: boolean): Json => {
   const n = asString(get(item, "name"))
   const name = reverseNames(original).get(n) ?? n
+
   let functionCall: Json = argsFirst
     ? { functionCall: { args: {}, name: "" } }
     : { functionCall: { name: "", args: {} } }
+
   functionCall = set(functionCall, "functionCall.name", name)
   const argsText = asString(get(item, "arguments"))
+
   if (argsText !== "") {
     const args = tryParseJson(argsText)
+
     if (isJsonObject(args)) functionCall = set(functionCall, "functionCall.args", args)
   }
+
   return setFunctionCallId(functionCall, item)
 }
 
@@ -112,9 +123,12 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
       hasOutputTextDelta: false,
       lastImageById: new Map()
     }
+
     context.state.value = initial
   }
+
   const params = context.state.value as GeminiParams
+
   if (!line.startsWith("data:")) return []
   const root = tryParseJson(line.slice(5).trim())
   const type = asString(get(root, "type"))
@@ -123,19 +137,24 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
   let template = baseTemplate()
   template = set(template, "modelVersion", params.model)
   const createdAt = get(root, "response.created_at")
+
   if (createdAt !== undefined) {
     params.createdAt = asInt(createdAt)
     template = set(template, "createTime", rfc3339(params.createdAt))
   }
+
   template = set(template, "responseId", params.responseId)
 
   const emitImage = (itemId: string, b64: string, outputFormat: string): ReadonlyArray<string> => {
     if (b64 === "") return []
+
     if (itemId !== "") {
       if (params.lastImageById.get(itemId) === b64) return []
       params.lastImageById.set(itemId, b64)
     }
+
     template = set(template, "candidates.0.content.parts", [inlineDataPart(b64, outputFormat)])
+
     return [JSON.stringify(template)]
   }
 
@@ -150,14 +169,17 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
   if (type === "response.output_item.done") {
     const item = get(root, "item")
     const itemType = asString(get(item, "type"))
+
     if (itemType === "image_generation_call") {
       return emitImage(asString(get(item, "id")), asString(get(item, "result")), asString(get(item, "output_format")))
     }
+
     if (itemType === "function_call") {
       template = set(template, "candidates.0.content.parts", [functionCallPart(item, original, false)])
       template = set(template, "candidates.0.finishReason", "STOP")
       // Held back until the next chunk so the finish reason can be emitted with the last call.
       params.lastStorageOutput = JSON.stringify(template)
+
       return []
     }
   }
@@ -173,19 +195,25 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
     template = set(template, "candidates.0.content.parts", [{ text: asString(get(root, "delta")) }])
   } else if (type === "response.output_item.done") {
     const item = get(root, "item")
+
     if (asString(get(item, "type")) !== "message" || params.hasOutputTextDelta) return []
     const content = get(item, "content")
+
     if (!isJsonArray(content)) return []
     let wroteText = false
+
     for (const part of content) {
       if (asString(get(part, "type")) !== "output_text") continue
       const text = asString(get(part, "text"))
+
       if (text === "") continue
       template = set(template, "candidates.0.content.parts.-1", { text })
       wroteText = true
     }
+
     if (!wroteText) return []
     params.hasOutputTextDelta = true
+
     return [JSON.stringify(template)]
   } else if (type === "response.completed" || type === "response.incomplete") {
     const input = asInt(get(root, "response.usage.input_tokens"))
@@ -193,6 +221,7 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
     template = set(template, "usageMetadata.promptTokenCount", input)
     template = set(template, "usageMetadata.candidatesTokenCount", output)
     template = set(template, "usageMetadata.totalTokenCount", input + output)
+
     if (type === "response.incomplete") {
       template = set(
         template,
@@ -207,8 +236,10 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
   if (params.lastStorageOutput !== undefined && params.lastStorageOutput !== "") {
     const stored = params.lastStorageOutput
     params.lastStorageOutput = undefined
+
     return [stored, JSON.stringify(template)]
   }
+
   return [JSON.stringify(template)]
 }
 
@@ -216,6 +247,7 @@ export const convertCodexResponseToGemini = (context: ResponseContext, line: str
 export const convertCodexResponseToGeminiNonStream = (context: ResponseContext, body: string): string => {
   const root = tryParseJson(body)
   const responseType = asString(get(root, "type"))
+
   if (responseType !== "response.completed" && responseType !== "response.incomplete") return ""
   const original = context.originalRequest
 
@@ -226,8 +258,10 @@ export const convertCodexResponseToGeminiNonStream = (context: ResponseContext, 
     createTime: "",
     responseId: ""
   }
+
   template = set(template, "modelVersion", context.model)
   const responseData = get(root, "response")
+
   if (responseData !== undefined) {
     if (responseType === "response.incomplete") {
       template = set(
@@ -236,11 +270,15 @@ export const convertCodexResponseToGeminiNonStream = (context: ResponseContext, 
         incompleteFinishReason(asString(get(responseData, "incomplete_details.reason")))
       )
     }
+
     const id = get(responseData, "id")
+
     if (id !== undefined) template = set(template, "responseId", asString(id))
     const createdAt = get(responseData, "created_at")
+
     if (createdAt !== undefined) template = set(template, "createTime", rfc3339(asInt(createdAt)))
     const usage = get(responseData, "usage")
+
     if (usage !== undefined) {
       const input = asInt(get(usage, "input_tokens"))
       const output = asInt(get(usage, "output_tokens"))
@@ -251,47 +289,61 @@ export const convertCodexResponseToGeminiNonStream = (context: ResponseContext, 
 
     const parts: Json[] = []
     let pendingFunctionCalls: Json[] = []
+
     const flush = () => {
       parts.push(...pendingFunctionCalls)
       pendingFunctionCalls = []
     }
+
     const output = get(responseData, "output")
+
     if (isJsonArray(output)) {
       for (const value of output) {
         switch (asString(get(value, "type"))) {
           case "reasoning": {
             flush()
             const content = get(value, "content")
+
             if (content !== undefined) parts.push({ text: asString(content), thought: true })
             break
           }
+
           case "message": {
             flush()
             const content = get(value, "content")
+
             if (isJsonArray(content)) {
               for (const item of content) {
                 if (asString(get(item, "type")) !== "output_text") continue
                 const text = get(item, "text")
+
                 if (text !== undefined) parts.push({ text: asString(text) })
               }
             }
+
             break
           }
+
           case "image_generation_call": {
             flush()
             const b64 = asString(get(value, "result"))
+
             if (b64 !== "") parts.push(inlineDataPart(b64, asString(get(value, "output_format"))))
             break
           }
+
           case "function_call":
             pendingFunctionCalls.push(functionCallPart(value, original, true))
             break
         }
       }
+
       flush()
+
       if (parts.length > 0) template = set(template, "candidates.0.content.parts", parts)
     }
   }
+
   return JSON.stringify(template)
 }
 

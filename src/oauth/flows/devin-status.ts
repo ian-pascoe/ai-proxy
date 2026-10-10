@@ -26,6 +26,7 @@ export interface DevinUserStatus {
 }
 
 const encoder = new TextEncoder()
+
 const decoder = new TextDecoder()
 
 const FINGERPRINT_BYTES = 366 // 732 hex characters
@@ -33,11 +34,14 @@ const FINGERPRINT_BYTES = 366 // 732 hex characters
 const varint = (value: number): number[] => {
   const out: number[] = []
   let rest = value
+
   while (rest > 0x7f) {
     out.push((rest & 0x7f) | 0x80)
     rest = Math.floor(rest / 128)
   }
+
   out.push(rest)
+
   return out
 }
 
@@ -65,6 +69,7 @@ export const buildUserStatusRequest = (sessionToken: string, fingerprint?: strin
     ...text(12, "chisel"),
     ...text(31, fingerprint ?? randomHex(FINGERPRINT_BYTES))
   ])
+
   return Uint8Array.from(field(1, inner))
 }
 
@@ -80,30 +85,40 @@ interface Field {
 const fields = (data: Uint8Array): Field[] => {
   const out: Field[] = []
   let at = 0
+
   const readVarint = (): number | undefined => {
     let value = 0
     let scale = 1
+
     for (let index = 0; index < 10; index++) {
       const byte = data[at++]
+
       if (byte === undefined) return undefined
       value += (byte & 0x7f) * scale
+
       if ((byte & 0x80) === 0) return value
       scale *= 128
     }
+
     return undefined
   }
+
   while (at < data.length) {
     const tag = readVarint()
+
     if (tag === undefined) break
     const wire = tag % 8
     const number = Math.floor(tag / 8)
+
     if (wire === 2) {
       const length = readVarint()
+
       if (length === undefined || at + length > data.length) break
       out.push({ number, wire, bytes: data.subarray(at, at + length) })
       at += length
     } else if (wire === 0) {
       const value = readVarint()
+
       if (value === undefined) break
       out.push({ number, wire, value })
     } else if (wire === 1 || wire === 5) {
@@ -113,6 +128,7 @@ const fields = (data: Uint8Array): Field[] => {
       break
     }
   }
+
   return out
 }
 
@@ -123,6 +139,7 @@ const EMPTY = new Uint8Array()
 /** `parseSecondsSubfield`: the first varint of field 1 (a protobuf `Timestamp.seconds`), 0 when absent. */
 const secondsSubfield = (data: Uint8Array): number => {
   for (const entry of fields(data)) if (entry.wire === 0 && entry.number === 1) return entry.value ?? 0
+
   return 0
 }
 
@@ -130,11 +147,15 @@ const secondsSubfield = (data: Uint8Array): number => {
 const parsePlanInfo = (data: Uint8Array, status: DevinUserStatus): void => {
   for (const info of fields(data)) {
     if (info.wire !== 2) continue
+
     if (info.number === 2) status.plan = stringField(info.bytes)
+
     if (info.number === 33) {
       for (const org of fields(info.bytes ?? EMPTY)) {
         if (org.wire !== 2) continue
+
         if (org.number === 4) status.orgId = stringField(org.bytes)
+
         if (org.number === 8) status.orgName = stringField(org.bytes)
       }
     }
@@ -150,6 +171,7 @@ const parsePlanStatus = (data: Uint8Array, status: DevinUserStatus): void => {
       else if (entry.number === 3) status.planEnd = secondsSubfield(entry.bytes ?? EMPTY)
     } else if (entry.wire === 0) {
       const value = entry.value ?? 0
+
       if (entry.number === 14) status.dailyQuotaRemainingPercent = value
       else if (entry.number === 15) status.weeklyQuotaRemainingPercent = value
       else if (entry.number === 17 && value > 0) status.dailyQuotaResetAt = value
@@ -178,10 +200,13 @@ export const emptyUserStatus = (): DevinUserStatus => ({
 export const parseUserStatus = (data: Uint8Array): DevinUserStatus | undefined => {
   if (data.length === 0) return undefined
   const status = emptyUserStatus()
+
   for (const top of fields(data)) {
     if (top.number !== 1 || top.wire !== 2 || top.bytes === undefined) continue
+
     for (const entry of fields(top.bytes)) {
       if (entry.wire !== 2) continue
+
       switch (entry.number) {
         case 3:
           status.userName = stringField(entry.bytes)
@@ -203,5 +228,6 @@ export const parseUserStatus = (data: Uint8Array): DevinUserStatus | undefined =
       }
     }
   }
+
   return status
 }

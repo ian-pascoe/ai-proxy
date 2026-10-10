@@ -12,7 +12,9 @@ import {
 import { NOW, Harness, cooling, cred, defaultSettings, entry, state } from "./support/credentials.ts"
 
 const wrr = () => new Harness({ ...defaultSettings, strategy: "weighted-round-robin" })
+
 const fillFirst = () => new Harness({ ...defaultSettings, strategy: "fill-first" })
+
 const affinity = () => new Harness({ ...defaultSettings, sessionAffinity: true })
 
 const entries = (...ids: string[]) => ids.map((id) => entry(cred(id)))
@@ -31,20 +33,24 @@ describe("fill-first and round-robin", () => {
 
   it("only the highest priority tier is selectable", () => {
     const h = new Harness()
+
     const pool = [
       entry(cred("c", { priority: 0 })),
       entry(cred("a", { priority: 10 })),
       entry(cred("b", { priority: 10 }))
     ]
+
     expect(h.ids(pool, 4)).toEqual(["a", "b", "a", "b"])
   })
 
   it("falls back to a lower tier while the higher tier cools down (fill-first)", () => {
     const h = fillFirst()
+
     const pool = [
       entry(cred("high", { priority: 10 }), state({ modelStates: { model: cooling(NOW + 30 * 60_000, true) } })),
       entry(cred("low", { priority: 0 }))
     ]
+
     expect(h.id(pool)).toBe("low")
   })
 
@@ -61,14 +67,18 @@ describe("fill-first and round-robin", () => {
     const pool = entries(...ids)
     const requests = 30
     const first: Record<string, number> = {}
+
     for (let index = 0; index < requests; index += 1) {
       const tried: string[] = []
+
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const id = h.id(pool, { tried })
+
         if (attempt === 0) first[id] = (first[id] ?? 0) + 1
         tried.push(id)
       }
     }
+
     expect(first).toEqual({ a: 10, b: 10, c: 10 })
   })
 
@@ -141,12 +151,15 @@ describe("weighted round-robin", () => {
 
   it("skips credentials unavailable for the model or quota-exceeded without recovery time", () => {
     const h = wrr()
+
     const pool = [
       entry(cred("model-unavailable"), state({ modelStates: { model: { ...cooling(0), nextRetryAfter: 0 } } })),
       entry(cred("quota-exceeded"), state({ quota: { exceeded: true, nextRecoverAt: 0, backoffLevel: 0 } })),
       entry(cred("available"))
     ]
+
     expect(h.id(pool, { model: "model" })).toBe("available")
+
     for (const id of h.ids(pool, 4, { model: "model" })) expect(id).toBe("available")
   })
 
@@ -155,6 +168,7 @@ describe("weighted round-robin", () => {
       ["a", Number.MAX_SAFE_INTEGER],
       ["b", -Number.MAX_SAFE_INTEGER]
     ])
+
     const picked = pickSmoothWeighted(
       [
         { id: "a", weight: 1 },
@@ -162,6 +176,7 @@ describe("weighted round-robin", () => {
       ],
       current
     )
+
     expect(picked?.id).toBe("a")
     expect(current.get("a")).toBe(Number.MAX_SAFE_INTEGER - 2)
     expect(current.get("b")).toBe(-Number.MAX_SAFE_INTEGER + 1)
@@ -207,10 +222,12 @@ describe("weighted round-robin", () => {
     expect(Object.fromEntries(stateful.current)).toEqual({ a: -2, b: 1 })
     stateful.prepare(new Map([["b", 5]]))
     expect(stateful.current.size).toBe(0)
+
     for (let index = 0; index < MAX_SMOOTH_STATE_ENTRIES * 3; index += 1) {
       stateful.prepare(new Map([[`churn-${index}`, 5]]))
       stateful.current.set(`churn-${index}`, 1)
     }
+
     expect(stateful.current.size).toBeLessThanOrEqual(MAX_SMOOTH_STATE_ENTRIES)
     expect(stateful.weights.size).toBeLessThanOrEqual(MAX_SMOOTH_STATE_ENTRIES)
   })
@@ -235,6 +252,7 @@ describe("availability", () => {
       "",
       NOW
     )
+
     expect(block.blocked).toBe(true)
   })
 
@@ -258,12 +276,15 @@ describe("availability", () => {
     const quota = state({
       quota: { exceeded: true, reason: "credential_quota", nextRecoverAt: NOW + 5000, backoffLevel: 0 }
     })
+
     expect(isBlockedForModel(credential, quota, "m", NOW)).toMatchObject({ blocked: true, reason: "cooldown" })
+
     const unauthorized = state({
       unavailable: true,
       status: "error",
       lastError: { message: "no", retryable: false, httpStatus: 401 }
     })
+
     expect(isBlockedForModel(credential, unauthorized, "m", NOW).blocked).toBe(true)
   })
 
@@ -281,6 +302,7 @@ describe("availability", () => {
       quota: { exceeded: true, reason: "quota", nextRecoverAt: NOW + 5000, backoffLevel: 1 },
       modelStates: { m: cooling(NOW + 5000, true) }
     })
+
     expect(isBlockedForModel(credential, aggregate, "", NOW).blocked).toBe(false)
   })
 })
@@ -293,9 +315,12 @@ describe("pick failures", () => {
   it("reports model_cooldown with HTTP 429, Retry-After and the Go body (provider only when single)", () => {
     const failure = (() => {
       const outcome = fillFirst().select(pool, { model: "test-model" })
+
       if (outcome.ok) throw new Error("expected failure")
+
       return outcome.failure
     })()
+
     expect(failure).toMatchObject({ code: "model_cooldown", httpStatus: 429, retryAfterSeconds: 60 })
     const body = JSON.parse(failure.body ?? "{}") as { error: Record<string, unknown> }
     expect(body.error).toMatchObject({
@@ -310,6 +335,7 @@ describe("pick failures", () => {
       [entry(cred("a"), coolingState), entry(cred("b", { provider: "claude" }), coolingState)],
       { model: "test-model", providers: ["gemini", "claude"] }
     )
+
     if (mixed.ok) throw new Error("expected failure")
     expect(JSON.parse(mixed.failure.body ?? "{}").error).not.toHaveProperty("provider")
   })
@@ -317,9 +343,11 @@ describe("pick failures", () => {
   it("reports a retryable 503 auth_unavailable when cooling without quota, plain otherwise", () => {
     const cooled = state({ unavailable: true, nextRetryAfter: next })
     const withRecovery = new Harness().select([entry(cred("a"), cooled)])
+
     if (withRecovery.ok) throw new Error("expected failure")
     expect(withRecovery.failure).toMatchObject({ code: "auth_unavailable", httpStatus: 503, retryAfterSeconds: 60 })
     const terminal = new Harness().select([entry(cred("a"), state({ unavailable: true }))])
+
     if (terminal.ok) throw new Error("expected failure")
     expect(terminal.failure).toMatchObject({ code: "auth_unavailable", retryable: false })
     expect(terminal.failure.httpStatus).toBeUndefined()
@@ -372,11 +400,13 @@ describe("session affinity", () => {
 
   it("keeps separate bindings per model and per provider set", () => {
     const h = affinity()
+
     const pool = [
       ...entries("a", "b"),
       entry(cred("c", { provider: "claude" })),
       entry(cred("d", { provider: "claude" }))
     ]
+
     const g1 = h.id(pool, { ...session("s"), model: "m1" })
     expect(g1).toBe("a")
     // `a` cools down for m2 only: the m2 binding differs while the m1 binding is untouched.
@@ -436,8 +466,10 @@ describe("session affinity", () => {
       const parent = h.id(pool, session("parent"))
       const fork = h.id(pool, session("child", { parentId: "parent", isFork: true }))
       const sub = h.id(pool, session("parent:agent:1", { parentId: "parent" }))
+
       return { parent, fork, sub }
     }
+
     const enabled = parentPicks(true)
     expect(enabled.fork).toBe(enabled.parent)
     expect(enabled.sub).toBe(enabled.parent)
@@ -467,11 +499,13 @@ describe("codex preferences", () => {
   it("prefers websocket credentials for websocket requests and skips free plans on demand", () => {
     const h = new Harness()
     const providers = ["codex"]
+
     const pool = [
       entry(cred("a", { provider: "codex" })),
       entry(cred("b", { provider: "codex", attributes: { websockets: "true" } })),
       entry(cred("c", { provider: "codex", attributes: { plan_type: "free" } }))
     ]
+
     expect(h.ids(pool, 3, { providers, preferWebsockets: true })).toEqual(["b", "b", "b"])
     expect(h.ids(pool, 4, { providers, disallowFreeCodex: true })).toEqual(["a", "b", "a", "b"])
   })

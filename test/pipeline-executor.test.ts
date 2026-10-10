@@ -87,9 +87,11 @@ describe("OpenAICompatStreamReader", () => {
     const registry = new TranslatorRegistry().register(Formats.OpenAIResponse, Formats.OpenAI, undefined, {
       stream: (context, line) => {
         context.state.canFinalize = true
+
         return line === "data: [DONE]" ? ["event: response.completed\ndata: {}\n\n"] : []
       }
     })
+
     const finalising = reader(Formats.OpenAIResponse, registry)
     finalising.push('data: {"x":1}')
     finalising.push("")
@@ -100,9 +102,11 @@ describe("OpenAICompatStreamReader", () => {
     const registry = new TranslatorRegistry().register(Formats.OpenAI, Formats.OpenAI, undefined, {
       stream: (context) => {
         context.state.toolInputError = "bad"
+
         return ["partial"]
       }
     })
+
     const step = feed(reader(Formats.OpenAI, registry), ['data: {"x":1}', ""]).at(-1)
     expect(step?.chunks).toEqual(["partial"])
     expect(step?.error?.status).toBe(502)
@@ -144,6 +148,7 @@ describe("custom headers", () => {
       "header:X-Mixed": "s=$cpa-session-id;",
       base_url: "ignored"
     })
+
     expect(customHeaders(c, new Headers({ "x-trace": "t1" }), "sess")).toEqual([
       ["X-Fixed", "v"],
       ["X-Client", "t1"],
@@ -183,6 +188,7 @@ describe("model resolution helpers", () => {
       { name: "up-2(low)", alias: "POOL" },
       { name: "up-1", alias: "pool" }
     ]
+
     expect(resolveModelAliasPool("pool(high)", models)).toEqual(["up-1(high)", "up-2(low)"])
     expect(resolveModelAliasPool("other", models)).toEqual([])
   })
@@ -212,6 +218,7 @@ api-keys:
       keys: [{ api-key: k3 }]
 `)
       )
+
       const group = config["api-keys"]["openai-compatibility"][0]!
       assert.deepStrictEqual(openAICompatModelIds(group, true), ["team/pool", "team", "team/team"])
       const creds = configCredentials(config)
@@ -255,9 +262,11 @@ api-keys:
       models: [{ name: m }, { name: only-b }]
       keys: [{ api-key: b1 }]
 `
+
   const run = <A, E>(effect: Effect.Effect<A, E, CredentialPicker | WorkerEnv>) =>
     Effect.gen(function* () {
       const config = yield* Effect.promise(() => loadConfig(yaml))
+
       return yield* effect.pipe(
         Effect.provide(StaticCredentialPickerLayer),
         Effect.provide(staticConfigReader(config)),
@@ -270,17 +279,21 @@ api-keys:
       Effect.gen(function* () {
         const picker = yield* CredentialPicker
         const providers = ["openai-compatible-a", "openai-compatible-b"]
+
         const pick = (excludedIds: ReadonlyArray<string> = []) =>
           picker
             .pick({ providers, model: "m(high)", callerScope: "s", excludedIds })
             .pipe(Effect.map((result) => result.credential.id))
+
         assert.strictEqual(yield* pick(), "openai-compatible-b#1.0")
         const a1 = yield* pick(["openai-compatible-b#1.0"])
         const a2 = yield* pick(["openai-compatible-b#1.0"])
         assert.deepStrictEqual([a1, a2].toSorted(), ["openai-compatible-a#0.0", "openai-compatible-a#0.1"])
+
         const none = yield* Effect.flip(
           picker.pick({ providers: ["openai-compatible-a"], model: "only-b", callerScope: "s" })
         )
+
         assert.strictEqual(none.code, "auth_not_found")
         assert.strictEqual(none.status, 503)
         const empty = yield* Effect.flip(picker.pick({ providers: [], model: "m", callerScope: "s" }))

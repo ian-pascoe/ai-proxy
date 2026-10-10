@@ -53,9 +53,11 @@ describe("Responses frame assembler", () => {
     framer.chunk(
       'event: response.output_item.done\ndata: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"a"}}\n\n'
     )
+
     const out = framer.chunk(
       'event: response.completed\ndata: {"type":"response.completed","response":{"output":[]}}\n\n'
     )
+
     const payload = JSON.parse(out.split("data: ")[1] as string) as { response: { output: Array<{ id: string }> } }
     expect(payload.response.output.map((item) => item.id)).toEqual(["a", "b"])
     expect(framer.chunk('event: response.created\ndata: {"type":"response.created"}\n\n')).toBe("")
@@ -66,9 +68,11 @@ describe("Responses frame assembler", () => {
     const framer = responsesFramer({ codexClient: false })
     framer.chunk(`${created}\n\n`)
     framer.chunk("event: error")
+
     const out = framer.chunk(
       'data: {"type":"error","status":429,"error":{"message":"bad Bearer abc.def-ghi key","api_key":"sk-1","code":"rate_limit_exceeded"}}'
     )
+
     expect(out).toMatch(/^event: error\ndata: /)
     expect(out).not.toContain("sk-1")
     expect(out).not.toContain("abc.def-ghi")
@@ -110,10 +114,13 @@ describe("tool schema normalisation", () => {
         }
       ]
     } as unknown as Json
+
     normalizeCodexToolSchemas(body)
+
     const properties = (
       body as { tools: Array<{ parameters: { properties: Record<string, Record<string, unknown>> } }> }
     ).tools[0]!.parameters.properties
+
     expect(properties["mode"]).toEqual({ description: "m", enum: Array.from({ length: 8 }, (_, i) => `v${i}`) })
     expect(properties["short"]!["oneOf"]).toHaveLength(7)
     expect(properties["mixed"]!["anyOf"]).toHaveLength(9)
@@ -133,6 +140,7 @@ describe("tool schema normalisation", () => {
         }
       ]
     } as unknown as Json
+
     normalizeCodexToolSchemas(body)
     expect(JSON.stringify(body)).not.toContain("oneOf")
   })
@@ -160,6 +168,7 @@ describe("tool schema normalisation", () => {
           { name: "wait_agent", input_schema: { properties: { timeout_ms: { type: "number" } } } }
         ]
       }) as unknown as Json
+
     const untouched = make()
     normalizeCodexToolIntegerTypes(untouched, new Headers({ "user-agent": "curl/8" }))
     expect(JSON.stringify(untouched)).not.toContain("integer")
@@ -173,10 +182,12 @@ describe("tool schema normalisation", () => {
 
   it("only normalises integers in the payload barrier of non-Codex targets", async () => {
     const config = await loadConfig("requests: {}")
+
     const make = (): Json =>
       ({
         tools: [{ type: "function", name: "sleep", parameters: { properties: { duration_ms: { type: "number" } } } }]
       }) as unknown as Json
+
     const request = { model: "m", protocol: "openai", headers: new Headers({ "user-agent": "codex-tui/1" }) }
     const forOpenAI = finalizePayload(config, "openai-compatible-x", request, make())
     expect(JSON.stringify(forOpenAI)).toContain('"integer"')
@@ -188,6 +199,7 @@ describe("tool schema normalisation", () => {
 describe("helpers", () => {
   it("sanitises input item ids like Go", () => {
     const long = `msg_${"a".repeat(80)}`
+
     const body = {
       input: [
         { type: "reasoning", id: `rs_${"b".repeat(70)}`, encrypted_content: "enc" },
@@ -197,6 +209,7 @@ describe("helpers", () => {
         { type: "function_call_output", id: "keep", call_id: "c" }
       ]
     }
+
     sanitizeCodexInputItemIds(body as unknown as Json)
     const ids = body.input.map((item) => item.id)
     expect(body.input).toHaveLength(4)
@@ -217,25 +230,31 @@ describe("helpers", () => {
 
   it("classifies status errors, capacity errors and terminal failures", () => {
     const now = Date.parse("2026-01-01T00:00:00Z")
+
     const capacity = newCodexStatusError(503, '{"error":{"message":"Selected model is at capacity"}}', {
       modelLevelCooling: false,
       nowMs: now
     })
+
     expect(capacity.status).toBe(429)
     expect(capacity.credentialScoped).toBeUndefined()
+
     const usage = newCodexStatusError(400, '{"error":{"type":"usage_limit_reached","resets_in_seconds":90}}', {
       modelLevelCooling: true,
       nowMs: now
     })
+
     expect(usage).toMatchObject({ status: 429, retryAfterMs: 90_000 })
     expect(usage.credentialScoped).toBeUndefined()
     expect(
       parseCodexRetryAfterMs(500, '{"error":{"type":"usage_limit_reached","resets_in_seconds":9}}', now)
     ).toBeUndefined()
+
     const failure = codexTerminalFailure(
       { type: "response.failed", sequence_number: 7, response: { error: { code: "model_not_found", message: "x" } } },
       { modelLevelCooling: false, nowMs: now }
     )
+
     expect(failure?.error.status).toBe(404)
     expect(JSON.parse(failure!.body)).toMatchObject({ sequence_number: 7 })
     expect(
@@ -260,9 +279,11 @@ describe("interactions terminal event", () => {
     const context = { model: "gpt-5.4", originalRequest: {}, translatedRequest: {}, state: makeTranslationState() }
     const translate = (line: string) => builtinTranslators.translateStream("interactions", "codex", context, line)
     translate('data: {"type":"response.created","response":{"id":"resp_1","created_at":1767225600,"model":"gpt-5.4"}}')
+
     const chunks = translate(
       'data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":3,"output_tokens":2,"input_tokens_details":{"cached_tokens":1},"output_tokens_details":{"reasoning_tokens":1}}}}'
     )
+
     expect(chunks.map((chunk) => chunk.split("\n")[0])).toEqual(["event: interaction.completed", "event: done"])
     const completed = JSON.parse(chunks[0]!.split("data: ")[1]!) as { interaction: Record<string, unknown> }
     expect(completed.interaction).toMatchObject({
@@ -286,6 +307,7 @@ describe("reasoning replay", () => {
     const bytes = new Uint8Array(73)
     bytes[0] = 0x80
     bytes.fill(7, 5)
+
     return btoa(String.fromCharCode(...bytes))
       .replaceAll("+", "-")
       .replaceAll("/", "_")
@@ -302,12 +324,14 @@ describe("reasoning replay", () => {
       ])
     )
     const items = await Effect.runPromise(store.get("gpt-5.4", "claude:s:agent:main"))
+
     const body = {
       input: [
         { type: "message", role: "user", content: [{ type: "input_text", text: "go" }] },
         { type: "function_call_output", call_id: "call_1", output: "ok" }
       ]
     } as unknown as Json
+
     expect(insertReplayTurns(body, items ?? [])).toBe(true)
     expect((body as { input: Array<{ type: string }> }).input.map((item) => item.type)).toEqual([
       "message",
@@ -339,10 +363,12 @@ describe("Codex executor replay round trip (Claude source)", () => {
   beforeAll(async () => {
     config = await loadConfig("requests: {}")
   })
+
   const signature = (() => {
     const bytes = new Uint8Array(73)
     bytes[0] = 0x80
     bytes.fill(9, 5)
+
     return btoa(String.fromCharCode(...bytes))
       .replaceAll("+", "-")
       .replaceAll("/", "_")
@@ -352,24 +378,29 @@ describe("Codex executor replay round trip (Claude source)", () => {
   it("caches reasoning from a completed response and replays it into the next request, then clears it", async () => {
     const bodies: Array<Record<string, unknown>> = []
     let respondWith: Response
+
     const client = Layer.succeed(
       HttpClient.HttpClient,
       HttpClient.make((request) =>
         Effect.promise(async () => {
           bodies.push(JSON.parse(new TextDecoder().decode((request.body as { body: Uint8Array }).body)))
+
           return HttpClientResponse.fromWeb(request, respondWith.clone())
         })
       )
     )
+
     const output = [
       { id: "rs_1", type: "reasoning", summary: [], encrypted_content: signature },
       { id: "fc_1", type: "function_call", call_id: "call_1", name: "Read", arguments: '{"p":1}' }
     ]
+
     const stream = `data: ${JSON.stringify({ type: "response.completed", response: { id: "r", status: "completed", output, usage: {} } })}\n\n`
     respondWith = new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" } })
 
     const store = makeInMemoryReplayStore(() => 0)
     const executor = makeCodexExecutor({ replayStore: store })
+
     const usage = new UsageReporter({
       requestId: "r",
       provider: "codex",
@@ -385,7 +416,9 @@ describe("Codex executor replay round trip (Claude source)", () => {
       serviceTier: "auto",
       requestedAt: 0
     })
+
     const context: ExecutionContext = { credential: oauthCredential(), config, usage }
+
     const options: ExecutorOptions = {
       stream: false,
       alt: "",
@@ -401,6 +434,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
         callerScope: "scope"
       }
     }
+
     const first = { model: "gpt-5.4", max_tokens: 10, messages: [{ role: "user", content: "read it" }] }
     const layers = Layer.mergeAll(client, Thinking.live)
     await Effect.runPromise(
@@ -408,6 +442,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
         .execute(context, { model: "gpt-5.4", payload: first as unknown as Json }, options)
         .pipe(Effect.provide(layers))
     )
+
     const second = {
       model: "gpt-5.4",
       max_tokens: 10,
@@ -417,6 +452,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
         { role: "user", content: [{ type: "tool_result", tool_use_id: "call_1", content: "done" }] }
       ]
     }
+
     respondWith = new Response(stream, { status: 200 })
     await Effect.runPromise(
       executor
@@ -433,6 +469,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
 
     // An invalid-signature rejection clears the cache.
     respondWith = new Response('{"error":{"message":"invalid_encrypted_content"}}', { status: 400 })
+
     const failed = await Effect.runPromise(
       Effect.flip(
         executor
@@ -440,6 +477,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
           .pipe(Effect.provide(layers))
       )
     )
+
     expect(failed).toBeInstanceOf(ExecutionError)
     expect(failed.message).toContain("thinking_signature_invalid")
     expect(await Effect.runPromise(store.get("gpt-5.4", "claude:sess-1:agent:main"))).toBeUndefined()
@@ -457,7 +495,9 @@ describe("Codex executor replay round trip (Claude source)", () => {
         )
       )
     )
+
     const executor = makeCodexExecutor()
+
     const usage = new UsageReporter({
       requestId: "r",
       provider: "codex",
@@ -473,6 +513,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
       serviceTier: "auto",
       requestedAt: 0
     })
+
     const result = await Effect.runPromise(
       executor
         .executeStream(
@@ -496,6 +537,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
         )
         .pipe(Effect.provide(Layer.mergeAll(client, Thinking.live)))
     )
+
     const outcome = await Effect.runPromise(Effect.result(Stream.runCollect(result.chunks)))
     expect(outcome._tag).toBe("Failure")
     expect(usage.failed).toBe(true)

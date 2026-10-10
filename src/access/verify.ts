@@ -16,9 +16,12 @@ const invalidCredential = () => new UnauthorizedError({ message: "Invalid API ke
 /** User tokens carry `email` + `sub`; service tokens carry the client id in `common_name`. */
 export const principalFromClaims = (claims: JWTPayload): Principal | undefined => {
   const email = typeof claims["email"] === "string" ? claims["email"].trim() : ""
+
   if (email !== "") return { kind: "user", email, sub: typeof claims.sub === "string" ? claims.sub : "" }
   const commonName = typeof claims["common_name"] === "string" ? claims["common_name"].trim() : ""
+
   if (commonName !== "") return { kind: "service", commonName }
+
   return undefined
 }
 
@@ -34,20 +37,25 @@ export const verifyAccessJwt = (
 ): Effect.Effect<Principal, UnauthorizedError | InternalError, AccessJwks> =>
   Effect.gen(function* () {
     const jwks = yield* AccessJwks
+
     const header = yield* Effect.try({
       try: () => decodeProtectedHeader(token),
       catch: invalidCredential
     })
+
     if (header.alg !== "RS256" || typeof header.kid !== "string" || header.kid === "") {
       return yield* invalidCredential()
     }
+
     const key = yield* jwks.getKey(config.jwksUrl, header.kid).pipe(
       Effect.catchTags({
         UnknownKeyError: () => Effect.fail(invalidCredential()),
         JwksFetchError: (error) => Effect.fail(new InternalError({ message: error.message }))
       })
     )
+
     const now = yield* Clock.currentTimeMillis
+
     const { payload } = yield* Effect.tryPromise({
       try: () =>
         jwtVerify(token, key, {
@@ -60,6 +68,8 @@ export const verifyAccessJwt = (
         }),
       catch: invalidCredential
     })
+
     const principal = principalFromClaims(payload)
+
     return principal ?? (yield* invalidCredential())
   })

@@ -27,34 +27,44 @@ const stateOf = (context: ResponseContext): GeminiStreamState => {
       responseId: "",
       usageMetadata: undefined
     }
+
     context.state.value = fresh
   }
+
   return context.state.value as GeminiStreamState
 }
 
 const firstString = (raw: Json | undefined, ...paths: string[]): string => {
   for (const path of paths) {
     const value = asString(get(raw, path))
+
     if (value !== "") return value
   }
+
   return ""
 }
 
 const observe = (state: GeminiStreamState, raw: Json | undefined): void => {
   if (!state.sawResponse) state.sawResponse = hasResponsePayload(raw)
+
   if (!state.sawFinishReason) {
     for (const path of ["response.candidates", "candidates"]) {
       const candidates = get(raw, path)
+
       if (isJsonArray(candidates) && candidates.some((candidate) => asString(get(candidate, "finishReason")) !== "")) {
         state.sawFinishReason = true
         break
       }
     }
   }
+
   if (state.modelVersion === "") state.modelVersion = firstString(raw, "response.modelVersion", "modelVersion")
+
   if (state.responseId === "") state.responseId = firstString(raw, "response.responseId", "responseId")
+
   for (const path of USAGE_PATHS) {
     const usage = get(raw, path)
+
     if (usage !== undefined) {
       state.usageMetadata = structuredClone(usage)
       break
@@ -65,47 +75,62 @@ const observe = (state: GeminiStreamState, raw: Json | undefined): void => {
 /** `syntheticTerminalChunk`: key order candidates, usageMetadata, modelVersion, responseId. */
 const syntheticTerminalChunk = (state: GeminiStreamState): Json => {
   const chunk: Json = { candidates: [{ content: { role: "model", parts: [{ text: "" }] }, finishReason: "STOP" }] }
+
   if (state.usageMetadata !== undefined) set(chunk, "usageMetadata", state.usageMetadata)
+
   if (state.modelVersion !== "") set(chunk, "modelVersion", state.modelVersion)
+
   if (state.responseId !== "") set(chunk, "responseId", state.responseId)
+
   return chunk
 }
 
 /** `restoreUsageMetadata`: `cpaUsageMetadata` back to `usageMetadata`. */
 const restoreUsageMetadata = (chunk: Json): Json => {
   const cpa = get(chunk, "cpaUsageMetadata")
+
   if (cpa !== undefined) {
     set(chunk, "usageMetadata", cpa)
     del(chunk, "cpaUsageMetadata")
   }
+
   return chunk
 }
 
 const restoreFunctionNames = (chunk: Json, originalRequest: Json | undefined): Json => {
   const nameMap = disambiguatedToolNameMap(originalRequest)
+
   if (nameMap === undefined) return chunk
   const candidates = get(chunk, "candidates")
+
   if (!isJsonArray(candidates)) return chunk
+
   for (const candidate of candidates) {
     const parts = get(candidate, "content.parts")
+
     if (!isJsonArray(parts)) continue
+
     for (const part of parts) {
       for (const field of ["functionCall", "functionResponse", "function_call", "function_response"]) {
         const nameResult = get(part, `${field}.name`)
         const name = asString(nameResult)
+
         if (name === "") continue
         const restored = restoreSanitizedToolName(nameMap, name)
+
         if (typeof nameResult === "string" && restored === name) continue
         set(part, `${field}.name`, restored)
       }
     }
   }
+
   return chunk
 }
 
 /** `ConvertAntigravityResponseToGemini`. */
 export const convertAntigravityResponseToGemini = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   let raw = line
+
   if (raw.startsWith("data:")) raw = raw.slice(5).trim()
   const state = stateOf(context)
 
@@ -115,6 +140,7 @@ export const convertAntigravityResponseToGemini = (context: ResponseContext, lin
     state.sawFinishReason = true
     const finalChunk = syntheticTerminalChunk(state)
     const alt = context.alt
+
     return [JSON.stringify(alt !== undefined && alt !== "" ? [finalChunk] : finalChunk)]
   }
 
@@ -122,21 +148,29 @@ export const convertAntigravityResponseToGemini = (context: ResponseContext, lin
   observe(state, parsed)
 
   const alt = context.alt
+
   if (alt === undefined) return []
+
   if (alt === "") {
     const response = get(parsed, "response")
+
     if (response === undefined) return [""]
+
     return [
       JSON.stringify(restoreFunctionNames(restoreUsageMetadata(structuredClone(response)), context.originalRequest))
     ]
   }
+
   const items: Json[] = []
+
   if (isJsonArray(parsed)) {
     for (const item of parsed) {
       const response = get(item, "response")
+
       if (response !== undefined) items.push(response)
     }
   }
+
   return [JSON.stringify(items)]
 }
 
@@ -145,19 +179,23 @@ export const convertAntigravityResponseToGeminiNonStream = (context: ResponseCon
   const parsed = tryParseJson(body)
   const response = get(parsed, "response")
   let chunk: Json
+
   if (response !== undefined) {
     chunk = restoreFunctionNames(restoreUsageMetadata(structuredClone(response)), context.originalRequest)
   } else {
     if (parsed === undefined) return body
     chunk = restoreFunctionNames(parsed, context.originalRequest)
   }
+
   const candidates = get(chunk, "candidates")
+
   if (isJsonArray(candidates)) {
     // Default every candidate so a multi-candidate response cannot leave some of them unterminated.
     candidates.forEach((candidate, index) => {
       if (asString(get(candidate, "finishReason")) === "") set(chunk, `candidates.${index}.finishReason`, "STOP")
     })
   }
+
   return JSON.stringify(chunk)
 }
 

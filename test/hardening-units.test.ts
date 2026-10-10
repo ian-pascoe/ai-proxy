@@ -48,14 +48,17 @@ describe("notAppliedSettings", () => {
 
   it("is reported by the config store on write", async () => {
     const rows: unknown[] = []
+
     // Minimal SqlStorage stand-in: the store only needs `exec` for its single-row table.
     const sql = {
       exec: (query: string, ...bindings: unknown[]) => {
         if (query.startsWith("INSERT"))
           rows[0] = { version: bindings[0], document: bindings[1], updated_at: bindings[2] }
+
         return { toArray: () => (query.startsWith("SELECT") ? rows : []) }
       }
     } as unknown as SqlStorage
+
     const result = new ConfigStore(sql, () => 1).put(GO_CONFIG)
     expect(result.ok && result.notApplied).toContain("upstream.codex.response-steering")
   })

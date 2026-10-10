@@ -30,6 +30,7 @@ export class ConfigSource extends Context.Service<
       fetch: (sinceVersion) =>
         Effect.gen(function* () {
           const env = yield* WorkerEnv
+
           return yield* Effect.tryPromise({
             try: async () => await env.CONTROL_PLANE.getByName("global").getConfig(sinceVersion),
             catch: (cause) => new ConfigStoreError({ message: "failed to read config from ControlPlane", cause })
@@ -75,25 +76,33 @@ export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigRead
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const wire = yield* source.fetch(cached?.snapshot.version)
+
       if (wire.unchanged && cached !== undefined) {
         yield* Ref.set(cache, { snapshot: cached.snapshot, checkedAt: now })
+
         return cached.snapshot
       }
+
       if (wire.document === undefined) {
         return yield* new ConfigStoreError({ message: "ControlPlane returned no config document" })
       }
+
       const config = yield* decodeStoredConfig(wire.document).pipe(
         Effect.mapError((cause) => new ConfigStoreError({ message: "stored config is invalid", cause }))
       )
+
       const snapshot: ConfigSnapshot = { version: wire.version, config }
       yield* Ref.set(cache, { snapshot, checkedAt: now })
+
       return snapshot
     })
 
   const get = Effect.gen(function* () {
     const cached = yield* Ref.get(cache)
     const now = yield* Clock.currentTimeMillis
+
     if (cached !== undefined && now - cached.checkedAt < ttlMillis) return cached.snapshot
+
     return yield* refresh(cached).pipe(
       Effect.catch((error) =>
         cached === undefined

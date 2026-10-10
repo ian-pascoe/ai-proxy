@@ -125,6 +125,7 @@ describe("state and provider names", () => {
   it("validates states like ValidateOAuthState", () => {
     for (const ok of ["a".repeat(32), "xai-1700000000000-ab12cd34", "kmi-ai-1.2_3"])
       expect(isValidOAuthState(ok), ok).toBe(true)
+
     for (const bad of ["", "  ", "a/b", "a\\b", "a..b", "a b", "ä", "a".repeat(129)])
       expect(isValidOAuthState(bad), bad).toBe(false)
   })
@@ -165,11 +166,13 @@ describe("encoding", () => {
 
 describe("devin GetUserStatus protobuf", () => {
   const varint = (n: number): number[] => (n < 128 ? [n] : [(n & 0x7f) | 0x80, ...varint(n >> 7)])
+
   const field = (num: number, bytes: ArrayLike<number>): number[] => [
     ...varint(num * 8 + 2),
     ...varint(bytes.length),
     ...Array.from(bytes)
   ]
+
   const text = (num: number, value: string): number[] => field(num, new TextEncoder().encode(value))
 
   it("builds the request with the Go field layout", () => {
@@ -187,6 +190,7 @@ describe("devin GetUserStatus protobuf", () => {
     const org = text(4, "org-9")
     const planInfo = [...text(2, "Pro Plan"), ...field(33, org)]
     const planStatus = [...field(1, planInfo), ...varint(14 * 8), 90]
+
     const userStatus = [
       ...text(3, "dev"),
       ...text(7, "dev@x.com"),
@@ -195,6 +199,7 @@ describe("devin GetUserStatus protobuf", () => {
       ...varint(40 * 8),
       1
     ]
+
     const response = Uint8Array.from([...field(1, userStatus), ...varint(9 * 8), 5])
     expect(parseUserStatus(response)).toMatchObject({
       userName: "dev",

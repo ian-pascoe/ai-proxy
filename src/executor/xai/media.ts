@@ -22,8 +22,10 @@ import { xaiSpeechStatusError, xaiStatusError } from "./errors.ts"
 
 export const isImageRequest = (options: ExecutorOptions): boolean =>
   options.sourceFormat === EntryOnlyFormats.OpenAIImage
+
 export const isVideoRequest = (options: ExecutorOptions): boolean =>
   options.sourceFormat === EntryOnlyFormats.OpenAIVideo
+
 export const isSpeechRequest = (options: ExecutorOptions): boolean =>
   options.sourceFormat === EntryOnlyFormats.OpenAISpeech
 
@@ -34,8 +36,11 @@ export const imageEndpointPath = (requestPath: string): string =>
 /** `xaiVideoEndpointPath`: `""` for anything but the three POST endpoints (poll requests). */
 export const videoEndpointPath = (requestPath: string): string => {
   if (requestPath.endsWith("/videos/edits")) return "/videos/edits"
+
   if (requestPath.endsWith("/videos/extensions")) return "/videos/extensions"
+
   if (requestPath.endsWith("/videos/generations")) return "/videos/generations"
+
   return ""
 }
 
@@ -50,6 +55,7 @@ export type FinalizeBody = (model: string, original: Json, body: Json) => Json
 
 const mediaModel = (request: ExecutorRequest): string => {
   const model = asString(get(request.payload, "model")).trim()
+
   return model !== "" ? model : request.model.trim()
 }
 
@@ -67,12 +73,14 @@ export const executeImages = Effect.fnUntraced(function* (
   const model = mediaModel(request)
   const payload = finalize(model, request.payload, normalizeImageRefs(cloneJson(request.payload)))
   const url = joinUrl(xaiChatBaseUrl(context.credential), imageEndpointPath(options.metadata.requestPath))
+
   const headers = buildXaiHeaders({
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
     ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {})
   })
+
   const response = yield* sendUpstream(context, {
     method: "POST",
     url,
@@ -80,8 +88,10 @@ export const executeImages = Effect.fnUntraced(function* (
     body: JSON.stringify(payload),
     classify: xaiStatusError
   })
+
   const text = yield* response.text.pipe(Effect.mapError(transportError))
   publishModel(context, text)
+
   return { payload: text, headers: new Headers(response.headers) } satisfies ExecutorResponse
 })
 
@@ -96,8 +106,10 @@ export const executeVideos = Effect.fnUntraced(function* (
   const base = xaiChatBaseUrl(context.credential)
   let method: "GET" | "POST" = "POST"
   let endpoint = videoEndpointPath(options.metadata.requestPath)
+
   if (endpoint === "") {
     const requestId = asString(get(payload, "request_id")).trim()
+
     if (requestId !== "") {
       method = "GET"
       endpoint = `/videos/${pathEscape(requestId)}`
@@ -105,16 +117,20 @@ export const executeVideos = Effect.fnUntraced(function* (
       endpoint = "/videos/generations"
     }
   }
+
   const headers = buildXaiHeaders({
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
     ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {})
   })
+
   if (method === "POST") {
     const key = (options.metadata.idempotencyKey ?? options.headers.get("x-idempotency-key") ?? "").trim()
+
     if (key !== "") headers["x-idempotency-key"] = key
   }
+
   const response = yield* sendUpstream(context, {
     method,
     url: joinUrl(base, endpoint),
@@ -122,8 +138,10 @@ export const executeVideos = Effect.fnUntraced(function* (
     ...(method === "POST" ? { body: JSON.stringify(payload) } : {}),
     classify: xaiStatusError
   })
+
   const text = yield* response.text.pipe(Effect.mapError(transportError))
   publishModel(context, text)
+
   return { payload: text, headers: new Headers(response.headers) } satisfies ExecutorResponse
 })
 
@@ -135,14 +153,17 @@ export const executeSpeech = Effect.fnUntraced(function* (
 ) {
   const model = mediaModel(request)
   const payload = finalize(model, request.payload, cloneJson(request.payload))
+
   const headers = buildXaiHeaders({
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
     ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {})
   })
+
   // Official TTS returns raw audio; the media header helper asks for JSON.
   headers["accept"] = "*/*"
+
   const response = yield* sendUpstream(context, {
     method: "POST",
     url: xaiSpeechUrl(context.credential),
@@ -150,10 +171,12 @@ export const executeSpeech = Effect.fnUntraced(function* (
     body: JSON.stringify(payload),
     classify: xaiSpeechStatusError
   })
+
   const bytes = yield* response.arrayBuffer.pipe(
     Effect.map((buffer) => new Uint8Array(buffer)),
     Effect.mapError(transportError)
   )
+
   return { payload: "", bytes, headers: new Headers(response.headers) } satisfies ExecutorResponse
 })
 

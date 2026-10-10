@@ -26,6 +26,7 @@ describe("gjson parity (golden fixtures)", () => {
       const root = parse(c.json)
       const result = get(root, c.path)
       expect(result !== undefined, "exists").toBe(c.exists)
+
       if (c.exists) {
         expect(result).toEqual(parse(c.raw ?? ""))
         expect(asString(result)).toBe(c.string)
@@ -41,15 +42,21 @@ describe("sjson parity (golden fixtures)", () => {
   for (const [index, c] of fixtures.set.entries()) {
     it(`${c.kind} #${index} ${JSON.stringify(c.json)} ${JSON.stringify(c.path)}`, () => {
       const root = c.json === "" ? undefined : parse(c.json)
+
       const run = (): Json | undefined => {
         if (c.kind === "delete") return del(root, c.path)
+
         if (c.kind === "raw") return setRaw(root, c.path, JSON.stringify(c.value))
+
         return set(root, c.path, c.value as Json)
       }
+
       if (c.error) {
         expect(run).toThrow(JsonPathError)
+
         return
       }
+
       const out = run()
       expect(JSON.stringify(out)).toBe(JSON.stringify(parse(c.out ?? "")))
     })

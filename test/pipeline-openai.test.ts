@@ -58,6 +58,7 @@ const chunk = (content: string | undefined, finish: string | null = null, extra:
   })
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
@@ -73,6 +74,7 @@ describe("POST /v1/chat/completions (non-stream)", () => {
   it("translates, resolves the alias and forwards to the upstream with credentials", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson(
@@ -80,6 +82,7 @@ describe("POST /v1/chat/completions (non-stream)", () => {
         { "X-Client-Trace": "trace-1" }
       )
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("application/json")
     expect(await response.json()).toEqual(COMPLETION)
@@ -186,17 +189,20 @@ describe("POST /v1/chat/completions (non-stream)", () => {
   it("decodes zstd request bodies (Codex CLI)", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const compressed = Uint8Array.from(
       atob(
         "KLUv/QRYLQIAckQPFaA5B6CriVBEOMhKPjCrOvJnTAKAT41oPgdgVhOfN32TKly8rojPT7XMhrPeQNUjl0DxJAoIvz7njUJmAQEAbZhMkfTeyQ=="
       ),
       (ch) => ch.charCodeAt(0)
     )
+
     const response = await p.call("/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json", "content-encoding": "zstd" },
       body: compressed
     })
+
     expect(response.status).toBe(200)
     expect(JSON.parse(p.calls[0]!.body)).toMatchObject({
       model: "upstream-model",
@@ -208,6 +214,7 @@ describe("POST /v1/chat/completions (non-stream)", () => {
     const empty = await loadConfig(
       YAML.replace("keys:\n        - api-key: sk-test-1", "disabled: true\n      keys: []")
     )
+
     const p = pipeline(() => jsonResponse(COMPLETION), { config: empty })
     afterAll(p.dispose)
     const response = await p.call("/v1/chat/completions", postJson({ model: "alias-model", messages: [] }))
@@ -224,6 +231,7 @@ describe("payload rules are the final mutation (regression)", () => {
         'params: { "stream_options.include_usage": false, "reasoning_effort": "low", "max_tokens": 3 }'
       )
     )
+
     // A thinking implementation that writes reasoning_effort: payload rules must still win.
     const thinking = Layer.succeed(
       Thinking,
@@ -232,15 +240,19 @@ describe("payload rules are the final mutation (regression)", () => {
         summary: noopSummaryHooks
       })
     )
+
     const p = pipeline(() => sseResponse([`data: ${chunk("a", "stop")}\n\n`, "data: [DONE]\n\n"]), {
       config: rules,
       thinking
     })
+
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true, max_tokens: 100 })
     )
+
     expect(response.status).toBe(200)
     await response.text()
     const body = JSON.parse(p.calls[0]!.body)
@@ -259,6 +271,7 @@ describe("POST /v1/chat/completions (stream)", () => {
       choices: [],
       usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 }
     })
+
     // Pieces split frames and lines at arbitrary points.
     const pieces = [
       `: comment\nevent: message\ndata: ${chunk("Hel")}\n`,
@@ -266,12 +279,15 @@ describe("POST /v1/chat/completions (stream)", () => {
       `\r\n\r\ndata: ${chunk(undefined, "stop")}\n\ndata: ${usageChunk}\n\n`,
       'data: [DONE]\n\ndata: {"trailing":true}\n\n'
     ]
+
     const p = pipeline(() => sseResponse(pieces))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("text/event-stream")
     expect(response.headers.get("cache-control")).toBe("no-cache")
@@ -289,11 +305,14 @@ describe("POST /v1/chat/completions (stream)", () => {
     const p = pipeline(() =>
       jsonResponse({ error: { message: "nope", type: "invalid_request_error" } }, { status: 401 })
     )
+
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(401)
     expect(response.headers.get("content-type")).toBe("application/json")
     expect(await response.json()).toEqual({ error: { message: "nope", type: "invalid_request_error" } })
@@ -302,10 +321,12 @@ describe("POST /v1/chat/completions (stream)", () => {
   it("maps an error payload before any chunk to an HTTP error with its status", async () => {
     const p = pipeline(() => sseResponse([`data: {"error":{"message":"quota","status":429}}\n\n`]))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(429)
     expect(await response.text()).toBe('{"error":{"message":"quota","status":429}}')
     expect(p.records[0]).toMatchObject({
@@ -318,11 +339,14 @@ describe("POST /v1/chat/completions (stream)", () => {
     const p = pipeline(() =>
       sseResponse([`data: ${chunk("partial")}\n\n`, 'event: error\ndata: {"message":"boom","code":"overloaded"}\n\n'])
     )
+
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(200)
     expect(await response.text()).toBe(`data: ${chunk("partial")}\n\ndata: {"message":"boom","code":"overloaded"}\n\n`)
     expect(p.records[0]).toMatchObject({ failed: true, fail: { statusCode: 502 } })
@@ -331,10 +355,12 @@ describe("POST /v1/chat/completions (stream)", () => {
   it("fails a stream that closes without any finish_reason", async () => {
     const p = pipeline(() => sseResponse([`data: ${chunk("partial")}\n\n`]))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(200)
     expect(await response.text()).toBe(
       `data: ${chunk("partial")}\n\ndata: {"error":{"message":"upstream stream closed before any chunk carried finish_reason","type":"server_error","code":"internal_server_error"}}\n\n`
@@ -345,10 +371,12 @@ describe("POST /v1/chat/completions (stream)", () => {
     // conductor_stream.go readStreamBootstrap: a stream that closes before the first payload fails over.
     const p = pipeline(() => sseResponse(["data: [DONE]\n\n"]))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(500)
     expect(await response.text()).toContain("upstream stream closed before first payload")
   })
@@ -356,10 +384,12 @@ describe("POST /v1/chat/completions (stream)", () => {
   it("rejects a bare JSON document inside a 200 stream", async () => {
     const p = pipeline(() => sseResponse(['{"error":{"message":"not sse"}}\n']))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [], stream: true })
     )
+
     expect(response.status).toBe(502)
     expect(await response.text()).toBe('{"error":{"message":"not sse"}}')
   })
@@ -369,10 +399,12 @@ describe("POST /v1/completions", () => {
   it("converts the legacy request and the chat response", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/completions",
       postJson({ model: "alias-model", prompt: "Say hi", max_tokens: 5, temperature: 0.5, stop: ["\n"] })
     )
+
     expect(response.status).toBe(200)
     expect(JSON.parse(p.calls[0]!.body)).toEqual({
       model: "upstream-model",
@@ -397,6 +429,7 @@ describe("POST /v1/completions", () => {
         "data: [DONE]\n\n"
       ])
     )
+
     afterAll(p.dispose)
     const response = await p.call("/v1/completions", postJson({ model: "alias-model", prompt: "x", stream: true }))
     expect(response.status).toBe(200)

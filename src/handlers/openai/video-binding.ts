@@ -27,6 +27,7 @@ export const saveVideoBinding = (videoId: string, binding: VideoBinding, ttlMs: 
   Effect.gen(function* () {
     const id = videoId.trim()
     const authId = binding.authId.trim()
+
     if (id === "" || authId === "") return
     const env = yield* WorkerEnv
     yield* Effect.tryPromise(() =>
@@ -43,12 +44,16 @@ export const saveVideoBinding = (videoId: string, binding: VideoBinding, ttlMs: 
 export const loadVideoBinding = (videoId: string) =>
   Effect.gen(function* () {
     const id = videoId.trim()
+
     if (id === "") return undefined
     const env = yield* WorkerEnv
     const stored = yield* Effect.tryPromise(() => env.CACHE.get(keyOf(id))).pipe(Effect.orElseSucceed(() => null))
+
     if (stored === null) return undefined
+
     try {
       const parsed = JSON.parse(stored) as Partial<VideoBinding>
+
       return typeof parsed.authId === "string" && parsed.authId !== ""
         ? ({
             authId: parsed.authId,

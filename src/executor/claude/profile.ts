@@ -24,11 +24,13 @@ export const upstreamModelOf = (profile: ClaudeUpstreamProfile | undefined, base
 
 const setModelFields = (payload: Json, model: string): boolean => {
   let changed = false
+
   for (const path of ["model", "message.model"]) {
     if (get(payload, path) === undefined) continue
     set(payload, path, model)
     changed = true
   }
+
   return changed
 }
 
@@ -43,13 +45,18 @@ export const restoreResponseModel = (
 ): string => {
   if (profile?.normalizeModel === undefined || model.trim() === "") return payload
   const whole = tryParseJson(payload.trim())
+
   if (whole !== undefined && typeof whole === "object" && whole !== null) {
     return setModelFields(whole, model) ? JSON.stringify(whole) : payload
   }
+
   const trimmed = payload.trimStart()
+
   if (!trimmed.startsWith("data:")) return payload
   const dataIndex = payload.indexOf("data:")
   const parsed = tryParseJson(payload.slice(dataIndex + 5).trim())
+
   if (parsed === undefined || typeof parsed !== "object" || parsed === null) return payload
+
   return setModelFields(parsed, model) ? `${payload.slice(0, dataIndex)}data: ${JSON.stringify(parsed)}` : payload
 }

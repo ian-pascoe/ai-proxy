@@ -37,10 +37,13 @@ import {
 /** `decodeSignature`: `R...` (two base64 layers) to `E...` (Anthropic format); `""` when undecodable. */
 const decodeSignature = (signature: string): string => {
   if (signature === "") return signature
+
   if (signature.startsWith("R")) {
     const decoded = decodeBase64Std(signature)
+
     return decoded === undefined ? "" : bytesToBinaryString(decoded)
   }
+
   return signature
 }
 
@@ -86,49 +89,64 @@ let toolUseIdCounter = 0
 const claudeToolUseId = (modelName: string, functionCall: Json, fallback: string): string => {
   if (signatureProviderFromModelName(modelName) === "gemini") {
     const args = get(functionCall, "args")
+
     const stable = geminiClaudeToolUseID(
       asString(get(functionCall, "id")),
       asString(get(functionCall, "name")),
       args === undefined ? "" : JSON.stringify(args)
     )
+
     if (stable !== "") return stable
   }
+
   return sanitizeClaudeToolId(fallback)
 }
 
 const resolveStopReason = (params: Params): string => {
   if (params.hasToolUse) return "tool_use"
+
   return params.finishReason === "MAX_TOKENS" ? "max_tokens" : "end_turn"
 }
 
 const stop = (index: number): string => `{"type":"content_block_stop","index":${index}}`
+
 const deltaEvent = (index: number, delta: JsonObject): string =>
   JSON.stringify({ type: "content_block_delta", index, delta })
 
 /** `appendFinalEvents`. */
 const appendFinalEvents = (params: Params, force: boolean): string => {
   if (params.hasSentFinalEvents) return ""
+
   if (!params.hasUsageMetadata && !force) return ""
+
   if (!params.hasContent) return ""
   let output = ""
+
   if (params.responseType !== 0) {
     output += sseEventLines("content_block_stop", stop(params.responseIndex), 3)
     params.responseType = 0
   }
+
   let usageOutputTokens = params.candidatesTokenCount + params.thoughtsTokenCount
+
   if (usageOutputTokens === 0 && params.totalTokenCount > 0) {
     usageOutputTokens = Math.max(params.totalTokenCount - params.promptTokenCount, 0)
   }
+
   const usage: JsonObject = { input_tokens: params.promptTokenCount, output_tokens: usageOutputTokens }
+
   const delta: JsonObject = {
     type: "message_delta",
     delta: { stop_reason: resolveStopReason(params), stop_sequence: null },
     usage
   }
+
   if (params.webSearchRequests > 0) usage["server_tool_use"] = { web_search_requests: params.webSearchRequests }
+
   if (params.cachedTokenCount > 0) usage["cache_read_input_tokens"] = params.cachedTokenCount
   output += sseEventLines("message_delta", JSON.stringify(delta), 3)
   params.hasSentFinalEvents = true
+
   return output
 }
 
@@ -158,8 +176,10 @@ const paramsOf = (context: ResponseContext): Params => {
       currentThinkingSigned: false,
       toolNameMap: disambiguatedToolNameMap(context.originalRequest)
     }
+
     context.state.value = fresh
   }
+
   return context.state.value as Params
 }
 
@@ -170,6 +190,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
 
   if (line === "[DONE]") {
     let output = ""
+
     if (params.hasFirstResponse && !params.hasContent) {
       output += sseEventLines(
         "content_block_start",
@@ -179,27 +200,34 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
       params.responseType = 1
       params.hasContent = true
     }
+
     if (params.hasContent) {
       output += appendFinalEvents(params, true)
       output += sseEventLines("message_stop", `{"type":"message_stop"}`, 3)
+
       return [output]
     }
+
     return []
   }
 
   const raw = tryParseJson(line)
   let output = ""
+
   const appendEvent = (event: string, payload: string): void => {
     output += sseEventLines(event, payload, 3)
   }
+
   const webSearchStreamMode = shouldTranslateWebSearchGrounding(context.originalRequest, context.translatedRequest)
 
   const appendThinkingSignature = (signature: string, direction: string, targetKind: string): void => {
     if (signature === "" || params.responseType !== 2) return
+
     if (params.currentThinkingText.length > 0) {
       cacheSignature(modelName, params.currentThinkingText, signature)
       params.currentThinkingText = ""
     }
+
     appendEvent(
       "content_block_delta",
       deltaEvent(params.responseIndex, {
@@ -210,6 +238,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
     params.currentThinkingSigned = true
     params.hasContent = true
   }
+
   const closeCurrentBlock = (): void => {
     if (params.responseType === 0) return
     appendEvent("content_block_stop", stop(params.responseIndex))
@@ -217,6 +246,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
     params.responseType = 0
     params.currentThinkingSigned = false
   }
+
   const startEmptyThinkingBlock = (): void => {
     appendEvent(
       "content_block_start",
@@ -226,6 +256,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
     params.currentThinkingSigned = false
     params.hasContent = true
   }
+
   const appendCarrierSignature = (signature: string, direction: string, targetKind: string): void => {
     if (signature === "" || params.responseType !== 2) return
     appendEvent(
@@ -238,19 +269,26 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
     params.currentThinkingSigned = true
     params.hasContent = true
   }
+
   const appendPartSignature = (signature: string, direction: string, targetKind: string): boolean => {
     if (signature === "") return false
+
     if (params.responseType === 2 && !params.currentThinkingSigned) {
       appendThinkingSignature(signature, direction, targetKind)
+
       return false
     }
+
     if (direction === CarrierDirection.Previous && targetKind === CarrierKind.Text) {
       cacheSignature(modelName, "", signature)
+
       return false
     }
+
     closeCurrentBlock()
     startEmptyThinkingBlock()
     appendCarrierSignature(signature, direction, targetKind)
+
     return true
   }
 
@@ -265,22 +303,29 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
       stop_sequence: null,
       usage: { input_tokens: 0, output_tokens: 0 }
     }
+
     const promptTokens = get(raw, "response.cpaUsageMetadata.promptTokenCount")
+
     if (promptTokens !== undefined) set(message, "usage.input_tokens", asInt(promptTokens))
     const candidateTokens = get(raw, "response.cpaUsageMetadata.candidatesTokenCount")
+
     if (candidateTokens !== undefined && !webSearchStreamMode)
       set(message, "usage.output_tokens", asInt(candidateTokens))
     const modelVersion = get(raw, "response.modelVersion")
+
     if (modelVersion !== undefined) message["model"] = asString(modelVersion)
     const responseId = get(raw, "response.responseId")
+
     if (responseId !== undefined) message["id"] = asString(responseId)
     appendEvent("message_start", JSON.stringify({ type: "message_start", message }))
     params.hasFirstResponse = true
   }
 
   let handledWebSearchGrounding = false
+
   if (webSearchStreamMode && !params.hasWebSearchTool) {
     const grounding = antigravityGroundingMetadata(raw)
+
     if (grounding !== undefined) {
       const toolUseId = newClaudeWebSearchToolUseId()
       const textContent = params.webSearchTextBuffer + antigravityTextContent(raw)
@@ -301,6 +346,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
   }
 
   const parts = get(raw, "response.candidates.0.content.parts")
+
   if (isJsonArray(parts) && webSearchStreamMode && !params.hasWebSearchTool && !handledWebSearchGrounding) {
     params.webSearchTextBuffer += appendWebSearchBufferedText(parts)
   } else if (isJsonArray(parts) && !handledWebSearchGrounding) {
@@ -309,27 +355,33 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
       const functionCall = get(part, "functionCall")
       const thoughtSignatureResult = get(part, "thoughtSignature") ?? get(part, "thought_signature")
       const thoughtSignature = asString(thoughtSignatureResult)
+
       const hasThoughtSignature =
         thoughtSignatureResult !== undefined && thoughtSignature !== "" && functionCall === undefined
 
       if (hasThoughtSignature && (text === undefined || asString(text) === "")) {
         let direction: string = CarrierDirection.Next
         let targetKind: string = CarrierKind.Any
+
         if (params.hasSemanticContent) {
           direction = CarrierDirection.Previous
           targetKind = params.lastSemanticKind
         }
+
         appendPartSignature(thoughtSignature, direction, targetKind)
         continue
       }
 
       if (text !== undefined) {
         const partText = asString(text)
+
         if (asBool(get(part, "thought"))) {
           if (partText !== "") {
             params.hasSemanticContent = true
             params.lastSemanticKind = CarrierKind.Text
+
             if (params.responseType === 2 && params.currentThinkingSigned) closeCurrentBlock()
+
             if (params.responseType === 2) {
               params.currentThinkingText += partText
               appendEvent(
@@ -342,6 +394,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
                 appendEvent("content_block_stop", stop(params.responseIndex))
                 params.responseIndex++
               }
+
               appendEvent(
                 "content_block_start",
                 `{"type":"content_block_start","index":${params.responseIndex},"content_block":{"type":"thinking","thinking":""}}`
@@ -356,13 +409,16 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
               params.currentThinkingText = partText
             }
           }
+
           if (hasThoughtSignature)
             appendThinkingSignature(thoughtSignature, CarrierDirection.Standalone, CarrierKind.Text)
         } else {
           let signatureTargetsVisibleText = false
+
           if (hasThoughtSignature) {
             signatureTargetsVisibleText = appendPartSignature(thoughtSignature, CarrierDirection.Next, CarrierKind.Text)
           }
+
           if (params.responseType === 1) {
             appendEvent("content_block_delta", deltaEvent(params.responseIndex, { type: "text_delta", text: partText }))
             params.hasContent = true
@@ -371,6 +427,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
               appendEvent("content_block_stop", stop(params.responseIndex))
               params.responseIndex++
             }
+
             appendEvent(
               "content_block_start",
               `{"type":"content_block_start","index":${params.responseIndex},"content_block":{"type":"text","text":""}}`
@@ -379,14 +436,17 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
             params.responseType = 1
             params.hasContent = true
           }
+
           if (partText !== "") {
             params.hasSemanticContent = true
             params.lastSemanticKind = CarrierKind.Text
+
             if (signatureTargetsVisibleText) closeCurrentBlock()
           }
         }
       } else if (functionCall !== undefined) {
         const toolSignature = thoughtSignature
+
         if (getModelGroup(modelName) !== "claude")
           appendPartSignature(toolSignature, CarrierDirection.Next, CarrierKind.Function)
         params.hasToolUse = true
@@ -398,6 +458,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
           params.responseIndex++
           params.responseType = 0
         }
+
         if (params.responseType !== 0) {
           appendEvent("content_block_stop", stop(params.responseIndex))
           params.responseIndex++
@@ -405,26 +466,31 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
 
         toolUseIdCounter++
         const fallbackId = `${fcName}-${Date.now()}000000-${toolUseIdCounter}`
+
         const contentBlock: JsonObject = {
           type: "tool_use",
           id: claudeToolUseId(modelName, functionCall, fallbackId),
           name: fcName,
           input: {}
         }
+
         if (getModelGroup(modelName) === "claude" && toolSignature !== "") {
           contentBlock["signature"] = formatClaudeSignatureValue(modelName, toolSignature)
         }
+
         appendEvent(
           "content_block_start",
           JSON.stringify({ type: "content_block_start", index: params.responseIndex, content_block: contentBlock })
         )
         const args = get(functionCall, "args")
+
         if (args !== undefined) {
           appendEvent(
             "content_block_delta",
             deltaEvent(params.responseIndex, { type: "input_json_delta", partial_json: JSON.stringify(args) })
           )
         }
+
         params.responseType = 3
         params.hasContent = true
         params.hasSemanticContent = true
@@ -434,12 +500,14 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
   }
 
   const finishReason = get(raw, "response.candidates.0.finishReason")
+
   if (finishReason !== undefined) {
     params.hasFinishReason = true
     params.finishReason = asString(finishReason)
   }
 
   const usage = get(raw, "response.usageMetadata")
+
   if (usage !== undefined) {
     params.hasUsageMetadata = true
     params.cachedTokenCount = asInt(get(usage, "cachedContentTokenCount"))
@@ -447,6 +515,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
     params.candidatesTokenCount = asInt(get(usage, "candidatesTokenCount"))
     params.thoughtsTokenCount = asInt(get(usage, "thoughtsTokenCount"))
     params.totalTokenCount = asInt(get(usage, "totalTokenCount"))
+
     if (params.candidatesTokenCount === 0 && params.totalTokenCount > 0) {
       params.candidatesTokenCount = Math.max(
         params.totalTokenCount - params.promptTokenCount - params.thoughtsTokenCount,
@@ -463,6 +532,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
   ) {
     const text = params.webSearchTextBuffer
     params.webSearchTextBuffer = ""
+
     if (text !== "") {
       appendEvent(
         "content_block_start",
@@ -475,6 +545,7 @@ export const convertAntigravityResponseToClaude = (context: ResponseContext, lin
   }
 
   if (params.hasUsageMetadata && params.hasFinishReason) output += appendFinalEvents(params, false)
+
   return [output]
 }
 
@@ -490,6 +561,7 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
   const totalTokens = asInt(get(root, "response.usageMetadata.totalTokenCount"))
   const cachedTokens = asInt(get(root, "response.usageMetadata.cachedContentTokenCount"))
   let outputTokens = candidateTokens + thoughtTokens
+
   if (outputTokens === 0 && totalTokens > 0) outputTokens = Math.max(totalTokens - promptTokens, 0)
 
   const responseJson: JsonObject = {
@@ -502,11 +574,14 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
     stop_sequence: null,
     usage: { input_tokens: promptTokens, output_tokens: outputTokens }
   }
+
   const usage = responseJson["usage"] as JsonObject
+
   if (cachedTokens > 0) usage["cache_read_input_tokens"] = cachedTokens
 
   if (shouldTranslateWebSearchGrounding(context.originalRequest, context.translatedRequest)) {
     const grounding = antigravityGroundingMetadata(root)
+
     if (grounding !== undefined) {
       responseJson["content"] = buildClaudeWebSearchContent(
         newClaudeWebSearchToolUseId(),
@@ -515,6 +590,7 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
       )
       responseJson["stop_reason"] = "end_turn"
       usage["server_tool_use"] = { web_search_requests: 1 }
+
       return JSON.stringify(responseJson)
     }
   }
@@ -536,18 +612,22 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
     blocks.push({ type: "text", text })
     text = ""
   }
+
   const flushThinking = (): void => {
     if (thinking === "" && thinkingSignature === "") return
     const block: JsonObject = { type: "thinking", thinking }
+
     if (thinkingSignature !== "") {
       block["signature"] = formatCarrierValue(modelName, thinkingSignature, thinkingDirection, thinkingTargetKind)
     }
+
     blocks.push(block)
     thinking = ""
     thinkingSignature = ""
     thinkingDirection = CarrierDirection.Standalone
     thinkingTargetKind = CarrierKind.Text
   }
+
   const appendSignatureCarrier = (signature: string, direction: string, targetKind: string): void => {
     if (signature === "") return
     blocks.push({
@@ -562,32 +642,39 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
       const signature = asString(get(part, "thoughtSignature") ?? get(part, "thought_signature"))
 
       const functionCall = get(part, "functionCall")
+
       if (functionCall !== undefined) {
         let signatureAttachedToThought = false
         const isClaudeTarget = getModelGroup(modelName) === "claude"
+
         if (!isClaudeTarget && signature !== "" && thinking.length > 0 && thinkingSignature === "") {
           thinkingSignature = signature
           thinkingDirection = CarrierDirection.Next
           thinkingTargetKind = CarrierKind.Function
           signatureAttachedToThought = true
         }
+
         flushThinking()
         flushText()
         hasToolCall = true
         const name = restoreSanitizedToolName(toolNameMap, asString(get(functionCall, "name")))
         toolIdCounter++
+
         if (!isClaudeTarget && signature !== "" && !signatureAttachedToThought) {
           appendSignatureCarrier(signature, CarrierDirection.Next, CarrierKind.Function)
         }
+
         const toolBlock: JsonObject = {
           type: "tool_use",
           id: claudeToolUseId(modelName, functionCall, `tool_${toolIdCounter}`),
           name,
           input: {}
         }
+
         if (isClaudeTarget && signature !== "")
           toolBlock["signature"] = formatClaudeSignatureValue(modelName, signature)
         const args = get(functionCall, "args")
+
         if (args !== undefined && typeof args === "object" && args !== null && !Array.isArray(args))
           toolBlock["input"] = args
         blocks.push(toolBlock)
@@ -598,14 +685,18 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
 
       const textValue = get(part, "text")
       const partText = textValue === undefined ? "" : asString(textValue)
+
       if (asBool(get(part, "thought"))) {
         flushText()
+
         if (thinkingSignature !== "") flushThinking()
+
         if (partText !== "") {
           thinking += partText
           hasSemanticContent = true
           lastSemanticKind = CarrierKind.Text
         }
+
         if (signature !== "") {
           if (thinking.length > 0) {
             thinkingSignature = signature
@@ -620,10 +711,12 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
             appendSignatureCarrier(signature, CarrierDirection.Next, CarrierKind.Any)
           }
         }
+
         continue
       }
 
       let visibleSignatureCarrier = false
+
       if (signature !== "") {
         if (thinking.length > 0 && thinkingSignature === "") {
           thinkingSignature = signature
@@ -633,6 +726,7 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
         } else {
           flushThinking()
           flushText()
+
           if (partText !== "") {
             appendSignatureCarrier(signature, CarrierDirection.Next, CarrierKind.Text)
             visibleSignatureCarrier = true
@@ -645,20 +739,25 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
           }
         }
       }
+
       if (partText !== "") {
         flushThinking()
         text += partText
         hasSemanticContent = true
         lastSemanticKind = CarrierKind.Text
+
         if (visibleSignatureCarrier) flushText()
       }
     }
   }
+
   flushThinking()
   flushText()
+
   if (blocks.length > 0) responseJson["content"] = blocks
 
   let stopReason = "end_turn"
+
   if (hasToolCall) stopReason = "tool_use"
   else if (asString(get(root, "response.candidates.0.finishReason")) === "MAX_TOKENS") stopReason = "max_tokens"
   responseJson["stop_reason"] = stopReason
@@ -666,6 +765,7 @@ export const convertAntigravityResponseToClaudeNonStream = (context: ResponseCon
   if (promptTokens === 0 && outputTokens === 0 && get(root, "response.usageMetadata") === undefined) {
     delete responseJson["usage"]
   }
+
   return JSON.stringify(responseJson)
 }
 

@@ -18,16 +18,19 @@ export type AccessZone = "public" | "protected" | "management"
  */
 export const normalizedPath = (requestUrl: string): string | undefined => {
   let path: string
+
   try {
     path = new URL(requestUrl, "http://invalid.invalid").pathname
   } catch {
     return undefined
   }
+
   try {
     path = decodeURIComponent(path)
   } catch {
     // Keep the raw path when it is not valid percent-encoding.
   }
+
   return path.replace(/\/{2,}/g, "/").toLowerCase()
 }
 
@@ -38,7 +41,10 @@ export const normalizedPath = (requestUrl: string): string | undefined => {
  */
 export const classifyPath = (requestUrl: string): AccessZone => {
   const path = normalizedPath(requestUrl)
+
   if (path === undefined) return "protected"
+
   if (path.startsWith(MANAGEMENT_PREFIX) || path.startsWith(MANAGEMENT_PANEL_PATH)) return "management"
+
   return PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "protected" : "public"
 }

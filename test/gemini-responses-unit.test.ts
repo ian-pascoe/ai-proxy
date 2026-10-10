@@ -20,6 +20,7 @@ import {
 } from "../src/translator/gemini/openai/responses/replay-cache.ts"
 
 const MODEL = "gemini-2.5-pro"
+
 const SIGNATURE = sig()
 
 describe("replay cache", () => {
@@ -32,6 +33,7 @@ describe("replay cache", () => {
     expect(cache.get("m", "k")).toBeUndefined()
     expect(cache.set("", "k", [{ a: 1 }])).toBe(false)
     expect(cache.set("m", "k", [])).toBe(false)
+
     for (let i = 0; i <= REPLAY_CACHE_MAX_ENTRIES; i++) cache.set("m", `key-${i}`, [{ i }])
     expect(cache.size()).toBe(REPLAY_CACHE_MAX_ENTRIES)
     expect(cache.get("m", "key-0")).toBeUndefined()
@@ -43,7 +45,9 @@ describe("replay cache", () => {
     const items: Json[] = [{ a: { b: 1 } }]
     cache.set("m", "k", items)
     ;(items[0] as { a: { b: number } }).a.b = 2
+
     const first = cache.get("m", "k") as Json[]
+
     ;(first[0] as { a: { b: number } }).a.b = 3
     expect(cache.get("m", "k")).toEqual([{ a: { b: 1 } }])
   })
@@ -88,21 +92,25 @@ describe("trailing text signatures", () => {
 
   it("keeps a trailing signature off the timeline and restores it on the next request", () => {
     const request = { model: "gpt-5", input: "hi" }
+
     const envelope = builtinTranslators.translateRequest("openai-response", "gemini", {
       format: "openai-response",
       model: MODEL,
       stream: true,
       body: request
     })
+
     const context = {
       model: MODEL,
       originalRequest: request,
       translatedRequest: envelope.body,
       state: makeTranslationState()
     }
+
     const chunks = [chunk([{ text: "answer" }]), chunk([{ text: "", thoughtSignature: SIGNATURE }], "STOP"), "[DONE]"]
       .flatMap((line) => builtinTranslators.translateStream("openai-response", "gemini", context, line))
       .join("")
+
     expect(chunks).not.toContain("cpa-gemini-responses-carrier")
     expect(replayCache().get(MODEL, "gemini-responses-text:msg_resp_r1_0")).toHaveLength(1)
 
@@ -124,9 +132,11 @@ describe("trailing text signatures", () => {
         ]
       }
     })
+
     const parts = (
       next.body as { contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> }
     ).contents.flatMap((content) => content.parts)
+
     expect(parts).toContainEqual({ text: "answer", thoughtSignature: SIGNATURE })
   })
 })

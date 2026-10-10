@@ -14,6 +14,7 @@ const replaceSessionId = (value: string, sessionId: string): string => {
   let out = ""
   let start = 0
   let i = 0
+
   while (i <= value.length - SESSION_TOKEN.length) {
     if (value[i] === "$" && value.slice(i, i + SESSION_TOKEN.length).toUpperCase() === SESSION_TOKEN) {
       out += value.slice(start, i) + sessionId
@@ -23,6 +24,7 @@ const replaceSessionId = (value: string, sessionId: string): string => {
       i++
     }
   }
+
   return start === 0 ? value : out + value.slice(start)
 }
 
@@ -33,11 +35,14 @@ export const customHeaders = (
   sessionId: string | undefined
 ): Array<readonly [string, string]> => {
   const out: Array<readonly [string, string]> = []
+
   for (const [key, raw] of Object.entries(credential.attributes)) {
     if (!key.startsWith("header:")) continue
     const name = key.slice("header:".length).trim()
     let value = raw.trim()
+
     if (name === "" || value === "") continue
+
     if (value.startsWith("$") && value.slice(1).trim().toUpperCase() === "CPA-SESSION-ID") {
       if (sessionId === undefined || sessionId === "") continue
       value = sessionId
@@ -47,11 +52,14 @@ export const customHeaders = (
     } else if (value.startsWith("$")) {
       const variable = value.slice(1).trim()
       const clientValue = variable === "" ? null : (clientHeaders?.get(variable) ?? null)
+
       if (clientValue === null || clientValue === "") continue
       value = clientValue
     }
+
     out.push([name, value])
   }
+
   return out
 }
 
@@ -64,10 +72,13 @@ export const applyCustomHeaders = (
 ): Record<string, string> => {
   for (const [name, value] of customHeaders(credential, clientHeaders, sessionId)) {
     const lower = name.toLowerCase()
+
     for (const existing of Object.keys(headers)) {
       if (existing.toLowerCase() === lower) delete headers[existing]
     }
+
     headers[name] = value
   }
+
   return headers
 }

@@ -16,6 +16,7 @@ import { isCodexModelCapacityError, newCodexStatusError } from "./errors.ts"
 
 /** Upstream lines held back at most (the SSE executor charges one unit per line). */
 export const BOOTSTRAP_MAX_BUFFERED_FRAMES = 48
+
 /** Bytes held back at most (upstream lines plus the chunks they translate into). */
 export const BOOTSTRAP_MAX_BUFFERED_BYTES = 1 << 20
 
@@ -35,21 +36,28 @@ const DURATION_UNITS: Readonly<Record<string, number>> = {
 /** Go `time.ParseDuration` in milliseconds (`undefined` = invalid). */
 const parseGoDurationMs = (raw: string): number | undefined => {
   let rest = raw
+
   if (rest === "") return undefined
   let sign = 1
+
   if (rest[0] === "-" || rest[0] === "+") {
     if (rest[0] === "-") sign = -1
     rest = rest.slice(1)
   }
+
   if (rest === "0") return 0
+
   if (rest === "") return undefined
   let total = 0
+
   while (rest !== "") {
     const match = /^(\d*\.?\d*)(ns|us|\u00b5s|\u03bcs|ms|s|m|h)/.exec(rest)
+
     if (match === null || match[1] === undefined || match[1] === "" || match[1] === ".") return undefined
     total += Number.parseFloat(match[1]) * (DURATION_UNITS[match[2] as string] as number)
     rest = rest.slice(match[0].length)
   }
+
   return sign * total
 }
 
@@ -59,18 +67,24 @@ const parseGoDurationMs = (raw: string): number | undefined => {
  */
 export const bootstrapTimeoutMs = (raw: string): number => {
   const text = raw.trim()
+
   if (UNLIMITED_WORDS.has(text.toLowerCase())) return 0
   const duration = parseGoDurationMs(text)
+
   if (duration !== undefined && duration >= 0) return duration
+
   if (/^[+-]?\d+$/.test(text)) {
     const seconds = Number.parseInt(text, 10)
+
     if (seconds >= 0 && Number.isSafeInteger(seconds)) return seconds * 1000
   }
+
   return 0
 }
 
 const isEmptyContentList = (list: Json | undefined): boolean => {
   if (list === undefined || list === null) return true
+
   // gjson `Array()` of a non-array value is a one-element list holding that value.
   for (const entry of isJsonArray(list) ? list : [list]) {
     switch (asString(get(entry, "type"))) {
@@ -87,16 +101,19 @@ const isEmptyContentList = (list: Json | undefined): boolean => {
         return false
     }
   }
+
   return true
 }
 
 const isBufferableOutputItem = (event: Json | undefined): boolean => {
   const item = get(event, "item")
+
   switch (asString(get(item, "type"))) {
     case "message":
       return isEmptyContentList(get(item, "content"))
     case "reasoning":
       if (asString(get(item, "encrypted_content")) !== "") return false
+
       return isEmptyContentList(get(item, "summary")) && isEmptyContentList(get(item, "content"))
     case "function_call":
       return asString(get(item, "arguments")) === ""
@@ -109,6 +126,7 @@ const isBufferableOutputItem = (event: Json | undefined): boolean => {
 
 const isEmptyPart = (event: Json | undefined): boolean => {
   const part = get(event, "part")
+
   switch (asString(get(part, "type"))) {
     case "output_text":
     case "summary_text":
@@ -128,6 +146,7 @@ const isEmptyPart = (event: Json | undefined): boolean => {
  */
 export const isBootstrapBufferableEvent = (eventType: string, payload: string, event: Json | undefined): boolean => {
   if (payload.trim() === "") return true
+
   switch (eventType) {
     case "response.created":
     case "response.in_progress":
@@ -156,8 +175,11 @@ export const isOverloadBootstrapFailure = (bodyText: string): boolean => {
   const errorType = lower("error.type")
   const errorCode = lower("error.code")
   const errorMessage = lower("error.message") !== "" ? lower("error.message") : lower("message")
+
   if (errorType === "service_unavailable_error" || errorCode === "server_is_overloaded") return true
+
   if (errorType === "rate_limit_error" || errorCode === "rate_limit_exceeded") return true
+
   return (
     (errorType === "server_error" || errorCode === "server_error") &&
     errorMessage.includes("you can retry your request")
@@ -171,5 +193,6 @@ export const bootstrapOverloadError = (body: string, nowMs: number): ExecutionEr
 /** `grokbuild.IsGrokClientHeaders`: the User-Agent names a Grok client. */
 export const isGrokClientHeaders = (headers: Headers): boolean => {
   const agent = (headers.get("user-agent") ?? "").toLowerCase()
+
   return agent.includes("grok-pager") || agent.includes("grok-shell")
 }

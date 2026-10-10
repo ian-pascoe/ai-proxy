@@ -5,11 +5,14 @@ import { builtinTranslators } from "../src/translator/builtin.ts"
 import { makeTranslationState } from "../src/translator/registry.ts"
 
 const PATCH_TOOL = { type: "custom", name: "apply_patch", format: { type: "grammar", syntax: "lark", definition: "x" } }
+
 const line = (event: unknown): string => `data: ${JSON.stringify(event)}`
+
 const START = line({
   type: "message_start",
   message: { id: "msg_1", type: "message", role: "assistant", model: "claude", content: [], usage: { input_tokens: 1 } }
 })
+
 const TOOL_START = line({
   type: "content_block_start",
   index: 0,
@@ -18,6 +21,7 @@ const TOOL_START = line({
 
 const context = (tools: Json[]) => {
   const request = { model: "claude", input: "go", tools }
+
   return {
     model: "claude",
     originalRequest: request,

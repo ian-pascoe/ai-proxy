@@ -41,13 +41,17 @@ export const filterUpstreamHeaders = (source: Headers): Headers => {
       .map((token) => token.trim().toLowerCase())
       .filter((token) => token !== "")
   )
+
   const out = new Headers()
   source.forEach((value, name) => {
     const lower = name.toLowerCase()
+
     if (BLOCKED_HEADERS.has(lower) || CPA_RESERVED_HEADERS.has(lower) || connectionScoped.has(lower)) return
+
     if (GATEWAY_HEADER_PREFIXES.some((prefix) => lower.startsWith(prefix))) return
     out.append(name, value)
   })
+
   return out
 }
 
@@ -60,8 +64,10 @@ export const mergeUpstreamHeaders = (
   const present = new Set(Object.keys(target).map((name) => name.toLowerCase()))
   source.forEach((value, name) => {
     const lower = name.toLowerCase()
+
     if (present.has(lower)) return
     target[lower] = value
   })
+
   return target
 }

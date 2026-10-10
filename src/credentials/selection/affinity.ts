@@ -13,6 +13,7 @@ interface Entry {
 }
 
 export const DEFAULT_AFFINITY_TTL_MS = 3_600_000
+
 export const DEFAULT_AFFINITY_CAPACITY = 65_536
 
 /** TTL cache `key -> credential id`. Every method takes the clock so tests control time. */
@@ -42,18 +43,24 @@ export class SessionCache {
   /** Peek without refreshing. */
   get(key: string, now: number): string | undefined {
     const entry = this.#entries.get(key)
+
     if (entry === undefined) return undefined
+
     if (now >= entry.expiresAt) {
       this.#entries.delete(key)
+
       return undefined
     }
+
     return entry.authId
   }
 
   /** Lookup that extends the TTL on a hit. */
   getAndRefresh(key: string, now: number): string | undefined {
     const authId = this.get(key, now)
+
     if (authId !== undefined) this.#put(key, authId, now)
+
     return authId
   }
 
@@ -66,16 +73,20 @@ export class SessionCache {
   /** Extends the TTL only while `key` is still bound to `expectedAuthId`. */
   touch(key: string, expectedAuthId: string, now: number): boolean {
     const entry = this.#entries.get(key)
+
     if (entry === undefined || entry.authId !== expectedAuthId || now >= entry.expiresAt) return false
     this.#put(key, expectedAuthId, now)
+
     return true
   }
 
   /** Removes the binding only while it still points at `expectedAuthId`. */
   compareAndDelete(key: string, expectedAuthId: string): boolean {
     const entry = this.#entries.get(key)
+
     if (entry === undefined || entry.authId !== expectedAuthId) return false
     this.#entries.delete(key)
+
     return true
   }
 
@@ -93,8 +104,10 @@ export class SessionCache {
     // Re-insert so Map order tracks recency; the oldest entries are evicted first.
     this.#entries.delete(key)
     this.#entries.set(key, { authId, expiresAt: now + this.#ttlMs })
+
     if (this.#entries.size > this.#capacity) {
       this.sweep(now)
+
       for (const oldest of this.#entries.keys()) {
         if (this.#entries.size <= this.#capacity) break
         this.#entries.delete(oldest)
@@ -110,10 +123,13 @@ export const affinityKey = (callerScope: string, provider: string, sessionId: st
 /** `isHierarchyParent`. */
 const isHierarchyParent = (primary: string, fallback: string): boolean => {
   if (fallback === "" || primary === "" || primary === fallback) return false
+
   if (primary.includes(":agent:")) return true
   const index1 = primary.indexOf(":")
   const index2 = fallback.indexOf(":")
+
   if (index1 > 0 && index2 > 0 && primary.slice(0, index1) === fallback.slice(0, index2)) return true
+
   return index1 === -1 && index2 === -1
 }
 

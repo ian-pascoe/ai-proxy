@@ -20,12 +20,14 @@ import {
 } from "./support/pipeline.ts"
 
 const REDIRECT = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/example-token"
+
 const TARGET = "https://example.com/weather"
 
 const redirecting =
   (location: string | undefined, status = 302) =>
   (call: UpstreamCall) => {
     expect(call.method).toBe("HEAD")
+
     return new Response(null, { status, ...(location === undefined ? {} : { headers: { location } }) })
   }
 
@@ -53,23 +55,29 @@ describe("grounding URL resolution", () => {
 
   it("replaces redirect URIs with their Location and leaves other chunks alone (HEAD, deduplicated)", async () => {
     const calls: UpstreamCall[] = []
+
     const out = await run(
       resolveGroundingUrlsInPayload(payload([REDIRECT, "https://already.example/source", REDIRECT])),
       calls,
       redirecting(TARGET)
     )
+
     expect(calls.map((call) => [call.method, call.url])).toEqual([["HEAD", REDIRECT]])
+
     const uris = JSON.parse(out).response.candidates[0].groundingMetadata.groundingChunks.map(
       (chunk: { web: { uri: string } }) => chunk.web.uri
     )
+
     expect(uris).toEqual([TARGET, "https://already.example/source", TARGET])
   })
 
   it("reads bare candidates payloads and returns the text untouched without redirects", async () => {
     const calls: UpstreamCall[] = []
+
     const bare = JSON.stringify({
       candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: REDIRECT } }] } }]
     })
+
     const out = await run(resolveGroundingUrlsInPayload(bare), calls, redirecting(TARGET))
     expect(JSON.parse(out).candidates[0].groundingMetadata.groundingChunks[0].web.uri).toBe(TARGET)
     const plain = payload(["https://a.example/x"])
@@ -110,6 +118,7 @@ describe("grounding URL resolution in the Antigravity executor", () => {
     kind: "oauth",
     metadata: { access_token: "t", project_id: "p" }
   })
+
   const grounded = {
     response: {
       candidates: [
@@ -126,6 +135,7 @@ describe("grounding URL resolution in the Antigravity executor", () => {
       usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 }
     }
   }
+
   const search = {
     model: "gemini-3-flash",
     tools: [{ type: "web_search" }],
@@ -134,16 +144,20 @@ describe("grounding URL resolution in the Antigravity executor", () => {
 
   const harness = async (stream: boolean) => {
     resetMemoryAntigravityState()
+
     const h = makeGeminiHarness({
       config: await loadConfig(""),
       credential: cred,
       models: { "gemini-3-flash": ["antigravity"] },
       respond: (call) => {
         if (call.method === "HEAD") return new Response(null, { status: 302, headers: { location: TARGET } })
+
         return stream ? sseResponse([`data: ${JSON.stringify(grounded)}\n\n`]) : jsonResponse(grounded)
       }
     })
+
     afterAll(h.dispose)
+
     return h
   }
 

@@ -93,12 +93,15 @@ export const tokenInt = (value: Json | undefined): number => (typeof value === "
 export const firstExisting = (node: Json | undefined, ...paths: ReadonlyArray<string>): Json | undefined => {
   for (const path of paths) {
     const value = get(node, path)
+
     if (value !== undefined) return value
   }
+
   return undefined
 }
 
 const int = tokenInt
+
 const first = firstExisting
 
 const USAGE_BUCKET_PATHS = [
@@ -126,6 +129,7 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
   const outputNode = first(node, "completion_tokens", "output_tokens")
   const cached = first(node, "prompt_tokens_details.cached_tokens", "input_tokens_details.cached_tokens")
   const reasoning = first(node, "completion_tokens_details.reasoning_tokens", "output_tokens_details.reasoning_tokens")
+
   const cacheCreation = first(
     node,
     "input_tokens_details.cache_creation_tokens",
@@ -133,6 +137,7 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
     "prompt_tokens_details.cache_creation_tokens",
     "prompt_tokens_details.cache_write_tokens"
   )
+
   const inputTokens = int(inputNode)
   const outputTokens = int(outputNode)
   const cacheRead = int(cached)
@@ -140,6 +145,7 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
   const reasoningTokens = int(reasoning)
   const reportedTotal = int(get(node, "total_tokens"))
   let tokenBreakdown: TokenBreakdown
+
   if (USAGE_BUCKET_PATHS.some((path) => get(node, path) !== undefined)) {
     tokenBreakdown =
       inputNode !== undefined && outputNode !== undefined
@@ -155,6 +161,7 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
   } else {
     tokenBreakdown = unclassifiedTokenBreakdown(reportedTotal)
   }
+
   return {
     inputTokens,
     outputTokens,
@@ -172,8 +179,10 @@ export const responseServiceTier = (payload: Json | undefined): string | undefin
   for (const path of ["response.service_tier", "service_tier", "interaction.service_tier"]) {
     const value = get(payload, path)
     const tier = typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : ""
+
     if (tier !== "") return tier
   }
+
   return undefined
 }
 
@@ -184,26 +193,34 @@ const withTier = (detail: UsageDetail, tier: string | undefined): UsageDetail =>
 export const parseOpenAIUsage = (body: string): UsageDetail => {
   const parsed = tryParseJson(body)
   const node = get(parsed, "usage")
+
   return withTier(hasUsageFields(node) ? parseOpenAIUsageNode(node) : emptyUsageDetail, responseServiceTier(parsed))
 }
 
 /** `jsonPayload`: the JSON object carried by one SSE line, if any. */
 export const ssePayloadObject = (line: string): Json | undefined => {
   let trimmed = line.trim()
+
   if (trimmed === "" || trimmed === "[DONE]" || trimmed.startsWith("event:")) return undefined
+
   if (trimmed.startsWith("data:")) trimmed = trimmed.slice(5).trim()
+
   if (!trimmed.startsWith("{")) return undefined
   const parsed = tryParseJson(trimmed)
+
   return isJsonObject(parsed) ? parsed : undefined
 }
 
 /** `ParseOpenAIStreamUsage`: usage carried by one OpenAI-style stream line. */
 export const parseOpenAIStreamUsage = (line: string): UsageDetail | undefined => {
   const payload = ssePayloadObject(line)
+
   if (payload === undefined) return undefined
   const tier = responseServiceTier(payload)
   const node = get(payload, "usage")
+
   if (!hasUsageFields(node)) return tier === undefined ? undefined : withTier(emptyUsageDetail, tier)
+
   return withTier(parseOpenAIUsageNode(node), tier)
 }
 
@@ -221,7 +238,9 @@ export const responseModelOf = (payload: Json | undefined): string | undefined =
     "response.modelVersion"
   ]) {
     const value = get(payload, path)
+
     if (typeof value === "string" && value.trim() !== "" && value.trim().length <= 256) return value.trim()
   }
+
   return undefined
 }

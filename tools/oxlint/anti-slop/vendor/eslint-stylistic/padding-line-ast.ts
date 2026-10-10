@@ -47,5 +47,6 @@ export const isTopLevelExpressionStatement = (
 export function isParenthesized(node: ESTree.Node, sourceCode: SourceCode): boolean {
   const before = sourceCode.getTokenBefore(node);
   const after = sourceCode.getTokenAfter(node);
+
   return before?.value === "(" && after?.value === ")";
 }

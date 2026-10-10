@@ -23,10 +23,13 @@ export const applyAntigravityHints = (models: ModelInfo[], hints: AntigravityMod
   const entitled = hints.modelIds === undefined ? undefined : new Set(hints.modelIds)
   const webSearch = new Set(hints.webSearchModelIds)
   const out: ModelInfo[] = []
+
   for (const model of models) {
     const id = normalizeFetchedModelId(model.id)
+
     if (entitled !== undefined && !entitled.has(id)) continue
     out.push(webSearch.has(id) ? { ...model, supportsWebSearch: true } : model)
   }
+
   return out
 }

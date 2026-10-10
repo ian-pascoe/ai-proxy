@@ -5,6 +5,7 @@ import { type HttpReply, send } from "../../credentials/refresh/http.ts"
 import { flowFailure, type FlowFailure } from "./types.ts"
 
 export { clipBody, parseJsonObject, rfc3339, seconds, str } from "../../credentials/refresh/http.ts"
+
 export type { HttpReply } from "../../credentials/refresh/http.ts"
 
 /**
@@ -35,6 +36,7 @@ export const tryCallBytes = (
     const client = yield* HttpClient.HttpClient
     const response = yield* client.execute(request)
     const buffer = yield* response.arrayBuffer
+
     return { status: response.status, bytes: new Uint8Array(buffer) }
   }).pipe(
     Effect.timeoutOrElse({ duration: "30 seconds", orElse: () => Effect.succeed(undefined) }),

@@ -28,18 +28,23 @@ const text = (value: Json | undefined): string => (typeof value === "string" ? v
 /** Prefix: trimmed, slashes stripped from both ends, ignored when it still contains a slash. */
 export const normalizePrefix = (raw: string | undefined): string | undefined => {
   const trimmed = (raw ?? "").trim().replace(/^\/+|\/+$/g, "")
+
   return trimmed === "" || trimmed.includes("/") ? undefined : trimmed
 }
 
 /** `ExtractCustomHeadersFromMetadata`: non-empty string values with trimmed names. */
 export const extractHeaders = (raw: Json | undefined): Record<string, string> => {
   const out: Record<string, string> = {}
+
   if (!isJsonObject(raw)) return out
+
   for (const [key, value] of Object.entries(raw)) {
     const name = key.trim()
     const headerValue = typeof value === "string" ? value.trim() : ""
+
     if (name !== "" && headerValue !== "") out[name] = headerValue
   }
+
   return out
 }
 
@@ -47,15 +52,19 @@ export const extractHeaders = (raw: Json | undefined): Record<string, string> =>
 export const sanitizeAliases = (aliases: ReadonlyArray<OAuthModelAlias>): OAuthModelAlias[] => {
   const seen = new Set<string>()
   const out: OAuthModelAlias[] = []
+
   for (const entry of aliases) {
     const name = entry.name.trim()
     const alias = entry.alias.trim()
+
     if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue
     const key = alias.toLowerCase()
+
     if (seen.has(key)) continue
     seen.add(key)
     out.push({ ...entry, name, alias })
   }
+
   return out
 }
 
@@ -63,6 +72,7 @@ export const sanitizeAliases = (aliases: ReadonlyArray<OAuthModelAlias>): OAuthM
 const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
   if (!Array.isArray(raw)) return []
   const entries: OAuthModelAlias[] = []
+
   for (const item of raw) {
     if (!isJsonObject(item)) continue
     entries.push({
@@ -73,6 +83,7 @@ const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
       ...(text(item["display-name"]) !== "" ? { "display-name": text(item["display-name"]) } : {})
     })
   }
+
   return sanitizeAliases(entries)
 }
 
@@ -82,16 +93,21 @@ const stringList = (raw: Json | undefined): string[] =>
 /** `ApplyAuthPriorityMetadata`: numbers are truncated, strings must be integers; anything else is ignored. */
 const parsePriority = (raw: Json | undefined): number | undefined => {
   if (typeof raw === "number" && Number.isFinite(raw)) return Math.trunc(raw)
+
   if (typeof raw === "string" && /^[+-]?\d+$/.test(raw.trim())) return Number(raw.trim())
+
   return undefined
 }
 
 const KIMI_PROVIDERS = new Set(["kimi", "kimi-ai", "kimi.ai", "kimi.com"])
+
 const KIMI_COM_BASE = "https://api.kimi.com/coding"
+
 const KIMI_AI_BASE = "https://api.kimi.ai/coding"
 
 const isKimiAiDomain = (domain: string): boolean => {
   const value = domain.trim().toLowerCase()
+
   return value === "kimi.ai" || value === "ai" || value === "kimi-ai" || value.endsWith(".kimi.ai")
 }
 
@@ -106,24 +122,32 @@ const kimiHost = (baseUrl: string): string => {
 const kimiDomain = (provider: string, domain: string, baseUrl: string): string => {
   if (domain !== "") {
     if (isKimiAiDomain(domain)) return "kimi.ai"
+
     if (domain.trim().toLowerCase().endsWith("kimi.com")) return "kimi.com"
   }
+
   if (baseUrl !== "") {
     const host = kimiHost(baseUrl)
+
     if (host === "kimi.ai" || host.endsWith(".kimi.ai")) return "kimi.ai"
+
     if (host === "kimi.com" || host.endsWith(".kimi.com")) return "kimi.com"
   }
+
   return provider === "kimi-ai" || provider === "kimi.ai" ? "kimi.ai" : "kimi.com"
 }
 
 /** Codex plan: metadata `plan_type`, else the id_token claim `chatgpt_plan_type`, else `free`. */
 const codexPlanType = (metadata: JsonObject): string | undefined => {
   const explicit = text(metadata.plan_type)
+
   if (explicit !== "") return explicit
   const idToken = text(metadata.id_token)
+
   if (idToken === "") return undefined
   const auth = decodeJwtClaims(idToken)?.["https://api.openai.com/auth"]
   const plan = isJsonObject(auth) ? text(auth.chatgpt_plan_type) : ""
+
   return plan === "" ? "free" : plan
 }
 
@@ -137,29 +161,38 @@ export const deriveFileCredential = (stored: StoredCredential, options: DeriveOp
   const attributes: Record<string, string> = { source: stored.id, path: stored.id, source_backend: "file" }
 
   const priority = parsePriority(metadata.priority)
+
   if (priority !== undefined) {
     attributes.priority = String(priority)
     attributes.file_priority = "true"
   }
+
   let weight = DEFAULT_WEIGHT
+
   if (Object.hasOwn(metadata, "weight")) {
     const parsed = parseWeightValue(metadata.weight)
+
     if (parsed.ok) {
       weight = parsed.value
       attributes.weight = String(weight)
     }
   }
+
   const note = text(metadata.note)
+
   if (note !== "") attributes.note = note
   const email = text(metadata.email)
+
   if (email !== "") attributes.email = email
   const fingerprint = text(metadata.fingerprint_profile).toLowerCase()
+
   if (fingerprint !== "") attributes.fingerprint_profile = fingerprint
 
   const excludedModels = normalizeExclusions(
     stringList(metadata.excluded_models),
     options.config.oauth["excluded-models"][provider]
   )
+
   if (excludedModels.length > 0) attributes.excluded_models = excludedModels.join(",")
   attributes.auth_kind = "oauth"
 
@@ -169,13 +202,16 @@ export const deriveFileCredential = (stored: StoredCredential, options: DeriveOp
     attributes.domain = domain
     attributes.base_url = baseUrl !== "" ? baseUrl : domain === "kimi.ai" ? KIMI_AI_BASE : KIMI_COM_BASE
   }
+
   if (provider === "codex") {
     const plan = codexPlanType(metadata)
+
     if (plan !== undefined) attributes.plan_type = plan
   }
 
   const proxyUrl = typeof metadata.proxy_url === "string" ? metadata.proxy_url : ""
   const prefix = normalizePrefix(typeof metadata.prefix === "string" ? metadata.prefix : undefined)
+
   return {
     id: stored.id,
     provider,

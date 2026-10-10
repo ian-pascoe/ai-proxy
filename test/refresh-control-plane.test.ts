@@ -8,6 +8,7 @@ import worker from "../src/index.ts"
 const plane = (name: string = crypto.randomUUID()) => env.CONTROL_PLANE.getByName(name)
 
 const HOUR = 3_600_000
+
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z")
 
 const claudeFile = (extra: Record<string, unknown> = {}) => ({
@@ -22,7 +23,9 @@ const claudeFile = (extra: Record<string, unknown> = {}) => ({
 // Effect's FetchHttpClient resolves `globalThis.fetch` once and keeps it, so a per-test `vi.spyOn` would be ignored
 // after the first test. Install one stable fetch for the whole file that delegates to the current test's handler.
 type UpstreamHandler = (url: string, body: string) => Response | Promise<Response>
+
 let currentUpstream: UpstreamHandler = () => new Response("no upstream configured", { status: 500 })
+
 const realFetch = globalThis.fetch
 
 beforeAll(() => {
@@ -33,9 +36,11 @@ beforeAll(() => {
         : typeof init?.body === "string"
           ? init.body
           : ""
+
     return currentUpstream(input instanceof Request ? input.url : String(input), body)
   }) as typeof fetch
 })
+
 afterAll(() => {
   globalThis.fetch = realFetch
 })
@@ -45,13 +50,18 @@ const mockUpstream = (handler?: UpstreamHandler) => {
   let issued = 1
   currentUpstream = (url, body) => {
     requests.push({ url, body })
+
     if (handler !== undefined) return handler(url, body)
+
     if (url.includes("platform.claude.com")) {
       issued += 1
+
       return Response.json({ access_token: `sk-ant-oat-${issued}`, refresh_token: `rt-${issued}`, expires_in: 28800 })
     }
+
     return new Response("unexpected", { status: 500 })
   }
+
   return { requests }
 }
 
@@ -102,13 +112,17 @@ describe("ControlPlane token refresh", () => {
     const upstream = mockUpstream()
     const stub = plane()
     await stub.importAuthFile("claude-a.json", claudeFile())
+
     const results = await Promise.all(
       Array.from({ length: 5 }, () => stub.refreshNow("claude-a.json", "sk-ant-oat-old"))
     )
+
     expect(upstream.requests.filter((request) => request.url.includes("platform.claude.com"))).toHaveLength(1)
+
     for (const result of results) {
       expect(result.ok && result.credential.metadata).toMatchObject({ access_token: "sk-ant-oat-2" })
     }
+
     const list = await stub.listCredentials()
     expect(JSON.stringify(list)).not.toContain("sk-ant-oat-2")
     expect(list[0]).toMatchObject({ credentialVersion: 2, status: "active" })

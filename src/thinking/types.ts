@@ -39,8 +39,11 @@ export interface ThinkingConfig {
 export const EMPTY_CONFIG: ThinkingConfig = { mode: "budget", budget: 0, level: "" }
 
 export const noneConfig = (): ThinkingConfig => ({ mode: "none", budget: 0, level: "" })
+
 export const autoConfig = (): ThinkingConfig => ({ mode: "auto", budget: -1, level: "" })
+
 export const levelConfig = (level: string): ThinkingConfig => ({ mode: "level", budget: 0, level })
+
 export const budgetConfig = (budget: number): ThinkingConfig => ({ mode: "budget", budget, level: "" })
 
 /** Go `hasThinkingConfig`: anything other than the empty config. */

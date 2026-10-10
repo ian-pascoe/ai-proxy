@@ -20,6 +20,7 @@ api-keys:
     - name: three
       keys: [{ api-key: g1 }]
 `)
+
       const groups = config["api-keys"].gemini
       // Header order does not matter; a different header set is a different credential.
       assert.deepStrictEqual(
@@ -46,6 +47,7 @@ api-keys:
     - name: three
       keys: [{ api-key: g1, proxy-url: "http://p" }]
 `)
+
       assert.deepStrictEqual(
         config["api-keys"].gemini.map((group) => group.name),
         ["one", "three"]
@@ -63,6 +65,7 @@ api-keys:
     - name: b
       keys: [{ api-key: k }]
 `)
+
       assert.strictEqual(config["api-keys"].interactions.length, 1)
     })
   )
@@ -85,6 +88,7 @@ api-keys:
       base-url: https://other.example
       keys: [{ api-key: v1 }]
 `)
+
         const groups = config["api-keys"].vertex
         assert.deepStrictEqual(
           groups.map((group) => [group.name, group.keys.map((key) => key["api-key"])]),
@@ -108,6 +112,7 @@ gemini-api-key:
   - api-key: ""
   - api-key: g1
 `)
+
       const groups = config["api-keys"].gemini
       assert.strictEqual(groups.length, 2)
       assert.strictEqual(groups[0]?.["base-url"], "https://gateway.example")
@@ -127,6 +132,7 @@ api-keys:
     - name: nothing
       keys: [{}]
 `)
+
       assert.deepStrictEqual(
         config["api-keys"].gemini.map((group) => group.name),
         ["gw"]

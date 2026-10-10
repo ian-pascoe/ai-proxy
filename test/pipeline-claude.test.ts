@@ -117,6 +117,7 @@ const oauthPipeline = (
   credential: CredentialSnapshot = oauthCredential()
 ): Harness => {
   const reports: Array<AttemptResult> = []
+
   const picker = Layer.succeed(
     CredentialPicker,
     CredentialPicker.of({
@@ -124,6 +125,7 @@ const oauthPipeline = (
         if ((request.excludedIds ?? []).includes(credential.id)) {
           return Effect.fail(new ExecutionError({ status: 503, code: "auth_not_found", message: "no auth available" }))
         }
+
         const lease = {
           id: "lease-1",
           credentialId: credential.id,
@@ -132,6 +134,7 @@ const oauthPipeline = (
           model: canonicalModelKey(request.model),
           issuedAt: 0
         }
+
         return Effect.succeed({
           credential,
           leaseId: lease.id,
@@ -151,6 +154,7 @@ const oauthPipeline = (
       planRetry: () => Effect.succeed({ retry: false })
     })
   )
+
   const providers = Layer.succeed(
     ModelProviders,
     ModelProviders.of({
@@ -158,12 +162,16 @@ const oauthPipeline = (
       firstAvailableModel: Effect.succeed("claude-sonnet-4-5")
     })
   )
+
   const pipeline = makePipeline({ config, respond, credentialPicker: picker, modelProviders: providers })
+
   return { pipeline, reports }
 }
 
 let apiKeyConfig: Config
+
 let oauthConfig: Config
+
 beforeAll(async () => {
   apiKeyConfig = await loadConfig(API_KEY_YAML)
   oauthConfig = await loadConfig(OAUTH_YAML)
@@ -180,6 +188,7 @@ describe("API key credential (caller-owned mode)", () => {
   it("forwards a native Messages request with x-api-key and default cache breakpoints", async () => {
     const p = makePipeline({ config: apiKeyConfig, respond: () => jsonResponse(message()) })
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages",
       postJson(
@@ -194,6 +203,7 @@ describe("API key credential (caller-owned mode)", () => {
         { "anthropic-beta": "my-custom-beta", "x-stainless-lang": "python" }
       )
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(message())
     const call = p.calls[0]!
@@ -252,10 +262,12 @@ describe("API key credential (caller-owned mode)", () => {
   it("streams Claude events through unchanged and records usage", async () => {
     const p = makePipeline({ config: apiKeyConfig, respond: () => sseResponse(sse(streamEvents())) })
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages",
       postJson({ model: "sonnet", max_tokens: 8, stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("text/event-stream")
     expect(await response.text()).toBe(sse(streamEvents()).join(""))
@@ -268,6 +280,7 @@ describe("API key credential (caller-owned mode)", () => {
   it("translates OpenAI chat requests to Claude (upstream always streams) and back", async () => {
     const p = makePipeline({ config: apiKeyConfig, respond: () => sseResponse(sse(streamEvents("get_weather"))) })
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({
@@ -285,6 +298,7 @@ describe("API key credential (caller-owned mode)", () => {
         ]
       })
     )
+
     expect(response.status).toBe(200)
     const out = (await response.json()) as JsonObject
     expect(out).toMatchObject({
@@ -318,15 +332,19 @@ describe("API key credential (caller-owned mode)", () => {
   it("streams OpenAI chunks for chat requests", async () => {
     const p = makePipeline({ config: apiKeyConfig, respond: () => sseResponse(sse(streamEvents())) })
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "sonnet", stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     const text = await response.text()
+
     const chunks = text
       .split("\n\n")
       .filter((frame) => frame.startsWith("data: ") && !frame.includes("[DONE]"))
       .map((frame) => JSON.parse(frame.slice(6)) as JsonObject)
+
     expect(chunks.map((chunk) => (chunk.choices as JsonObject[])[0]?.delta).filter(Boolean)).toContainEqual({
       content: "Hel"
     })
@@ -335,12 +353,14 @@ describe("API key credential (caller-owned mode)", () => {
 
   describe("Codex apply_patch bridge (Responses clients)", () => {
     const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
+
     const patchTool = {
       type: "custom",
       name: "apply_patch",
       description: "Apply a patch. This is a FREEFORM tool, so do not wrap the patch in JSON.",
       format: { type: "grammar", syntax: "lark", definition: "start: patch" }
     }
+
     const patchEvents = (partialJson: string[]): JsonObject[] => [
       {
         type: "message_start",
@@ -367,6 +387,7 @@ describe("API key credential (caller-owned mode)", () => {
       { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 9 } },
       { type: "message_stop" }
     ]
+
     const request = (stream: boolean) => ({
       model: "sonnet",
       stream,
@@ -376,10 +397,12 @@ describe("API key credential (caller-owned mode)", () => {
 
     it("declares the patch tool as a strict input function and streams the patch as custom tool input", async () => {
       const json = JSON.stringify({ input: PATCH })
+
       const p = makePipeline({
         config: apiKeyConfig,
         respond: () => sseResponse(sse(patchEvents([json.slice(0, 20), json.slice(20)])))
       })
+
       afterAll(p.dispose)
       const response = await p.call("/v1/responses", postJson(request(true)))
       expect(response.status).toBe(200)
@@ -390,9 +413,11 @@ describe("API key credential (caller-owned mode)", () => {
       })
       expect(String(upstreamTool?.description)).toContain("*** Begin Patch")
       const text = await response.text()
+
       const deltas = [...text.matchAll(/event: response\.custom_tool_call_input\.delta\ndata: (.*)/g)].map(
         (match) => (JSON.parse(match[1] as string) as { delta: string }).delta
       )
+
       expect(deltas.join("")).toBe(PATCH)
       expect(text).toContain('"type":"custom_tool_call"')
       expect(text).not.toContain("response.function_call_arguments")
@@ -403,6 +428,7 @@ describe("API key credential (caller-owned mode)", () => {
         config: apiKeyConfig,
         respond: () => sseResponse(sse(patchEvents([JSON.stringify({ input: PATCH })])))
       })
+
       afterAll(ok.dispose)
       const response = await ok.call("/v1/responses", postJson(request(false)))
       expect(response.status).toBe(200)
@@ -413,6 +439,7 @@ describe("API key credential (caller-owned mode)", () => {
         config: apiKeyConfig,
         respond: () => sseResponse(sse(patchEvents(['{"input":"x","extra":1}'])))
       })
+
       afterAll(bad.dispose)
       const failed = await bad.call("/v1/responses", postJson(request(false)))
       expect(failed.status).toBe(502)
@@ -424,6 +451,7 @@ describe("API key credential (caller-owned mode)", () => {
         config: apiKeyConfig,
         respond: () => sseResponse(sse(patchEvents(['{"input":"x","secret":"s3cret"}'])))
       })
+
       afterAll(p.dispose)
       const response = await p.call("/v1/responses", postJson(request(true)))
       const text = await response.text()
@@ -438,11 +466,14 @@ describe("API key credential (caller-owned mode)", () => {
       respond: () =>
         jsonResponse({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, { status: 529 })
     })
+
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages",
       postJson({ model: "sonnet", max_tokens: 8, messages: [{ role: "user", content: "hi" }] })
     )
+
     expect(response.status).toBe(529)
     expect(await response.json()).toMatchObject({ type: "error" })
     expect(p.records[0]).toMatchObject({ failed: true })
@@ -536,9 +567,11 @@ describe("OAuth credential (Claude Code cloaking)", () => {
     const text = h.pipeline.calls[0]!.body
     const cch = /cch=([0-9a-f]{5});/.exec(text)![1]!
     const unsigned = text.replace(/cch=[0-9a-f]{5};/, "cch=00000;")
+
     const expected = (xxh64(new TextEncoder().encode(normalizeCchInput(unsigned)), 0x4d659218e32a3268n) & 0xfffffn)
       .toString(16)
       .padStart(5, "0")
+
     expect(cch).toBe(expected)
   })
 
@@ -559,9 +592,11 @@ describe("OAuth credential (Claude Code cloaking)", () => {
     const cch = /cch=([0-9a-f]{5});/.exec(call.body)![1]!
     expect(cch).not.toBe("00000")
     const unsigned = call.body.replace(/cch=[0-9a-f]{5};/, "cch=00000;")
+
     const expected = (xxh64(new TextEncoder().encode(normalizeCchInput(unsigned)), 0x4d659218e32a3268n) & 0xfffffn)
       .toString(16)
       .padStart(5, "0")
+
     expect(cch).toBe(expected)
   })
 
@@ -570,8 +605,10 @@ describe("OAuth credential (Claude Code cloaking)", () => {
       const probe = oauthPipeline(() => jsonResponse(message()), await loadConfig(""))
       afterAll(probe.pipeline.dispose)
       await probe.pipeline.call("/v1/messages", request())
+
       return (lastBody(probe).tools as JsonObject[])[0]?.name as string
     }
+
     const alias = await aliasOf()
 
     const nonStream = oauthPipeline(
@@ -584,6 +621,7 @@ describe("OAuth credential (Claude Code cloaking)", () => {
         ),
       await loadConfig("")
     )
+
     afterAll(nonStream.pipeline.dispose)
     const json = (await (await nonStream.pipeline.call("/v1/messages", request())).json()) as JsonObject
     expect((json.content as JsonObject[])[0]?.name).toBe("get_weather")
@@ -602,6 +640,7 @@ describe("OAuth credential (Claude Code cloaking)", () => {
       () => jsonResponse({ error: { message: "bad token" } }, { status: 401 }),
       await loadConfig("")
     )
+
     afterAll(unauthorized.pipeline.dispose)
     expect((await unauthorized.pipeline.call("/v1/messages", request())).status).toBe(401)
     expect(unauthorized.reports[0]).toMatchObject({ success: false, httpStatus: 401 })
@@ -620,6 +659,7 @@ describe("OAuth credential (Claude Code cloaking)", () => {
         ),
       await loadConfig("")
     )
+
     afterAll(limited.pipeline.dispose)
     expect((await limited.pipeline.call("/v1/messages", request())).status).toBe(429)
     const report = limited.reports[0]
@@ -636,6 +676,7 @@ describe("OAuth credential (Claude Code cloaking)", () => {
         }),
       await loadConfig("")
     )
+
     afterAll(h.pipeline.dispose)
     const body = JSON.parse(request().body as string) as JsonObject
     const response = await h.pipeline.call("/v1/messages", postJson({ ...body, speed: "fast" }))
@@ -650,6 +691,7 @@ describe("POST /v1/messages/count_tokens", () => {
   it("counts upstream for first-party hosts with the token-counting beta", async () => {
     const p = makePipeline({ config: apiKeyConfig, respond: () => jsonResponse({ input_tokens: 42 }) })
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages/count_tokens",
       postJson({
@@ -659,6 +701,7 @@ describe("POST /v1/messages/count_tokens", () => {
         metadata: { user_id: "u" }
       })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ input_tokens: 42 })
     const call = p.calls[0]!
@@ -678,12 +721,15 @@ api-keys:
       keys: [{ api-key: gw-key }]
       models: [{ name: claude-sonnet-4-5 }]
 `)
+
     const p = makePipeline({ config: gateway, respond: () => jsonResponse({}) })
     afterAll(p.dispose)
+
     const ok = await p.call(
       "/v1/messages/count_tokens",
       postJson({ model: "claude-sonnet-4-5", messages: [{ role: "user", content: "hello world, how are you today?" }] })
     )
+
     expect(ok.status).toBe(200)
     const count = ((await ok.json()) as { input_tokens: number }).input_tokens
     expect(count).toBeGreaterThan(3)

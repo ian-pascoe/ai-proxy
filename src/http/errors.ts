@@ -16,6 +16,7 @@ type JsonRecord = Record<string, unknown>
 const parseObject = (text: string): JsonRecord | undefined => {
   try {
     const value: unknown = JSON.parse(text)
+
     return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as JsonRecord) : undefined
   } catch {
     return undefined
@@ -64,11 +65,13 @@ export const openAIErrorBody = (status: number, text: string, options: OpenAIErr
   if (options.terminalAuth === true) {
     let message = errText
     const parsed = trimmed !== "" ? parseObject(trimmed) : undefined
+
     if (parsed !== undefined) {
       const direct = nonBlank(parsed["message"])
       const nested = nonBlank(asRecord(parsed["error"])?.["message"])
       message = direct ?? nested ?? message
     }
+
     return goMarshal({
       error: {
         message,
@@ -82,6 +85,7 @@ export const openAIErrorBody = (status: number, text: string, options: OpenAIErr
   if (trimmed !== "" && isValidJson(trimmed)) return compactJson(trimmed)
 
   const { type, code } = openAIErrorClass(effectiveStatus)
+
   return goMarshal({ error: { message: errText, type, ...(code !== undefined ? { code } : {}) } })
 }
 
@@ -120,20 +124,27 @@ export const claudeErrorDetailFromText = (status: number, text: string): { type:
   let message = text.trim() === "" ? statusText(status) : text.trim()
   let type = claudeErrorTypeFromStatus(status)
   const payload = parseObject(message)
+
   if (payload !== undefined) {
     const error = asRecord(payload["error"])
+
     if (error !== undefined) {
       const t = nonBlank(error["type"])
+
       if (t !== undefined) type = t.trim()
       const m = nonBlank(error["message"]) ?? nonBlank(error["code"])
+
       if (m !== undefined) message = m.trim()
     } else {
       const t = nonBlank(payload["type"])
+
       if (t !== undefined && t.trim() !== "error") type = t.trim()
       const m = nonBlank(payload["message"])
+
       if (m !== undefined) message = m.trim()
     }
   }
+
   return { type, message }
 }
 
@@ -141,10 +152,13 @@ export const claudeErrorDetailFromText = (status: number, text: string): { type:
 export const isClaudeThreadNotFound = (status: number, text: string): boolean => {
   if (status !== 404) return false
   const body = text.trim()
+
   if (body === "") return false
+
   if (isValidJson(body)) {
     const error = asRecord(parseObject(body)?.["error"])
     const message = typeof error?.["message"] === "string" ? error["message"].toLowerCase() : ""
+
     return (
       typeof error?.["type"] === "string" &&
       error["type"].trim().toLowerCase() === "not_found_error" &&
@@ -152,7 +166,9 @@ export const isClaudeThreadNotFound = (status: number, text: string): boolean =>
       message.includes("previous_message_id")
     )
   }
+
   const lower = body.toLowerCase()
+
   return lower.includes("thread state") && lower.includes("previous_message_id")
 }
 
@@ -161,6 +177,7 @@ export const claudeErrorBody = (status: number, text: string): string => {
   const effectiveStatus = status <= 0 ? 500 : status
   const errText = text.trim() === "" ? statusText(effectiveStatus) : text
   const detail = claudeErrorDetailFromText(effectiveStatus, errText)
+
   return goMarshal({
     type: "error",
     error: {
@@ -187,7 +204,9 @@ const responsesErrorClass = (status: number): { code: string; type: string } => 
       return { code: "request_timeout", type: "server_error" }
     default:
       if (status >= 500) return { code: "internal_server_error", type: "server_error" }
+
       if (status >= 400) return { code: "invalid_request_error", type: "invalid_request_error" }
+
       return { code: "unknown_error", type: "invalid_request_error" }
   }
 }
@@ -197,22 +216,32 @@ const responsesErrorDetail = (status: number, errText: string, initialCode: stri
   let message = initialMessage
   const trimmed = errText.trim()
   const payload = trimmed !== "" ? parseObject(trimmed) : undefined
+
   if (payload !== undefined) {
     const error = asRecord(payload["error"])
+
     if (error !== undefined) return error
     const responseError = asRecord(asRecord(payload["response"])?.["error"])
+
     if (responseError !== undefined) return responseError
     const m = nonBlank(payload["message"])
+
     if (m !== undefined) message = m.trim()
     const c = payload["code"]
+
     if (c !== undefined && c !== null) code = typeof c === "string" && c.trim() !== "" ? c.trim() : String(c).trim()
   }
+
   const detail: JsonRecord = { type: responsesErrorClass(status).type, code, message, param: null }
+
   if (payload !== undefined) {
     const t = nonBlank(payload["type"])
+
     if (t !== undefined && t.trim() !== "error") detail["type"] = t.trim()
+
     if (Object.hasOwn(payload, "param")) detail["param"] = payload["param"]
   }
+
   return detail
 }
 
@@ -222,19 +251,23 @@ const responsesErrorParts = (status: number, errText: string, sequenceNumber: nu
   const message = errText.trim() === "" ? statusText(effectiveStatus) : errText.trim()
   const payload = errText.trim() !== "" ? parseObject(errText.trim()) : undefined
   const seq = payload?.["sequence_number"]
+
   if (typeof seq === "number" && Number.isFinite(seq)) sequence = Math.trunc(seq)
   const code = responsesErrorClass(effectiveStatus).code
+
   return { sequence, error: responsesErrorDetail(effectiveStatus, errText, code, message) }
 }
 
 /** `BuildOpenAIResponsesStreamErrorChunk`: `{"type":"error","error":{...},"sequence_number":N}`. */
 export const responsesStreamErrorChunk = (status: number, errText: string, sequenceNumber: number): string => {
   const { sequence, error } = responsesErrorParts(status, errText, sequenceNumber)
+
   return `{"type":"error","error":${goMarshalSorted(error)},"sequence_number":${sequence}}`
 }
 
 /** `BuildOpenAIResponsesStreamFailedChunk`: `{"type":"response.failed","sequence_number":N,"response":{...}}`. */
 export const responsesStreamFailedChunk = (status: number, errText: string, sequenceNumber: number): string => {
   const { sequence, error } = responsesErrorParts(status, errText, sequenceNumber)
+
   return `{"type":"response.failed","sequence_number":${sequence},"response":{"status":"failed","error":${goMarshalSorted(error)}}}`
 }

@@ -25,10 +25,13 @@ const cacheKeyOf = (messageId: string): string => `gemini-responses-text:${messa
  */
 export const textSignatureKeys = (items: readonly Json[]): string[] => {
   const keys: string[] = []
+
   for (const item of items) {
     const messageId = asString(get(item, "id")).trim()
+
     if (messageId !== "" && assistantVisibleText(item) !== undefined) keys.push(cacheKeyOf(messageId))
   }
+
   return keys
 }
 
@@ -42,6 +45,7 @@ export const cacheTextSignatures = (
   if (messageId === "" || text === "") return false
   const textHash = sha256Hex(text)
   const items: Json[] = []
+
   for (const signature of signatures) {
     if (compatibleCarrierSignature(signature) === undefined) return false
     const item: JsonObject = { type: "thought_signature", targetKind: "text" }
@@ -49,6 +53,7 @@ export const cacheTextSignatures = (
     set(item, "targetHash", textHash)
     items.push(item)
   }
+
   return replayCache().set(parseSuffix(modelName).modelName, cacheKeyOf(messageId), items)
 }
 
@@ -62,15 +67,19 @@ export const restoreTextSignatures = (modelName: string, items: readonly Json[])
     restored.push(item)
     const text = assistantVisibleText(item)
     const messageId = asString(get(item, "id")).trim()
+
     if (text === undefined || messageId === "") return
     const cached = replayCache().get(model, cacheKeyOf(messageId))
+
     if (cached === undefined) return
     // Replay the cached prefix in its original order, then retain uncached explicit carriers. Skipping cached entries
     // instead would reorder A,B into B,A when the client also supplied an explicit carrier for A.
     const replayed = new Set<string>()
     const textHash = sha256Hex(text)
+
     for (const entry of cached) {
       const signature = asString(get(entry, "thoughtSignature"))
+
       if (asString(get(entry, "targetHash")) !== textHash) continue
       restored.push({
         type: "reasoning",
@@ -79,8 +88,10 @@ export const restoreTextSignatures = (modelName: string, items: readonly Json[])
       })
       replayed.add(signature)
     }
+
     for (let adjacent = index + 1; adjacent < items.length && isDetachedCarrier(items[adjacent]); adjacent++) {
       const decoded = decodeCarrier(asString(get(items[adjacent], "encrypted_content")))
+
       if (
         decoded.ok &&
         decoded.direction === CARRIER_PREVIOUS &&
@@ -91,5 +102,6 @@ export const restoreTextSignatures = (modelName: string, items: readonly Json[])
       }
     }
   })
+
   return restored
 }

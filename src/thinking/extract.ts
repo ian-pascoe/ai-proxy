@@ -15,8 +15,11 @@ import type { ThinkingConfig } from "./types.ts"
 /** Budget `0` → none, `-1` → auto, anything else a budget. */
 const configFromBudget = (budget: Json | undefined): ThinkingConfig => {
   const value = asInt(budget)
+
   if (value === 0) return noneConfig()
+
   if (value === -1) return autoConfig()
+
   return budgetConfig(value)
 }
 
@@ -38,29 +41,38 @@ const configFromEffortWord = (value: string): ThinkingConfig => {
  */
 export const extractClaudeConfig = (body: Json | undefined): ThinkingConfig => {
   const thinkingType = getString(body, "thinking.type")
+
   if (thinkingType === "disabled") return noneConfig()
 
   const effort = get(body, "output_config.effort")
+
   if (thinkingType === "adaptive" || thinkingType === "auto") {
     // Only an explicit effort counts; otherwise upstream defaults apply.
     if (typeof effort === "string") {
       const value = normalize(effort)
+
       if (value === "") return EMPTY_CONFIG
+
       return configFromEffortWord(value)
     }
+
     return EMPTY_CONFIG
   }
 
   const budget = get(body, "thinking.budget_tokens")
+
   if (budget !== undefined) return configFromBudget(budget)
 
   if (thinkingType === "enabled") {
     if (typeof effort === "string") {
       const value = normalize(effort)
+
       if (value !== "") return configFromEffortWord(value)
     }
+
     return autoConfig()
   }
+
   return EMPTY_CONFIG
 }
 
@@ -71,15 +83,21 @@ export const extractGeminiConfig = (body: Json | undefined, provider: string): T
 
   // The official Python SDK sends snake_case names.
   const level = getFirst(body, [`${prefix}.thinkingLevel`, `${prefix}.thinking_level`])
+
   if (level !== undefined) {
     const value = asString(level)
+
     if (value === "none") return noneConfig()
+
     if (value === "auto") return autoConfig()
+
     return levelConfig(value)
   }
 
   const budget = getFirst(body, [`${prefix}.thinkingBudget`, `${prefix}.thinking_budget`])
+
   if (budget !== undefined) return configFromBudget(budget)
+
   return EMPTY_CONFIG
 }
 
@@ -104,22 +122,30 @@ const INTERACTIONS_BUDGET_PATHS = [
 export const extractInteractionsConfig = (body: Json | undefined): ThinkingConfig => {
   for (const path of INTERACTIONS_LEVEL_PATHS) {
     const level = get(body, path)
+
     if (level === undefined) continue
+
     return configFromEffortWord(normalize(asString(level)))
   }
+
   for (const path of INTERACTIONS_BUDGET_PATHS) {
     const budget = get(body, path)
+
     if (budget === undefined) continue
+
     return configFromBudget(budget)
   }
+
   return EMPTY_CONFIG
 }
 
 /** `reasoning_effort` (Chat Completions); `none` disables. The value is not normalised. */
 export const extractOpenAIConfig = (body: Json | undefined): ThinkingConfig => {
   const effort = get(body, "reasoning_effort")
+
   if (effort === undefined) return EMPTY_CONFIG
   const value = asString(effort)
+
   return value === "none" ? noneConfig() : levelConfig(value)
 }
 
@@ -130,6 +156,7 @@ export const extractOpenAIConfig = (body: Json | undefined): ThinkingConfig => {
 export const extractKimiConfig = (body: Json | undefined): ThinkingConfig => {
   const thinkingType = get(body, "thinking.type")
   const effort = get(body, "thinking.effort")
+
   if (thinkingType !== undefined) {
     switch (normalize(asString(thinkingType))) {
       case "disabled":
@@ -141,32 +168,39 @@ export const extractKimiConfig = (body: Json | undefined): ThinkingConfig => {
 
   if (effort !== undefined) {
     const value = normalize(asString(effort))
+
     if (value === "") return EMPTY_CONFIG
+
     return configFromEffortWord(value)
   }
 
   // A native thinking object without effort is left for the upstream and must not be overridden by the legacy field.
   if (thinkingType !== undefined) return EMPTY_CONFIG
+
   return extractOpenAIConfig(body)
 }
 
 /** Codex / Responses: `reasoning.effort`. */
 export const extractCodexConfig = (body: Json | undefined): ThinkingConfig => {
   const effort = get(body, "reasoning.effort")
+
   if (effort === undefined) return EMPTY_CONFIG
   const value = asString(effort)
+
   return value === "none" ? noneConfig() : levelConfig(value)
 }
 
 /** The last effective Responses update, falling back to the top-level effort. */
 export const extractCodexUsageConfig = (body: Json | undefined): ThinkingConfig => {
   const update = extractConfigurationUpdateConfig(body)
+
   return hasThinkingConfig(update) ? update : extractCodexConfig(body)
 }
 
 /** Config from a body already in `provider`'s format. Unknown providers yield the empty config. */
 export const extractThinkingConfig = (body: Json | undefined, provider: string): ThinkingConfig => {
   if (body === undefined) return EMPTY_CONFIG
+
   switch (provider) {
     case "claude":
       return extractClaudeConfig(body)
@@ -193,6 +227,7 @@ export const extractThinkingConfig = (body: Json | undefined, provider: string):
 /** Config from the client's source body (`openai-response` reads like Codex). */
 export const extractSourceThinkingConfig = (body: Json | undefined, provider: string): ThinkingConfig => {
   const format = normalize(provider)
+
   return format === "openai-response" ? extractCodexConfig(body) : extractThinkingConfig(body, format)
 }
 
@@ -210,6 +245,7 @@ const extractThinkingConfigForUsage = (body: Json | undefined, provider: string)
 /** Canonical `reasoning_effort` label for usage logging; "" when nothing is configured. */
 export const reasoningEffortFromConfig = (config: ThinkingConfig): string => {
   if (!hasThinkingConfig(config)) return ""
+
   switch (config.mode) {
     case "none":
       return Level.none
@@ -228,20 +264,27 @@ export const reasoningEffortFromConfig = (config: ThinkingConfig): string => {
  */
 export const extractReasoningEffort = (body: Json | undefined, providerRaw: string, model: string): string => {
   const provider = normalize(providerRaw)
+
   if (isResponsesFormat(provider)) {
     const effort = reasoningEffortFromConfig(extractConfigurationUpdateConfig(body))
+
     if (effort !== "") return effort
   }
+
   const suffix = parseSuffix(model)
+
   if (suffix.hasSuffix) {
     const effort = reasoningEffortFromConfig(parseSuffixToConfig(suffix.rawSuffix))
+
     if (effort !== "") return effort
   }
 
   let config = extractThinkingConfigForUsage(body, provider)
+
   if (!hasThinkingConfig(config) && (provider === "openai-response" || provider === "openai")) {
     config = extractCodexUsageConfig(body)
   }
+
   return reasoningEffortFromConfig(config)
 }
 
@@ -249,9 +292,12 @@ export const extractReasoningEffort = (body: Json | undefined, providerRaw: stri
 export const extractTranslatedReasoningEffort = (body: Json | undefined, providerRaw: string): string => {
   const provider = normalize(providerRaw)
   let config = extractThinkingConfigForUsage(body, provider)
+
   if (!hasThinkingConfig(config) && (provider === "openai" || provider === "openai-response")) {
     config = extractCodexUsageConfig(body)
+
     if (!hasThinkingConfig(config)) config = extractOpenAIConfig(body)
   }
+
   return reasoningEffortFromConfig(config)
 }

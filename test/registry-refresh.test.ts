@@ -16,6 +16,7 @@ const entry = (id: string, extra: Record<string, unknown> = {}) => ({
   type: "x",
   ...extra
 })
+
 const sections = [
   "claude",
   "gemini",
@@ -39,8 +40,11 @@ const catalogText = (claudeIds: string[], meta: string[] = []) =>
   })
 
 const [MODELS_URL, MODELS_MIRROR] = DEFAULT_CATALOG_URLS.models as [string, string]
+
 const [CODEX_URL] = DEFAULT_CATALOG_URLS.codexClient as [string]
+
 const [DEVIN_URL] = DEFAULT_CATALOG_URLS.devin as [string]
+
 const embeddedCodexText = JSON.stringify(codexClientJson)
 
 const runRefresh = (kv: FakeKv, responses: Record<string, string | number>, yaml = "", requested: string[] = []) =>
@@ -65,6 +69,7 @@ describe("refreshCatalogs (cron)", () => {
     Effect.gen(function* () {
       const kv = new FakeKv()
       const requested: string[] = []
+
       const outcomes = yield* runRefresh(
         kv,
         {
@@ -75,6 +80,7 @@ describe("refreshCatalogs (cron)", () => {
         "",
         requested
       )
+
       assert.deepStrictEqual(
         outcomes.map((outcome) => [outcome.catalog, outcome.status]),
         [
@@ -93,12 +99,14 @@ describe("refreshCatalogs (cron)", () => {
   it.effect("tries the mirror when the first source is unreachable or invalid and is idempotent", () =>
     Effect.gen(function* () {
       const kv = new FakeKv()
+
       const responses = {
         [MODELS_URL]: "<html>not json</html>",
         [MODELS_MIRROR]: catalogText(["mirror-claude"]),
         [CODEX_URL]: 500,
         [DEVIN_URL]: 404
       }
+
       const first = yield* runRefresh(kv, responses)
       assert.deepStrictEqual(
         first.map((outcome) => [outcome.catalog, outcome.status, outcome.source]),
@@ -118,10 +126,12 @@ describe("refreshCatalogs (cron)", () => {
     Effect.gen(function* () {
       const kv = new FakeKv()
       kv.data.set(CATALOG_KEYS.models, catalogText(["kept"]))
+
       const outcomes = yield* runRefresh(kv, {
         [MODELS_URL]: JSON.stringify({ claude: [null] }),
         [MODELS_MIRROR]: "{}x"
       })
+
       assert.strictEqual(outcomes[0]?.status, "failed")
       assert.strictEqual(kv.data.get(CATALOG_KEYS.models), catalogText(["kept"]))
     })
@@ -164,12 +174,14 @@ describe("refreshCatalogs (cron)", () => {
       kv.data.set(CATALOG_KEYS.devin, JSON.stringify({ devin: [entry("stale")] }))
       const requested: string[] = []
       const yaml = `models:\n  catalog: https://example.test/custom.json\n  codex-catalog: disabled\n  devin-catalog: embed\n`
+
       const outcomes = yield* runRefresh(
         kv,
         { "https://example.test/custom.json": catalogText(["custom"]) },
         yaml,
         requested
       )
+
       assert.deepStrictEqual(requested, ["https://example.test/custom.json"])
       assert.deepStrictEqual(
         outcomes.map((outcome) => outcome.status),
@@ -192,6 +204,7 @@ describe("refreshCatalogs (cron)", () => {
 describe("CatalogStore", () => {
   it.effect("serves the embedded catalogs, then KV copies after the cache TTL, and survives KV errors", () => {
     const kv = new FakeKv()
+
     return Effect.gen(function* () {
       const store = yield* CatalogStore
       const before = yield* store.load
@@ -211,6 +224,7 @@ describe("CatalogStore", () => {
       kv.get = async () => {
         throw new Error("kv down")
       }
+
       yield* TestClock.adjust(CATALOG_CACHE_TTL_MS + 1)
       const stale = yield* store.load
       assert.strictEqual(stale, after)

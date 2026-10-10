@@ -10,7 +10,9 @@ const COLLIDING = new Set(["read_file", "write_file", "execute_code"])
 
 const intrinsicBase = (name: string): boolean => {
   let base = name
+
   while (base.startsWith(EXTERNAL_TOOL_PREFIX)) base = base.slice(EXTERNAL_TOOL_PREFIX.length)
+
   return COLLIDING.has(base)
 }
 
@@ -20,7 +22,9 @@ export const antigravityToolNameToUpstream = (name: string): string =>
 export const antigravityUpstreamToolNameToClient = (name: string): string => {
   if (name.startsWith(EXTERNAL_TOOL_PREFIX)) {
     const base = name.slice(EXTERNAL_TOOL_PREFIX.length)
+
     if (intrinsicBase(base)) return base
   }
+
   return name
 }

@@ -75,12 +75,14 @@ export const readRequestBody = (
 export const altOf = (request: HttpServerRequest.HttpServerRequest): string => {
   const url = new URL(request.url, "http://localhost")
   const alt = url.searchParams.get("alt") ?? url.searchParams.get("$alt") ?? ""
+
   return alt === "sse" ? "" : alt
 }
 
 /** The config snapshot, or a 503 when it cannot be read at all. */
 export const currentConfig = Effect.gen(function* () {
   const reader = yield* ConfigReader
+
   return yield* reader.get.pipe(
     Effect.map((snapshot): Config => snapshot.config),
     Effect.mapError((cause) => new ExecutionError({ status: 503, message: "config unavailable", cause }))

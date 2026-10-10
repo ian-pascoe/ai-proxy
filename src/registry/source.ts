@@ -41,6 +41,7 @@ const isCompat = (credential: Pick<Credential, "provider" | "attributes">): bool
 export const toModelSource = (credential: Credential, state: CredentialState): ModelSource => {
   const { rejectedAccessToken: _omitted, ...safeState } = state
   const planType = credential.attributes.plan_type?.trim() ?? ""
+
   return {
     id: credential.id,
     provider: credential.provider,

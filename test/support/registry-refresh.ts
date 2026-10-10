@@ -32,6 +32,7 @@ export const fakeHttp = (responses: Record<string, string | number>, requested: 
         requested.push(request.url)
         const reply = responses[request.url]
         const status = typeof reply === "number" ? reply : reply === undefined ? 404 : 200
+
         return HttpClientResponse.fromWeb(request, new Response(typeof reply === "string" ? reply : "", { status }))
       })
     )

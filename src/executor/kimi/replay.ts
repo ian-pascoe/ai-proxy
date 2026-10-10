@@ -29,6 +29,7 @@ import type { ExecutorOptions, ExecutorRequest } from "../types.ts"
 import { normalizeKimiUpstreamModel } from "./model.ts"
 
 const TTL_MS = 3600_000
+
 const KIMI_STORE = "kimi-thinking-replay"
 
 /** In-memory Kimi store for tests (`now` is injectable). */
@@ -42,14 +43,18 @@ export const makeSessionStateKimiReplayStore = (): ThinkingReplayStore =>
 /** `kimiThinkingReplayModelFamily`: `k3` and `k3-256k` share one family. */
 export const kimiReplayFamily = (model: string): string => {
   const normalized = normalizeKimiUpstreamModel(parseSuffix(model.trim()).modelName)
+
   return normalized === "k3" || normalized === "k3-256k" ? "k3" : normalized
 }
 
 /** `xaiReasoningReplayIsolateSessionKey`: session keys are isolated per caller; no caller scope disables replay. */
 const isolateSessionKey = (callerScope: string, sessionKey: string): string => {
   if (sessionKey === "") return ""
+
   if (sessionKey.startsWith("execution:")) return sessionKey
+
   if (callerScope.trim() === "") return ""
+
   return `caller:${createHash("sha256").update(callerScope).digest("hex").slice(0, 16)}:${sessionKey}`
 }
 
@@ -76,15 +81,20 @@ export const prepareKimiReplay = (
         body: request.payload
       }).sessionKey
     )
+
     const modelFamily = kimiReplayFamily(request.model)
     const empty: ReplayScope = { modelFamily, sessionKey, snapshot: undefined, cacheReady: false, replayApplied: false }
+
     if (!replayScopeValid(empty)) return { request, scope: empty }
     const stored = yield* store.get(modelFamily, sessionKey)
     const base: ReplayScope = { ...empty, snapshot: stored?.snapshot, cacheReady: true }
+
     if (stored === undefined || !isJsonObject(request.payload)) return { request, scope: base }
     const restored = cloneJson(request.payload) as JsonObject
     let applied = false
+
     for (const content of stored.contents) if (restoreReplayContent(restored, content)) applied = true
+
     return applied
       ? { request: { ...request, payload: restored }, scope: { ...base, replayApplied: true } }
       : { request, scope: base }
@@ -105,6 +115,7 @@ export const cacheReplay = (
   content: Json | undefined
 ): Effect.Effect<void> => {
   if (!replayScopeValid(scope) || !scope.cacheReady) return Effect.void
+
   return content !== undefined && replayContentIsReplayable(content)
     ? store.replaceIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot, content).pipe(Effect.asVoid)
     : clearReplay(store, scope)
@@ -118,6 +129,7 @@ export const wrapReplayStream = <E extends ExecutionError>(
 ): Stream.Stream<string, E> => {
   if (!replayScopeValid(scope)) return chunks
   const accumulator = new ReplayStreamAccumulator()
+
   return chunks.pipe(
     Stream.tap((chunk) =>
       Effect.sync(() => {
@@ -127,6 +139,7 @@ export const wrapReplayStream = <E extends ExecutionError>(
     Stream.onExit((exit) => {
       if (exit._tag !== "Success") return Effect.void
       const content = accumulator.content()
+
       return content === undefined ? Effect.void : cacheReplay(store, scope, content)
     })
   )

@@ -98,18 +98,22 @@ export class CredentialStore {
         id
       )
       .toArray()[0]
+
     return row === undefined ? undefined : toRecord(row)
   }
 
   /** Inserts or replaces one auth file. `incoming` is the complete new file content. */
   upsert(id: string, provider: string, incoming: JsonObject, options: UpsertOptions): UpsertOutcome {
     const existing = this.get(id)
+
     const metadata =
       existing !== undefined && options.mergeExisting
         ? mergeExistingMetadata(provider, incoming, existing.metadata)
         : incoming
+
     const now = this.#now()
     const changed = existing === undefined ? true : credentialsChanged(existing.metadata, metadata)
+
     const record: StoredCredential = {
       id,
       provider,
@@ -118,28 +122,36 @@ export class CredentialStore {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     }
+
     this.#write(record)
+
     return { record, created: existing === undefined, credentialsChanged: changed }
   }
 
   /** Sets the `disabled` flag (persisted in the file JSON like Go). `undefined` when the credential is unknown. */
   setDisabled(id: string, disabled: boolean): StoredCredential | undefined {
     const existing = this.get(id)
+
     if (existing === undefined) return undefined
+
     const record: StoredCredential = {
       ...existing,
       metadata: { ...existing.metadata, disabled },
       updatedAt: this.#now()
     }
+
     this.#write(record)
+
     return record
   }
 
   remove(id: string): boolean {
     const existing = this.get(id)
+
     if (existing === undefined) return false
     this.#sql.exec("DELETE FROM credentials WHERE id = ?", id)
     this.deleteState(id)
+
     return true
   }
 
@@ -163,15 +175,18 @@ export class CredentialStore {
   /** Persisted runtime states; rows that no longer decode are dropped. */
   loadStates(): Map<string, CredentialState> {
     const states = new Map<string, CredentialState>()
+
     for (const row of this.#sql.exec<StateRow>("SELECT id, state FROM credential_state").toArray()) {
       try {
         const decoded = Effect.runSync(Effect.result(decodeState(JSON.parse(row.state))))
+
         if (decoded._tag === "Success") states.set(row.id, decoded.success)
         else this.deleteState(row.id)
       } catch {
         this.deleteState(row.id)
       }
     }
+
     return states
   }
 

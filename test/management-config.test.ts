@@ -4,7 +4,9 @@ import { authIndexOf } from "../src/management/auth-index.ts"
 import { controlPlane, jsonInit, makeHarness, resetControlPlane, token } from "./support/management.ts"
 
 const harness = makeHarness()
+
 afterAll(harness.dispose)
+
 beforeEach(resetControlPlane)
 
 const { call, json } = harness
@@ -32,6 +34,7 @@ describe("management config", () => {
       headers: { "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\n"
     })
+
     expect(put).toMatchObject({ status: 200, body: { status: "ok", "config-version": 8 } })
     expect((await json("/v8/management/config/routing/strategy")).body).toBe("fill-first")
 
@@ -50,20 +53,24 @@ describe("management config", () => {
     expect((await json("/v8/management/config", jsonInit("PUT", ["x"]))).body).toEqual({
       error: "config_must_be_object"
     })
+
     const invalidJson = await json("/v8/management/config", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: "{nope"
     })
+
     expect(invalidJson).toMatchObject({ status: 400, body: { error: "invalid_json" } })
     const bad = await json("/v8/management/config", jsonInit("PUT", { routing: "not-an-object" }))
     expect(bad.status).toBe(422)
     expect(bad.body).toMatchObject({ error: "invalid_config" })
+
     const badYaml = await json("/v8/management/config.yaml", {
       method: "PUT",
       headers: { "content-type": "application/yaml" },
       body: "routing: ["
     })
+
     expect(badYaml.status).toBe(422)
     // A rejected write leaves the stored config untouched.
     expect((await json("/v8/management/config/routing/strategy")).body).toBe("fill-first")
@@ -74,15 +81,19 @@ describe("management config", () => {
       "/v8/management/config",
       jsonInit("PUT", { routing: { strategy: "fill-first" }, access: { "api-keys": ["a"] } })
     )
+
     const patch = await json(
       "/v8/management/config",
       jsonInit("PATCH", { routing: { "session-affinity": true }, access: { "api-keys": ["b", "c"] } })
     )
+
     expect(patch.status).toBe(200)
+
     const config = (await json("/v8/management/config")).body as {
       routing: { strategy: string; "session-affinity": boolean }
       access: { "api-keys": string[] }
     }
+
     expect(config.routing.strategy).toBe("fill-first")
     expect(config.routing["session-affinity"]).toBe(true)
     expect(config.access["api-keys"]).toEqual(["b", "c"])
@@ -154,18 +165,22 @@ describe("management config", () => {
         }
       })
     )
+
     expect(put.status).toBe(200)
+
     const config = (await json("/v8/management/config")).body as {
       "api-keys": {
         claude: Array<{ keys: Array<{ auth_index?: string }> }>
         "openai-compatibility": Array<{ auth_index?: string; keys: Array<{ auth_index?: string }> }>
       }
     }
+
     const indexes = [
       ...config["api-keys"].claude[0]!.keys.map((entry) => entry.auth_index),
       ...config["api-keys"]["openai-compatibility"][0]!.keys.map((entry) => entry.auth_index),
       config["api-keys"]["openai-compatibility"][1]!.auth_index
     ]
+
     for (const index of indexes) expect(index).toMatch(/^[0-9a-f]{16}$/)
     expect(new Set(indexes).size).toBe(5)
 

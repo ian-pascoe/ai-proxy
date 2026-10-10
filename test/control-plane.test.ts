@@ -47,6 +47,7 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const imported = yield* parseConfigYaml(YAML)
       const put = yield* Effect.promise(async () => await stub.putConfig(YAML))
       assert.isTrue(put.ok)
+
       if (!put.ok) return
       assert.strictEqual(put.version, 1)
 
@@ -59,9 +60,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const exported = stringifyConfigYaml(stored)
       const second = yield* Effect.promise(async () => await stub.putConfig(exported))
       assert.isTrue(second.ok)
+
       const again = yield* decodeStoredConfig(
         (yield* Effect.promise(async () => await stub.getConfig())).document ?? ""
       )
+
       assert.deepStrictEqual(encodeConfig(again), encodeConfig(imported))
       assert.strictEqual(stringifyConfigYaml(again), exported)
     })
@@ -87,6 +90,7 @@ describe("ControlPlane config storage (Workers pool)", () => {
       yield* Effect.promise(async () => await stub.putConfig("routing: { strategy: fill-first }"))
       const bad = yield* Effect.promise(async () => await stub.putConfig("routing: { retry: { request-retry: many } }"))
       assert.isFalse(bad.ok)
+
       if (bad.ok) return
       assert.strictEqual(bad.error, "invalid")
       const snapshot = yield* Effect.promise(async () => await stub.getConfig())
@@ -103,6 +107,7 @@ describe("ControlPlane config storage (Workers pool)", () => {
       assert.isTrue(first.ok)
       const stale = yield* Effect.promise(async () => await stub.putConfig("{}", 0))
       assert.isFalse(stale.ok)
+
       if (stale.ok) return
       assert.strictEqual(stale.error, "conflict")
       assert.strictEqual(stale.error === "conflict" ? stale.currentVersion : -1, 1)
@@ -148,6 +153,7 @@ interface FakeSource {
 const makeFakeSource = Effect.gen(function* () {
   const calls = yield* Ref.make<ReadonlyArray<number | undefined>>([])
   const state = yield* Ref.make({ version: 1, yaml: "routing: { strategy: fill-first }", failing: false })
+
   const layer = Layer.succeed(
     ConfigSource,
     ConfigSource.of({
@@ -155,11 +161,15 @@ const makeFakeSource = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* Ref.update(calls, (all) => [...all, since])
           const current = yield* Ref.get(state)
+
           if (current.failing) return yield* new ConfigStoreError({ message: "down" })
+
           if (since === current.version) {
             return { version: current.version, unchanged: true, updatedAt: 0 } satisfies ConfigSnapshotWire
           }
+
           const config = yield* parseConfigYaml(current.yaml).pipe(Effect.orDie)
+
           return {
             version: current.version,
             unchanged: false,
@@ -169,6 +179,7 @@ const makeFakeSource = Effect.gen(function* () {
         })
     })
   )
+
   return { layer, calls, state } satisfies FakeSource
 })
 
@@ -176,9 +187,11 @@ describe("ConfigReader cache", () => {
   const run = <A, E>(body: (source: FakeSource, reader: ConfigReader["Service"]) => Effect.Effect<A, E, WorkerEnv>) =>
     Effect.gen(function* () {
       const source = yield* makeFakeSource
+
       const reader = yield* ConfigReader.pipe(
         Effect.provide(ConfigReader.layer({ ttl: 5_000 }).pipe(Layer.provide(source.layer)))
       )
+
       return yield* body(source, reader).pipe(Effect.provideService(WorkerEnv, env))
     })
 

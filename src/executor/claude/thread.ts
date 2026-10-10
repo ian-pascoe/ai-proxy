@@ -22,7 +22,9 @@ import type { SessionAddress, StateOp } from "../../session-state/protocol.ts"
 import { ExecutionError } from "../errors.ts"
 
 const STORE_NAME = "claude-tool-aliases"
+
 const ENTRY_LIMIT = 1024
+
 const TTL_MS = 7 * 24 * 3_600_000
 
 export const THREAD_NOT_FOUND_MESSAGE =
@@ -41,17 +43,23 @@ export const threadNotFoundError = (): ExecutionError =>
 export const threadAliasKeys = (body: JsonObject, messageId: string): string[] => {
   const keys: string[] = []
   const previous = str(isObj(body.thread) ? body.thread.previous_message_id : undefined)
+
   if (previous !== "") keys.push(`message:${previous}`)
+
   if (messageId !== "") keys.push(`message:${messageId}`)
+
   return keys
 }
 
 /** `claudeThreadContinuationNeedsAliasState`: a `continue` turn that sends no tool definitions itself. */
 export const threadContinuationNeedsAliasState = (body: JsonObject): boolean => {
   const thread = body.thread
+
   if (!isObj(thread) || str(thread.type) !== "continue") return false
   const previous = thread.previous_message_id
+
   if (previous === undefined || str(previous) === "") return false
+
   return !isArr(body.tools) || body.tools.length === 0
 }
 
@@ -72,9 +80,12 @@ const addressOf = (callerScope: string): SessionAddress => ({ store: STORE_NAME,
 
 const parseAliases = (text: string | undefined): ReadonlyMap<string, string> | undefined => {
   if (text === undefined) return undefined
+
   try {
     const parsed = JSON.parse(text) as Json
+
     if (!isObj(parsed)) return undefined
+
     return new Map(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
   } catch {
     return undefined
@@ -91,18 +102,23 @@ export const makeSessionStateToolAliasStore = (backend: BackendResolver = resolv
           Effect.gen(function* () {
             const ops: StateOp[] = keys.map((key) => ({ op: "get", key }))
             const results = yield* (yield* backend).run(addressOf(callerScope), ops)
+
             for (const result of results) {
               if (result.status !== "ok" || result.value === undefined) continue
               const aliases = parseAliases(result.value)
+
               if (aliases !== undefined) return aliases
             }
+
             return undefined
           })
         ),
   save: (callerScope, keys, aliases) => {
     const targets = keys.filter((key) => key !== "")
+
     if (targets.length === 0) return Effect.void
     const value = JSON.stringify(Object.fromEntries(aliases))
+
     return bestEffort(
       "claude tool alias save",
       undefined,
@@ -114,6 +130,7 @@ export const makeSessionStateToolAliasStore = (backend: BackendResolver = resolv
           ttlMs: TTL_MS,
           maxEntries: ENTRY_LIMIT
         }))
+
         yield* (yield* backend).run(addressOf(callerScope), ops)
       })
     )

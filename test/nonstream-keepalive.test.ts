@@ -20,7 +20,9 @@ const answer = (status: number, delaySeconds: number) =>
 const collect = (response: HttpServerResponse.HttpServerResponse) =>
   Effect.gen(function* () {
     const body = response.body
+
     if (body._tag !== "Stream") return yield* Effect.die(`unexpected body ${body._tag}`)
+
     return (yield* Stream.runCollect(body.stream)).map((chunk) => new TextDecoder().decode(chunk))
   })
 

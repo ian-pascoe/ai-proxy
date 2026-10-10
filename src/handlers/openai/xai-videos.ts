@@ -13,26 +13,36 @@ import { asString, get, isJsonArray, isJsonObject, type Json, type JsonObject } 
 import { modelParts } from "./xai-images.ts"
 
 export const DEFAULT_OPENAI_VIDEOS_MODEL = "sora-2"
+
 export const DEFAULT_XAI_VIDEOS_MODEL = "grok-imagine-video"
+
 const XAI_VIDEOS_15_MODEL = "grok-imagine-video-1.5"
+
 const XAI_VIDEOS_15_PREVIEW_ALIAS = "grok-imagine-video-1.5-preview"
+
 const DEFAULT_SECONDS = "4"
+
 const DEFAULT_SIZE = "720x1280"
+
 const DEFAULT_RESOLUTION = "720p"
+
 const MAX_REFERENCES = 7
 
 const videosModelBase = (model: string): string => modelParts(model).base.toLowerCase()
 
 export const isXaiVideosModel = (model: string): boolean => {
   const { prefix, base } = modelParts(model)
+
   if (![DEFAULT_XAI_VIDEOS_MODEL, XAI_VIDEOS_15_MODEL, XAI_VIDEOS_15_PREVIEW_ALIAS].includes(base.toLowerCase())) {
     return false
   }
+
   return ["", "xai", "x-ai", "grok"].includes(prefix.toLowerCase())
 }
 
 export const isSoraVideosModel = (model: string): boolean => {
   const base = videosModelBase(model)
+
   return base === DEFAULT_OPENAI_VIDEOS_MODEL || base.startsWith(`${DEFAULT_OPENAI_VIDEOS_MODEL}-`)
 }
 
@@ -42,6 +52,7 @@ export const isSupportedVideosModel = (model: string): boolean => isXaiVideosMod
 export const canonicalXaiVideosModel = (model: string): string => {
   if (isSoraVideosModel(model)) return DEFAULT_XAI_VIDEOS_MODEL
   const base = videosModelBase(model)
+
   return base === XAI_VIDEOS_15_MODEL || base === XAI_VIDEOS_15_PREVIEW_ALIAS
     ? XAI_VIDEOS_15_MODEL
     : DEFAULT_XAI_VIDEOS_MODEL
@@ -51,8 +62,11 @@ export const canonicalXaiVideosModel = (model: string): string => {
 export const routingXaiVideosModel = (model: string): string => {
   if (isSoraVideosModel(model)) return DEFAULT_XAI_VIDEOS_MODEL
   const base = videosModelBase(model)
+
   if (base === XAI_VIDEOS_15_MODEL) return XAI_VIDEOS_15_MODEL
+
   if (base === XAI_VIDEOS_15_PREVIEW_ALIAS) return XAI_VIDEOS_15_PREVIEW_ALIAS
+
   return DEFAULT_XAI_VIDEOS_MODEL
 }
 
@@ -64,8 +78,10 @@ const text = (body: Json, path: string): string => asString(get(body, path)).tri
 
 const normalizeSeconds = (raw: string): { readonly seconds: string; readonly duration: number } | string => {
   const trimmed = raw.trim() === "" ? DEFAULT_SECONDS : raw.trim()
+
   if (!/^[+-]?\d+$/.test(trimmed)) return "seconds must be an integer"
   const duration = Math.min(15, Math.max(1, Number.parseInt(trimmed, 10)))
+
   return { seconds: String(duration), duration }
 }
 
@@ -73,6 +89,7 @@ const sizeOptions = (
   raw: string
 ): { readonly size: string; readonly aspectRatio: string; readonly resolution: string } | string => {
   const size = raw.trim() === "" ? DEFAULT_SIZE : raw.trim()
+
   switch (size) {
     case "720x1280":
     case "1024x1792":
@@ -111,46 +128,61 @@ const aspectRatio = (raw: string): string => {
 
 const resolutionOf = (raw: string): string => {
   const value = raw.trim().toLowerCase()
+
   return value === "480p" || value === "720p" ? value : ""
 }
 
 const inputImageUrl = (body: Json): string | { readonly error: string } => {
   const inputRef = get(body, "input_reference")
+
   if (inputRef !== undefined) {
     const imageUrl = text(inputRef, "image_url")
     const fileId = text(inputRef, "file_id")
+
     if (imageUrl !== "" && fileId !== "")
       return { error: "input_reference must provide exactly one of image_url or file_id" }
+
     if (fileId !== "") {
       return {
         error: "input_reference.file_id is not supported for xAI video generation; use input_reference.image_url"
       }
     }
+
     if (imageUrl !== "") return imageUrl
   }
+
   const image = get(body, "image")
+
   if (image !== undefined) {
     if (typeof image === "string") return image.trim()
     const url = text(image, "url")
+
     if (url !== "") return url
     const nested = text(image, "image_url.url")
+
     if (nested !== "") return nested
   }
+
   return text(body, "image_url")
 }
 
 const referenceImages = (body: Json): string[] => {
   const out: string[] = []
+
   const collect = (value: Json | undefined) => {
     if (!isJsonArray(value)) return
+
     for (const item of value) {
       const url =
         typeof item === "string" ? item : text(item, "url") !== "" ? text(item, "url") : text(item, "image_url.url")
+
       if (url.trim() !== "") out.push(url.trim())
     }
   }
+
   collect(get(body, "reference_images"))
   collect(get(body, "reference_image_urls"))
+
   return out
 }
 
@@ -170,17 +202,23 @@ export const buildXaiVideosCreateRequest = (
   nowSeconds: number
 ): { readonly request: JsonObject; readonly meta: XaiVideoCreateMetadata } | string => {
   const prompt = text(body, "prompt")
+
   if (prompt === "") return "prompt is required"
   const seconds = normalizeSeconds(asString(get(body, "seconds")))
+
   if (typeof seconds === "string") return seconds
   const sizes = sizeOptions(asString(get(body, "size")))
+
   if (typeof sizes === "string") return sizes
   const ratio = aspectRatio(asString(get(body, "aspect_ratio"))) || sizes.aspectRatio
   const resolution = resolutionOf(asString(get(body, "resolution"))) || sizes.resolution
   const image = inputImageUrl(body)
+
   if (typeof image !== "string") return image.error
   const references = referenceImages(body)
+
   if (references.length > MAX_REFERENCES) return `reference_images supports at most ${MAX_REFERENCES} images on xAI`
+
   if (image !== "" && references.length > 0) return "image and reference_images cannot be combined on xAI"
 
   const request: JsonObject = {
@@ -190,8 +228,11 @@ export const buildXaiVideosCreateRequest = (
     aspect_ratio: ratio,
     resolution
   }
+
   if (image !== "") request["image"] = { url: image }
+
   if (references.length > 0) request["reference_images"] = references.map((url) => ({ url }))
+
   return {
     request,
     meta: {
@@ -209,29 +250,38 @@ export const buildXaiVideosCreateRequest = (
 export const videosCreateRequestFromForm = (form: FormData): JsonObject => {
   const field = (name: string): string => {
     const value = form.get(name)
+
     return typeof value === "string" ? value.trim() : ""
   }
+
   const first = (...names: string[]): string => names.map(field).find((value) => value !== "") ?? ""
   const out: JsonObject = {}
+
   for (const name of ["model", "prompt", "seconds", "size", "aspect_ratio", "resolution"]) {
     const value = field(name)
+
     if (value !== "") out[name] = value
   }
+
   const imageUrl = first("input_reference[image_url]", "input_reference.image_url", "image_url")
   const fileId = first("input_reference[file_id]", "input_reference.file_id", "file_id")
+
   if (imageUrl !== "" || fileId !== "") {
     out["input_reference"] = {
       ...(imageUrl !== "" ? { image_url: imageUrl } : {}),
       ...(fileId !== "" ? { file_id: fileId } : {})
     }
   }
+
   const refs = field("reference_image_urls")
+
   if (refs !== "") {
     out["reference_image_urls"] = refs
       .split(",")
       .map((ref) => ref.trim())
       .filter((ref) => ref !== "")
   }
+
   return out
 }
 
@@ -268,6 +318,7 @@ export const openAIVideoStatus = (status: string): string => {
 /** `videoIDFromPayload`: `request_id`, else `id`. */
 export const videoIdFromPayload = (payload: Json | undefined): string => {
   const id = text(payload ?? null, "request_id")
+
   return id !== "" ? id : text(payload ?? null, "id")
 }
 
@@ -277,6 +328,7 @@ export const buildVideosCreateResponse = (
   meta: XaiVideoCreateMetadata
 ): string | { readonly error: string } => {
   const requestId = videoIdFromPayload(payload)
+
   if (requestId === "") return { error: "xAI video response did not include request_id" }
   const out: JsonObject = { object: "video", progress: 0, status: "queued" }
   out["id"] = requestId
@@ -286,9 +338,12 @@ export const buildVideosCreateResponse = (
   out["size"] = meta.size
   out["created_at"] = meta.createdAt
   const status = openAIVideoStatus(asString(get(payload, "status")))
+
   if (status !== "") out["status"] = status
   const progress = get(payload, "progress")
+
   if (progress !== undefined) out["progress"] = progress
+
   return goMarshal(out)
 }
 
@@ -308,6 +363,7 @@ export const buildVideosFailedResponse = (model: string, code: string, message: 
 
 const markFailed = (out: JsonObject): void => {
   if (out["status"] === undefined) out["status"] = "failed"
+
   if (out["progress"] === undefined) out["progress"] = 0
 }
 
@@ -315,10 +371,13 @@ const markFailed = (out: JsonObject): void => {
 const setErrorFromXai = (out: JsonObject, payload: Json | undefined): void => {
   const errorPayload = get(payload, "error")
   const code = text(payload ?? null, "code")
+
   if (errorPayload !== undefined) {
     markFailed(out)
+
     if (isJsonObject(errorPayload)) {
       const message = text(errorPayload, "message")
+
       if (message !== "") {
         out["error"] = {
           code:
@@ -330,12 +389,17 @@ const setErrorFromXai = (out: JsonObject, payload: Json | undefined): void => {
           message
         }
       }
+
       return
     }
+
     const message = asString(errorPayload).trim()
+
     if (message !== "") out["error"] = { code: code !== "" ? code : "video_generation_failed", message }
+
     return
   }
+
   if (code !== "") {
     markFailed(out)
     out["error"] = { code, message: code }
@@ -351,33 +415,45 @@ export const buildVideosRetrieveResponse = (
   const out: JsonObject = { object: "video", id: videoId }
   const model = text(payload ?? null, "model")
   out["model"] = model !== "" ? model : canonicalXaiVideosModel(fallbackModel)
+
   for (const field of ["created_at", "completed_at", "expires_at", "prompt", "remixed_from_video_id", "size"]) {
     const value = get(payload, field)
+
     if (value !== undefined) out[field] = value
   }
+
   const status = openAIVideoStatus(asString(get(payload, "status")))
+
   if (status !== "") out["status"] = status
   const progress = get(payload, "progress")
+
   if (progress !== undefined) out["progress"] = progress
   const seconds = get(payload, "seconds")
   const duration = get(payload, "video.duration")
+
   if (seconds !== undefined) out["seconds"] = seconds
   else if (duration !== undefined) out["seconds"] = asString(duration)
   const videoUrl = text(payload ?? null, "video.url")
+
   if (videoUrl !== "") out["video_url"] = videoUrl
   setErrorFromXai(out, payload)
+
   return goMarshal(out)
 }
 
 /** `xaiVideoContentURLFromPayload`. */
 export const videoContentUrl = (payload: Json | undefined): string | { readonly error: string } => {
   const raw = text(payload ?? null, "video.url")
+
   if (raw === "") return { error: "xAI video response did not include video.url" }
+
   try {
     const parsed = new URL(raw)
+
     if ((parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.host !== "") return raw
   } catch {
     // Falls through to the error below.
   }
+
   return { error: "xAI video response included invalid video.url" }
 }

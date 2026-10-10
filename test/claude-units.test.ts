@@ -117,6 +117,7 @@ describe("cloaking helpers", () => {
       promptId: "p",
       turnOrigin: "human"
     })
+
     expect(text).toMatch(
       /^x-anthropic-billing-header: cc_version=2\.1\.280\.[0-9a-f]{3}; cc_entrypoint=cli; cch=00000; cc_workload=w; cc_is_subagent=true; cc_prev_req=req_1; cc_prompt_id=p; cc_turn_origin=human;$/
     )
@@ -143,6 +144,7 @@ describe("betas", () => {
       new Set(),
       true
     ).split(",")
+
     expect(betas.slice(0, 7)).toEqual([
       BETA.claudeCode,
       BETA.oauth,
@@ -170,6 +172,7 @@ describe("betas", () => {
       new Set([BETA.context1M]),
       false
     ).split(",")
+
     expect(betas).toContain(BETA.midConvSystem)
     expect(betas).toContain(BETA.midConvToolChanges)
     expect(betas).toContain(BETA.fastMode)
@@ -186,6 +189,7 @@ describe("betas", () => {
       new Set(),
       false
     )
+
     expect(betas).not.toContain(BETA.redactThinking)
     expect(betas).not.toContain(BETA.effort)
   })
@@ -218,6 +222,7 @@ describe("cache control", () => {
         { role: "user", content: "three" }
       ]
     }
+
     ensureCacheControl(body)
     expect(body.tools).toEqual([{ name: "t" }])
     expect((body.system as JsonObject[])[1]?.cache_control).toEqual(eph)
@@ -229,6 +234,7 @@ describe("cache control", () => {
       tools: [{ name: "a" }, { name: "b", defer_loading: true }],
       messages: [{ role: "user", content: "x" }]
     }
+
     ensureCacheControl(body)
     expect((body.tools as JsonObject[])[0]?.cache_control).toEqual(eph)
     expect((body.tools as JsonObject[])[1]?.cache_control).toBeUndefined()
@@ -246,6 +252,7 @@ describe("cache control", () => {
       ],
       messages: [{ role: "user", content: [{ type: "text", text: "m", cache_control: eph }] }]
     }
+
     enforceCacheControlLimit(body, 4)
     expect((body.system as JsonObject[]).map((block) => block.cache_control !== undefined)).toEqual([false, true])
     expect((body.tools as JsonObject[]).map((block) => block.cache_control !== undefined)).toEqual([true, true])
@@ -261,14 +268,17 @@ describe("cache control", () => {
         { role: "user", content: [{ type: "text", text: "m", cache_control: { type: "ephemeral", ttl: "1h" } }] }
       ]
     }
+
     upgradeCacheControlTTL(body, "1h")
     expect((body.system as JsonObject[])[0]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" })
+
     const mixed: JsonObject = {
       system: [
         { text: "a", cache_control: { type: "ephemeral" } },
         { text: "b", cache_control: { type: "ephemeral", ttl: "1h" } }
       ]
     }
+
     normalizeCacheControlTTL(mixed)
     expect((mixed.system as JsonObject[])[1]?.cache_control).toEqual({ type: "ephemeral" })
   })
@@ -300,6 +310,7 @@ describe("MCP tool aliases", () => {
       tool_choice: { type: "tool", name: "get_weather" },
       messages: [{ role: "assistant", content: [{ type: "tool_use", id: "t1", name: "get_weather", input: {} }] }]
     }
+
     const reverse = remapToolNames(body, SECRET)
     const tools = body.tools as JsonObject[]
     const alias = tools[0]?.name as string
@@ -319,6 +330,7 @@ describe("MCP tool aliases", () => {
         { type: "text", text: alias }
       ]
     }
+
     restoreToolNamesInResponse(response, reverse)
     expect((response.content as JsonObject[])[0]?.name).toBe("get_weather")
     expect((response.content as JsonObject[])[1]?.text).toBe(alias)
@@ -338,18 +350,21 @@ describe("MCP tool aliases", () => {
       ["mcp__alpha_beta__zzz_write_file", "write_file"],
       ["mcp__srv__keep", "mcp__srv__keep"]
     ])
+
     const resolver = new AliasResolver(reverse)
     expect(resolver.resolve("mcp__alpha_beta__word_read_file")).toBe("read_file")
     expect(resolver.resolve("mcp__alpha_beta__alpha_beta__word_read_file")).toBe("read_file")
     expect(resolver.resolve("mcp__alpha_beta__other_write_file")).toBe("write_file")
     expect(resolver.resolve("unrelated")).toBeUndefined()
     expect(resolver.resolve("mcp__srv__keep")).toBeUndefined()
+
     const ambiguous = new AliasResolver(
       new Map([
         ["mcp__a_b__w1_file", "file"],
         ["mcp__a_b__w2_file", "file2"]
       ])
     )
+
     expect(() => ambiguous.resolve("mcp__a_b__w3_file")).toThrow(AliasRestoreError)
   })
 })
@@ -365,6 +380,7 @@ describe("rate limit classification", () => {
       "anthropic-ratelimit-unified-7d-status": "allowed",
       "retry-after": "30"
     })
+
     expect(headersIndicateUnifiedRejection(h)).toBe(true)
     expect(parseRateLimitResetMs(h, NOW, () => 5)).toBe(600_000 + 5000)
     expect(parseRateLimitResetMs(headers({}), NOW, () => 5)).toBeUndefined()
@@ -378,6 +394,7 @@ describe("rate limit classification", () => {
       "anthropic-ratelimit-unified-7d-status": "allowed_warning",
       "anthropic-ratelimit-unified-representative-claim": "overage"
     })
+
     expect(headersIndicateUnifiedRejection(h)).toBe(false)
   })
 
@@ -389,7 +406,9 @@ describe("rate limit classification", () => {
       false,
       NOW
     )
+
     expect(credential.credentialScoped).toBe(true)
+
     const modelLevelConfigured = classifyUpstreamError(
       429,
       headers({ "anthropic-ratelimit-unified-7d-status": "rejected" }),
@@ -397,7 +416,9 @@ describe("rate limit classification", () => {
       true,
       NOW
     )
+
     expect(modelLevelConfigured.credentialScoped).toBe(false)
+
     const entitlement = classifyUpstreamError(
       429,
       headers({}),
@@ -405,6 +426,7 @@ describe("rate limit classification", () => {
       false,
       NOW
     )
+
     expect(entitlement.requestScoped).toBe(true)
     expect(classifyUpstreamError(500, headers({}), "boom", false, NOW)).toMatchObject({ status: 500, message: "boom" })
   })
@@ -427,6 +449,7 @@ describe("history sanitising", () => {
         { role: "assistant", content: [{ type: "thinking", thinking: "", signature: "" }] }
       ]
     }
+
     sanitizeForClaudeUpstream(body, "claude-sonnet-4-5", false)
     const messages = body.messages as JsonObject[]
     expect(messages).toHaveLength(2)
@@ -441,6 +464,7 @@ describe("Responses reasoning replay", () => {
   it("replays a decodable Claude signature as a thinking block and drops foreign ones unless compat mode keeps them", async () => {
     const { convertOpenAIResponsesRequestToClaude, convertOpenAIResponsesRequestToClaudeWithCompat } =
       await import("../src/translator/claude/openai/responses/request.ts")
+
     const input = (signature: string): JsonObject => ({
       model: "gpt-5",
       input: [
@@ -449,23 +473,28 @@ describe("Responses reasoning replay", () => {
         { type: "message", role: "assistant", content: [{ type: "output_text", text: "a" }] }
       ]
     })
+
     const blocks = (body: JsonObject): unknown => (body.messages as JsonObject[])[1]?.content as unknown
+
     const native = convertOpenAIResponsesRequestToClaude(
       "claude-sonnet-4-5",
       input(claudeSignature()),
       false
     ) as JsonObject
+
     expect(blocks(native)).toEqual([
       { type: "thinking", thinking: "why", signature: claudeSignature() },
       { type: "text", text: "a" }
     ])
     const foreign = convertOpenAIResponsesRequestToClaude("claude-sonnet-4-5", input("opaque"), false) as JsonObject
     expect(blocks(foreign)).toBe("a")
+
     const compat = convertOpenAIResponsesRequestToClaudeWithCompat(
       "claude-sonnet-4-5",
       input("opaque"),
       false
     ) as JsonObject
+
     expect(blocks(compat)).toEqual([
       { type: "thinking", thinking: "why", signature: "opaque" },
       { type: "text", text: "a" }

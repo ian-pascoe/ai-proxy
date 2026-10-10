@@ -45,9 +45,12 @@ const REQUEST_FAULT_TYPES = new Set(["invalid_request", "invalid_request_error",
 
 const parseJsonObject = (text: string): Record<string, unknown> | undefined => {
   const trimmed = text.trim()
+
   if (trimmed === "" || (trimmed[0] !== "{" && trimmed[0] !== "[")) return undefined
+
   try {
     const parsed: unknown = JSON.parse(trimmed)
+
     return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : undefined
@@ -58,9 +61,12 @@ const parseJsonObject = (text: string): Record<string, unknown> | undefined => {
 
 const isJsonText = (text: string): boolean => {
   const trimmed = text.trim()
+
   if (trimmed === "") return false
+
   try {
     JSON.parse(trimmed)
+
     return true
   } catch {
     return false
@@ -70,24 +76,29 @@ const isJsonText = (text: string): boolean => {
 /** gjson-style lookup of a dotted path of plain keys; non-strings read as "". */
 const stringAt = (root: Record<string, unknown>, path: string): string => {
   let current: unknown = root
+
   for (const key of path.split(".")) {
     if (typeof current !== "object" || current === null) return ""
     current = (current as Record<string, unknown>)[key]
   }
+
   return typeof current === "string" ? current : typeof current === "number" ? String(current) : ""
 }
 
 const CODE_PATHS = ["error.code", "code", "response.error.code", "body.error.code"]
+
 const TYPE_PATHS = ["error.type", "type", "response.error.type", "body.error.type"]
 
 const hasBodyValue = (body: string, paths: readonly string[], accept: (value: string) => boolean): boolean => {
   const root = parseJsonObject(body)
+
   return root !== undefined && paths.some((path) => accept(lower(stringAt(root, path))))
 }
 
 /** `IsItemNotPersisted`: Responses items referenced although `store` was false. */
 export const isItemNotPersisted = (message: string): boolean => {
   const text = message.toLowerCase()
+
   return (
     text.includes("item with id") &&
     text.includes("not found") &&
@@ -99,18 +110,23 @@ export const isItemNotPersisted = (message: string): boolean => {
 const isClaudeThreadNotFound = (status: number, body: string): boolean => {
   if (status !== 404) return false
   const trimmed = body.trim()
+
   if (trimmed === "") return false
   const root = parseJsonObject(trimmed)
+
   if (root !== undefined) {
     const message = lower(stringAt(root, "error.message"))
+
     return (
       lower(stringAt(root, "error.type")) === "not_found_error" &&
       message.includes("thread state") &&
       message.includes("previous_message_id")
     )
   }
+
   if (isJsonText(trimmed)) return false
   const text = trimmed.toLowerCase()
+
   return text.includes("thread state") && text.includes("previous_message_id")
 }
 
@@ -120,14 +136,21 @@ const isClaudeThreadNotFound = (status: number, body: string): boolean => {
  */
 export const isRequestFault = (status: number, body: string): boolean => {
   if (status === 402 || status === 429) return false
+
   if (status === 401 && hasBodyValue(body, TYPE_PATHS, (value) => value === "authentication_error")) return false
+
   if (isClaudeThreadNotFound(status, body)) return true
+
   if (hasBodyValue(body, CODE_PATHS, (value) => value === "model_not_found" || value === "model_not_found_error")) {
     return false
   }
+
   if (hasBodyValue(body, CODE_PATHS, (value) => REQUEST_FAULT_CODES.has(value))) return true
+
   if (hasBodyValue(body, TYPE_PATHS, (value) => REQUEST_FAULT_TYPES.has(value))) return true
+
   if (isItemNotPersisted(body)) return true
+
   return status === 400 || status === 409 || status === 413 || status === 422
 }
 
@@ -138,15 +161,19 @@ const normalizeIdentifier = (value: string): string => lower(value).replaceAll("
 const isModelNotFoundIdentifier = (value: string): boolean => {
   let candidate = lower(value)
   const fragment = candidate.lastIndexOf("#")
+
   if (fragment >= 0 && fragment + 1 < candidate.length) {
     candidate = candidate.slice(fragment + 1)
   } else {
     const query = candidate.indexOf("?")
+
     if (query >= 0) candidate = candidate.slice(0, query)
     candidate = candidate.replace(/\/+$/, "")
     const separator = Math.max(candidate.lastIndexOf("/"), candidate.lastIndexOf(":"))
+
     if (separator >= 0) candidate = candidate.slice(separator + 1)
   }
+
   return [
     "model_not_found",
     "model_not_found_error",
@@ -178,15 +205,20 @@ const trimRequestedModelReference = (
   requestedModel: string
 ): { readonly rest: string; readonly matches: boolean } => {
   const model = lower(requestedModel)
+
   if (model === "") return { rest: "", matches: false }
+
   for (const candidate of [model, `'${model}'`, `"${model}"`, `\`${model}\``]) {
     if (value === candidate) return { rest: "", matches: true }
+
     if (!value.startsWith(candidate)) continue
     const remainder = value.slice(candidate.length)
+
     if (remainder === "" || " :,".includes(remainder[0] as string)) {
       return { rest: remainder.replace(/^[ :,]+/, ""), matches: true }
     }
   }
+
   return { rest: "", matches: false }
 }
 
@@ -194,42 +226,61 @@ const stripPrefixWord = (lowerText: string, prefix: string): string | undefined 
   if (lowerText !== prefix && !lowerText.startsWith(`${prefix} `) && !lowerText.startsWith(`${prefix}:`)) {
     return undefined
   }
+
   let rest = lowerText.slice(prefix.length).trim()
+
   if (rest.startsWith(":")) rest = rest.slice(1).trim()
+
   return rest
 }
 
 const isExplicitModelNotFoundMessage = (message: string, requestedModel: string): boolean => {
   const text = trimPunctuation(lower(message))
+
   if (text === "") return false
+
   if (text.includes("in request") || text.includes("in body") || text.includes("request body")) return false
   const normalized = text.replaceAll("-", "_")
+
   if (normalized.includes("model_not_found") || normalized.includes("unknown_model")) return true
+
   for (const prefix of ["no such model", "unknown model"]) {
     const remainder = stripPrefixWord(text, prefix)
+
     if (remainder === undefined) continue
+
     if (remainder === "") return true
     const { rest, matches } = trimRequestedModelReference(remainder, requestedModel)
+
     return matches && rest === ""
   }
+
   for (const prefix of ["the requested model", "requested model", "the model", "model"]) {
     const remainder = stripPrefixWord(text, prefix)
+
     if (remainder === undefined) continue
+
     if (MISSING_MODEL_PHRASES.has(trimPunctuation(remainder))) return true
     const { rest, matches } = trimRequestedModelReference(remainder, requestedModel)
+
     return matches && MISSING_MODEL_PHRASES.has(trimPunctuation(rest))
   }
+
   return false
 }
 
 const isExactRequestedModelReference = (message: string, requestedModel: string): boolean => {
   const text = trimPunctuation(lower(message))
+
   for (const prefix of ["the requested model", "requested model", "the model", "model"]) {
     const remainder = stripPrefixWord(text, prefix)
+
     if (remainder === undefined) continue
     const { rest, matches } = trimRequestedModelReference(remainder, requestedModel)
+
     return matches && rest === ""
   }
+
   return false
 }
 
@@ -241,9 +292,11 @@ const containsStructuredModelNotFound = (value: unknown, requestedModel: string)
         containsStructuredModelNotFound(item, requestedModel)
     )
   }
+
   if (typeof value !== "object" || value === null) return false
   let notFoundType = false
   let exactModelReference = false
+
   for (const [key, item] of Object.entries(value)) {
     if (typeof item === "string") {
       switch (lower(key)) {
@@ -266,8 +319,10 @@ const containsStructuredModelNotFound = (value: unknown, requestedModel: string)
           break
       }
     }
+
     if (typeof item === "object" && item !== null && containsStructuredModelNotFound(item, requestedModel)) return true
   }
+
   return notFoundType && exactModelReference
 }
 
@@ -275,13 +330,16 @@ const containsStructuredModelNotFound = (value: unknown, requestedModel: string)
 export const isExplicitModelNotFound = (error: ClassifiableError, requestedModel = ""): boolean => {
   if (error.code !== undefined && isModelNotFoundIdentifier(error.code)) return true
   const text = error.message.trim()
+
   if (text === "") return false
   let parsed: unknown
+
   try {
     parsed = JSON.parse(text)
   } catch {
     return false
   }
+
   return containsStructuredModelNotFound(parsed, requestedModel)
 }
 
@@ -302,24 +360,30 @@ const MODEL_SUPPORT_PATTERNS = [
 
 export const isModelSupportMessage = (message: string): boolean => {
   const text = lower(message)
+
   return text !== "" && MODEL_SUPPORT_PATTERNS.some((pattern) => text.includes(pattern))
 }
 
 /** `isModelSupportError`: explicit model-not-found, or 400/404/422 with a "model not supported" message. */
 export const isModelSupportError = (error: ClassifiableError): boolean => {
   if (isExplicitModelNotFound(error)) return true
+
   if (error.status !== 400 && error.status !== 422 && error.status !== 404) return false
+
   return isModelSupportMessage(error.message)
 }
 
 export const isInvalidGrantError = (error: ClassifiableError): boolean => {
   const text = `${error.code ?? ""} ${error.message}`.toLowerCase()
+
   if (!text.includes("invalid_grant")) return false
+
   return error.status === 400 || error.status === 401 || error.status === 0
 }
 
 export const isCloudflareChallengeMessage = (message: string): boolean => {
   const text = lower(message)
+
   return (
     text.includes("challenge-platform") ||
     text.includes("cf-mitigated") ||
@@ -334,7 +398,9 @@ export const isCloudflareChallengeError = (error: ClassifiableError): boolean =>
 
 export const isConnectionLifecycleMessage = (message: string): boolean => {
   const text = lower(message)
+
   if (text === "") return false
+
   if (
     [
       "context canceled",
@@ -347,6 +413,7 @@ export const isConnectionLifecycleMessage = (message: string): boolean => {
   ) {
     return true
   }
+
   return (
     text.includes("websocket: close 1000") ||
     text.includes("websocket: close 1001") ||
@@ -380,6 +447,7 @@ const TRANSIENT_FRAGMENTS = [
 
 export const isTransientTransportMessage = (message: string): boolean => {
   const text = lower(message)
+
   return text !== "" && TRANSIENT_FRAGMENTS.some((fragment) => text.includes(fragment))
 }
 
@@ -397,9 +465,13 @@ export const isTransientTransportError = (error: ClassifiableError): boolean =>
  */
 export const isRequestInvalidError = (error: ClassifiableError): boolean => {
   if (error.code === ErrorCode.requestScoped) return true
+
   if (isCloudflareChallengeError(error)) return false
+
   if (isInvalidGrantError(error)) return false
+
   if (isModelSupportError(error)) return false
+
   return isRequestFault(error.status, error.message)
 }
 
@@ -415,7 +487,9 @@ export const isRequestScopedResult = (error: ClassifiableError): boolean =>
  */
 export const shouldSkipCredentialCooldown = (error: ClassifiableError | undefined): boolean => {
   if (error === undefined) return false
+
   if (error.code === ErrorCode.forceCooldown) return false
+
   return isRequestScopedResult(error) || isConnectionLifecycleError(error) || isTransientTransportError(error)
 }
 

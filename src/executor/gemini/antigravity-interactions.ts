@@ -25,7 +25,9 @@ import type { CredentialSnapshot } from "../picker.ts"
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts"
 
 const TTL_MS = 30 * 60_000
+
 const MAX_ENTRIES = 1024
+
 const STORE_NAME = "antigravity-interactions"
 
 /** Upstream continuation identifiers only. */
@@ -42,10 +44,13 @@ export interface ContinuationStore {
 /** `InteractionsCallKey`: the sorted call ids; empty (rejected) for no ids, empty ids, duplicates or NUL bytes. */
 export const interactionsCallKey = (ids: ReadonlyArray<string>): string => {
   const sorted = [...ids].toSorted()
+
   for (let index = 0; index < sorted.length; index++) {
     const id = sorted[index] as string
+
     if (id === "" || id.includes("\u0000") || (index > 0 && sorted[index - 1] === id)) return ""
   }
+
   return sorted.join("\u0000")
 }
 
@@ -65,9 +70,11 @@ export const makeSessionStateContinuationStore = (backend: BackendResolver = res
       Effect.gen(function* () {
         const state = yield* backend
         const [result] = yield* state.run(addressOf(conversationKey), [{ op: "get", key: entryKey(callKey) }])
+
         if (result?.status !== "ok" || result.value === undefined) return undefined
         const parsed = tryParseJson(result.value)
         const id = asString(get(parsed, "id"))
+
         return id === "" ? undefined : ({ id, environment: asString(get(parsed, "environment")) } as const)
       })
     ),
@@ -121,22 +128,31 @@ export class InteractionsState {
     const event = asString(get(payload, "event_type"))
     const interaction = event !== "" ? get(payload, "interaction") : payload
     const id = asString(get(interaction, "id"))
+
     if (id !== "") this.#id = id
     const environment = asString(get(interaction, "environment_id"))
+
     if (environment !== "") this.#environment = environment
+
     if (event === "step.start" && asString(get(payload, "step.type")) === "function_call") {
       this.#calls.push(asString(get(payload, "step.id")))
     }
+
     if (event !== "" && event !== "interaction.completed") return Effect.void
+
     if (asString(get(interaction, "status")) !== "requires_action" || this.#id === "") return Effect.void
     const steps = get(interaction, "steps")
+
     if (isJsonArray(steps)) {
       this.#calls = steps
         .filter((step) => asString(get(step, "type")) === "function_call")
         .map((step) => asString(get(step, "id")))
     }
+
     const callKey = interactionsCallKey(this.#calls)
+
     if (callKey === "") return Effect.void
+
     return this.#store.put(this.#key, callKey, { id: this.#id, environment: this.#environment })
   }
 }
@@ -161,17 +177,20 @@ export const prepareAntigravityInteractions = (
 ): Effect.Effect<PreparedInteractions> =>
   Effect.gen(function* () {
     const inert = (): PreparedInteractions => ({ state: new InteractionsState("", store), body })
+
     if (!model.toLowerCase().startsWith("antigravity")) return inert()
     const caller = options.metadata.callerScope || (options.headers.get("Authorization") ?? "")
     const original = options.originalRequest ?? request.payload
     let identity = extractSessionInfo(options.headers, original)?.sessionId ?? ""
     const inputValue = get(body, "input")
     const input = isJsonArray(inputValue) ? inputValue : []
+
     if (identity === "") {
       let lastUser = -1
       input.forEach((step, index) => {
         if (asString(get(step, "type")) === "user_input") lastUser = index
       })
+
       if (lastUser < 0) return inert()
       // Canonical JSON, so whitespace and key order do not split a conversation; tool rounds after the last user
       // turn are excluded.
@@ -180,7 +199,9 @@ export const prepareAntigravityInteractions = (
         system_instruction: get(body, "system_instruction") ?? null
       })
     }
+
     const { attributes } = credential
+
     const key = digest([
       caller,
       credential.id,
@@ -190,22 +211,31 @@ export const prepareAntigravityInteractions = (
       model,
       identity
     ])
+
     const state = new InteractionsState(key, store)
+
     if (get(body, "previous_interaction_id") !== undefined) return { state, body }
     let start = input.length
     const calls: string[] = []
+
     while (start > 0 && asString(get(input[start - 1], "type")) === "function_result") {
       start--
       calls.push(asString(get(input[start], "call_id")))
     }
+
     const callKey = interactionsCallKey(calls)
+
     if (callKey === "") return { state, body }
     const cached = yield* store.get(key, callKey)
+
     if (cached === undefined) return { state, body }
     set(body, "previous_interaction_id", cached.id)
+
     if (get(body, "environment_id") === undefined && cached.environment !== "") {
       set(body, "environment_id", cached.environment)
     }
+
     if (isJsonObject(body)) body["input"] = input.slice(start).map((step) => cloneJson(step))
+
     return { state, body }
   })

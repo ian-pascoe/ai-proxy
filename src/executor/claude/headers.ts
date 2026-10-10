@@ -45,9 +45,13 @@ import {
 } from "./classify.ts"
 
 const DEFAULT_PACKAGE_VERSION = "0.112.1"
+
 const DEFAULT_RUNTIME_VERSION = "v26.3.0"
+
 const DEFAULT_OS = "MacOS"
+
 const DEFAULT_ARCH = "arm64"
+
 const DEFAULT_TIMEOUT = "600"
 
 export interface DeviceProfile {
@@ -61,8 +65,10 @@ export interface DeviceProfile {
 /** `defaultClaudeDeviceProfile`. */
 export const defaultDeviceProfile = (config: Config): DeviceProfile => {
   const defaults = config.upstream.claude["header-defaults"]
+
   const pick = (value: string | undefined, fallback: string): string =>
     value !== undefined && value.trim() !== "" ? value.trim() : fallback
+
   return {
     userAgent: pick(defaults["user-agent"], DEFAULT_USER_AGENT),
     packageVersion: pick(defaults["package-version"], DEFAULT_PACKAGE_VERSION),
@@ -75,6 +81,7 @@ export const defaultDeviceProfile = (config: Config): DeviceProfile => {
 /** Deterministic per-API-key agent session id (Go caches a random UUID per key for an hour). */
 export const cachedSessionId = (apiKey: string): string => {
   const hex = createHash("sha256").update(`cpa-claude-session|${apiKey}`).digest("hex")
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${"89ab"[Number.parseInt(hex[16] as string, 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }
 
@@ -105,6 +112,7 @@ export interface HeaderInput {
 }
 
 const COPIED_PREFIXES = ["anthropic-", "x-stainless-", "x-claude-code-", "x-claude-remote-"]
+
 const COPIED_NAMES = new Set([
   "accept",
   "accept-encoding",
@@ -119,7 +127,9 @@ const COPIED_NAMES = new Set([
 const copyCallerFingerprintHeaders = (target: Record<string, string>, source: Headers, confirmed: boolean): void => {
   source.forEach((value, name) => {
     const lower = name.toLowerCase()
+
     if (!COPIED_NAMES.has(lower) && !COPIED_PREFIXES.some((prefix) => lower.startsWith(prefix))) return
+
     if (!confirmed && (lower.startsWith("x-claude-code-") || lower.startsWith("x-claude-remote-"))) return
     target[lower] = value
   })
@@ -140,6 +150,7 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
     if (isAnthropicBase && useAPIKey) headers["x-api-key"] = apiKey
     else headers["authorization"] = `Bearer ${apiKey}`
   }
+
   headers["content-type"] = "application/json"
 
   const incomingBetas = (incoming.get("anthropic-beta") ?? "").trim()
@@ -147,16 +158,22 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
   const advisorNeeded = requested.has(BETA.advisorTool) || hasAdvisorTool(body)
 
   let baseBetas = incomingBetas
+
   if (!preserveCallerFingerprint) {
     baseBetas = claudeCodeCLIBetas(body, requested, useOAuthBetas)
+
     if (countTokens) {
       baseBetas = countTokensBetas(useOAuthBetas)
+
       if (advisorNeeded) baseBetas = withAdvisorToolBeta(baseBetas)
     }
   }
+
   if (confirmedClaudeCode && incomingBetas !== "") {
     baseBetas = incomingBetas
+
     if (advisorNeeded) baseBetas = withAdvisorToolBeta(baseBetas)
+
     if (useOAuthBetas) {
       if (countTokens) {
         baseBetas = withCountTokensOAuthBeta(baseBetas)
@@ -170,7 +187,9 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
   } else if (preserveCallerFingerprint && useOAuthBetas) {
     baseBetas = countTokens ? withCountTokensOAuthBeta(baseBetas) : withOAuthCredentialBetas(baseBetas, false)
   }
+
   if (preserveCallerFingerprint && advisorNeeded) baseBetas = withAdvisorToolBeta(baseBetas)
+
   if (!requestSupportsEffort(body)) baseBetas = withoutBeta(baseBetas, BETA.effort)
 
   const existing = new Set(
@@ -179,110 +198,143 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
       .map((beta) => beta.trim())
       .filter((beta) => beta !== "")
   )
+
   const appendBeta = (raw: string): void => {
     const beta = raw.trim()
+
     if (beta === "" || existing.has(beta)) return
     baseBetas = baseBetas.trim() === "" ? beta : `${baseBetas},${beta}`
     existing.add(beta)
   }
+
   if (preserveCallerFingerprint) {
     if (str(body.speed).trim().toLowerCase() === "fast") appendBeta(BETA.fastMode)
+
     for (const beta of input.extraBetas) appendBeta(beta)
   } else {
     if (!confirmedClaudeCode && incomingBetas !== "") {
       for (const raw of incomingBetas.split(",")) {
         const beta = raw.trim()
+
         if (beta === "") continue
+
         if (isManagedBeta(beta) && isAnthropicBase) continue
         appendBeta(beta)
       }
     }
+
     if (!isAnthropicBase) for (const beta of input.extraBetas) appendBeta(beta)
   }
 
   const applyBetaHeader = (): void => {
     if (!requestSupportsEffort(body)) baseBetas = withoutBeta(baseBetas, BETA.effort)
     const probeOrHelper = isProbeOrHelperRequest(body)
+
     if (probeOrHelper) {
       baseBetas = withoutBeta(baseBetas, BETA.serverSideFallback)
       baseBetas = withoutBeta(baseBetas, BETA.thinkingDisplayUpdates)
       baseBetas = withoutBeta(baseBetas, BETA.extendedCacheTTL)
     }
+
     if (str(get(body, "thinking.type")) === "disabled") {
       baseBetas = withoutBeta(baseBetas, BETA.thinkingDisplayUpdates)
     }
+
     if (isSubagentRequest(incoming, body) && !subagentRequests1h(incoming, body)) {
       baseBetas = withoutBeta(baseBetas, BETA.extendedCacheTTL)
     }
+
     if (!probeOrHelper && !countTokens && payloadHas1hTTL(body)) baseBetas = withExtendedCacheTTLBeta(baseBetas)
+
     if (isHaikuModel(str(body.model).trim()) && body.fallbacks === undefined) {
       baseBetas = withoutBeta(baseBetas, BETA.serverSideFallback)
     }
+
     if (baseBetas.trim() === "") delete headers["anthropic-beta"]
     else headers["anthropic-beta"] = baseBetas
   }
+
   applyBetaHeader()
 
   if (preserveCallerFingerprint) {
     let defaultAccept = "application/json"
     let defaultAcceptEncoding = "gzip, deflate, br, zstd"
+
     if (stream && !isAnthropicBase) {
       defaultAccept = "text/event-stream"
       defaultAcceptEncoding = "identity"
     }
+
     copyCallerFingerprintHeaders(headers, incoming, confirmedClaudeCode)
+
     const ensure = (name: string, fallback: string): void => {
       const value = headerValue(incoming, name)
+
       if (value !== "") headers[name] = value
       else if ((headers[name] ?? "").trim() === "") headers[name] = fallback
     }
+
     ensure("anthropic-version", "2023-06-01")
     ensure("accept", defaultAccept)
     ensure("accept-encoding", defaultAcceptEncoding)
     ensure("user-agent", "CLIProxyAPI/workers")
     applyBetaHeader()
+
     if (input.sessionId.trim() !== "") headers["x-claude-code-session-id"] = input.sessionId.trim()
     applyCustomHeaders(headers, credential, incoming, input.cpaSessionId)
+
     const restoreCallerTransport = (): void => {
       headers["accept"] = headerValue(incoming, "accept") || defaultAccept
       headers["accept-encoding"] = headerValue(incoming, "accept-encoding") || defaultAcceptEncoding
     }
+
     if (isAnthropicBase) {
       applyBetaHeader()
       restoreCallerTransport()
     } else if (stream) {
       restoreCallerTransport()
     }
+
     return headers
   }
 
   const identity = (name: string, fallback: string): void => {
     if (confirmedClaudeCode) {
       const value = headerValue(incoming, name)
+
       if (value !== "") headers[name] = value
       else if ((headers[name] ?? "").trim() === "") headers[name] = fallback
+
       return
     }
+
     headers[name] = fallback
   }
+
   identity("anthropic-version", "2023-06-01")
   identity("anthropic-dangerous-direct-browser-access", "true")
   identity("x-app", "cli")
   identity("x-stainless-retry-count", "0")
   identity("x-stainless-runtime", "node")
   identity("x-stainless-lang", "js")
+
   if (confirmedClaudeCode && headerValue(incoming, "x-stainless-async") === "async")
     headers["x-stainless-async"] = "async"
+
   if (!countTokens) {
     const timeout = (defaults.timeout ?? "").trim()
     identity("x-stainless-timeout", timeout !== "" ? timeout : DEFAULT_TIMEOUT)
   } else if (confirmedClaudeCode) {
     const timeout = headerValue(incoming, "x-stainless-timeout")
+
     if (timeout !== "") headers["x-stainless-timeout"] = timeout
   }
+
   const sessionId = input.sessionId.trim()
+
   if (sessionId !== "") headers["x-claude-code-session-id"] = sessionId
   else identity("x-claude-code-session-id", cachedSessionId(apiKey))
+
   for (const name of [
     "x-claude-code-agent-id",
     "x-claude-code-parent-agent-id",
@@ -292,8 +344,10 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
     "x-anthropic-additional-protection"
   ]) {
     const value = headerValue(incoming, name)
+
     if (value !== "") headers[name] = value
   }
+
   if (confirmedClaudeCode) {
     for (const name of [
       "x-claude-code-request-class",
@@ -303,24 +357,31 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
       "x-claude-code-context-compacted"
     ]) {
       const value = headerValue(incoming, name)
+
       if (value !== "") headers[name] = value
     }
   }
+
   if (isAnthropicBase) identity("x-client-request-id", crypto.randomUUID())
   headers["connection"] = "keep-alive"
+
   const applyTransportNegotiation = (): void => {
     if (stream && !isAnthropicBase) {
       headers["accept"] = "text/event-stream"
       headers["accept-encoding"] = "identity"
+
       return
     }
+
     headers["accept"] = "application/json"
     headers["accept-encoding"] = "gzip, deflate, br, zstd"
   }
+
   applyTransportNegotiation()
 
   const profile = defaultDeviceProfile(config)
   let usedIncomingUserAgent = false
+
   if (input.stabilizeDeviceProfile === true) {
     const stabilized = confirmedClaudeCode ? (input.stabilizedProfile ?? profile) : profile
     headers["user-agent"] = stabilized.userAgent
@@ -333,24 +394,31 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
     // Legacy device headers (`ApplyClaudeLegacyDeviceHeaders`).
     const ensureValid = (name: string, fallback: string, valid?: (value: string) => boolean): void => {
       const current = (headers[name] ?? "").trim()
+
       if (current !== "" && (valid === undefined || valid(current))) return
       const fromIncoming = headerValue(incoming, name)
+
       if (fromIncoming !== "" && (valid === undefined || valid(fromIncoming))) {
         headers[name] = fromIncoming
+
         return
       }
+
       headers[name] = fallback
     }
+
     ensureValid("x-stainless-runtime-version", profile.runtimeVersion, (value) => value === profile.runtimeVersion)
     ensureValid("x-stainless-package-version", profile.packageVersion, (value) => value === profile.packageVersion)
     ensureValid("x-stainless-os", profile.os)
     ensureValid("x-stainless-arch", profile.arch)
     const clientUserAgent = headerValue(incoming, "user-agent")
+
     if (plausibleClaudeCodeUserAgent(clientUserAgent, profile.userAgent)) {
       headers["user-agent"] = clientUserAgent
       usedIncomingUserAgent = true
     }
   }
+
   if (!usedIncomingUserAgent) {
     headers["x-stainless-runtime-version"] = profile.runtimeVersion
     headers["x-stainless-package-version"] = profile.packageVersion
@@ -358,12 +426,15 @@ export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> =
     headers["x-stainless-arch"] = profile.arch
     headers["user-agent"] = profile.userAgent
   }
+
   applyCustomHeaders(headers, credential, incoming, input.cpaSessionId)
+
   if (isAnthropicBase) {
     headers["anthropic-beta"] = baseBetas
     applyTransportNegotiation()
   } else if (stream) {
     applyTransportNegotiation()
   }
+
   return headers
 }

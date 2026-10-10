@@ -40,6 +40,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     name: "devin-user-status",
     run: Effect.gen(function* () {
       const env = yield* WorkerEnv
+
       return yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").refreshDevinStatus())
     })
   },

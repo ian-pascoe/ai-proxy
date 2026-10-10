@@ -5,6 +5,8 @@ export const sig = (payload = "cipher-text-bytes"): string => {
   const container = new Uint8Array([0x0a, inner.length, ...inner])
   const outer = new Uint8Array([0x12, container.length, ...container])
   let binary = ""
+
   for (const byte of outer) binary += String.fromCharCode(byte)
+
   return btoa(binary)
 }

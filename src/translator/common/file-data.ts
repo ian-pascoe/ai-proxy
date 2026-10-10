@@ -8,6 +8,7 @@ import { MIME_TYPES } from "./mime-types.ts"
 const extensionOf = (filename: string): string => {
   const base = filename.slice(filename.lastIndexOf("/") + 1)
   const dot = base.lastIndexOf(".")
+
   return dot < 0 ? "" : base.slice(dot + 1).toLowerCase()
 }
 
@@ -19,22 +20,29 @@ export const normalizeOpenAIFileData = (
 ): { readonly mimeType: string; readonly data: string } | undefined => {
   if (fileData === "") return undefined
   let fallback = fallbackMimeType
+
   if (fallback === "") {
     const ext = extensionOf(filename)
     fallback = Object.hasOwn(MIME_TYPES, ext) ? (MIME_TYPES[ext] as string) : ""
   }
+
   if (fileData.slice(0, 5).toLowerCase() !== "data:") {
     return fallback === "" ? undefined : { mimeType: fallback, data: fileData }
   }
+
   const rest = fileData.slice(5)
   const comma = rest.indexOf(",")
+
   if (comma < 0) return undefined
   const metadata = rest.slice(0, comma)
   const payload = rest.slice(comma + 1)
+
   if (payload === "") return undefined
   const fields = metadata.split(";")
   const mimeType = (fields[0] ?? "").trim()
+
   if (mimeType === "") return undefined
+
   return fields.slice(1).some((field) => field.trim().toLowerCase() === "base64")
     ? { mimeType, data: payload }
     : undefined

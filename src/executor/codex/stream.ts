@@ -81,8 +81,11 @@ export interface CodexStreamOptions {
 /** `grokbuild.IsKeepaliveSSELine`. */
 const isKeepaliveLine = (line: string): boolean => {
   const trimmed = line.trim()
+
   if (trimmed.startsWith("event:")) return trimmed.slice(6).trim() === "keepalive"
+
   if (trimmed.startsWith("data:")) return asString(get(tryParseJson(trimmed.slice(5).trim()), "type")) === "keepalive"
+
   return false
 }
 
@@ -108,9 +111,12 @@ export class CodexStreamReader {
   #translate(line: string): string[] {
     const { registry, responseFormat, providerFormat, context } = this.options
     const chunks = [...registry.translateStream(responseFormat, providerFormat, context, line)]
+
     const out =
       responseFormat === Formats.OpenAIResponse ? chunks.map((chunk) => ensureResponsesUsageDetails(chunk)) : chunks
+
     for (const chunk of out) if (chunk.length > 0) this.#emitted++
+
     return out
   }
 
@@ -124,29 +130,37 @@ export class CodexStreamReader {
     this.#buffering = false
     const chunks = [...this.#held, ...step.chunks]
     this.#held.length = 0
+
     return { ...step, chunks }
   }
 
   /** Feeds one upstream line (without terminator). */
   push(line: string): CodexStreamStep {
     const { step, handshake } = this.#process(line)
+
     if (!this.#buffering) return step
     const { nowMs } = this.options
     const timeoutMs = this.options.bootstrap?.timeoutMs ?? 0
     const timeoutReached = (): boolean => timeoutMs > 0 && nowMs() - this.#startMs >= timeoutMs
+
     if (step.error !== undefined) {
       const body = step.failureBody?.body
+
       if (body !== undefined && isOverloadBootstrapFailure(body) && !timeoutReached()) {
         // Transient capacity rejection inside an HTTP 200 stream: fail the attempt before the headers are committed.
         this.#buffering = false
         this.#held.length = 0
+
         return { ...step, chunks: [], error: bootstrapOverloadError(body, nowMs()), stop: true }
       }
+
       // Every other terminal failure keeps its in-stream delivery: the held handshake goes first.
       return this.#release(step)
     }
+
     if (!handshake || step.stop) return this.#release(step)
     const frameBytes = line.length + step.chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+
     if (
       !timeoutReached() &&
       this.#heldFrames < BOOTSTRAP_MAX_BUFFERED_FRAMES &&
@@ -155,27 +169,34 @@ export class CodexStreamReader {
       this.#heldFrames++
       this.#heldBytes += frameBytes
       this.#held.push(...step.chunks)
+
       return { chunks: [], stop: false }
     }
+
     return this.#release(step)
   }
 
   #process(line: string): Processed {
     if (this.#stopped) return { step: { chunks: [], stop: true }, handshake: false }
+
     if (this.options.grokClient === true && isKeepaliveLine(line)) {
       return { step: { chunks: this.#translate(KEEPALIVE_COMMENT), stop: false }, handshake: true }
     }
+
     if (!line.startsWith("data:")) return { step: { chunks: this.#translate(line), stop: false }, handshake: true }
     const { usage, modelLevelCooling, nowMs } = this.options
     const payload = restoreCodexMultiAgentV2Response(line.slice(5).trim(), this.options.multiAgentV2 === true)
     const parsed = tryParseJson(payload)
     usage.observeResponseModel(responseModelOf(parsed))
+
     if (!usage.ttftObserved) usage.observeTokenEvent(nowMs(), isResponsesTokenEvent(payload))
     const eventType = asString(get(parsed, "type"))
 
     const failure = codexTerminalFailure(parsed, { modelLevelCooling, nowMs: nowMs() })
+
     if (failure !== undefined) {
       this.#stopped = true
+
       return {
         step: {
           chunks: [],
@@ -186,12 +207,17 @@ export class CodexStreamReader {
         handshake: false
       }
     }
+
     if (hasMeaningfulOutputDelta(parsed)) this.#sawOutputDelta = true
+
     if (isTerminalEmptyIncomplete(parsed, this.#collector.count, this.#sawOutputDelta)) {
       this.#stopped = true
+
       return { step: { chunks: [], error: codexEmptyIncompleteStreamError(), stop: true }, handshake: false }
     }
+
     const handshake = isBootstrapBufferableEvent(eventType, payload, parsed)
+
     switch (eventType) {
       case "response.output_item.done":
         this.#collector.collect(parsed)
@@ -200,13 +226,17 @@ export class CodexStreamReader {
       case "response.incomplete":
       case "response.done": {
         this.#stopped = true
+
         if (!isJsonObject(parsed)) break
         const event: JsonObject = normalizeCodexCompletion(parsed)
         const detail = parseCodexUsage(event)
+
         if (detail !== undefined) usage.publish(detail)
         publishCodexImageToolUsage(usage, this.options.requestBody, event)
+
         if (!this.options.preserveNativeOutput) patchCodexCompletedOutput(event, this.#collector)
         const completed = eventType === "response.completed" || eventType === "response.done"
+
         return {
           step: {
             chunks: this.#translate(`data: ${JSON.stringify(event)}`),
@@ -217,6 +247,7 @@ export class CodexStreamReader {
         }
       }
     }
+
     return { step: { chunks: this.#translate(`data: ${payload}`), stop: false }, handshake }
   }
 
@@ -225,6 +256,7 @@ export class CodexStreamReader {
     if (this.#stopped) return { chunks: [], stop: true }
     this.#stopped = true
     const error = this.#emitted === 0 ? codexClosedBeforeFirstPayloadError() : codexIncompleteStreamError()
+
     return { chunks: [], error, stop: true }
   }
 }

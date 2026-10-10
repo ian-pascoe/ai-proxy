@@ -26,11 +26,13 @@ const GEMINI_RESPONSE = {
 }
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
 
 const models = { "gemini-2.5-pro": ["vertex"], "imagen-4.0-generate-001": ["vertex"] }
+
 const saMetadata = {
   project_id: "proj-1",
   location: "europe-west4",
@@ -48,12 +50,15 @@ describe("vertex service account", () => {
       kind: "oauth",
       metadata: { ...saMetadata, access_token: "ya29.cached" }
     })
+
     const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred)
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-pro:generateContent",
       postJson({ ...body, session_id: "x" })
     )
+
     expect(response.status).toBe(200)
     expect(h.calls[0]?.url).toBe(
       "https://europe-west4-aiplatform.googleapis.com/v1/projects/proj-1/locations/europe-west4/publishers/google/models/gemini-2.5-pro:generateContent"
@@ -70,6 +75,7 @@ describe("vertex service account", () => {
     getByName: () => ({
       ensureFresh: async (id: string) => {
         ensured.push(id)
+
         return result(id)
       },
       refreshNow: async () => ({ ok: false, error: { code: "not_refreshable", message: "no" }, terminal: false })
@@ -109,6 +115,7 @@ describe("vertex service account", () => {
       error: { code: "refresh_failed", message: "secret detail" },
       terminal: false
     }))
+
     const cred = credential("vertex", "vertex:sa", { kind: "oauth", metadata: saMetadata })
     const h1 = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: failing })
     afterAll(h1.dispose)
@@ -138,6 +145,7 @@ describe("vertex service account", () => {
       kind: "oauth",
       metadata: { ...saMetadata, location: "global", access_token: "t" }
     })
+
     const h = harness(
       (call) =>
         call.url.endsWith(":countTokens")
@@ -145,6 +153,7 @@ describe("vertex service account", () => {
           : sseResponse([`data: ${JSON.stringify({ ...GEMINI_RESPONSE, usageMetadata: { totalTokenCount: 5 } })}\n\n`]),
       cred
     )
+
     afterAll(h.dispose)
     const stream = await h.call("/v1beta/models/gemini-2.5-pro:streamGenerateContent", postJson(body))
     expect(h.calls[0]?.url).toBe(
@@ -163,6 +172,7 @@ describe("vertex API key", () => {
     const cred = credential("vertex", "vertex:apikey", {
       attributes: { api_key: "vk-1", base_url: "https://vx.test/" }
     })
+
     const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred)
     afterAll(h.dispose)
     await h.call("/v1beta/models/gemini-2.5-pro:generateContent", postJson(body))
@@ -185,15 +195,19 @@ describe("vertex API key", () => {
 describe("vertex imagen", () => {
   it("converts the request to predict and the response back to a Gemini response", async () => {
     const cred = credential("vertex", "vertex:apikey", { attributes: { api_key: "vk-1" } })
+
     const h = harness(
       () => jsonResponse({ predictions: [{ bytesBase64Encoded: "QUJD", mimeType: "image/jpeg" }] }),
       cred
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/imagen-4.0-generate-001:generateContent",
       postJson({ contents: [{ role: "user", parts: [{ text: "a red cat" }] }], aspectRatio: "1:1", sampleCount: 2 })
     )
+
     expect(h.calls[0]?.url).toBe(
       "https://aiplatform.googleapis.com/v1/publishers/google/models/imagen-4.0-generate-001:predict"
     )
@@ -201,9 +215,11 @@ describe("vertex imagen", () => {
       instances: [{ prompt: "a red cat" }],
       parameters: { sampleCount: 2, aspectRatio: "1:1" }
     })
+
     const out = (await response.json()) as {
       candidates: Array<{ content: { parts: Array<{ inlineData: { data: string; mimeType: string } }> } }>
     }
+
     expect(out.candidates[0]?.content.parts[0]?.inlineData).toEqual({ mimeType: "image/jpeg", data: "QUJD" })
   })
 
@@ -260,6 +276,7 @@ describe("vertex helpers", () => {
         { role: "user", parts: [{ functionResponse: { id: "call_1", name: "f", response: {} } }] }
       ]
     })
+
     const stripped = stripVertexOpenAIResponsesToolCallIds(make(), "openai-response")
     expect(JSON.stringify(stripped)).not.toContain("call_1")
     expect(JSON.stringify(stripVertexOpenAIResponsesToolCallIds(make(), "openai"))).toContain("call_1")

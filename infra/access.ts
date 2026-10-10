@@ -46,6 +46,7 @@ const ApplicationSettings = Alchemy.Action(
       readonly tags?: Array<string>
       readonly policies?: ReadonlyArray<{ readonly id?: string; readonly precedence?: number }>
     }
+
     yield* zeroTrust.updateAccessApplicationForAccount({
       accountId: input.accountId,
       appId: input.applicationId,
@@ -67,6 +68,7 @@ const ApplicationSettings = Alchemy.Action(
       httpOnlyCookieAttribute: true,
       ...(input.serviceTokenHeader === "" ? {} : { readServiceTokensFromHeader: input.serviceTokenHeader })
     })
+
     return { applied: true }
   })
 )
@@ -82,6 +84,7 @@ const WriteServiceTokens = Alchemy.Action(
     }>
   }) {
     const path = resolve(SERVICE_TOKENS_FILE)
+
     const body = Object.fromEntries(
       input.tokens.map((token) => [
         token.name,
@@ -91,11 +94,13 @@ const WriteServiceTokens = Alchemy.Action(
         }
       ])
     )
+
     yield* Effect.promise(async () => {
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, `${JSON.stringify(body, null, 2)}\n`, { mode: 0o600 })
       await chmod(path, 0o600)
     })
+
     return { path }
   })
 )
@@ -113,28 +118,34 @@ export const provisionAccess = (settings: Settings) =>
         adminServiceTokens: settings.adminServiceTokens.join(","),
         serviceTokenClientIds: {}
       }
+
       return wiring
     }
 
     const tokens: Array<{ readonly name: string; readonly token: Cloudflare.Access.ServiceToken }> = []
+
     for (const name of settings.serviceTokens) {
       tokens.push({ name, token: yield* Cloudflare.Access.ServiceToken(`ServiceToken-${name}`, {}) })
     }
 
     const policies: Array<Output.Output<string>> = []
+
     const people = [
       ...settings.allowEmails.map((email) => ({ email })),
       ...settings.allowEmailDomains.map((emailDomain) => ({ emailDomain }))
     ]
+
     if (people.length > 0) {
       const allow = yield* Cloudflare.Access.Policy("AllowUsers", { decision: "allow", include: people })
       policies.push(allow.policyId)
     }
+
     if (tokens.length > 0) {
       const serviceAuth = yield* Cloudflare.Access.Policy("AllowServiceTokens", {
         decision: "non_identity",
         include: tokens.map(({ token }) => ({ serviceToken: token.serviceTokenId }))
       })
+
       policies.push(serviceAuth.policyId)
     }
 
@@ -144,12 +155,14 @@ export const provisionAccess = (settings: Settings) =>
       sessionDuration: settings.sessionDuration,
       policies
     })
+
     yield* ApplicationSettings({
       accountId: app.accountId,
       applicationId: app.applicationId,
       updatedAt: app.updatedAt,
       serviceTokenHeader: settings.serviceTokenHeader
     })
+
     if (tokens.length > 0) {
       yield* WriteServiceTokens({
         tokens: tokens.map(({ name, token }) => ({
@@ -166,6 +179,7 @@ export const provisionAccess = (settings: Settings) =>
     const adminIds = settings.adminServiceTokens.map((entry) => Output.asOutput(clientIds[entry] ?? entry))
     // `Output.all` over an array resolves to the array of values (its static type only covers tuples).
     const allAdminIds = Output.all(...adminIds) as unknown as Output.Output<ReadonlyArray<string>>
+
     const wiring: AccessWiring = {
       aud: app.aud,
       adminServiceTokens: named
@@ -173,5 +187,6 @@ export const provisionAccess = (settings: Settings) =>
         : settings.adminServiceTokens.join(","),
       serviceTokenClientIds: clientIds
     }
+
     return wiring
   })

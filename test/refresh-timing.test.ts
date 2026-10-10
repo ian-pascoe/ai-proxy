@@ -35,11 +35,13 @@ describe("refresh timing", () => {
   it.effect("a hung upstream fails the refresh after 30 seconds", () =>
     Effect.gen(function* () {
       const http = mockHttp(() => new Promise(() => {}))
+
       const fiber = yield* refreshClaude({ ...context, provider: "claude" }).pipe(
         Effect.provide(http.layer),
         Effect.flip,
         Effect.forkChild
       )
+
       yield* TestClock.adjust(29_999)
       assert.strictEqual(fiber.pollUnsafe(), undefined)
       yield* TestClock.adjust(1)

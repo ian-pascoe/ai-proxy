@@ -86,9 +86,11 @@ describe("429 decisions and retry delays", () => {
 
   it("reads RetryInfo, quotaResetDelay and message hints in Go's order", () => {
     expect(parseRetryDelayMs(body("X", "2.000s"))).toBe(2000)
+
     const meta = JSON.stringify({
       error: { details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", metadata: { quotaResetDelay: "9s" } }] }
     })
+
     expect(parseRetryDelayMs(meta)).toBe(9000)
     expect(parseRetryDelayMs(JSON.stringify({ error: { message: "Try again after 12s." } }))).toBe(12_000)
     expect(parseRetryDelayMs(JSON.stringify({ error: { message: "reset after 1h30m" } }))).toBe(5_400_000)
@@ -122,6 +124,7 @@ describe("429 decisions and retry delays", () => {
   it("starts the credits fallback only after capacity failures", () => {
     const failure = (status: number, code?: string) =>
       new ExecutionError({ status, message: "m", ...(code === undefined ? {} : { code }) })
+
     expect(shouldAttemptCreditsFallback(failure(429))).toBe(true)
     expect(shouldAttemptCreditsFallback(failure(503))).toBe(true)
     expect(shouldAttemptCreditsFallback(failure(500, "model_cooldown"))).toBe(true)
@@ -136,6 +139,7 @@ describe("envelope", () => {
       toolConfig: { functionCallingConfig: { mode: "AUTO" } },
       model: "x"
     }
+
     expect(stableSessionId(payload)).toBe(stableSessionId(structuredClone(payload)))
     expect(stableSessionId(payload)).toMatch(/^-\d+$/)
     geminiToAntigravity("claude-sonnet-4-5", payload, "proj", "", 1_700_000_000_000)
@@ -190,6 +194,7 @@ describe("envelope", () => {
         generationConfig: { maxOutputTokens: 10 }
       }
     }
+
     sanitizeRequestSchemas(payload, true)
     // The schema keyword is rewritten, the replayed call arguments are not.
     expect(get(payload, "request.tools.0.functionDeclarations.0.parameters")).toBeDefined()
@@ -225,6 +230,7 @@ describe("content fixes", () => {
         ]
       }
     }
+
     normalizeFunctionResponseRoles(payload)
     expect(get(payload, "request.contents.2.role")).toBe("model")
     expect(get(payload, "request.contents.2.parts.0.functionResponse.id")).toBe("a")
@@ -292,6 +298,7 @@ describe("SSE handling", () => {
         traceId: "t1"
       }
     ].map((line) => JSON.stringify(line))
+
     const merged = convertStreamToNonStream(lines)
     expect(get(merged, "traceId")).toBe("t1")
     expect(get(merged, "response.candidates.0.content.parts")).toEqual([
@@ -357,6 +364,7 @@ describe("state and credits", () => {
         ]
       }
     }
+
     expect(parseCreditsReply(reply, 1)).toEqual({
       known: true,
       record: { creditAmount: 25_000, minCreditAmount: 50, paidTierId: "g1-pro-tier", updatedAt: 1 }
@@ -393,6 +401,7 @@ describe("version", () => {
 
   it("stores the fetched version in KV and keeps the old value when the fetch fails", async () => {
     const calls: UpstreamCall[] = []
+
     const run = (respond: () => Response) =>
       Effect.runPromise(
         refreshAntigravityVersion.pipe(
@@ -400,6 +409,7 @@ describe("version", () => {
           Effect.provideService(WorkerEnv, env)
         )
       )
+
     resetAntigravityVersionCache()
     expect(await run(() => new Response("version: 2.11.0\n"))).toEqual({ version: "2.11.0" })
     expect(calls[0]?.url).toContain("manifest/latest-arm64-mac.yml")
@@ -426,10 +436,12 @@ describe("model catalog probes", () => {
     const catalog = sectionModels(embeddedCatalogs(), "antigravity")
     expect(catalog.length).toBeGreaterThan(1)
     const keep = catalog[0]?.id ?? ""
+
     const filtered = applyAntigravityHints(catalog, {
       modelIds: [keep.toLowerCase()],
       webSearchModelIds: [keep.toLowerCase()]
     })
+
     expect(filtered.map((model) => model.id)).toEqual([keep])
     expect(filtered[0]?.supportsWebSearch).toBe(true)
     expect(applyAntigravityHints(catalog, { webSearchModelIds: [] })).toHaveLength(catalog.length)
@@ -441,6 +453,7 @@ describe("model catalog probes", () => {
     expect(state).toMatchObject({ count: 1, nextRetryAt: 60_000 })
     state = nextFailure(state, 1000, 1)
     expect(state).toMatchObject({ count: 2, nextRetryAt: 1000 + 240_000 })
+
     for (let i = 0; i < 10; i++) state = nextFailure(state, 2000, 1)
     expect(state.count).toBe(5)
     expect(state.nextRetryAt).toBe(2000 + 30 * 60_000)
@@ -468,7 +481,9 @@ describe("model catalog probes", () => {
         credential: { attributes: {}, metadata: { access_token: "tok", project_id: "proj" } }
       })
     }
+
     const stubEnv = { ...env, CONTROL_PLANE: { getByName: () => plane } } as unknown as Env
+
     const results = await Effect.runPromise(
       refreshAntigravityModels.pipe(
         Effect.provide(
@@ -482,6 +497,7 @@ describe("model catalog probes", () => {
         Effect.provideService(WorkerEnv, stubEnv)
       )
     )
+
     expect(results).toEqual([{ id, status: "success" }])
     expect(calls).toHaveLength(1)
     expect(calls[0]?.url).toBe("https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
@@ -500,8 +516,10 @@ describe("model catalog probes", () => {
         Effect.provideService(WorkerEnv, stubEnv)
       )
     )
+
     expect(failed).toEqual([{ id, status: "transient" }])
     expect((await loadAntigravityHints(env.CACHE, [id])).get(id)).toEqual(stored)
+
     // The failure window suppresses the next probe.
     const backoff = await Effect.runPromise(
       refreshAntigravityModels.pipe(
@@ -509,6 +527,7 @@ describe("model catalog probes", () => {
         Effect.provideService(WorkerEnv, stubEnv)
       )
     )
+
     expect(backoff).toEqual([{ id, status: "backoff" }])
   })
 })
@@ -550,6 +569,7 @@ describe("signature cache", () => {
   it("survives a failing store", async () => {
     const cache = new MemorySignatureCache()
     cache.set("claude-x", "t", LONG_SIGNATURE)
+
     const broken = {
       get: async () => {
         throw new Error("kv down")
@@ -559,6 +579,7 @@ describe("signature cache", () => {
       },
       delete: async () => {}
     }
+
     await expect(flushSignatureWrites(cache, broken)).resolves.toBeUndefined()
     const throwing = new MemorySignatureCache()
     await expect(prefetchSignatures(throwing, broken, "claude-x", ["a"])).resolves.toBeUndefined()
@@ -571,8 +592,10 @@ describe("claude web search grounding", () => {
     groundingChunks: [{ web: { uri: "https://a.test/x", title: "A" } }, { web: { uri: "https://a.test/x" } }],
     groundingSupports: [{ segment: { startIndex: 0, endIndex: 5, text: "Paris" }, groundingChunkIndices: [0] }]
   }
+
   const original = { tools: [{ type: "web_search_20250305", name: "web_search" }] }
   const translated = { model: "m", request: { tools: [{ googleSearch: {} }] } }
+
   const reply = {
     response: {
       candidates: [{ content: { role: "model", parts: [{ text: "Paris is it" }] }, groundingMetadata: grounding }]
@@ -586,10 +609,12 @@ describe("claude web search grounding", () => {
       { model: "m", originalRequest: original, translatedRequest: translated, state: makeTranslationState() },
       JSON.stringify(reply)
     )
+
     const message = JSON.parse(out ?? "{}") as {
       content: Array<Record<string, unknown>>
       usage: Record<string, unknown>
     }
+
     expect(message.content.map((block) => block["type"])).toEqual([
       "server_tool_use",
       "web_search_tool_result",
@@ -608,6 +633,7 @@ describe("claude web search grounding", () => {
     const first = builtinTranslators.translateStream("claude", "antigravity", context, JSON.stringify(reply))
     expect(first.join("")).toContain('"type":"server_tool_use"')
     expect(first.join("")).toContain('"type":"citations_delta"')
+
     const last = builtinTranslators.translateStream(
       "claude",
       "antigravity",
@@ -619,6 +645,7 @@ describe("claude web search grounding", () => {
         }
       })
     )
+
     expect(last.join("")).toContain('"web_search_requests":1')
   })
 })

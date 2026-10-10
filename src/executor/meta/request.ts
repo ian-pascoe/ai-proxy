@@ -25,14 +25,19 @@ import { type ExecutionContext, type ExecutorOptions, type ExecutorRequest, resp
 /** `SanitizeMetaWebSearchTools`: Meta rejects `search_content_types` on `web_search` tools (also inside namespaces). */
 export const sanitizeMetaWebSearchTools = (body: Json): Json => {
   const tools = get(body, "tools")
+
   if (!isJsonArray(tools)) return body
+
   const strip = (tool: Json): void => {
     if (isJsonObject(tool) && tool["type"] === "web_search") delete tool["search_content_types"]
   }
+
   for (const tool of tools) {
     strip(tool)
+
     if (isJsonObject(tool) && tool["type"] === "namespace" && isJsonArray(tool["tools"])) tool["tools"].forEach(strip)
   }
+
   return body
 }
 
@@ -60,6 +65,7 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
   const baseModel = parseSuffix(request.model).modelName
   const from = options.sourceFormat
   const to = Formats.Codex
+
   const translate = (payload: Json) =>
     translateRequestForExecutor(
       registry,
@@ -69,7 +75,9 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
       thinking.summary,
       { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
     )
+
   const translated = translate(request.payload)
+
   if (translated.error !== undefined) {
     return yield* new ExecutionError({
       status: translated.error.status,
@@ -77,6 +85,7 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
       requestScoped: true
     })
   }
+
   const original =
     options.originalRequest === undefined || options.originalRequest === request.payload
       ? cloneJson(translated.body)
@@ -94,8 +103,10 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
     modelInfo: request.modelInfo,
     lookupModelInfo: request.modelLookup
   })
+
   body = setIfDifferent(body, "model", baseModel)
   body = setIfDifferent(body, "stream", stream)
+
   for (const field of [
     "generate",
     "prompt_cache_retention",
@@ -105,7 +116,9 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
   ]) {
     body = del(body, field)
   }
+
   const applyPatch = new ApplyPatchResponsesState(from, options.originalRequest ?? request.payload, original)
+
   try {
     body = normalizeApplyPatchResponses(body, options.originalRequest ?? request.payload)
   } catch (error) {
@@ -115,6 +128,7 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
       requestScoped: true
     })
   }
+
   body = normalizeCodexInstructions(body, false)
   body = sanitizeReasoningEncryptedContent(body, true)
   body = sanitizeMetaWebSearchTools(body)
@@ -134,6 +148,7 @@ export const prepareMetaRequest = Effect.fnUntraced(function* (
     },
     body
   )
+
   return {
     baseModel,
     body,

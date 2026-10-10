@@ -19,6 +19,7 @@ import { jsonResponse, loadConfig, makePipeline, postJson, type UpstreamResponde
 import { xaiKey, xaiModels, xaiOauth, xaiPicker, type XaiPickerLog } from "./support/xai.ts"
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(`
 requests:
@@ -34,6 +35,7 @@ const pipeline = (respond: UpstreamResponder, credentials: ReadonlyArray<Credent
   const log: XaiPickerLog = { picks: [], reports: [] }
   const p = makePipeline({ config, respond, credentialPicker: xaiPicker(credentials, log), modelProviders: xaiModels })
   afterAll(p.dispose)
+
   return { ...p, log }
 }
 
@@ -46,10 +48,12 @@ const IMAGE_RESPONSE = {
 describe("images (xai models on /v1/images/*)", () => {
   it("converts generations to the xAI shape on the chat base URL and the answer back to the Images API", async () => {
     const p = pipeline(() => jsonResponse(IMAGE_RESPONSE))
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ model: "xai/grok-imagine-image", prompt: " a cat ", size: "2048x2048", n: 2, quality: "high" })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       created: 1767225600,
@@ -75,10 +79,12 @@ describe("images (xai models on /v1/images/*)", () => {
 
   it("returns data URLs for response_format=url and replays the result as SSE for stream requests", async () => {
     const p = pipeline(() => jsonResponse(IMAGE_RESPONSE), [xaiKey()])
+
     const url = await p.call(
       "/v1/images/generations",
       postJson({ model: "grok-imagine-image", prompt: "p", response_format: "url" })
     )
+
     expect(((await url.json()) as { data: Array<{ url: string }> }).data[0]?.url).toBe(
       "data:image/jpeg;base64,aGVsbG8="
     )
@@ -88,6 +94,7 @@ describe("images (xai models on /v1/images/*)", () => {
       "/v1/images/generations",
       postJson({ model: "grok-imagine-image", prompt: "p", stream: true })
     )
+
     expect(stream.headers.get("content-type")).toContain("text/event-stream")
     const text = await stream.text()
     expect(text).toContain("event: image_generation.completed")
@@ -97,6 +104,7 @@ describe("images (xai models on /v1/images/*)", () => {
 
   it("serves edits from JSON and multipart bodies", async () => {
     const p = pipeline(() => jsonResponse(IMAGE_RESPONSE))
+
     const one = await p.call(
       "/v1/images/edits",
       postJson({
@@ -106,6 +114,7 @@ describe("images (xai models on /v1/images/*)", () => {
         size: "1792x1024"
       })
     )
+
     expect(one.status).toBe(200)
     expect(p.calls[0]!.url).toBe("https://cli-chat-proxy.grok.com/v1/images/edits")
     expect(JSON.parse(p.calls[0]!.body)).toMatchObject({
@@ -140,6 +149,7 @@ describe("images (xai models on /v1/images/*)", () => {
 })
 
 const VIDEO_CREATED = { request_id: "req_1" }
+
 const VIDEO_DONE = {
   status: "done",
   model: "grok-imagine-video",
@@ -150,6 +160,7 @@ const VIDEO_DONE = {
 describe("videos", () => {
   it("creates xAI-native videos, forwards the idempotency key and binds the video to the serving credential", async () => {
     const p = pipeline(() => jsonResponse(VIDEO_CREATED), [xaiKey({ id: "xai-key-2" })])
+
     const response = await p.call(
       "/v1/videos",
       postJson(
@@ -157,6 +168,7 @@ describe("videos", () => {
         { "x-idempotency-key": "idem-1" }
       )
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(VIDEO_CREATED)
     const call = p.calls[0]!
@@ -174,6 +186,7 @@ describe("videos", () => {
       () => jsonResponse(VIDEO_DONE),
       [xaiOauth({ id: "xai-oauth-9" }), xaiKey({ id: "xai-key-2" })]
     )
+
     const poll = await other.call("/v1/videos/req_1")
     expect(poll.status).toBe(200)
     expect(await poll.json()).toEqual(VIDEO_DONE)
@@ -205,11 +218,13 @@ describe("videos", () => {
 
   it("maps OpenAI video requests to xAI and xAI results back, including content downloads", async () => {
     const mp4 = new Uint8Array([0, 1, 2, 3, 255])
+
     const p = pipeline(
       (call) => {
         if (call.url.startsWith("https://cdn.example.test/")) {
           return new Response(mp4, { headers: { "content-type": "video/mp4", "content-length": "5", etag: "abc" } })
         }
+
         return call.method === "POST"
           ? jsonResponse({ request_id: "req_77", status: "pending" })
           : jsonResponse(VIDEO_DONE)
@@ -221,6 +236,7 @@ describe("videos", () => {
       "/openai/v1/videos",
       postJson({ model: "sora-2", prompt: "a wave", seconds: "20", size: "1280x720" })
     )
+
     expect(created.status).toBe(200)
     const createdBody = (await created.json()) as Record<string, unknown>
     expect(createdBody).toMatchObject({
@@ -286,10 +302,12 @@ describe("speech", () => {
 
   it("maps OpenAI speech requests to /tts on the official API and returns the audio verbatim", async () => {
     const p = pipeline(() => new Response(AUDIO, { headers: { "content-type": "application/octet-stream" } }))
+
     const response = await p.call(
       "/v1/audio/speech",
       postJson({ model: "tts-1", input: "hello", voice: "nova", response_format: "wav", speed: 1.25 })
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toBe("audio/wav")
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(AUDIO)
@@ -328,6 +346,7 @@ describe("speech", () => {
       () => new Response('{"error":"unknown voice_id"}', { status: 404 }),
       [xaiKey({ id: "a" }), xaiKey({ id: "b" })]
     )
+
     const response = await voice.call("/v1/audio/speech", postJson({ input: "x" }))
     expect(response.status).toBe(404)
     expect(voice.calls).toHaveLength(1)
@@ -336,6 +355,7 @@ describe("speech", () => {
       () => new Response('{"error":"model not available for your plan"}', { status: 404 }),
       [xaiKey({ id: "a" }), xaiKey({ id: "b" })]
     )
+
     const failed = await model.call("/v1/audio/speech", postJson({ input: "x" }))
     expect(failed.status).toBe(404)
     expect(model.calls).toHaveLength(2)
@@ -361,9 +381,11 @@ describe("client version task", () => {
     expect(await Effect.runPromise(currentXaiClientVersion.pipe(Effect.provideService(WorkerEnv, env)))).toBe(
       XAI_FALLBACK_CLIENT_VERSION
     )
+
     const stored = await run(refreshXaiClientVersion("https://registry.test/latest"), () =>
       jsonResponse({ version: "1.2.3" })
     )
+
     expect(stored).toBe("1.2.3")
     expect(await env.CACHE.get(XAI_VERSION_KV_KEY)).toBe("1.2.3")
     resetXaiClientVersionCache()
@@ -387,6 +409,7 @@ describe("client version task", () => {
 describe("xAI image edit options (Go drops Codex-only mask / input_fidelity)", () => {
   it("builds the xAI edit body from size/quality/n only", async () => {
     const { buildEditRequest } = await import("../src/handlers/openai/xai-images.ts")
+
     const body = buildEditRequest(
       {
         prompt: "p",
@@ -401,6 +424,7 @@ describe("xAI image edit options (Go drops Codex-only mask / input_fidelity)", (
       "b64_json",
       ["data:image/png;base64,BBBB"]
     )
+
     expect(body).toEqual({
       model: "grok-imagine-image",
       prompt: "p",

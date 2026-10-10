@@ -58,7 +58,9 @@ import { compatImageEndpointPath, editBodyToFormData, prepareCompatImagesBody, w
 import { OpenAICompatStreamReader, TOOL_INPUT_ERROR_MESSAGE } from "./stream.ts"
 
 const USER_AGENT = "cli-proxy-openai-compat"
+
 const CHAT_COMPLETIONS_PATH = "/chat/completions"
+
 const RESPONSES_COMPACT_PATH = "/responses/compact"
 
 interface PreparedRequest {
@@ -103,10 +105,13 @@ const applyPromptCacheKey = (
   translated: Json
 ): Json => {
   const group = resolveCompatConfig(context.config, context.credential)
+
   if (group?.["support-prompt-cache-key"] !== true) return translated
+
   for (const payload of [request.payload, options.originalRequest, translated]) {
     const value = get(payload, "prompt_cache_key")
     const key = typeof value === "string" ? value.trim() : ""
+
     if (key !== "")
       return get(translated, "prompt_cache_key") === key ? translated : set(translated, "prompt_cache_key", key)
   }
@@ -114,21 +119,27 @@ const applyPromptCacheKey = (
   const translatedModel = get(translated, "model")
   const modelName = (typeof translatedModel === "string" ? translatedModel.trim() : "") || baseModel
   const from = options.sourceFormat
+
   if (from.trim().toLowerCase() === "claude") {
     const scope = claudeCodeExecutionScope(request.payload, options.headers)
+
     if (modelName !== "" && scope !== undefined) {
       const cached = uuidV5Oid(["cli-proxy-api:codex:claude-code", modelName, scope].join("\u0000"))
+
       return get(translated, "prompt_cache_key") === cached ? translated : set(translated, "prompt_cache_key", cached)
     }
   }
 
   const executionId = (options.metadata.websocket?.sessionId ?? "").trim()
+
   const sessionId =
     executionId !== ""
       ? providerSessionUuid(provider, "execution-session", executionId)
       : providerSessionUuid(provider, "derived-session", options.metadata.derivedSessionId)
+
   if (sessionId === "") return translated
   const providerName = provider.trim() || group.name.trim()
+
   const identity = [
     "cli-proxy-api:openai-compat:prompt-cache",
     providerName.toLowerCase(),
@@ -136,7 +147,9 @@ const applyPromptCacheKey = (
     from.trim().toLowerCase(),
     sessionId
   ].join("\u0000")
+
   const key = uuidV5Oid(identity)
+
   return get(translated, "prompt_cache_key") === key ? translated : set(translated, "prompt_cache_key", key)
 }
 
@@ -169,6 +182,7 @@ export const makeOpenAICompatExecutor = (
     const thinking = yield* Thinking
     const baseModel = parseSuffix(request.model).modelName
     const { baseURL, apiKey } = credentialEndpoint(context)
+
     if (baseURL === "") return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" })
     // Go routes only the non-stream path of `responses/compact` to `/responses/compact` (the handler never streams it).
     const compact = options.alt === "responses/compact" && !stream
@@ -176,6 +190,7 @@ export const makeOpenAICompatExecutor = (
 
     const from = options.sourceFormat
     const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+
     const original = translateRequestForExecutor(
       registry,
       from,
@@ -184,6 +199,7 @@ export const makeOpenAICompatExecutor = (
       thinking.summary,
       rewrite
     )
+
     const translated = translateRequestForExecutor(
       registry,
       from,
@@ -192,6 +208,7 @@ export const makeOpenAICompatExecutor = (
       thinking.summary,
       rewrite
     )
+
     if (translated.error !== undefined) {
       return yield* new ExecutionError({
         status: translated.error.status,
@@ -215,17 +232,21 @@ export const makeOpenAICompatExecutor = (
 
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
     const group = resolveCompatConfig(context.config, context.credential)
+
     if (shouldNormalizeToolResults(group, baseModel, requestedModel)) body = normalizeToolResultsTextOnly(body)
+
     if (!compact) {
       body = normalizeOpenAIMaxTokens(body, shouldUseMaxCompletionTokens(group, baseModel, requestedModel))
       body = applyPromptCacheKey(provider, context, request, options, baseModel, body)
     } else {
       body = sanitizeReasoningEncryptedContent(del(body, "stream"))
     }
+
     if (stream) {
       // Ask for usage in the final chunk so token statistics are captured.
       body = setBoolIfDifferent(body, "stream_options.include_usage", true)
     }
+
     const effort = get(body, "reasoning_effort")
     context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
 
@@ -246,16 +267,20 @@ export const makeOpenAICompatExecutor = (
     )
 
     const headers: Record<string, string> = { "content-type": "application/json" }
+
     if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`
     headers["user-agent"] = USER_AGENT
     applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId)
+
     if (stream) {
       headers["accept"] = "text/event-stream"
       headers["cache-control"] = "no-cache"
     }
+
     const url =
       (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) +
       (compact ? RESPONSES_COMPACT_PATH : CHAT_COMPLETIONS_PATH)
+
     return { url, headers, body, baseModel, to } satisfies PreparedRequest
   })
 
@@ -268,6 +293,7 @@ export const makeOpenAICompatExecutor = (
   ) {
     const baseModel = parseSuffix(request.model).modelName
     const { baseURL, apiKey } = credentialEndpoint(context)
+
     if (baseURL === "") return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" })
     const endpoint = compatImageEndpointPath(options.metadata.requestPath)
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
@@ -293,36 +319,45 @@ export const makeOpenAICompatExecutor = (
     )
     const multipart = wantsMultipartEdit(endpoint, options.headers.get("content-type") ?? "")
     const headers: Record<string, string> = multipart ? {} : { "content-type": "application/json" }
+
     if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`
     headers["user-agent"] = USER_AGENT
     applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId)
+
     if (stream) {
       headers["accept"] = "text/event-stream"
       headers["cache-control"] = "no-cache"
     }
+
     const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + endpoint
     const form = multipart ? editBodyToFormData(body as JsonObject, baseModel, stream) : undefined
+
     return { url, headers, body, baseModel, to, ...(form === undefined ? {} : { form }) } satisfies PreparedRequest
   })
 
   /** Sends the request; non-2xx answers become `ExecutionError`s carrying the upstream body. */
   const send = Effect.fnUntraced(function* (context: ExecutionContext, prepared: PreparedRequest) {
     const client = yield* HttpClient.HttpClient
+
     const request = HttpClientRequest.post(prepared.url).pipe(
       prepared.form === undefined
         ? HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json")
         : HttpClientRequest.bodyFormData(prepared.form),
       HttpClientRequest.setHeaders(prepared.headers)
     )
+
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(request)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
       const webHeaders = new Headers(response.headers)
       const retryAfterMs = openAICompatRetryAfterMs(response.status, webHeaders, text, yield* Clock.currentTimeMillis)
       context.usage.fail(response.status, text)
+
       return yield* new ExecutionError({
         status: response.status,
         message: text,
@@ -330,6 +365,7 @@ export const makeOpenAICompatExecutor = (
         ...(retryAfterMs !== undefined ? { retryAfterMs } : {})
       })
     }
+
     return response
   })
 
@@ -344,6 +380,7 @@ export const makeOpenAICompatExecutor = (
     const text = yield* response.text.pipe(Effect.mapError(transportError))
     context.usage.observeResponseModel(responseModelOf(tryParseJson(text)))
     context.usage.publish(parseOpenAIUsage(text))
+
     return { payload: text, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -355,11 +392,13 @@ export const makeOpenAICompatExecutor = (
   ) {
     const prepared = yield* prepareImages(context, request, options, true)
     const response = yield* send(context, prepared)
+
     const chunks = response.stream.pipe(
       Stream.decodeText,
       Stream.mapError(transportError),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -373,17 +412,21 @@ export const makeOpenAICompatExecutor = (
     const response = yield* send(context, prepared)
     const text = yield* response.text.pipe(Effect.mapError(transportError))
     context.usage.observeResponseModel(responseModelOf(tryParseJson(text)))
+
     const out = registry.translateNonStream(
       responseFormatOf(options),
       prepared.to,
       responseContext(request, options, prepared.body),
       text
     )
+
     if (out === undefined || out === "") {
       return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
     }
+
     context.usage.publish(parseOpenAIUsage(text))
     const payload = responseFormatOf(options) === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out
+
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -396,23 +439,28 @@ export const makeOpenAICompatExecutor = (
       return yield* executeImagesStream(context, request, options)
     const prepared = yield* prepare(context, request, options, true)
     const response = yield* send(context, prepared)
+
     const reader = new OpenAICompatStreamReader({
       registry,
       responseFormat: responseFormatOf(options),
       providerFormat: to,
       context: responseContext(request, options, prepared.body)
     })
+
     const observe = (line: string) => {
       const usage = parseOpenAIStreamUsage(line)
+
       if (usage !== undefined) context.usage.publish(usage)
       context.usage.observeResponseModel(responseModelOf(ssePayloadObject(line)))
     }
+
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.mapAccum(
         () => reader,
         (state, line: string) => {
           observe(line)
+
           return [state, [state.push(line)]] as const
         },
         { onHalt: (state) => [state.end()] }
@@ -420,16 +468,19 @@ export const makeOpenAICompatExecutor = (
       Stream.takeUntil((step) => step.stop),
       Stream.flatMap((step) => {
         const emitted = Stream.fromIterable(step.chunks)
+
         if (step.error === undefined) return emitted
         const error = step.error
         context.usage.fail(
           error.status,
           step.payloadError === true ? "upstream stream returned an error payload" : error.message
         )
+
         return Stream.concat(emitted, Stream.fail(error))
       }),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -447,6 +498,7 @@ export const makeOpenAICompatExecutor = (
     const from = options.sourceFormat
     const responseFormat = responseFormatOf(options)
     const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+
     const translate = (payload: Json) =>
       translateRequestForExecutor(
         registry,
@@ -456,7 +508,9 @@ export const makeOpenAICompatExecutor = (
         thinking.summary,
         rewrite
       )
+
     const translated = translate(request.payload)
+
     if (translated.error !== undefined) {
       return yield* new ExecutionError({
         status: translated.error.status,
@@ -464,7 +518,9 @@ export const makeOpenAICompatExecutor = (
         requestScoped: true
       })
     }
+
     const original = options.originalRequest === undefined ? translated : translate(options.originalRequest)
+
     let body = yield* thinking.apply({
       body: translated.body,
       model: request.model,
@@ -477,6 +533,7 @@ export const makeOpenAICompatExecutor = (
       modelInfo: request.modelInfo,
       lookupModelInfo: request.modelLookup
     })
+
     body = finalizePayload(
       context.config,
       provider,
@@ -492,6 +549,7 @@ export const makeOpenAICompatExecutor = (
       body
     )
     const count = countOpenAIChatTokens(getCodec(encodingForModel(baseModel)), body)
+
     return {
       payload: registry.translateTokenCount(responseFormat, to, count, buildOpenAIUsageJson(count)),
       headers: new Headers()

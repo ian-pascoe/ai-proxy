@@ -14,7 +14,9 @@ import { cred, state } from "./support/credentials.ts"
 import { jwt, T0 } from "./support/refresh.ts"
 
 const MIN = 60_000
+
 const HOUR = 60 * MIN
+
 const iso = (ms: number) => new Date(ms).toISOString()
 
 const subject = (provider: string, metadata: Record<string, unknown>, attributes: Record<string, string> = {}) =>
@@ -66,11 +68,13 @@ describe("expiry sources", () => {
 
   it("lets a JWT exp claim outrank the expired metadata", () => {
     const exp = Math.floor((T0 + 2 * HOUR) / 1000)
+
     const credential = subject("claude", {
       refresh_token: "r",
       access_token: jwt({ exp }),
       expired: iso(T0 + 100 * HOUR)
     })
+
     // exp - 4h is already in the past: due now, even though `expired` says 100 h from now.
     expect(nextRefreshCheckAt(T0, credential, emptyState())).toBe(T0)
     expect(shouldRefresh(T0, credential, emptyState())).toBe(true)
@@ -90,6 +94,7 @@ describe("expiry sources", () => {
       expired: iso(T0 + 100 * HOUR),
       last_refresh: iso(T0 - 5 * MIN)
     })
+
     expect(nextRefreshCheckAt(T0, credential, emptyState())).toBe(T0 + 5 * MIN)
     expect(shouldRefresh(T0 + 6 * MIN, credential, emptyState())).toBe(true)
   })
@@ -106,17 +111,21 @@ describe("back-off and terminal states", () => {
 
   it("stops scheduling after a terminal unauthorized failure and for disabled + invalid_grant", () => {
     const credential = subject("claude", { refresh_token: "r", expired: iso(T0 - HOUR) })
+
     const terminal = state({
       unavailable: true,
       status: "error",
       lastError: { code: "unauthorized", message: "x", retryable: false, httpStatus: 401 }
     })
+
     expect(nextRefreshCheckAt(T0, credential, terminal)).toBeUndefined()
+
     const disabled = cred("d.json", {
       provider: "claude",
       disabled: true,
       metadata: { refresh_token: "r", expired: iso(T0 - HOUR) }
     })
+
     const invalid = state({ lastError: { message: "invalid_grant", retryable: false } })
     expect(nextRefreshCheckAt(T0, disabled, invalid)).toBeUndefined()
     expect(nextRefreshCheckAt(T0, disabled, emptyState())).toBe(T0)
@@ -165,11 +174,13 @@ describe("refresh failure transitions", () => {
       nextRefreshAfter: T0 + MIN,
       statusMessage: "invalid grant (retrying)"
     })
+
     const third = applyRefreshFailure(state({ refreshFailures: 2 }), {
       ...base,
       message: "status 400: invalid_grant",
       status: 400
     })
+
     expect(third.state).toMatchObject({ refreshFailures: 3, nextRefreshAfter: T0 + 4 * MIN })
   })
 
@@ -195,6 +206,7 @@ describe("refresh failure transitions", () => {
       accessTokenRejected: true,
       hasValidAccessToken: true
     })
+
     expect(out.schedule).toBe("unschedule")
     expect(out.state).toMatchObject({
       unavailable: true,
@@ -211,6 +223,7 @@ describe("refresh failure transitions", () => {
       hasValidAccessToken: true,
       tokenExpiry: T0 + 2 * MIN
     })
+
     expect(out.state.unavailable).toBe(false)
     expect(out.state.status).toBe("active")
     expect(out.state.nextRefreshAfter).toBe(T0 + 2 * MIN)
@@ -238,6 +251,7 @@ describe("refresh success transitions", () => {
       nextRefreshAfter: T0 - 1,
       rejectedAccessToken: "old"
     })
+
     const ok = applyRefreshSuccess(current, current, T0, false, false)
     expect(ok).toMatchObject({ status: "active", unavailable: false, refreshFailures: 0, nextRefreshAfter: 0 })
     expect(ok.lastError).toBeUndefined()
@@ -268,6 +282,7 @@ describe("refresh success transitions", () => {
       lastError: { message: "401", retryable: false, httpStatus: 401 },
       updatedAt: 0
     }
+
     const healthy = { ...stale, lastError: { message: "500", retryable: true, httpStatus: 500 } }
     const current = state({ modelStates: { a: stale, b: healthy } })
     const out = applyRefreshSuccess(emptyState(), current, T0, false, false)

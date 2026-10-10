@@ -23,6 +23,7 @@ import { UsageSink } from "../src/usage/sink.ts"
 import { resetUsageDb, sampleRecord } from "./support/usage.ts"
 
 let db: D1Database
+
 beforeEach(async () => {
   db = await resetUsageDb()
 })
@@ -91,6 +92,7 @@ describe("D1 usage sink", () => {
 
   it("never fails the request when the write fails and does nothing without a binding", async () => {
     const warnings: Array<{ message: unknown; annotations: Record<string, unknown> }> = []
+
     const capture = Logger.layer([
       Logger.make((options) => {
         warnings.push({
@@ -99,13 +101,17 @@ describe("D1 usage sink", () => {
         })
       })
     ])
+
     const pending: Array<Promise<unknown>> = []
     const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise) } as unknown as ExecutionContext
+
     const broken = {
       ...env,
       USAGE: { prepare: () => ({ bind: () => ({ run: () => Promise.reject(new Error("D1 down")) }) }) }
     } as unknown as Env
+
     const record = sampleRecord()
+
     const publish = (bindings: Env) =>
       Effect.gen(function* () {
         yield* (yield* UsageSink).publish(record)
@@ -116,6 +122,7 @@ describe("D1 usage sink", () => {
         Effect.provideService(WorkerExecutionContext, ctx),
         Effect.runPromise
       )
+
     await publish(broken)
     await Promise.all(pending)
     expect(warnings).toEqual([
@@ -131,6 +138,7 @@ describe("D1 usage sink", () => {
         throw new Error("invocation finished")
       }
     } as unknown as ExecutionContext
+
     await Effect.gen(function* () {
       yield* (yield* UsageSink).publish(sampleRecord())
     }).pipe(
@@ -146,6 +154,7 @@ describe("D1 usage sink", () => {
     const detail = parseClaudeUsage(
       '{"usage":{"input_tokens":2,"cache_creation_input_tokens":831,"cache_read_input_tokens":44225,"output_tokens":244,"output_tokens_details":{"thinking_tokens":40}}}'
     )
+
     await insertUsageRecord(db, sampleRecord({ provider: "claude", executorType: "claude", detail }))
     expect((await rows())[0]).toMatchObject({
       total_tokens: 45302,
@@ -176,6 +185,7 @@ describe("export queue (GET /observability/usage/queue)", () => {
     for (let index = 0; index < 5; index += 1) {
       await insertUsageRecord(db, sampleRecord({ requestId: `r${index}`, requestedAt: 1000 + index }))
     }
+
     const first = await popUsageQueue(db, 2, 5000)
     expect(first.map((row) => row.request_id)).toEqual(["r0", "r1"])
     expect(first.every((row) => row.exported_at === 5000)).toBe(true)
@@ -238,6 +248,7 @@ describe("listing and summary", () => {
   const seed = async () => {
     const base = 1_700_000_000_000
     const day = 86_400_000
+
     const records = [
       sampleRecord({ requestId: "a", requestedAt: base, model: "gpt-5", principalId: "user:a" }),
       sampleRecord({ requestId: "b", requestedAt: base + 1000, model: "gpt-5", principalId: "user:b" }),
@@ -259,7 +270,9 @@ describe("listing and summary", () => {
         }
       })
     ]
+
     for (const record of records) await insertUsageRecord(db, record)
+
     return { base, day }
   }
 
@@ -317,11 +330,14 @@ describe("retention", () => {
     const now = 100 * day
     await insertUsageRecord(db, sampleRecord({ requestId: "old", requestedAt: now - 31 * day }))
     await insertUsageRecord(db, sampleRecord({ requestId: "recent", requestedAt: now - 29 * day }))
+
     const run = (bindings: Env) =>
       Effect.gen(function* () {
         yield* TestClock.setTime(now)
+
         return yield* pruneExpiredUsage
       }).pipe(Effect.provide(TestClock.layer()), Effect.provideService(WorkerEnv, bindings), Effect.runPromise)
+
     expect(await run({ ...env, USAGE_RETENTION_DAYS: "0" })).toBe(0)
     expect(await rows()).toHaveLength(2)
     expect(await run({ ...env, USAGE_RETENTION_DAYS: "30" })).toBe(1)

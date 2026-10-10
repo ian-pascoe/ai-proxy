@@ -21,6 +21,7 @@ const fakeControlPlane = (sources: () => ReadonlyArray<ModelSource>, calls: { co
       getByName: () => ({
         listModelSources: async () => {
           calls.count += 1
+
           return sources()
         }
       })
@@ -34,6 +35,7 @@ describe("ModelRegistry service", () => {
   it.effect("builds a snapshot from ControlPlane sources and caches it for the TTL", () => {
     const calls = { count: 0 }
     let credentials: ModelSource[] = [source("claude-a.json", "claude")]
+
     return Effect.gen(function* () {
       const registry = yield* ModelRegistry
       const first = yield* registry.snapshot
@@ -60,10 +62,13 @@ describe("ModelRegistry service", () => {
   it.effect("serves the previous snapshot when the ControlPlane fails, and fails without one", () => {
     const calls = { count: 0 }
     let failing = false
+
     const sources = () => {
       if (failing) throw new Error("do unreachable")
+
       return [source("claude-a.json", "claude")]
     }
+
     return Effect.gen(function* () {
       const registry = yield* ModelRegistry
       failing = true
@@ -80,12 +85,14 @@ describe("ModelRegistry service", () => {
 
   it.effect("model records satisfy the thinking pipeline's lookup and drive applyThinking", () => {
     const calls = { count: 0 }
+
     return Effect.gen(function* () {
       const registry = yield* ModelRegistry
       const snapshot = yield* registry.snapshot
       const lookup: ModelInfoLookup = snapshot.lookupModelInfo
       const info = lookup("claude-sonnet-4-5-20250929", "claude")
       expect(info?.thinking).toMatchObject({ min: 1024, max: 128000, zeroAllowed: true })
+
       const apply = (budget: number) =>
         applyThinking(
           {
@@ -96,6 +103,7 @@ describe("ModelRegistry service", () => {
           },
           { model: "claude-sonnet-4-5-20250929", fromFormat: "claude", toFormat: "claude", lookupModelInfo: lookup }
         )
+
       expect(apply(2048).error).toBeUndefined()
       // The registry's capabilities (min 1024) reject a budget below the range.
       expect(apply(100).error?.code).toBe("BUDGET_OUT_OF_RANGE")
@@ -116,6 +124,7 @@ describe("static lookups agree with the thinking fixtures' Go catalog", () => {
   it("returns the same capabilities for every catalog model", () => {
     const ids = Object.keys(thinkingFixture.catalog)
     expect(ids.length).toBeGreaterThan(100)
+
     for (const id of ids) {
       const expected = thinkingFixture.catalog[id]
       const actual = lookupStaticModelInfo(catalogs, id)

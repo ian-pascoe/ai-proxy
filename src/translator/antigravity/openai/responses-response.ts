@@ -11,6 +11,7 @@ import { convertGeminiResponseToOpenAIResponsesNonStream } from "../../gemini/op
 
 const unwrapResponse = (text: string): string => {
   const response = get(tryParseJson(text), "response")
+
   return response === undefined ? text : JSON.stringify(response)
 }
 

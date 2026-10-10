@@ -64,6 +64,7 @@ export const ProxyRoutes = Layer.mergeAll(
  */
 export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
   const config = options.configReader ?? ConfigReader.layerControlPlane()
+
   const services = Layer.mergeAll(
     options.credentialPicker ?? ControlPlanePickerLayer,
     options.modelCapabilities ?? ModelCapabilities.registryLayer.pipe(Layer.provide(ModelRegistryLive)),
@@ -75,6 +76,7 @@ export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
     options.websocketConnector ?? UpstreamWebSocketConnector.layerFetch,
     options.thinking ?? Thinking.live
   ).pipe(Layer.provideMerge(config))
+
   return ProxyRoutes.pipe(Layer.provide(services))
 }
 

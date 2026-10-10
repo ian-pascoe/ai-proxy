@@ -72,8 +72,11 @@ import type { UsageDetail } from "../../usage/record.ts"
 import { countClaudeInputTokens } from "../../tokenizer/claude-input.ts"
 
 const defaultContinuity = makeSessionStateContinuityStore()
+
 const defaultReplay = makeSessionStateReplayStore()
+
 const defaultDeviceProfiles = makeSessionStateDeviceProfileStore()
+
 const defaultToolAliases = makeSessionStateToolAliasStore()
 
 export interface ClaudeExecutorOptions {
@@ -137,12 +140,14 @@ const upstreamFailure = (
 ): ExecutionError => {
   const modelLevelCooling = context.config.upstream.claude["model-level-cooling"]
   const classified = classifyUpstreamError(status, headers, body, modelLevelCooling, now)
+
   if (fastRequest) {
     const direct = new Headers(headers)
     direct.delete("content-encoding")
     direct.delete("content-length")
     const credentialScoped = status === 429 && headersIndicateUnifiedRejection(headers)
     const retryAfterMs = status === 429 ? parseRateLimitResetMs(headers, now) : undefined
+
     return new ExecutionError({
       status,
       message: body,
@@ -153,15 +158,18 @@ const upstreamFailure = (
       ...(retryAfterMs !== undefined ? { retryAfterMs } : {})
     })
   }
+
   // A rejected token (401) concerns the credential, not the request: the conductor refreshes or rotates it.
   if (status === 401 && classified.credentialScoped === undefined) {
     return copyError(classified, { credentialScoped: true })
   }
+
   return classified
 }
 
 export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}): ProviderExecutor => {
   const registry = executorOptions.translators ?? builtinTranslators
+
   const services: PipelineServices = {
     registry,
     continuity: executorOptions.continuity ?? defaultContinuity,
@@ -171,6 +179,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     now: executorOptions.now ?? (() => new Date()),
     profile: executorOptions.profile
   }
+
   const profile = executorOptions.profile
 
   /** Sends a prepared request; non-2xx answers become classified `ExecutionError`s. */
@@ -180,21 +189,27 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     fastRequest: boolean
   ) {
     const client = yield* HttpClient.HttpClient
+
     const httpRequest = HttpClientRequest.post(prepared.url).pipe(
       HttpClientRequest.bodyText(prepared.bodyText, "application/json"),
       HttpClientRequest.setHeaders(prepared.headers)
     )
+
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(httpRequest)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(
         Effect.orElseSucceed(() => ""),
         Effect.map((value) => value)
       )
+
       const headers = new Headers(response.headers)
       context.usage.fail(response.status, text)
+
       return yield* upstreamFailure(
         context,
         fastRequest,
@@ -204,12 +219,15 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
         yield* Clock.currentTimeMillis
       )
     }
+
     return response
   })
 
   const finishReplay = (prepared: PreparedClaudeRequest, content: Json | undefined): Effect.Effect<void> => {
     const scope = prepared.replay
+
     if (!replayScopeValid(scope) || !scope.cacheReady) return Effect.void
+
     return (
       content !== undefined && replayContentIsReplayable(content)
         ? services.replay.replaceIfUnchanged(scope.modelFamily, scope.sessionKey, scope.snapshot, content)
@@ -241,6 +259,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
   ) {
     const responseFormat = responseFormatOf(options)
     const upstreamStream = responseFormat !== Formats.Claude
+
     const prepared = yield* prepareMessagesRequest({
       services,
       config: context.config,
@@ -250,14 +269,18 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       upstreamStream,
       compactionSummary
     })
+
     const response = yield* send(context, prepared, prepared.fastRequest)
     let data = yield* response.text.pipe(Effect.mapError(readError))
     const requestId = response.headers["request-id"] ?? ""
     let usage: UsageDetail | undefined
     let replayContent: Json | undefined
+
     if (upstreamStream) {
       const invalid = validateClaudeStreamingResponse(data)
+
       if (invalid !== undefined) return yield* gatewayError(invalid)
+
       const reader = new ClaudeStreamReader({
         registry,
         responseFormat: Formats.Claude,
@@ -268,16 +291,20 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
         },
         onResponseModel: (model) => context.usage.observeResponseModel(model)
       })
+
       const lines = data.split("\n")
+
       const restored = yield* Effect.try({
         try: () =>
           lines.map((line) => {
             reader.accumulator.observe(line)
             const parsed = parseClaudeStreamUsage(line)
+
             if (parsed !== undefined) usage = mergeUsage(usage, parsed)
             context.usage.observeResponseModel(
               responseModelOf(tryParseJson(line.trim().startsWith("data:") ? line.trim().slice(5).trim() : ""))
             )
+
             return restoreResponseModel(profile, restoreToolNamesInStreamLine(line, prepared.reverseMap), request.model)
           }),
         catch: (error) =>
@@ -289,16 +316,20 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
               })
             : readError(error)
       })
+
       data = restored.join("\n")
+
       const message = lines
         .map((line) => tryParseJson(line.trim().startsWith("data:") ? line.trim().slice(5).trim() : ""))
         .find((payload) => str(get(payload, "type")) === "message_start")
+
       yield* commitContinuity(prepared, str(get(message, "message.id")).trim(), requestId, options.metadata.callerScope)
       replayContent = reader.accumulator.content()
     } else {
       const parsed = tryParseJson(data)
       context.usage.observeResponseModel(responseModelOf(parsed))
       yield* commitContinuity(prepared, str(get(parsed, "id")).trim(), requestId, options.metadata.callerScope)
+
       if (prepared.reverseMap.size > 0 && isObj(parsed)) {
         yield* Effect.try({
           try: () => restoreToolNamesInResponse(parsed, prepared.reverseMap),
@@ -311,20 +342,27 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
         })
         data = JSON.stringify(parsed)
       }
+
       data = restoreResponseModel(profile, data, request.model)
       usage = parseClaudeUsage(data)
       replayContent = get(parsed, "content")
     }
+
     yield* finishReplay(prepared, replayContent)
+
     let out = registry.translateNonStream(
       responseFormat,
       Formats.Claude,
       responseContext(request, options, prepared),
       data
     )
+
     if (out === undefined || out === "") return yield* gatewayError(TOOL_INPUT_ERROR_MESSAGE)
+
     if (usage !== undefined) context.usage.publish(usage)
+
     if (responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -350,10 +388,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     options: ExecutorOptions
   ) {
     const baseModel = parseSuffix(request.model).modelName
+
     const summaryRequest: ExecutorRequest = {
       ...request,
       payload: prepareClaudeCompactionSummaryPayload(claudeCompactionSourcePayload(request, options))
     }
+
     const summaryOptions: ExecutorOptions = {
       ...options,
       alt: "",
@@ -362,19 +402,24 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       sourceFormat: Formats.OpenAIResponse,
       responseFormat: Formats.Claude
     }
+
     const summary = yield* executeMessages(context, summaryRequest, summaryOptions, true)
     const parsed = tryParseJson(summary.payload)
+
     const text = yield* Effect.try({
       try: () => extractSummaryText(parsed as Json),
       catch: (error) => new ExecutionError({ status: 500, message: `extract summary: ${(error as Error).message}` })
     })
+
     const capsule = yield* Effect.tryPromise({
       try: () => sealCompaction(text, baseModel),
       catch: (error) => new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` })
     })
+
     const usage = claudeCompactionUsage(parsed, summary.payload)
     const body = buildCompactionResponse(baseModel, capsule, usage.input, usage.output, usage.total, Date.now())
     set(body, "usage.input_tokens_details.cached_tokens", usage.cached)
+
     return { payload: JSON.stringify(body), headers: summary.headers } satisfies ExecutorResponse
   })
 
@@ -384,9 +429,11 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     options: ExecutorOptions
   ) {
     const expanded = yield* expandCompaction(request, options)
+
     if (claudeCompactionRequested(expanded.request, expanded.options)) {
       return yield* executeCompaction(context, expanded.request, expanded.options)
     }
+
     return yield* executeMessages(context, expanded.request, expanded.options, false)
   })
 
@@ -400,15 +447,18 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     const summary = yield* executeCompaction(context, request, options)
     const parsed = tryParseJson(summary.payload)
     const capsule = asString(get(parsed, "output.0.encrypted_content"))
+
     if (asString(get(parsed, "output.0.type")) !== "compaction" || capsule === "") {
       return yield* new ExecutionError({ status: 500, message: "extract summary: compaction item missing" })
     }
+
     const usage = {
       input: asInt(get(parsed, "usage.input_tokens")),
       output: asInt(get(parsed, "usage.output_tokens")),
       total: asInt(get(parsed, "usage.total_tokens")),
       cached: asInt(get(parsed, "usage.input_tokens_details.cached_tokens"))
     }
+
     const chunks = buildCompactionStreamChunks(
       baseModel,
       capsule,
@@ -417,8 +467,10 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       usage.total,
       Date.now()
     ).map((chunk) => patchClaudeCompactionStreamUsage(chunk, usage))
+
     const headers = new Headers(summary.headers)
     headers.set("Content-Type", "text/event-stream")
+
     return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
   })
 
@@ -428,9 +480,11 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     options: ExecutorOptions
   ) {
     const expanded = yield* expandCompaction(request, options)
+
     if (claudeCompactionRequested(expanded.request, expanded.options)) {
       return yield* executeCompactionStream(context, expanded.request, expanded.options)
     }
+
     return yield* executeMessagesStream(context, expanded.request, expanded.options)
   })
 
@@ -440,6 +494,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
     options: ExecutorOptions
   ) {
     const responseFormat = responseFormatOf(options)
+
     const prepared = yield* prepareMessagesRequest({
       services,
       config: context.config,
@@ -448,8 +503,10 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       options,
       upstreamStream: true
     })
+
     const response = yield* send(context, prepared, prepared.fastRequest)
     const requestId = response.headers["request-id"] ?? ""
+
     const reader = new ClaudeStreamReader({
       registry,
       responseFormat,
@@ -459,10 +516,12 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       onUsage: (detail) => context.usage.publish(detail),
       onResponseModel: (model) => context.usage.observeResponseModel(model)
     })
+
     const wrap = (error: ExecutionError): ExecutionError =>
       prepared.fastRequest && !error.direct
         ? copyError(error, { requestScoped: error.credentialScoped !== true })
         : error
+
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.mapAccum(
@@ -473,9 +532,11 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       Stream.takeUntil((step) => step.stop),
       Stream.flatMap((step) => {
         const emitted = Stream.fromIterable(step.chunks)
+
         if (step.error === undefined) return emitted
         const error = wrap(step.error)
         context.usage.fail(error.status, error.message)
+
         return Stream.concat(emitted, Stream.fail(error))
       }),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message))),
@@ -488,6 +549,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
           : finishReplay(prepared, undefined)
       )
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -498,6 +560,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
   ) {
     const responseFormat = responseFormatOf(options)
     const { apiKey, baseURL } = claudeCreds(context.credential)
+
     const input = {
       services,
       config: context.config,
@@ -506,6 +569,7 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       options,
       upstreamStream: false
     }
+
     if (
       apiKey.trim() !== "" &&
       (profile?.upstreamCountTokens === true ||
@@ -516,16 +580,20 @@ export const makeClaudeExecutor = (executorOptions: ClaudeExecutorOptions = {}):
       const data = yield* response.text.pipe(Effect.mapError(readError))
       const count = asInt(get(tryParseJson(data), "input_tokens"))
       const out = registry.translateTokenCount(responseFormat, Formats.Claude, count, data)
+
       return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
+
     const body = yield* prepareLocalCountBody(input)
     const count = countClaudeInputTokens(body)
+
     const out = registry.translateTokenCount(
       responseFormat,
       Formats.Claude,
       count,
       JSON.stringify({ input_tokens: count })
     )
+
     return { payload: out, headers: new Headers() } satisfies ExecutorResponse
   })
 

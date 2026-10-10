@@ -15,6 +15,7 @@ const start = (n: number) =>
 describe("Claude input token estimate", () => {
   it("counts Claude requests like helps.CountClaudeInputTokens", () => {
     expect(fixtures.claude.length).toBeGreaterThan(5)
+
     for (const c of fixtures.claude) expect(countClaudeInputTokens(JSON.parse(c.payload)), c.payload).toBe(c.count)
   })
 
@@ -27,12 +28,14 @@ describe("Claude input token estimate", () => {
   for (const scenario of fixtures.streams) {
     it(`stream: ${scenario.name}`, () => {
       const state = makeTranslationState()
+
       const context = {
         model: scenario.model,
         originalRequest: tryParseJson(scenario.original),
         translatedRequest: scenario.translated === undefined ? undefined : tryParseJson(scenario.translated),
         state
       }
+
       for (const step of scenario.steps) {
         expect(builtinTranslators.translateStream("claude", scenario.upstream, context, step.in)).toEqual(step.out)
       }
@@ -42,7 +45,9 @@ describe("Claude input token estimate", () => {
   it("leaves Claude upstreams and non-Claude clients alone", () => {
     const start =
       'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":0,"output_tokens":0}}}\n\n'
+
     const original = { messages: [{ role: "user", content: "Hello, how are you today?" }] }
+
     for (const [client, provider] of [
       ["claude", "claude"],
       ["openai", "unregistered-provider"]
@@ -53,6 +58,7 @@ describe("Claude input token estimate", () => {
         translatedRequest: undefined,
         state: makeTranslationState()
       }
+
       expect(builtinTranslators.translateStream(client, provider, context, start)).toEqual([start])
       expect(context.state.claudeInputTokensHandled).toBeUndefined()
     }
@@ -77,7 +83,9 @@ describe("Claude input token estimate", () => {
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
       }
     ]
+
     const body = upstream.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n"
+
     const h = await harness(
       credential("openai-compatibility", {
         kind: "apikey",
@@ -87,6 +95,7 @@ describe("Claude input token estimate", () => {
       undefined,
       true
     )
+
     const claudeRequest = {
       model: "m",
       max_tokens: 16,
@@ -94,12 +103,14 @@ describe("Claude input token estimate", () => {
       system: "System text.",
       messages: [{ role: "user", content: "Hello, how are you today?" }]
     }
+
     const collected = await collectStream(
       makeOpenAICompatExecutor("openai-compatibility"),
       h,
       { model: "m", payload: claudeRequest },
       options({ stream: true, sourceFormat: "claude", originalRequest: claudeRequest })
     )
+
     expect(collected.error).toBeUndefined()
     const starts = collected.chunks.filter((chunk) => chunk.includes('"type":"message_start"'))
     expect(starts).toHaveLength(1)

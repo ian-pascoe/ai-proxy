@@ -23,8 +23,10 @@ export const withCredentialPolicy = (
   pick: (request) =>
     Effect.gen(function* () {
       const excluded = [...(request.excludedIds ?? [])]
+
       for (let attempt = 0; attempt < MAX_REJECTIONS; attempt++) {
         const picked = yield* base.pick({ ...request, excludedIds: excluded })
+
         if (allows(picked.credential)) return picked
         excluded.push(picked.credential.id)
         yield* base.report(picked.lease, {
@@ -33,6 +35,7 @@ export const withCredentialPolicy = (
           error: { message: unavailableMessage, retryable: false, code: "request_scoped" }
         })
       }
+
       return yield* new ExecutionError({ status: 503, code: "auth_not_found", message: unavailableMessage })
     })
 })

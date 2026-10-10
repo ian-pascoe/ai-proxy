@@ -48,8 +48,10 @@ import { ModelCapabilities } from "./model-capabilities.ts"
 
 /** Upstream attempts (executor calls) allowed for one request. */
 export const MAX_UPSTREAM_ATTEMPTS = 16
+
 /** Longest cooldown the Worker waits for before answering with `Retry-After` instead. */
 export const MAX_COOLDOWN_WAIT_MS = 30_000
+
 /** `cooldownWaitJitterCap`. */
 const JITTER_CAP_MS = 2000
 
@@ -65,6 +67,7 @@ export interface RetrySettings {
 export const retrySettings = (config: Config): RetrySettings => {
   const retry = config.routing.retry
   const waitMs = Math.max(0, retry["max-retry-interval"]) * 1000
+
   return {
     requestRetry: Math.max(0, retry["request-retry"]),
     maxRetryCredentials: Math.max(0, retry["max-retry-credentials"]),
@@ -76,7 +79,9 @@ export const retrySettings = (config: Config): RetrySettings => {
 export const jitteredWait = (waitMs: number, maxWaitMs: number, unit: number): number => {
   if (waitMs <= 0) return waitMs
   let range = Math.min(waitMs / 4, JITTER_CAP_MS)
+
   if (maxWaitMs > 0 && range > maxWaitMs - waitMs) range = maxWaitMs - waitMs
+
   return range <= 0 ? waitMs : waitMs + unit * range
 }
 
@@ -84,6 +89,7 @@ export const jitteredWait = (waitMs: number, maxWaitMs: number, unit: number): n
 const usageSession = (routing: SessionRouting | undefined, picked: PickResult, credential: CredentialSnapshot) => {
   const session = picked.session ?? routing?.usageSession
   const baseUrl = (credential.attributes["base_url"] ?? "").trim() || stringOf(credential.metadata["base_url"])
+
   return {
     ...(session === undefined ? {} : { sessionId: session.id }),
     ...(session?.parentId === undefined || session.parentId === session.id
@@ -186,9 +192,12 @@ const authNotFound = (): ExecutionError =>
 /** Adds `Retry-After` to a final 429/503 when a credential recovery time is known (seconds, rounded up). */
 const withRetryAfter = (error: ExecutionError, retryAfterMs: number | undefined): ExecutionError => {
   if (retryAfterMs === undefined || retryAfterMs <= 0) return error
+
   if (error.status !== 429 && error.status !== 503) return error
   const existing = error.safeHeaders ?? {}
+
   if (existing["retry-after"] !== undefined || existing["Retry-After"] !== undefined) return error
+
   return withErrorFields(error, {
     safeHeaders: { ...existing, "retry-after": String(Math.max(1, Math.ceil(retryAfterMs / 1000))) }
   })
@@ -213,6 +222,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
     const buildAttempt = (picked: PickResult, executor: ProviderExecutor, upstreamModel: string, credits = false) =>
       Effect.gen(function* () {
         const { credential, route, lease } = picked
+
         const newUsage = (now: number) =>
           new UsageReporter({
             requestId: crypto.randomUUID(),
@@ -235,6 +245,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
             requestedAt: now,
             ...usageSession(prepared.routing, picked, credential)
           })
+
         yield* noteSelection(credential.id, credential.provider, parseSuffix(upstreamModel).modelName)
         const { modelInfo, lookup } = yield* capabilities.thinking(parseSuffix(upstreamModel).modelName, credential)
         const stateModel = route.pooled ? upstreamModel : undefined
@@ -244,6 +255,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
         const release = yield* holdInvocation
         let finished = false
         const requestScope = yield* Effect.serviceOption(Scope.Scope)
+
         if (Option.isSome(requestScope)) {
           yield* Scope.addFinalizer(
             requestScope.value,
@@ -252,22 +264,28 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
             })
           )
         }
+
         const finish = (error: ExecutionError | undefined, headers?: Headers) =>
           Effect.gen(function* () {
             if (finished) return undefined
             finished = true
+
             const action =
               error === undefined
                 ? undefined
                 : matchRequestScopedAction(requestScopedRules(prepared.config, credential), error)
+
             const usage = attempt.context.usage
+
             if (error !== undefined) usage.fail(error.status, error.message)
+
             const context = {
               provider: credential.provider,
               ...(stateModel === undefined ? {} : { stateModel }),
               ...(compact ? { compact: true } : {}),
               ...(prepared.countTokens === true ? { countTokens: true } : {})
             }
+
             // A refresh replaces the token material: report against the credential version that was actually used.
             const version = attempt.context.credential.credentialVersion ?? lease.credentialVersion
             yield* picker.report(
@@ -277,12 +295,16 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
                 : failureReport(error, { ...context, action })
             )
             const record = usage.finish(yield* Clock.currentTimeMillis)
+
             if (record !== undefined) {
               yield* sink.publish(record)
+
               for (const extra of usage.additionalRecords(yield* Clock.currentTimeMillis)) yield* sink.publish(extra)
             }
+
             return action
           }).pipe(Effect.ensuring(Effect.sync(release)))
+
         const attempt: Attempt = {
           picked,
           executor,
@@ -299,8 +321,10 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               const rejected = attempt.context.usage
               rejected.fail(error.status, error.message)
               const record = rejected.finish(yield* Clock.currentTimeMillis)
+
               if (record !== undefined) yield* sink.publish(record)
               attempt.bootstrapFailed = false
+
               return {
                 ...attempt.context,
                 credential: refreshed,
@@ -308,6 +332,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               }
             })
         }
+
         return attempt
       })
 
@@ -316,6 +341,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
       Effect.gen(function* () {
         const env = yield* WorkerEnv
         const record = yield* Effect.promise(() => antigravityStateFor(env).credits(credentialId))
+
         return record === undefined ? undefined : creditsAvailable(record)
       })
 
@@ -336,6 +362,7 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           bootstrap,
           attempted
         })
+
         /** `preferredExecutionAttemptError`: the last error that actually reached an upstream wins. */
         const preferred = (fallback: ExecutionError): ExecutionError => upstreamError ?? fallback
 
@@ -368,19 +395,24 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
          */
         let creditsQueue: Array<PickResult> | undefined
         let creditsFailure: ExecutionError | undefined
+
         const nextCreditsPick = Effect.gen(function* () {
           if (creditsQueue === undefined) {
             const known: Array<PickResult> = []
             const unknown: Array<PickResult> = []
             const excluded: string[] = []
+
             while (true) {
               const candidate = yield* pickNext(excluded)
+
               if (candidate._tag === "Failure") {
                 creditsFailure = candidate.failure
                 break
               }
+
               excluded.push(candidate.success.credential.id)
               const available = yield* creditsBalance(candidate.success.credential.id)
+
               if (available === undefined) unknown.push(candidate.success)
               else if (available) known.push(candidate.success)
               else {
@@ -390,11 +422,15 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
                 )
               }
             }
+
             const byId = (a: PickResult, b: PickResult) =>
               a.credential.id < b.credential.id ? -1 : a.credential.id > b.credential.id ? 1 : 0
+
             creditsQueue = [...known.sort(byId), ...unknown.sort(byId)]
           }
+
           const next = creditsQueue.shift()
+
           return next === undefined
             ? ({ _tag: "Failure", failure: creditsFailure ?? authNotFound() } as const)
             : ({ _tag: "Success", success: next } as const)
@@ -404,34 +440,45 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           if (settings.maxRetryCredentials > 0 && attempted.length >= settings.maxRetryCredentials) {
             return failed(lastError === undefined ? authNotFound() : preferred(lastError), false)
           }
+
           if (upstreamAttempts >= MAX_UPSTREAM_ATTEMPTS) {
             return failed(lastError === undefined ? authNotFound() : preferred(lastError), true)
           }
+
           const pick = yield* credits ? nextCreditsPick : pickNext(tried)
+
           if (pick._tag === "Failure") {
             // Without an earlier upstream error the selection failure itself is the answer.
             return failed(lastError === undefined ? pick.failure : preferred(lastError), false)
           }
+
           const picked = pick.success
           tried.push(picked.credential.id)
           const executor = executors.get(picked.credential.provider)
+
           if (executor === undefined) {
             const error = new ExecutionError({
               status: 500,
               code: "executor_not_found",
               message: "executor not registered"
             })
+
             yield* picker.report(picked.lease, failureReport(error, { provider: picked.credential.provider }))
+
             return failed(error, false)
           }
+
           const models = picked.route.upstreamModels
+
           if (models.length === 0) continue
           attempted.push(picked.credential.id)
 
           let credentialError: ExecutionError | undefined
+
           for (const upstreamModel of models) {
             upstreamAttempts += 1
             const attempt = yield* buildAttempt(picked, executor, upstreamModel, credits)
+
             // Prepares the credential (`prepareRequestAuth`) and, after a 401, refreshes it and repeats the attempt once
             // (`tryRefreshAfterUnauthorized`) before the failure is reported.
             const result = yield* Effect.result(
@@ -439,18 +486,22 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
                 attempt.context,
                 (context) => {
                   attempt.context = context
+
                   return run(attempt)
                 },
                 { retry: attempt.restart }
               ).pipe(Effect.onInterrupt(() => attempt.finish(lifecycleError())))
             )
+
             if (result._tag === "Success") return { ok: true, value: result.success } satisfies RoundOutcome<T>
 
             const error = result.failure
             upstreamError = error
             bootstrap = attempt.bootstrapFailed
             const action = yield* attempt.finish(error)
+
             if (isStopAction(action)) return failed(error, true)
+
             if (
               action === undefined &&
               (isCompactRequestFault(error, prepared.options.alt) || isRequestInvalid(error))
@@ -458,20 +509,26 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
               // A request fault: no rotation, no penalty.
               return failed(error, true)
             }
+
             credentialError = error
+
             // Credential-wide failures (quota windows) skip the remaining models of the pool.
             if (error.credentialScoped === true) break
           }
+
           if (credentialError !== undefined) lastError = credentialError
         }
       })
 
     const NO_RETRY: RetryPlan = { retry: false }
+
     /** `shouldRetryAfterErrorWithAttempted`: class check here, cooldown knowledge in the ControlPlane. */
     const nextRound = (outcome: Extract<RoundOutcome<T>, { ok: false }>, round: number) =>
       Effect.gen(function* () {
         const error = outcome.error
+
         if (outcome.stop || isRequestInvalid(error) || !isRetryRoundError(error)) return NO_RETRY
+
         const plan = yield* picker.planRetry({
           providers: prepared.providers,
           model: prepared.routeModel,
@@ -484,32 +541,42 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
           ...(prepared.pinnedId === undefined ? {} : { pinnedAuthId: prepared.pinnedId }),
           ...(prepared.disallowFreeAuth === true ? { disallowFreeCodex: true } : {})
         })
+
         return plan
       })
 
     let preferredUpstream: ExecutionError | undefined
     let lastFailure: Extract<RoundOutcome<T>, { ok: false }> | undefined
     let recoveryHintMs: number | undefined
+
     for (let round = 0; ; round += 1) {
       const outcome = yield* runRound(round)
+
       if (outcome.ok) return { ok: true, value: outcome.value } satisfies ConductResult<T>
+
       if (outcome.upstream) preferredUpstream = outcome.error
       lastFailure = outcome
+
       if (outcome.stop) break
       const plan = yield* nextRound(outcome, round)
+
       if (!plan.retry) {
         recoveryHintMs = plan.retryAfterMs
         break
       }
+
       if (upstreamAttempts >= MAX_UPSTREAM_ATTEMPTS) break
+
       if (plan.waitMs > 0) {
         const unit = yield* Random.next
         yield* Effect.sleep(Duration.millis(jitteredWait(plan.waitMs, settings.maxWaitMs, unit)))
       }
     }
+
     const last = lastFailure as Extract<RoundOutcome<T>, { ok: false }>
     // Stops return their own error; exhausted retries answer with the error of the last real upstream attempt.
     const error = last.stop ? last.error : (preferredUpstream ?? last.error)
+
     // Google One AI credits (`quota-exceeded.antigravity-credits`): after the normal rotation failed for capacity
     // reasons, Claude models get one more pass over the Antigravity credentials with credits enabled.
     if (
@@ -521,8 +588,10 @@ export const conduct = <T, R>(prepared: Prepared, run: (attempt: Attempt) => Eff
       shouldAttemptCreditsFallback(error)
     ) {
       const credited = yield* runRound(0, true)
+
       if (credited.ok) return { ok: true, value: credited.value } satisfies ConductResult<T>
     }
+
     return {
       ok: false,
       error: withRetryAfter(error, recoveryHintMs),

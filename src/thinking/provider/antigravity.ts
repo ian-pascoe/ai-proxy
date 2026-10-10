@@ -11,6 +11,7 @@ import type { ProviderApplier, ThinkingModelInfo } from "../types.ts"
 import { applyBudgetFormat, applyLevelFormat } from "./google.ts"
 
 const PREFIX = "request.generationConfig.thinkingConfig"
+
 const MAX_OUTPUT_PATH = "request.generationConfig.maxOutputTokens"
 
 const isClaudeModel = (modelInfo: ThinkingModelInfo | undefined): boolean =>
@@ -22,8 +23,10 @@ const effectiveMaxTokens = (
   modelInfo: ThinkingModelInfo
 ): { readonly max: number; readonly fromModel: boolean } => {
   const requested = get(payload, MAX_OUTPUT_PATH)
+
   if (requested !== undefined && asInt(requested) > 0) return { max: asInt(requested), fromModel: false }
   const modelMax = modelInfo.maxCompletionTokens ?? 0
+
   return modelMax > 0 ? { max: modelMax, fromModel: true } : { max: 0, fromModel: false }
 }
 
@@ -36,13 +39,17 @@ const normalizeClaudeBudget = (
   let budget = budgetIn
   let payload = payloadIn
   const { max, fromModel } = effectiveMaxTokens(payload, modelInfo)
+
   if (max > 0 && budget >= max) budget = max - 1
 
   const minBudget = modelInfo.thinking?.min ?? 0
+
   if (minBudget > 0 && budget >= 0 && budget < minBudget) {
     return { budget: "removed", body: delPath(payload, PREFIX) }
   }
+
   if (fromModel && max > 0) payload = setPath(payload, MAX_OUTPUT_PATH, max)
+
   return { budget, body: payload }
 }
 
@@ -63,18 +70,24 @@ const budgetFormat = (
 export const antigravityApplier: ProviderApplier = {
   apply(body, config, modelInfo) {
     const userDefined = isUserDefinedModel(modelInfo)
+
     if (!userDefined && modelInfo?.thinking === undefined) return body
 
     const root = ensureBody(body)
+
     if (config.mode === "auto" || config.mode === "budget") return budgetFormat(root, modelInfo, config)
+
     if (userDefined) {
       if (config.mode === "level" || (config.mode === "none" && config.level !== "")) {
         return applyLevelFormat(root, config, PREFIX)
       }
+
       return budgetFormat(root, modelInfo, config)
     }
+
     // Known models choose the format from their capabilities.
     if ((modelInfo?.thinking?.levels?.length ?? 0) > 0) return applyLevelFormat(root, config, PREFIX)
+
     return budgetFormat(root, modelInfo, config)
   }
 }

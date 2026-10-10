@@ -8,10 +8,13 @@ import { makeFixture, T0, type Fixture, type MockHandler, type MockReply } from 
 import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts"
 
 const MIN = 60_000
+
 const HOUR = 60 * MIN
+
 const iso = (ms: number) => new Date(ms).toISOString()
 
 const CLAUDE_TOKEN = "https://platform.claude.com/v1/oauth/token"
+
 const CLAUDE_PROFILE = "https://api.anthropic.com/api/oauth/profile"
 
 const claudeFile = (extra: JsonObject = {}): JsonObject => ({
@@ -26,33 +29,42 @@ const claudeFile = (extra: JsonObject = {}): JsonObject => ({
 /** Claude token endpoint that rotates `rt-N` -> `rt-(N+1)` and answers the profile with 403 (identity kept). */
 const claudeServer = (log: string[] = []): MockHandler => {
   let issued = 1
+
   return (request) => {
     if (request.url === CLAUDE_PROFILE) return { status: 403, body: "no" }
     expect(request.url).toBe(CLAUDE_TOKEN)
     const refreshToken = String(request.json().refresh_token)
     log.push(refreshToken)
     issued += 1
+
     return { body: { access_token: `at-${issued}`, refresh_token: `rt-${issued}`, expires_in: 8 * 3600 } }
   }
 }
 
 const ok = (result: RefreshResult) => {
   if (!result.ok) throw new Error(`expected success, got ${result.error.code}: ${result.error.message}`)
+
   return result
 }
+
 const bad = (result: RefreshResult) => {
   if (result.ok) throw new Error("expected failure")
+
   return result
 }
+
 const stored = (fixture: Fixture, id: string) => fixture.store.get(id)?.metadata ?? {}
+
 const tokenCalls = (fixture: Fixture) => fixture.http.requests.filter((request) => request.url === CLAUDE_TOKEN)
 
 /** A promise that can be resolved from outside: lets a test hold an upstream call open. */
 const gate = () => {
   let open!: () => void
+
   const promise = new Promise<void>((resolve) => {
     open = resolve
   })
+
   return { promise, open }
 }
 
@@ -120,6 +132,7 @@ describe("alarm multiplexing", () => {
     let running = 0
     let peak = 0
     const release = gate()
+
     const fixture = makeFixture(
       async (request) => {
         if (request.url === CLAUDE_PROFILE) return { status: 403 }
@@ -127,10 +140,12 @@ describe("alarm multiplexing", () => {
         peak = Math.max(peak, running)
         await release.promise
         running -= 1
+
         return { body: { access_token: "n", refresh_token: "r2", expires_in: 8 * 3600 } }
       },
       { workers: () => 2 }
     )
+
     for (let i = 0; i < 5; i++) fixture.add(`claude-${i}.json`, claudeFile({ expired: iso(T0 + HOUR) }))
     const run = fixture.manager.runDue()
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -146,10 +161,13 @@ describe("concurrent refresh dedupe", () => {
     const release = gate()
     const log: string[] = []
     const inner = claudeServer(log)
+
     const fixture = makeFixture(async (request) => {
       if (request.url === CLAUDE_TOKEN) await release.promise
+
       return inner(request)
     })
+
     fixture.add("claude-a.json", claudeFile({ expired: iso(T0 + HOUR) }))
 
     const callers = [
@@ -157,6 +175,7 @@ describe("concurrent refresh dedupe", () => {
       ...Array.from({ length: 8 }, () => fixture.manager.refreshNow("claude-a.json", { rejectedAccessToken: "at-1" })),
       fixture.manager.refreshNow("claude-a.json")
     ]
+
     await new Promise((resolve) => setTimeout(resolve, 10))
     release.open()
     const results = await Promise.all(callers)
@@ -164,9 +183,11 @@ describe("concurrent refresh dedupe", () => {
     expect(log).toEqual(["rt-1"])
     expect(tokenCalls(fixture)).toHaveLength(1)
     const refreshes = results.slice(1) as RefreshResult[]
+
     for (const result of refreshes) {
       expect(ok(result).credential.metadata).toMatchObject({ access_token: "at-2", refresh_token: "rt-2" })
     }
+
     expect(fixture.store.get("claude-a.json")?.credentialVersion).toBe(2)
   })
 
@@ -203,10 +224,13 @@ describe("persistence and merge", () => {
   it("keeps user edits made while the refresh was in flight (three-way merge)", async () => {
     const release = gate()
     const inner = claudeServer()
+
     const fixture = makeFixture(async (request) => {
       if (request.url === CLAUDE_TOKEN) await release.promise
+
       return inner(request)
     })
+
     fixture.add("claude-a.json", claudeFile({ prefix: "old" }))
     const pending = fixture.manager.refreshNow("claude-a.json")
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -227,10 +251,13 @@ describe("persistence and merge", () => {
   it("discards a refresh result when the credential was replaced by a re-login meanwhile", async () => {
     const release = gate()
     const inner = claudeServer()
+
     const fixture = makeFixture(async (request) => {
       if (request.url === CLAUDE_TOKEN) await release.promise
+
       return inner(request)
     })
+
     fixture.add("claude-a.json", claudeFile())
     const pending = fixture.manager.refreshNow("claude-a.json")
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -246,10 +273,13 @@ describe("persistence and merge", () => {
   it("reports a credential removed during the refresh", async () => {
     const release = gate()
     const inner = claudeServer()
+
     const fixture = makeFixture(async (request) => {
       if (request.url === CLAUDE_TOKEN) await release.promise
+
       return inner(request)
     })
+
     fixture.add("claude-a.json", claudeFile())
     const pending = fixture.manager.refreshNow("claude-a.json")
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -288,17 +318,21 @@ describe("failure back-off", () => {
   it("invalid_grant backs off exponentially and a success clears the state", async () => {
     let grant = true
     const inner = claudeServer()
+
     const fixture = makeFixture((request) =>
       grant && request.url === CLAUDE_TOKEN ? { status: 400, body: '{"error":"invalid_grant"}' } : inner(request)
     )
+
     fixture.add("claude-a.json", claudeFile({ expired: iso(T0 - MIN) }))
     const delays: number[] = []
+
     for (let i = 0; i < 3; i++) {
       await fixture.manager.refreshNow("claude-a.json")
       const next = fixture.pool.refreshTarget("claude-a.json")?.state.nextRefreshAfter ?? 0
       delays.push((next - fixture.clock.now) / MIN)
       fixture.clock.now = next
     }
+
     expect(delays).toEqual([1, 2, 4])
     expect(fixture.pool.refreshTarget("claude-a.json")?.state).toMatchObject({
       refreshFailures: 3,
@@ -342,9 +376,11 @@ describe("failure back-off", () => {
   it("remembers a rejected token that has no expiry of its own until a refresh replaces it", async () => {
     let failNow = true
     const inner = claudeServer()
+
     const fixture = makeFixture((request) =>
       failNow && request.url === CLAUDE_TOKEN ? { status: 500, body: "boom" } : inner(request)
     )
+
     fixture.add("claude-a.json", { type: "claude", access_token: "no-expiry", refresh_token: "rt-1" })
     bad(await fixture.manager.refreshNow("claude-a.json", { rejectedAccessToken: "no-expiry" }))
     expect(fixture.pool.refreshTarget("claude-a.json")?.state).toMatchObject({
@@ -374,11 +410,13 @@ describe("failure back-off", () => {
   it("Claude 429 blocks the refresh token for Retry-After without calling upstream", async () => {
     const inner = claudeServer()
     let throttled = true
+
     const fixture = makeFixture((request) =>
       throttled && request.url === CLAUDE_TOKEN
         ? { status: 429, body: "slow", headers: { "retry-after": "30" } }
         : inner(request)
     )
+
     fixture.add("claude-a.json", claudeFile({ expired: iso(T0 - MIN) }))
     bad(await fixture.manager.refreshNow("claude-a.json"))
     expect(tokenCalls(fixture)).toHaveLength(1)
@@ -397,6 +435,7 @@ describe("failure back-off", () => {
         ? { body: { access_token: "n", refresh_token: "r2", expires_in: 60 } }
         : {}
     )
+
     fixture.add("codex-a.json", { type: "codex", access_token: "a", refresh_token: "r", expired: iso(T0 + HOUR) })
     ok(await fixture.manager.refreshNow("codex-a.json"))
     expect(fixture.pool.refreshTarget("codex-a.json")?.state.nextRefreshAfter).toBe(T0 + 30_000)
@@ -445,10 +484,13 @@ describe("ensureFresh (request-time preparation)", () => {
 
   it("mints a Meta API key from the DCA token, persisted before use, and re-mints after a 401", async () => {
     let minted = 0
+
     const fixture = makeFixture(() => {
       minted += 1
+
       return { body: { api_key: `meta-key-${minted}`, user_email: "me@meta.com" } }
     })
+
     fixture.add("meta-a.json", { type: "meta", auth_kind: "oauth", dca_token: "dca:abc", access_token: "dca:abc" })
     expect(fixture.manager.nextDueAt()).toBeUndefined() // never scheduled
     const first = ok(await fixture.manager.ensureFresh("meta-a.json"))
@@ -473,14 +515,17 @@ describe("vertex access tokens", () => {
       expect(request.url).toBe(TOKEN_URI)
       counter.n += 1
       await new Promise((resolve) => setTimeout(resolve, 5))
+
       return { body: { access_token: `ya29.${counter.n}`, expires_in: 3600 } }
     })
+
     fixture.add("vertex-a.json", {
       type: "vertex",
       project_id: "proj-1",
       email: "sa@proj-1.iam.gserviceaccount.com",
       service_account: sa.account(sa.pem.pkcs1)
     })
+
     return fixture
   }
 
@@ -489,9 +534,11 @@ describe("vertex access tokens", () => {
     const fixture = vertexFixture(counter)
     const results = await Promise.all(Array.from({ length: 6 }, () => fixture.manager.ensureFresh("vertex-a.json")))
     expect(counter.n).toBe(1)
+
     for (const result of results) {
       expect(ok(result).credential.metadata).toMatchObject({ access_token: "ya29.1" })
     }
+
     // not persisted in the auth file
     expect(stored(fixture, "vertex-a.json")).not.toHaveProperty("access_token")
 
@@ -506,11 +553,15 @@ describe("vertex access tokens", () => {
   it("exposes a valid cached token through the pick snapshot and re-mints when the credential changes", async () => {
     const counter = { n: 0 }
     const fixture = vertexFixture(counter)
+
     const pickToken = () => {
       const result: PickResult = fixture.pool.pick({ providers: ["vertex"], model: "gemini-2.5-pro" })
+
       if (!result.ok) throw new Error(result.failure.code)
+
       return result.credential.metadata
     }
+
     expect(pickToken()).not.toHaveProperty("access_token") // nothing minted yet: executor calls ensureFresh
     ok(await fixture.manager.ensureFresh("vertex-a.json"))
     expect(pickToken()).toMatchObject({ access_token: "ya29.1" })

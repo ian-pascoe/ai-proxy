@@ -17,6 +17,7 @@ const raw = (value: Json): string => JSON.stringify(value)
 /** `addIfNotEmpty` / `xaiAppendTokenString`: the trimmed `Result.String()` when not empty. */
 const add = (segments: string[], value: Json | undefined): void => {
   const text = goTrimSpace(asString(value))
+
   if (text !== "") segments.push(text)
 }
 
@@ -42,7 +43,9 @@ export const buildResponsesUsageJson = (count: number): string =>
 
 const collectOpenAIContent = (content: Json | undefined, segments: string[]): void => {
   if (content === undefined) return
+
   if (typeof content === "string") return add(segments, content)
+
   if (isJsonArray(content)) {
     for (const part of content) {
       switch (asString(get(part, "type"))) {
@@ -69,22 +72,27 @@ const collectOpenAIContent = (content: Json | undefined, segments: string[]): vo
           else add(segments, part)
       }
     }
+
     return
   }
+
   if (isJsonObject(content)) add(segments, raw(content))
 }
 
 const addParameters = (segments: string[], owner: Json | undefined): void => {
   const params = get(owner, "parameters")
+
   if (params !== undefined) add(segments, raw(params))
 }
 
 const collectOpenAIToolCalls = (calls: Json | undefined, segments: string[]): void => {
   if (!isJsonArray(calls)) return
+
   for (const call of calls) {
     add(segments, get(call, "id"))
     add(segments, get(call, "type"))
     const fn = get(call, "function")
+
     if (fn !== undefined) {
       add(segments, get(fn, "name"))
       add(segments, get(fn, "description"))
@@ -100,6 +108,7 @@ const appendToolPayload = (tool: Json | undefined, segments: string[]): void => 
   add(segments, get(tool, "name"))
   add(segments, get(tool, "description"))
   const fn = get(tool, "function")
+
   if (fn !== undefined) {
     add(segments, get(fn, "name"))
     add(segments, get(fn, "description"))
@@ -113,6 +122,7 @@ export const countOpenAIChatTokens = (codec: BpeCodec, payload: Json | undefined
   const segments: string[] = []
 
   const messages = get(payload, "messages")
+
   if (isJsonArray(messages)) {
     for (const message of messages) {
       add(segments, get(message, "role"))
@@ -120,6 +130,7 @@ export const countOpenAIChatTokens = (codec: BpeCodec, payload: Json | undefined
       collectOpenAIContent(get(message, "content"), segments)
       collectOpenAIToolCalls(get(message, "tool_calls"), segments)
       const functionCall = get(message, "function_call")
+
       if (functionCall !== undefined) {
         add(segments, get(functionCall, "name"))
         add(segments, get(functionCall, "arguments"))
@@ -128,10 +139,12 @@ export const countOpenAIChatTokens = (codec: BpeCodec, payload: Json | undefined
   }
 
   const tools = get(payload, "tools")
+
   if (isJsonArray(tools)) for (const tool of tools) appendToolPayload(tool, segments)
   else appendToolPayload(tools, segments)
 
   const functions = get(payload, "functions")
+
   if (isJsonArray(functions)) {
     for (const fn of functions) {
       add(segments, get(fn, "name"))
@@ -141,17 +154,22 @@ export const countOpenAIChatTokens = (codec: BpeCodec, payload: Json | undefined
   }
 
   const choice = get(payload, "tool_choice")
+
   if (choice !== undefined) add(segments, typeof choice === "string" ? choice : raw(choice))
 
   const format = get(payload, "response_format")
+
   if (format !== undefined) {
     add(segments, get(format, "type"))
     add(segments, get(format, "name"))
+
     for (const key of ["json_schema", "schema"]) {
       const schema = get(format, key)
+
       if (schema !== undefined) add(segments, raw(schema))
     }
   }
+
   add(segments, get(payload, "input"))
   add(segments, get(payload, "prompt"))
 
@@ -169,14 +187,17 @@ export const countCodexInputTokens = (codec: BpeCodec, body: Json | undefined): 
   add(segments, get(body, "instructions"))
 
   const input = get(body, "input")
+
   if (isJsonArray(input)) {
     for (const item of input) {
       switch (asString(get(item, "type"))) {
         case "message": {
           const content = get(item, "content")
+
           if (isJsonArray(content)) for (const part of content) add(segments, get(part, "text"))
           break
         }
+
         case "function_call":
           add(segments, get(item, "name"))
           add(segments, get(item, "arguments"))
@@ -191,6 +212,7 @@ export const countCodexInputTokens = (codec: BpeCodec, body: Json | undefined): 
   }
 
   const tools = get(body, "tools")
+
   if (isJsonArray(tools)) {
     for (const tool of tools) {
       add(segments, get(tool, "name"))
@@ -200,10 +222,12 @@ export const countCodexInputTokens = (codec: BpeCodec, body: Json | undefined): 
   }
 
   const format = get(body, "text.format")
+
   if (format !== undefined) {
     add(segments, get(format, "name"))
     addJsonOrString(segments, get(format, "schema"))
   }
+
   return countSegments(codec, segments.join("\n"))
 }
 
@@ -213,7 +237,9 @@ export const countCodexInputTokens = (codec: BpeCodec, body: Json | undefined): 
 
 const collectXaiContent = (content: Json | undefined, segments: string[]): void => {
   if (typeof content === "string") return add(segments, content)
+
   if (!isJsonArray(content)) return
+
   for (const part of content) {
     switch (asString(get(part, "type"))) {
       case "text":
@@ -246,6 +272,7 @@ export const countXaiInputTokens = (codec: BpeCodec, body: Json | undefined): nu
   add(segments, get(body, "instructions"))
 
   const input = get(body, "input")
+
   if (typeof input === "string") add(segments, input)
   else if (isJsonArray(input)) {
     for (const item of input) {
@@ -268,6 +295,7 @@ export const countXaiInputTokens = (codec: BpeCodec, body: Json | undefined): nu
   }
 
   const tools = get(body, "tools")
+
   if (isJsonArray(tools)) {
     for (const tool of tools) {
       if (asString(get(tool, "type")) !== "function") continue
@@ -278,9 +306,11 @@ export const countXaiInputTokens = (codec: BpeCodec, body: Json | undefined): nu
   }
 
   const format = get(body, "text.format")
+
   if (format !== undefined) {
     add(segments, get(format, "name"))
     addJsonOrString(segments, get(format, "schema"))
   }
+
   return countSegments(codec, segments.length === 0 ? "" : segments.join("\n"))
 }

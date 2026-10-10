@@ -37,6 +37,7 @@ export const RetryQuery = Schema.Struct({
   requireAuthKind: optional(AuthKind),
   disallowFreeCodex: optional(Schema.Boolean)
 })
+
 export type RetryQuery = typeof RetryQuery.Type
 
 export type RetryPlan =
@@ -45,7 +46,9 @@ export type RetryPlan =
 
 const parseIntAny = (value: unknown): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value)
+
   if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) return Number(value.trim())
+
   return undefined
 }
 
@@ -53,8 +56,10 @@ const parseIntAny = (value: unknown): number | undefined => {
 export const requestRetryOverride = (credential: Pick<Credential, "metadata">): number | undefined => {
   for (const key of ["request_retry", "request-retry"]) {
     const parsed = parseIntAny(credential.metadata[key])
+
     if (parsed !== undefined) return parsed < 0 ? undefined : parsed
   }
+
   return undefined
 }
 
@@ -76,18 +81,26 @@ export const retryRoundAvailability = (
   now: number
 ): { readonly eligible: boolean; readonly next: number } => {
   const block = isBlockedForModel(credential, state, model, now)
+
   if (!block.blocked) return { eligible: true, next: 0 }
+
   if (block.next === 0 || block.reason === "disabled") return { eligible: false, next: 0 }
+
   if (state.quota.exceeded && state.quota.reason === "credential_quota" && state.quota.nextRecoverAt > now) {
     return { eligible: retryRoundStateEligible(state.lastError, true), next: block.next }
   }
+
   const key = canonicalModelKey(model)
   const states = Object.entries(state.modelStates)
+
   if (key !== "" && states.length > 0) {
     let matchedBlocked = false
+
     for (const [stateModel, modelState] of states) {
       if (canonicalModelKey(stateModel) !== key) continue
+
       if (modelState.status === "disabled") return { eligible: false, next: 0 }
+
       const stateBlock = availabilityBlock(
         modelState.unavailable,
         modelState.quota.exceeded,
@@ -95,15 +108,20 @@ export const retryRoundAvailability = (
         modelState.quota.nextRecoverAt,
         now
       )
+
       if (!stateBlock.blocked) continue
       matchedBlocked = true
+
       if (stateBlock.next === 0 || !retryRoundStateEligible(modelState.lastError, modelState.quota.exceeded)) {
         return { eligible: false, next: 0 }
       }
     }
+
     if (matchedBlocked) return { eligible: true, next: block.next }
   }
+
   if (!retryRoundStateEligible(state.lastError, state.quota.exceeded)) return { eligible: false, next: 0 }
+
   return { eligible: true, next: block.next }
 }
 
@@ -119,15 +137,20 @@ const routeAvailability = (
   now: number
 ): { readonly eligible: boolean; readonly next: number } => {
   if (route === undefined) return retryRoundAvailability(state, credential, "", now)
+
   if (route.upstreamModels.length <= 1) return retryRoundAvailability(state, credential, route.selectionModel, now)
   let best: { readonly eligible: boolean; readonly next: number } | undefined
+
   for (const upstream of route.upstreamModels) {
     const availability = retryRoundAvailability(state, credential, upstream, now)
+
     if (availability.eligible && availability.next === 0) return availability
+
     if (best === undefined || (availability.eligible && (!best.eligible || availability.next < best.next))) {
       best = availability
     }
   }
+
   return best ?? { eligible: false, next: 0 }
 }
 
@@ -144,6 +167,7 @@ export interface RetryPlanInput {
 export const planRetry = (input: RetryPlanInput): RetryPlan => {
   const { query, now } = input
   const providers = new Set(query.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean))
+
   if (providers.size === 0 || query.round < 0) return { retry: false }
   const attempted = new Set(query.attempted ?? [])
   const pinned = query.pinnedAuthId?.trim() ?? ""
@@ -152,10 +176,14 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
   let allowed = false
   let found = false
   let minWait = 0
+
   for (const { credential, state } of input.credentials) {
     if (credential.disabled || state.status === "disabled") continue
+
     if (pinned !== "" && credential.id !== pinned) continue
+
     if (query.requireAuthKind !== undefined && credential.authKind !== query.requireAuthKind) continue
+
     if (
       query.disallowFreeCodex === true &&
       credential.provider === "codex" &&
@@ -163,44 +191,62 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
     ) {
       continue
     }
+
     if (!providers.has(executorKey(credential))) continue
     const route = query.model === "" ? undefined : resolveModelRoute(credential, query.model, input.routing)
+
     if (query.model !== "" && route === undefined) continue
+
     if (query.round >= effectiveRequestRetry(credential, query.requestRetry)) continue
     const { eligible, next } = routeAvailability(state, credential, route, now)
+
     if (!eligible) continue
     allowed = true
 
     const wasAttempted = attempted.has(credential.id)
+
     if (!wasAttempted || input.coolingDisabled(credential) || query.status !== 429) {
       if (next === 0) {
         // Something is available right now.
         return { retry: true, waitMs: 0 }
       }
+
       const wait = next - now
+
       if (wait < 0) continue
+
       if (!found || wait < minWait) {
         minWait = wait
         found = true
       }
+
       continue
     }
+
     // Already attempted in the round that just failed with 429: never an immediate retry.
     const wait = next === 0 ? MIN_QUOTA_COOLDOWN_MS : Math.max(next - now, MIN_QUOTA_COOLDOWN_MS)
+
     if (!found || wait < minWait) {
       minWait = wait
       found = true
     }
   }
+
   if (!allowed) return { retry: false }
+
   if (found) {
     if (minWait > 0 && (maxWait <= 0 || minWait > maxWait)) return { retry: false, retryAfterMs: minWait }
+
     return { retry: true, waitMs: minWait }
   }
+
   const hint = query.retryAfterMs
+
   if (hint !== undefined) {
     if (hint < 0 || (hint > 0 && (maxWait <= 0 || hint > maxWait))) return { retry: false }
+
     return { retry: true, waitMs: hint }
   }
+
   return { retry: true, waitMs: 0 }
 }

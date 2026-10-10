@@ -73,6 +73,7 @@ export class UpstreamWebSocketConnector extends Context.Service<
 /** Go `buildCodexResponsesWebsocketURL` / `buildXAIResponsesWebsocketURL`: `http` -> `ws`, `https` -> `wss`. */
 export const websocketUrl = (httpUrl: string): string => {
   const parsed = new URL(httpUrl.trim())
+
   switch (parsed.protocol) {
     case "http:":
       parsed.protocol = "ws:"
@@ -86,7 +87,9 @@ export const websocketUrl = (httpUrl: string): string => {
     default:
       throw new Error(`unsupported responses websocket URL scheme "${parsed.protocol.replace(/:$/, "")}"`)
   }
+
   if (parsed.host === "") throw new Error("responses websocket URL host is empty")
+
   return parsed.toString()
 }
 
@@ -104,19 +107,23 @@ export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket =
   const listeners = new Set<(message: UpstreamMessage) => void>()
   let open = true
   let ended = false
+
   const end = (message: UpstreamMessage) => {
     if (ended) return
     ended = true
     open = false
     Queue.offerUnsafe(messages, message)
+
     for (const listener of listeners) listener(message)
   }
+
   ws.addEventListener("message", (event) => {
     const data = (event as MessageEvent).data
     Queue.offerUnsafe(messages, typeof data === "string" ? { _tag: "text", data } : { _tag: "binary" })
   })
   ws.addEventListener("close", (event) => end({ _tag: "close", ...closeReasonOf(event as CloseEvent) }))
   ws.addEventListener("error", () => end({ _tag: "error", message: "websocket error" }))
+
   return {
     headers,
     send: (text) =>
@@ -132,7 +139,9 @@ export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket =
       Effect.sync(() => {
         const wasOpen = open
         open = false
+
         if (!wasOpen) return
+
         try {
           // 1005/1006 cannot be sent; default to a normal closure.
           ws.close(code ?? 1000, reason === undefined ? undefined : reason.slice(0, 120))
@@ -143,6 +152,7 @@ export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket =
     isOpen: () => open,
     onEnd: (listener) => {
       listeners.add(listener)
+
       return () => void listeners.delete(listener)
     }
   }
@@ -157,6 +167,7 @@ export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocket
           const url = request.url.replace(/^ws(s?):/i, "http$1:")
           const response = await fetch(url, { headers: { ...request.headers, upgrade: "websocket" } })
           const ws = (response as Response & { webSocket?: WebSocket | null }).webSocket
+
           if (ws === undefined || ws === null) {
             const body = await response.text().catch(() => "")
             const headers: Record<string, string> = {}
@@ -170,7 +181,9 @@ export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocket
               message: `websocket upgrade rejected: ${response.status}`
             })
           }
+
           ws.accept()
+
           return wrapWebSocket(ws, new Headers(response.headers))
         },
         catch: (cause) =>

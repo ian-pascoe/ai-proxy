@@ -39,15 +39,20 @@ const handle = (exchange: Exchange) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const configResult = yield* Effect.result(currentConfig)
+
     if (configResult._tag === "Failure") {
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false })
     }
+
     const config = configResult.success
+
     const onError = (error: ExecutionError) =>
       errorResponse("openai", error, { passthroughHeaders: config.requests["passthrough-headers"] })
 
     const read = yield* Effect.result(readRequestBody(request))
+
     if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status)
+
     if (read.success.json === undefined) return badRequest("request body is not valid JSON")
     const { body, stream } = exchange.prepare(read.success.json)
 
@@ -58,6 +63,7 @@ const handle = (exchange: Exchange) =>
       alt: exchange.alt(request),
       request
     }
+
     if (stream) {
       return yield* streamResponse(executeStream(input), {
         framer: exchange.framer(),
@@ -65,11 +71,14 @@ const handle = (exchange: Exchange) =>
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"]
       })
     }
+
     return yield* withNonStreamKeepAlive(
       config.requests["nonstream-keepalive-interval"],
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(input))
+
         if (result._tag === "Failure") return onError(result.failure)
+
         return jsonResponse(exchange.convertResponse(result.success.payload), result.success.headers)
       })
     )
@@ -79,6 +88,7 @@ const chatCompletions = handle({
   prepare: (raw) => {
     let body = raw
     let stream = get(body, "stream") === true
+
     // Some clients send Responses-format payloads to /v1/chat/completions; convert them to Chat Completions.
     if (isResponsesShaped(body) && builtinTranslators.hasRequestTransformer(Formats.OpenAIResponse, Formats.OpenAI)) {
       const converted = builtinTranslators.translateRequest(Formats.OpenAIResponse, Formats.OpenAI, {
@@ -87,10 +97,12 @@ const chatCompletions = handle({
         stream,
         body
       })
+
       // Go ignores the conversion error and continues with the returned body.
       body = converted.body
       stream = asBool(get(body, "stream"))
     }
+
     return { body, stream }
   },
   alt: altOf,
@@ -101,10 +113,12 @@ const chatCompletions = handle({
 /** The completions framer converts chat chunks back and drops chunks without text, finish reason or usage. */
 const completionsFramer = (): StreamFramer => {
   const inner = openAIFramer()
+
   return {
     ...inner,
     chunk: (payload) => {
       const converted = chatStreamChunkToCompletions(payload)
+
       return converted === undefined ? "" : inner.chunk(converted)
     }
   }
@@ -113,6 +127,7 @@ const completionsFramer = (): StreamFramer => {
 const completions = handle({
   prepare: (raw) => {
     const body = completionsRequestToChat(isJsonObject(raw) ? raw : {})
+
     return { body, stream: get(raw, "stream") === true }
   },
   alt: () => "",

@@ -49,10 +49,13 @@ export class SqliteStateTable implements StateTable {
     const entry = this.#sql
       .exec<EntryRow>("SELECT generation, expires_at, chunks FROM session_state_entries WHERE key = ?", key)
       .toArray()[0]
+
     if (entry === undefined) return undefined
+
     const chunks = this.#sql
       .exec<ChunkRow>("SELECT data FROM session_state_chunks WHERE key = ? ORDER BY seq", key)
       .toArray()
+
     return {
       value: chunks.map((chunk) => chunk.data).join(""),
       generation: entry.generation,
@@ -64,10 +67,12 @@ export class SqliteStateTable implements StateTable {
     const existing = this.#sql
       .exec<EntryRow>("SELECT generation, expires_at, chunks FROM session_state_entries WHERE key = ?", key)
       .toArray()[0]
+
     // The value only changes with a new generation: a sliding expiry update keeps the chunks.
     if (existing === undefined || existing.generation !== row.generation) {
       this.#sql.exec("DELETE FROM session_state_chunks WHERE key = ?", key)
       let seq = 0
+
       for (let offset = 0; offset === 0 || offset < row.value.length; offset += CHUNK_UNITS) {
         this.#sql.exec(
           "INSERT INTO session_state_chunks (key, seq, data) VALUES (?, ?, ?)",
@@ -76,6 +81,7 @@ export class SqliteStateTable implements StateTable {
           row.value.slice(offset, offset + CHUNK_UNITS)
         )
       }
+
       this.#sql.exec(
         "INSERT OR REPLACE INTO session_state_entries (key, generation, expires_at, chunks) VALUES (?, ?, ?, ?)",
         key,
@@ -83,8 +89,10 @@ export class SqliteStateTable implements StateTable {
         row.expiresAt,
         seq
       )
+
       return
     }
+
     this.#sql.exec("UPDATE session_state_entries SET expires_at = ? WHERE key = ?", row.expiresAt, key)
   }
 
@@ -119,6 +127,7 @@ export class SqliteStateTable implements StateTable {
         "SELECT MIN(expires_at) AS next FROM session_state_entries"
       )
       .one()
+
     return row.next ?? undefined
   }
 
@@ -128,6 +137,7 @@ export class SqliteStateTable implements StateTable {
         "SELECT MAX(generation) AS max FROM session_state_entries"
       )
       .one()
+
     return row.max ?? 0
   }
 }

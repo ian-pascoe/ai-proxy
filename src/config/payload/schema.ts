@@ -27,6 +27,7 @@ export const PayloadModelRule = Schema.Struct({
   /** Paths that must be missing or null. */
   "not-exist": Schema.optionalKey(Schema.Array(Schema.String))
 })
+
 export type PayloadModelRule = typeof PayloadModelRule.Type
 
 export const PayloadRule = Schema.Struct({
@@ -34,6 +35,7 @@ export const PayloadRule = Schema.Struct({
   /** gjson/sjson path -> value (`*-raw` rules: raw JSON text or any JSON value). */
   params: Schema.optionalKey(Schema.Record(Schema.String, ParamValue))
 })
+
 export type PayloadRule = typeof PayloadRule.Type
 
 export const PayloadFilterRule = Schema.Struct({
@@ -41,9 +43,11 @@ export const PayloadFilterRule = Schema.Struct({
   /** Paths to delete. */
   params: Schema.optionalKey(Schema.Array(Schema.String))
 })
+
 export type PayloadFilterRule = typeof PayloadFilterRule.Type
 
 const RuleList = Schema.Array(PayloadRule).pipe(Schema.withDecodingDefaultKey(Effect.succeed([])))
+
 const FilterRuleList = Schema.Array(PayloadFilterRule).pipe(Schema.withDecodingDefaultKey(Effect.succeed([])))
 
 export const PayloadConfig = Schema.Struct({
@@ -53,4 +57,5 @@ export const PayloadConfig = Schema.Struct({
   "override-raw": RuleList,
   filter: FilterRuleList
 })
+
 export type PayloadConfig = typeof PayloadConfig.Type

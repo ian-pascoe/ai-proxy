@@ -9,7 +9,9 @@ import { type Credential, type CredentialError, type CredentialState, executorKe
 import type { CredentialSnapshot } from "./selection/types.ts"
 
 const SECRET_KEY = /token|secret|password|passwd|api[_-]?key|private[_-]?key|authorization|cookie|session_id|dca/i
+
 const SAFE_KEYS = new Set(["token_type", "token_endpoint", "dca_expired", "dca_expires_at"])
+
 const SECRET_ATTRIBUTES = new Set(["api_key"])
 
 /** Last four characters only, so a key is recognisable without being usable. */
@@ -18,13 +20,16 @@ export const maskSecret = (value: string): string =>
 
 const redactValue = (value: Json): Json => {
   if (Array.isArray(value)) return value.map(redactValue)
+
   if (isJsonObject(value)) return redactMetadata(value)
+
   return value
 }
 
 /** Copy of auth-file metadata with every secret-looking value replaced. */
 export const redactMetadata = (metadata: JsonObject): JsonObject => {
   const out: JsonObject = {}
+
   for (const [key, value] of Object.entries(metadata)) {
     if (SECRET_KEY.test(key) && !SAFE_KEYS.has(key)) {
       out[key] = typeof value === "string" && value !== "" ? maskSecret(value) : value === null ? null : "[redacted]"
@@ -32,6 +37,7 @@ export const redactMetadata = (metadata: JsonObject): JsonObject => {
       out[key] = redactValue(value)
     }
   }
+
   return out
 }
 
@@ -73,11 +79,14 @@ export interface CredentialSummary {
 
 export const summarizeCredential = (credential: Credential, state: CredentialState): CredentialSummary => {
   const attributes: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(credential.attributes)) {
     attributes[key] = SECRET_ATTRIBUTES.has(key) ? maskSecret(value) : value
   }
+
   const expiresAt = accessTokenExpiry(credential.metadata, state.rejectedAccessToken)
   const modelStates: Record<string, { unavailable: boolean; nextRetryAfter: number; statusMessage?: string }> = {}
+
   for (const [model, modelState] of Object.entries(state.modelStates)) {
     modelStates[model] = {
       unavailable: modelState.unavailable,
@@ -85,6 +94,7 @@ export const summarizeCredential = (credential: Credential, state: CredentialSta
       ...(modelState.statusMessage === undefined ? {} : { statusMessage: modelState.statusMessage })
     }
   }
+
   return {
     id: credential.id,
     provider: credential.provider,
@@ -126,5 +136,6 @@ const stringField = (value: Json | undefined): string => (typeof value === "stri
 /** Credential plus resolved executor key and base URL: the data an executor needs to call the upstream. */
 export const toSnapshot = (credential: Credential): CredentialSnapshot => {
   const baseUrl = credential.attributes.base_url?.trim() || stringField(credential.metadata.base_url)
+
   return { ...credential, ...(baseUrl === "" ? {} : { baseUrl }), executor: executorKey(credential) }
 }

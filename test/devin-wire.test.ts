@@ -20,7 +20,9 @@ import fixtures from "./fixtures/devin.json"
 
 const fromHex = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16))
+
 const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")
+
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
 
 describe("protobuf codec", () => {
@@ -34,6 +36,7 @@ describe("protobuf codec", () => {
       .double(6, 0.1)
       .float(7, 1.5)
       .toBytes()
+
     const fields = [...readFields(bytes)]
     expect(fields.map((field) => [field.num, field.wire])).toEqual([
       [1, WireType.Varint],
@@ -73,8 +76,10 @@ describe("Connect envelope and frame reader", () => {
       ...wrapConnectEnvelope(new Uint8Array(0)),
       ...wrapConnectEnvelope(new TextEncoder().encode("{}"), 2)
     ])
+
     const parser = new ConnectFrameParser()
     const frames = []
+
     for (let i = 0; i < wire.length; i += 3) frames.push(...parser.push(wire.subarray(i, i + 3)))
     expect(frames.map((frame) => [frame.flag, frame.payload.length])).toEqual([
       [0, 3],
@@ -123,6 +128,7 @@ describe("response frames (parity with ParseDevinFrame)", () => {
           isCustomToolCall: call.isCustomToolCall
         }))
       ).toEqual(expected.toolCalls)
+
       if (expected.usage !== undefined) {
         expect({
           promptTokens: frame.usage?.promptTokens,
@@ -134,6 +140,7 @@ describe("response frames (parity with ParseDevinFrame)", () => {
           modelName: frame.usage?.modelName
         }).toEqual(expected.usage)
       }
+
       if (expected.dimension !== undefined) {
         const parsed = parseDimensionGroups(frame.dimensionGroups)
         expect(parsed).toEqual({
@@ -183,18 +190,23 @@ describe("system prompt sanitising (parity with SanitizeDevinSystemPrompt)", () 
 /** Replaces the random prompt ids so wire bytes can be compared with the Go output. */
 const normalizePromptIds = (wire: Uint8Array): string => {
   const out = new ProtoWriter()
+
   for (const field of readFields(wire)) {
     if (field.num !== 3) {
       out.raw(field.encoded)
       continue
     }
+
     const prompt = new ProtoWriter()
+
     for (const inner of readFields(field.bytes)) {
       if (inner.num === 1) prompt.string(1, "ID")
       else prompt.raw(inner.encoded)
     }
+
     out.bytes(3, prompt.toBytes())
   }
+
   return toHex(out.toBytes())
 }
 
@@ -208,6 +220,7 @@ describe("GetChatMessageRequest encoding", () => {
 
   it("encodes the Go request bytes of a simple chat (random prompt ids aside)", () => {
     const go = fixtures.scenarios.find((scenario) => scenario.name === "text-basic")
+
     const bytes = buildGetChatMessageRequest({
       sessionToken: "devin-session-token$test",
       deviceSeed: "seed-1",
@@ -238,6 +251,7 @@ describe("GetChatMessageRequest encoding", () => {
       matcher: undefined,
       osName: "linux"
     })
+
     expect(normalizePromptIds(bytes)).toBe(normalizePromptIds(fromHex(go?.requests[0]?.bodyHex ?? "")))
   })
 
@@ -250,17 +264,22 @@ describe("GetChatMessageRequest encoding", () => {
     expect(view["model"]).toBe("claude-opus-4-6-thinking")
     // An untouched view keeps the exact wire bytes.
     expect(finalizeDevinPayload(go, (value) => value).wire).toBe(go)
+
     // A changed view replaces the business fields; credentials and flags stay opaque.
     const changed = finalizeDevinPayload(go, (value) => {
       ;(value as { model: string }).model = "custom-uid"
+
       return value
     })
+
     const reread = devinPayloadView(changed.wire)
     expect(reread["model"]).toBe("custom-uid")
     expect(reread["prompts"]).toEqual(view["prompts"])
     expect(reread["tools"]).toEqual(view["tools"])
+
     const opaque = (wire: Uint8Array): string[] =>
       [...readFields(wire)].filter((field) => [1, 7, 15, 20].includes(field.num)).map((field) => toHex(field.encoded))
+
     expect(opaque(changed.wire).toSorted()).toEqual(opaque(go).toSorted())
   })
 })

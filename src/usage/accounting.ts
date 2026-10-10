@@ -40,15 +40,18 @@ export interface TokenBreakdown {
 export type TokenAccountingSemantics = "unknown" | "subset" | "independent" | "separate-reasoning"
 
 const zeroInput: TokenInputBreakdown = { totalTokens: 0, uncachedTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
+
 const zeroOutput: TokenOutputBreakdown = { totalTokens: 0, nonReasoningTokens: 0, reasoningTokens: 0 }
 
 /** Sum of non-negative integers that stays within the safe-integer range (`nonNegativeSum`). */
 const nonNegativeSum = (...values: ReadonlyArray<number>): number | undefined => {
   let total = 0
+
   for (const value of values) {
     if (!Number.isFinite(value) || value < 0 || total > Number.MAX_SAFE_INTEGER - value) return undefined
     total += value
   }
+
   return total
 }
 
@@ -59,21 +62,28 @@ const validQuality = (quality: string): quality is TokenAccountingQuality =>
 export const isValidTokenBreakdown = (b: TokenBreakdown | undefined): b is TokenBreakdown => {
   if (b === undefined || b.schemaVersion !== TOKEN_ACCOUNTING_SCHEMA_VERSION || !validQuality(b.quality)) return false
   const inputSum = nonNegativeSum(b.input.uncachedTokens, b.input.cacheReadTokens, b.input.cacheWriteTokens)
+
   if (inputSum === undefined || b.input.totalTokens !== inputSum) return false
   const outputSum = nonNegativeSum(b.output.nonReasoningTokens, b.output.reasoningTokens)
+
   if (outputSum === undefined || b.output.totalTokens !== outputSum) return false
   const totalSum = nonNegativeSum(b.input.totalTokens, b.output.totalTokens, b.unclassifiedTokens)
+
   if (totalSum === undefined || b.totalTokens !== totalSum) return false
+
   return !(b.quality === "complete" && b.unclassifiedTokens !== 0)
 }
 
 /** `inconsistentTokenBreakdown`: keeps the best known total, all of it unclassified. */
 export const inconsistentTokenBreakdown = (total: number, fallback: number): TokenBreakdown => {
   let resolved = total
+
   if (resolved <= 0) resolved = fallback
+
   if (resolved < 0 || !Number.isFinite(resolved)) resolved = 0
   // Go's int64 holds any total; keep ours inside the range where sums are exact.
   resolved = Math.min(resolved, Number.MAX_SAFE_INTEGER)
+
   return {
     schemaVersion: TOKEN_ACCOUNTING_SCHEMA_VERSION,
     quality: "inconsistent",
@@ -87,7 +97,9 @@ export const inconsistentTokenBreakdown = (total: number, fallback: number): Tok
 /** `resolveAccountingTotal`: a reported total must match the sum of the buckets (0 = not reported). */
 const resolveAccountingTotal = (total: number, expected: number): number | undefined => {
   if (total < 0 || expected < 0) return undefined
+
   if (total === 0) return expected
+
   return total === expected ? total : undefined
 }
 
@@ -123,6 +135,7 @@ export const subsetTokenBreakdown = (
 ): TokenBreakdown => {
   const cacheTotal = nonNegativeSum(cacheRead, cacheWrite)
   const expected = nonNegativeSum(inputTotal, outputTotal)
+
   if (
     cacheTotal === undefined ||
     expected === undefined ||
@@ -132,8 +145,11 @@ export const subsetTokenBreakdown = (
   ) {
     return inconsistentTokenBreakdown(total, expected ?? 0)
   }
+
   const resolved = resolveAccountingTotal(total, expected)
+
   if (resolved === undefined) return inconsistentTokenBreakdown(total, expected)
+
   return complete(resolved, includedCacheInput(inputTotal, cacheRead, cacheWrite), {
     totalTokens: outputTotal,
     nonReasoningTokens: outputTotal - reasoning,
@@ -152,6 +168,7 @@ export const partialSubsetTokenBreakdown = (
 ): TokenBreakdown => {
   const cacheTotal = nonNegativeSum(cacheRead, cacheWrite)
   const expected = nonNegativeSum(inputTotal, outputTotal)
+
   if (
     cacheTotal === undefined ||
     expected === undefined ||
@@ -164,8 +181,11 @@ export const partialSubsetTokenBreakdown = (
   ) {
     return inconsistentTokenBreakdown(total, expected ?? 0)
   }
+
   const resolved = total === 0 ? expected : total
+
   if (resolved < expected) return inconsistentTokenBreakdown(total, expected)
+
   return complete(
     resolved,
     includedCacheInput(inputTotal, cacheRead, cacheWrite),
@@ -185,13 +205,18 @@ export const independentTokenBreakdown = (
 ): TokenBreakdown => {
   const inputTotal = nonNegativeSum(uncachedInput, cacheRead, cacheWrite)
   const outputTotal = nonNegativeSum(nonReasoningOutput, reasoning)
+
   const expected =
     inputTotal === undefined || outputTotal === undefined ? undefined : nonNegativeSum(inputTotal, outputTotal)
+
   if (inputTotal === undefined || outputTotal === undefined || expected === undefined) {
     return inconsistentTokenBreakdown(total, expected ?? 0)
   }
+
   const resolved = resolveAccountingTotal(total, expected)
+
   if (resolved === undefined) return inconsistentTokenBreakdown(total, expected)
+
   return complete(
     resolved,
     {
@@ -214,12 +239,16 @@ export const separateReasoningTokenBreakdown = (
   total: number
 ): TokenBreakdown => {
   const cacheTotal = nonNegativeSum(cacheRead, cacheWrite)
+
   if (cacheTotal === undefined || inputTotal < 0 || cacheTotal > inputTotal) return inconsistentTokenBreakdown(total, 0)
   const outputTotal = nonNegativeSum(nonReasoningOutput, reasoning)
   const expected = outputTotal === undefined ? undefined : nonNegativeSum(inputTotal, outputTotal)
+
   if (outputTotal === undefined || expected === undefined) return inconsistentTokenBreakdown(total, expected ?? 0)
   const resolved = resolveAccountingTotal(total, expected)
+
   if (resolved === undefined) return inconsistentTokenBreakdown(total, expected)
+
   return complete(resolved, includedCacheInput(inputTotal, cacheRead, cacheWrite), {
     totalTokens: outputTotal,
     nonReasoningTokens: nonReasoningOutput,
@@ -239,6 +268,7 @@ export const unclassifiedTokenBreakdown = (total: number): TokenBreakdown => {
       unclassifiedTokens: 0
     }
   }
+
   return {
     schemaVersion: TOKEN_ACCOUNTING_SCHEMA_VERSION,
     quality: "unclassified",
@@ -254,7 +284,9 @@ export const tokenAccountingSemanticsFor = (provider: string, executorType: stri
   const normalizedProvider = provider.trim().toLowerCase()
   const normalizedExecutor = executorType.trim().toLowerCase()
   const value = `${normalizedProvider} ${normalizedExecutor}`.trim()
+
   if (value === "" || value === "unknown" || value === "unknown unknown") return "unknown"
+
   if (
     normalizedExecutor === "openaicompatexecutor" ||
     normalizedProvider === "openai-compatibility" ||
@@ -262,19 +294,24 @@ export const tokenAccountingSemanticsFor = (provider: string, executorType: stri
   ) {
     return "subset"
   }
+
   if (value.includes("claude") || value.includes("anthropic")) return "independent"
+
   for (const marker of ["gemini", "aistudio", "antigravity", "vertex", "interaction"]) {
     if (value.includes(marker)) return "separate-reasoning"
   }
+
   for (const marker of ["openai", "codex", "xai", "grok", "kimi", "qwen", "deepseek", "openrouter"]) {
     if (value.includes(marker)) return "subset"
   }
+
   return "unknown"
 }
 
 /** `unclassifiedTokenLowerBound`. */
 const unclassifiedTokenLowerBound = (detail: UsageDetail): number | undefined => {
   const cacheTokens = nonNegativeSum(detail.cacheReadTokens, detail.cacheCreationTokens)
+
   if (
     cacheTokens === undefined ||
     detail.inputTokens < 0 ||
@@ -284,8 +321,10 @@ const unclassifiedTokenLowerBound = (detail: UsageDetail): number | undefined =>
   ) {
     return undefined
   }
+
   const inputTotal = Math.max(detail.inputTokens, cacheTokens, detail.cachedTokens)
   const outputTotal = Math.max(detail.outputTokens, detail.reasoningTokens)
+
   return nonNegativeSum(inputTotal, outputTotal)
 }
 
@@ -293,7 +332,9 @@ const unclassifiedTokenLowerBound = (detail: UsageDetail): number | undefined =>
 const tokenBreakdownForSemantics = (detail: UsageDetail, semantics: TokenAccountingSemantics): TokenBreakdown => {
   if (detail.totalTokens === 0 && detail.inputTokens === 0 && detail.outputTokens === 0) {
     const lowerBound = unclassifiedTokenLowerBound(detail)
+
     if (lowerBound === undefined) return inconsistentTokenBreakdown(detail.totalTokens, 0)
+
     if (
       lowerBound > 0 &&
       (semantics === "unknown" ||
@@ -304,7 +345,9 @@ const tokenBreakdownForSemantics = (detail: UsageDetail, semantics: TokenAccount
       return unclassifiedTokenBreakdown(lowerBound)
     }
   }
+
   const { inputTokens, cacheReadTokens, cacheCreationTokens, outputTokens, reasoningTokens, totalTokens } = detail
+
   switch (semantics) {
     case "subset":
       return subsetTokenBreakdown(
@@ -335,6 +378,7 @@ const tokenBreakdownForSemantics = (detail: UsageDetail, semantics: TokenAccount
       )
     default: {
       const total = totalTokens === 0 ? unclassifiedTokenLowerBound(detail) : totalTokens
+
       return total === undefined ? inconsistentTokenBreakdown(totalTokens, 0) : unclassifiedTokenBreakdown(total)
     }
   }
@@ -346,8 +390,10 @@ const tokenBreakdownForSemantics = (detail: UsageDetail, semantics: TokenAccount
  */
 export const ensureTokenBreakdown = (detail: UsageDetail, provider = "", executorType = ""): UsageDetail => {
   let next = detail
+
   if (!isValidTokenBreakdown(next.tokenBreakdown)) {
     const semantics = tokenAccountingSemanticsFor(provider, executorType)
+
     if (
       next.cacheReadTokens === 0 &&
       next.cachedTokens > 0 &&
@@ -360,10 +406,13 @@ export const ensureTokenBreakdown = (detail: UsageDetail, provider = "", executo
     ) {
       next = { ...next, cacheReadTokens: next.cachedTokens }
     }
+
     next = { ...next, tokenBreakdown: tokenBreakdownForSemantics(next, semantics) }
   }
+
   if (next.totalTokens === 0 && next.tokenBreakdown !== undefined) {
     next = { ...next, totalTokens: next.tokenBreakdown.totalTokens }
   }
+
   return next
 }

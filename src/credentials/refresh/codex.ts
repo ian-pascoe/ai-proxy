@@ -16,8 +16,11 @@ import { withRetries } from "./retry.ts"
 import type { RefreshContext, RefreshEffect, RefreshProtocolEffect } from "./types.ts"
 
 export const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
+
 export const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+
 const MAX_ATTEMPTS = 3
+
 const DEFAULT_PLAN = "free"
 
 interface TokenData {
@@ -38,10 +41,14 @@ const requestTokens = (refreshToken: string, now: number): RefreshEffect<TokenDa
         scope: "openid profile email"
       })
     )
+
     const reply = yield* send(request)
+
     if (reply.status !== 200) return yield* Effect.fail(statusFailure("token refresh", reply))
     const body = parseJsonObject(reply.text)
+
     if (body === undefined) return yield* Effect.fail(refreshError({ message: "failed to parse refresh response" }))
+
     return {
       idToken: str(body.id_token),
       accessToken: str(body.access_token),
@@ -53,9 +60,11 @@ const requestTokens = (refreshToken: string, now: number): RefreshEffect<TokenDa
 /** Claims of the id_token that matter to the credential (unverified, like Go). */
 export const codexIdentity = (idToken: string): { email: string; accountId: string; planType: string } | undefined => {
   const claims = idToken === "" ? undefined : decodeJwtClaims(idToken)
+
   if (claims === undefined) return undefined
   const auth = claims["https://api.openai.com/auth"]
   const info = isJsonObject(auth) ? auth : {}
+
   return {
     email: str(claims.email),
     accountId: str(info.chatgpt_account_id),
@@ -67,6 +76,7 @@ export const refreshCodex = (context: RefreshContext): RefreshProtocolEffect =>
   Effect.gen(function* () {
     const metadata: JsonObject = { ...context.metadata }
     const refreshToken = str(metadata.refresh_token)
+
     if (refreshToken === "") return metadata
 
     const tokens = yield* withRetries(requestTokens(refreshToken, context.now), {
@@ -75,16 +85,21 @@ export const refreshCodex = (context: RefreshContext): RefreshProtocolEffect =>
       retryable: (error) => !error.message.toLowerCase().includes("refresh_token_reused"),
       delayMs: context.retryDelayMs
     })
+
     const identity = codexIdentity(tokens.idToken)
 
     metadata.id_token = tokens.idToken
     metadata.access_token = tokens.accessToken
+
     if (tokens.refreshToken !== "") metadata.refresh_token = tokens.refreshToken
+
     if (identity !== undefined && identity.accountId !== "") metadata.account_id = identity.accountId
+
     if (identity !== undefined && identity.email !== "") metadata.email = identity.email
     metadata.expired = tokens.expired
     metadata.type = "codex"
     metadata.last_refresh = rfc3339(context.now)
     metadata.plan_type = identity?.planType ?? (str(metadata.plan_type) || DEFAULT_PLAN)
+
     return metadata
   })

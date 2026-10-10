@@ -78,6 +78,7 @@ export class Harness {
   /** Picked credential id, or `failure:<code>`. */
   id(entries: ReadonlyArray<CredentialEntry>, request: Partial<PickRequest> = {}): string {
     const outcome = this.select(entries, request)
+
     return outcome.ok ? outcome.entry.credential.id : `failure:${outcome.failure.code}`
   }
 
@@ -87,7 +88,9 @@ export class Harness {
 
   counts(entries: ReadonlyArray<CredentialEntry>, count: number, request: Partial<PickRequest> = {}) {
     const out: Record<string, number> = {}
+
     for (const id of this.ids(entries, count, request)) out[id] = (out[id] ?? 0) + 1
+
     return out
   }
 }

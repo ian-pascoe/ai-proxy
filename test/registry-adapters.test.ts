@@ -71,10 +71,12 @@ describe("ModelCapabilities.registryLayer", () => {
   it.effect("falls back to the catalog lookup for credentials the registry does not know, and to unknown", () =>
     Effect.gen(function* () {
       const capabilities = yield* ModelCapabilities
+
       const stranger = yield* capabilities.thinking(
         "claude-sonnet-4-5-20250929",
         credential("claude-gone.json", "claude")
       )
+
       assert.strictEqual(stranger.modelInfo?.id, "claude-sonnet-4-5-20250929")
       const unknown = yield* capabilities.thinking("no-such-model", credential("claude-a.json", "claude"))
       assert.isUndefined(unknown.modelInfo)

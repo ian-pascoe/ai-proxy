@@ -13,6 +13,7 @@ describe("scheduled dispatch", () => {
 
   it("runs every task in order, gives them the invocation's bindings and isolates failures", async () => {
     const log: string[] = []
+
     const tasks: ScheduledTask[] = [
       { name: "first", run: Effect.sync(() => void log.push("first")) },
       { name: "boom", run: Effect.fail(new Error("boom")) },
@@ -25,6 +26,7 @@ describe("scheduled dispatch", () => {
         })
       }
     ]
+
     await runScheduledTasks(tasks, env, ctx)
     expect(log).toEqual(["first", "last:env"])
   })

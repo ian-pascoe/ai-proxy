@@ -20,12 +20,14 @@ import {
 } from "../../translator/antigravity/claude/web-search.ts"
 
 const REDIRECT_HOST = "vertexaisearch.cloud.google.com"
+
 const REDIRECT_PATH_PREFIX = "/grounding-api-redirect/"
 
 /** `isAntigravityVertexSearchRedirect`. */
 export const isVertexSearchRedirect = (rawUrl: string): boolean => {
   try {
     const parsed = new URL(rawUrl)
+
     return (
       parsed.protocol === "https:" && parsed.host === REDIRECT_HOST && parsed.pathname.startsWith(REDIRECT_PATH_PREFIX)
     )
@@ -41,6 +43,7 @@ export const shouldResolveGroundingUrls = (
   translatedRequest: Json | undefined
 ): boolean => {
   if (!hasAntigravityGoogleSearchTool(translatedRequest)) return false
+
   switch (from) {
     case Formats.Claude:
       return hasClaudeTypedWebSearchTool(originalRequest)
@@ -56,17 +59,22 @@ export const resolveGroundingUrl = (rawUrl: string): Effect.Effect<string, never
   Effect.gen(function* () {
     if (!isVertexSearchRedirect(rawUrl)) return rawUrl
     const client = yield* HttpClient.HttpClient
+
     const response = yield* client
       .execute(HttpClientRequest.head(rawUrl))
       .pipe(
         Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
         Effect.provideService(HttpClient.TracerPropagationEnabled, false)
       )
+
     if (response.status < 300 || response.status >= 400) return rawUrl
     const location = (response.headers["location"] ?? "").trim()
+
     if (location === "") return rawUrl
+
     try {
       const parsed = new URL(location)
+
       return parsed.protocol === "https:" && parsed.host !== "" ? location : rawUrl
     } catch {
       return rawUrl
@@ -82,24 +90,31 @@ export const resolveGroundingUrlsInPayload = (payload: string): Effect.Effect<st
     const parsed = tryParseJson(payload)
     let basePath = "response.candidates.0.groundingMetadata.groundingChunks"
     let chunks = get(parsed, basePath)
+
     if (!isJsonArray(chunks)) {
       basePath = "candidates.0.groundingMetadata.groundingChunks"
       chunks = get(parsed, basePath)
     }
+
     if (parsed === undefined || !isJsonArray(chunks)) return payload
     const resolved = new Map<string, string>()
     let changed = false
+
     for (const [index, chunk] of chunks.entries()) {
       const uri = asString(get(chunk, "web.uri")).trim()
+
       if (uri === "") continue
       let target = resolved.get(uri)
+
       if (target === undefined) {
         target = yield* resolveGroundingUrl(uri)
         resolved.set(uri, target)
       }
+
       if (target === uri) continue
       set(parsed, `${basePath}.${index}.web.uri`, target)
       changed = true
     }
+
     return changed ? JSON.stringify(parsed) : payload
   })

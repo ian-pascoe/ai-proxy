@@ -30,14 +30,17 @@ export const holdInvocation: Effect.Effect<() => void> = Effect.serviceOption(Wo
   Effect.map((ctx) => {
     if (Option.isNone(ctx)) return noop
     let release: () => void = noop
+
     const done = new Promise<void>((resolve) => {
       release = () => resolve()
     })
+
     try {
       ctx.value.waitUntil(done)
     } catch {
       return noop
     }
+
     return release
   })
 )

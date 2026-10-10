@@ -29,8 +29,11 @@ const TURN_STATE_HEADER = "x-codex-turn-state"
 /** Decodes a client frame: text, or UTF-8 bytes (Go reads text and binary frames alike). */
 const frameText = (data: unknown): string | undefined => {
   if (typeof data === "string") return data
+
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
+
   if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data)
+
   return undefined
 }
 
@@ -38,12 +41,14 @@ const frameText = (data: unknown): string | undefined => {
 export const handleResponsesSocket = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const headers = new Headers(request.headers as Record<string, string>)
+
   if ((headers.get("upgrade") ?? "").toLowerCase() !== "websocket") {
     return HttpServerResponse.text(invalidRequestBody("websocket upgrade required"), {
       status: 400,
       contentType: "application/json"
     })
   }
+
   const identity = yield* AccessPrincipal
   const services = yield* Effect.context<TurnServices>()
   // `upstream.codex.response-steering`; an unreadable config surfaces from the turn itself.
@@ -57,6 +62,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
 
   const raw = yield* Queue.unbounded<string, Cause.Done>()
   const sessionId = crypto.randomUUID()
+
   const io: SocketIO = {
     send: (text) => {
       try {
@@ -73,6 +79,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
       }
     }
   }
+
   const program = runResponsesSocket<TurnServices>(
     {
       io,
@@ -86,23 +93,29 @@ export const handleResponsesSocket = Effect.gen(function* () {
     },
     raw
   )
+
   const fiber = Effect.runForkWith(services)(program)
   server.addEventListener("message", (event) => {
     const text = frameText((event as MessageEvent).data)
+
     if (text !== undefined) Queue.offerUnsafe(raw, text)
   })
+
   const ended = () => {
     // A turn in flight is interrupted (reported as a client abort); an idle loop just ends.
     fiber.interruptUnsafe()
     Effect.runFork(Queue.end(raw))
   }
+
   server.addEventListener("close", ended)
   server.addEventListener("error", ended)
 
   const responseHeaders = new Headers()
   // Keep the same sticky turn-state across reconnects when provided by the client.
   const turnState = (headers.get(TURN_STATE_HEADER) ?? "").trim()
+
   if (turnState !== "") responseHeaders.set(TURN_STATE_HEADER, turnState)
+
   return HttpServerResponse.raw(new Response(null, { status: 101, webSocket: client, headers: responseHeaders }), {
     status: 101
   })

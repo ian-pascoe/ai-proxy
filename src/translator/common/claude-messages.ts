@@ -18,32 +18,42 @@ export const systemReminderText = (text: string): string => `<system-reminder>\n
 
 const claudeSystemTextParts = (content: Json | undefined): string[] => {
   if (content === undefined) return []
+
   if (typeof content === "string") {
     return content === "" || isClaudeCodeAttributionSystemText(content) ? [] : [content]
   }
+
   if (!isJsonArray(content)) return []
   const parts: string[] = []
+
   for (const item of content) {
     if (asString(get(item, "type")) !== "text") continue
     const text = asString(get(item, "text"))
+
     if (text === "" || isClaudeCodeAttributionSystemText(text)) continue
     parts.push(text)
   }
+
   return parts
 }
 
 /** `ClaudeMessageSystemReminderText`: a message-level system value as reminder text, if it has any. */
 export const claudeMessageSystemReminderText = (content: Json | undefined): string | undefined => {
   const parts = claudeSystemTextParts(content)
+
   if (parts.length === 0) return undefined
   const text = parts.join("\n")
+
   return text.trim() === "" ? undefined : systemReminderText(text)
 }
 
 const claudeMessageContentParts = (content: Json | undefined): JsonObject[] => {
   if (content === undefined || content === null) return []
+
   if (typeof content === "string") return content === "" ? [] : [{ type: "text", text: content }]
+
   if (!isJsonArray(content)) return []
+
   return content.filter(isJsonObject)
 }
 
@@ -57,16 +67,21 @@ export class ClaudeMessageAccumulator {
   append(message: JsonObject | undefined): void {
     if (message === undefined) return
     const role = asString(message.role)
+
     if (role !== "user" && role !== "assistant") return
     const parts = claudeMessageContentParts(message.content)
+
     if (parts.length === 0) return
+
     if (this.#role !== "" && this.#role !== role) this.flush()
     this.#role = role
+
     for (const part of parts) {
       if (role === "assistant" && asString(part.type) === "tool_use") {
         this.#toolUseParts.push(part)
         continue
       }
+
       this.#content.push(part)
     }
   }
@@ -74,6 +89,7 @@ export class ClaudeMessageAccumulator {
   flush(): void {
     if (this.#role === "") return
     const parts = this.#toolUseParts.length > 0 ? [...this.#content, ...this.#toolUseParts] : this.#content
+
     if (parts.length > 0) this.#messages.push({ role: this.#role, content: parts })
     this.#role = ""
     this.#content = []
@@ -82,6 +98,7 @@ export class ClaudeMessageAccumulator {
 
   messages(): JsonObject[] {
     this.flush()
+
     return this.#messages
   }
 }
@@ -103,20 +120,25 @@ export function alignClaudeToolResults(content: Json | undefined, toolUseIds: re
       indices.push(index)
     }
   })
+
   if (results.length !== toolUseIds.length) return content
   const reordered: Json[] = []
   const used = results.map(() => false)
+
   for (const toolUseId of toolUseIds) {
     const matched = results.findIndex(
       (result, i) => !used[i] && toolUseId !== "" && asString(get(result, "tool_use_id")) === toolUseId
     )
+
     if (matched < 0) return content
     used[matched] = true
     reordered.push(results[matched] as Json)
   }
+
   const ordered = [...content]
   indices.forEach((slot, i) => {
     ordered[slot] = reordered[i] as Json
   })
+
   return ordered
 }

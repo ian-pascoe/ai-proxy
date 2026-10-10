@@ -86,13 +86,17 @@ const setup = (
     const harness = yield* Effect.promise(
       async () => await makePool(yaml, options.store === undefined ? {} : { store: options.store })
     )
+
     options.prepare?.(harness)
+
     const refresher =
       typeof options.refresher === "function"
         ? options.refresher(harness)
         : (options.refresher ?? CredentialRefresher.none)
+
     const calls: Array<UpstreamCall> = []
     const records: Array<UsageRecord> = []
+
     const layer = Layer.mergeAll(
       poolPickerLayer(harness.pool),
       options.providers ?? ModelProviders.configLayer,
@@ -103,6 +107,7 @@ const setup = (
       mockHttpClient(calls, (call) => respond(call, calls.length - 1)),
       Thinking.live
     ).pipe(Layer.provideMerge(staticConfigReader(harness.config)))
+
     const exec = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       // The layer provides every service the conductor needs (`Scope` is provided by the caller where used).
       effect.pipe(
@@ -110,6 +115,7 @@ const setup = (
         Effect.provideService(AccessPrincipal, identity),
         Effect.provideService(WorkerEnv, {} as Env)
       ) as unknown as Effect.Effect<A, E>
+
     return { harness, calls, records, exec }
   })
 
@@ -131,6 +137,7 @@ describe("failover within a round", () => {
       const run = yield* setup(config(group("a") + group("b")), (call) =>
         keyOf(call) === "a" ? upstreamError(500) : jsonResponse(CHAT_OK)
       )
+
       const result = yield* run.exec(executeNonStream(chatInput()))
       assert.include(result.payload, "chat.completion")
       assert.deepStrictEqual(run.calls.map(keyOf), ["a", "b"])
@@ -169,6 +176,7 @@ describe("failover within a round", () => {
       const run = yield* setup(config(group("a") + group("b")), (call) =>
         keyOf(call) === "a" ? upstreamError(401, "bad key") : upstreamError(429, "quota gone")
       )
+
       const error = yield* failure(run.exec(executeNonStream(chatInput())))
       assert.deepStrictEqual(run.calls.map(keyOf), ["a", "b"])
       assert.strictEqual(error.status, 429)
@@ -201,12 +209,15 @@ describe("retry rounds (TestExecuteRetryRoundCredentialWindows / MaxCredentialsA
           group("c", "request-retry: 2\n      disable-cooling: true"),
         "routing:\n  retry:\n    request-retry: 3"
       )
+
       const run = yield* setup(yaml, () => upstreamError(500))
       const error = yield* failure(run.exec(executeNonStream(chatInput())))
       assert.strictEqual(error.status, 500)
+
       const counts = Object.fromEntries(
         ["a", "b", "c"].map((name) => [name, run.calls.filter((call) => keyOf(call) === name).length])
       )
+
       assert.deepStrictEqual(counts, { a: 4, b: 3, c: 3 })
     })
   )
@@ -214,6 +225,7 @@ describe("retry rounds (TestExecuteRetryRoundCredentialWindows / MaxCredentialsA
   it.effect("max-retry-credentials caps the credentials tried per round", () =>
     Effect.gen(function* () {
       const off = "disable-cooling: true"
+
       const yaml = config(
         group("a", `request-retry: 1\n      ${off}`) +
           group("b", `request-retry: 1\n      ${off}`) +
@@ -221,11 +233,13 @@ describe("retry rounds (TestExecuteRetryRoundCredentialWindows / MaxCredentialsA
           group("d", `request-retry: 2\n      ${off}`),
         "routing:\n  retry:\n    request-retry: 2\n    max-retry-credentials: 3"
       )
+
       const run = yield* setup(yaml, () => upstreamError(500))
       yield* failure(run.exec(executeNonStream(chatInput())))
       const order = run.calls.map(keyOf)
       assert.strictEqual(order.length, 7)
       assert.strictEqual(order.at(-1), "d")
+
       for (const name of ["a", "b", "c"]) assert.isAtMost(order.filter((key) => key === name).length, 2)
       assert.isAtMost(order.filter((key) => key === "d").length, 3)
     })
@@ -248,6 +262,7 @@ describe("cooldown waits", () => {
       const run = yield* setup(waiting, (_call, index) =>
         index === 0 ? upstreamError(429, "slow down", { "retry-after": "12" }) : jsonResponse(CHAT_OK)
       )
+
       const fiber = yield* Effect.forkChild(run.exec(executeNonStream(chatInput())))
       yield* TestClock.adjust(5000)
       run.harness.clock.advance(5000)
@@ -289,6 +304,7 @@ describe("cooldown waits", () => {
 
 const rule = (action: string) =>
   `request-scoped-errors:\n        - { status: 400, match: ["context window"], action: ${action} }`
+
 const respondContextWindow = (call: UpstreamCall) =>
   keyOf(call) === "a" ? upstreamError(400, "the context window is too large") : jsonResponse(CHAT_OK)
 
@@ -333,6 +349,7 @@ describe("request-scoped error rules", () => {
       const run = yield* setup(config(group("a", rule("continue")) + group("b")), () =>
         upstreamError(400, "other problem")
       )
+
       const error = yield* failure(run.exec(executeNonStream(chatInput())))
       assert.strictEqual(error.status, 400)
       assert.strictEqual(run.calls.length, 1)
@@ -354,6 +371,7 @@ describe("alias pools and force-mapping", () => {
       const run = yield* setup(pooled, (call) =>
         bodyOf(call).model === "up-1" ? upstreamError(500) : jsonResponse(CHAT_OK)
       )
+
       for (let index = 0; index < 4; index += 1) yield* run.exec(executeNonStream(chatInput("shared")))
       const models = run.calls.map((call) => bodyOf(call).model)
       // up-1 fails at most once (then cools for 60 s); every request is served by up-2.
@@ -370,8 +388,10 @@ describe("alias pools and force-mapping", () => {
       base-url: https://f.example/v1
       models: [{ name: real-model, alias: friendly, force-mapping: true }]
       keys: [{ api-key: key-f }]`)
+
       const run = yield* setup(yaml, (call) => {
         const stream = bodyOf(call).stream === true
+
         return stream
           ? sseResponse([
               'data: {"id":"c","object":"chat.completion.chunk","created":1,"model":"real-model","choices":[{"index":0,"delta":{"content":"x"}}]}\n\n',
@@ -379,6 +399,7 @@ describe("alias pools and force-mapping", () => {
             ])
           : jsonResponse({ ...CHAT_OK, model: "real-model" })
       })
+
       const result = yield* run.exec(executeNonStream(chatInput("friendly")))
       assert.strictEqual((JSON.parse(result.payload) as { model: string }).model, "friendly")
       assert.strictEqual(bodyOf(run.calls[0] as UpstreamCall).model, "real-model")
@@ -390,6 +411,7 @@ describe("alias pools and force-mapping", () => {
           )
         )
       )
+
       const joined = [...stream].join("")
       assert.include(joined, '"model":"friendly"')
       assert.notInclude(joined, "real-model")
@@ -414,10 +436,14 @@ describe("streaming", () => {
     Effect.gen(function* () {
       const run = yield* setup(config(group("a") + group("b") + group("c")), (call) => {
         const key = keyOf(call)
+
         if (key === "a") return upstreamError(503)
+
         if (key === "b") return sseResponse([": keep-alive\n\n"])
+
         return sseResponse([chunk("hi"), "data: [DONE]\n\n"])
       })
+
       const chunks = yield* collect(run)
       assert.isTrue(chunks.some((text) => text.includes('"content":"hi"')))
       assert.deepStrictEqual(run.calls.map(keyOf), ["a", "b", "c"])
@@ -433,6 +459,7 @@ describe("streaming", () => {
       const run = yield* setup(config(group("a") + group("b")), () =>
         sseResponse([chunk("part"), '{"error":{"message":"midstream"}}\n'])
       )
+
       const exit = yield* Effect.exit(collect(run))
       assert.isTrue(Exit.isFailure(exit))
       assert.strictEqual(run.calls.length, 1)
@@ -467,9 +494,11 @@ describe("streaming", () => {
   it.effect("requests.streaming.bootstrap-retries repeats the execution for bootstrap failures", () =>
     Effect.gen(function* () {
       const yaml = config(group("a", "disable-cooling: true"), "requests:\n  streaming:\n    bootstrap-retries: 1")
+
       const run = yield* setup(yaml, (_call, index) =>
         index === 0 ? sseResponse([": nothing\n\n"]) : sseResponse([chunk("ok"), "data: [DONE]\n\n"])
       )
+
       const chunks = yield* collect(run)
       assert.isTrue(chunks.some((text) => text.includes('"content":"ok"')))
       assert.strictEqual(run.calls.length, 2)
@@ -488,17 +517,21 @@ describe("session affinity and thinking", () => {
       const yaml = config(group("a") + group("b") + group("c"), "routing:\n  session-affinity: true")
       const run = yield* setup(yaml, () => jsonResponse(CHAT_OK))
       const sessionInput = chatInput("m", {}, { "x-session-id": "session-42" })
+
       for (let index = 0; index < 5; index += 1) yield* run.exec(executeNonStream(sessionInput))
       assert.strictEqual(new Set(run.calls.map(keyOf)).size, 1)
+
       // Without a session marker unrelated conversations rotate ...
       const conversation = (text: string) => ({
         ...chatInput(),
         body: { model: "m", messages: [{ role: "user", content: text }] }
       })
+
       for (let index = 0; index < 6; index += 1) yield* run.exec(executeNonStream(conversation(`topic ${index}`)))
       assert.isAbove(new Set(run.calls.slice(5).map(keyOf)).size, 1)
       // ... while the same conversation stays on one credential (LCP matcher / derived identity).
       const before = run.calls.length
+
       for (let index = 0; index < 4; index += 1) yield* run.exec(executeNonStream(conversation("topic 0")))
       assert.strictEqual(new Set(run.calls.slice(before).map(keyOf)).size, 1)
       assert.strictEqual(run.calls.slice(before).map(keyOf)[0], keyOf(run.calls[5] as UpstreamCall))
@@ -515,6 +548,7 @@ describe("session affinity and thinking", () => {
       const run = yield* setup(config(group("t", "", "{ name: m, thinking: { levels: [low, medium, high] } }")), () =>
         jsonResponse(CHAT_OK)
       )
+
       yield* run.exec(executeNonStream(chatInput("m(high)")))
       const body = bodyOf(run.calls[0] as UpstreamCall)
       assert.strictEqual(body.model, "m")
@@ -531,6 +565,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
     refresh_token: "r",
     expired: "2999-01-01T00:00:00Z"
   }
+
   const providers = Layer.succeed(
     ModelProviders,
     ModelProviders.of({
@@ -545,18 +580,22 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
       Effect.suspend(() => {
         const token = String(context.credential.metadata["access_token"] ?? "")
         seen.push(token)
+
         return token === "old"
           ? Effect.fail(new ExecutionError({ status: 401, message: "token expired" }))
           : Effect.succeed({ payload: '{"ok":true}', headers: new Headers() })
       })
+
     const unsupported: ProviderExecutor["executeStream"] = () =>
       Effect.fail(new ExecutionError({ status: 501, message: "unsupported" }))
+
     const executor: ProviderExecutor = {
       identifier: "claude",
       execute,
       executeStream: unsupported,
       countTokens: execute
     }
+
     return Layer.succeed(ExecutorRegistry, ExecutorRegistry.of({ get: () => executor }))
   }
 
@@ -572,11 +611,13 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
           refreshNow: (_id, rejected) =>
             Effect.sync(() => {
               counts.refresh.push(rejected)
+
               return respond(harness, rejected)
             }),
           ensureFresh: () =>
             Effect.sync(() => {
               counts.ensure += 1
+
               return respond(harness, undefined)
             })
         })
@@ -588,7 +629,9 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
     (harness: PoolHarness): RefreshResult => {
       harness.pool.upsert("claude-a.json", { ...AUTH_FILE, access_token: token }, { mergeExisting: false })
       const picked = harness.pool.pick({ providers: ["claude"], model: "m" })
+
       if (!picked.ok) throw new Error("pick failed")
+
       return { ok: true, refreshed: true, credential: picked.credential }
     }
 
@@ -598,12 +641,14 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
       Effect.gen(function* () {
         const seen: string[] = []
         const counts = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
         const run = yield* setup("", () => jsonResponse({}), {
           providers,
           executors: tokenExecutor(seen),
           refresher: refresherFor(counts, (harness) => rotate("new")(harness)),
           prepare: (harness) => harness.pool.upsert("claude-a.json", AUTH_FILE, { mergeExisting: false })
         })
+
         const result = yield* run.exec(executeNonStream(chatInput("claude-x")))
         assert.strictEqual(result.payload, '{"ok":true}')
         assert.deepStrictEqual(seen, ["old", "new"])
@@ -626,17 +671,20 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
     Effect.gen(function* () {
       const seen: string[] = []
       const counts = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
       const failure = (terminal: boolean) => (): RefreshResult => ({
         ok: false,
         error: { code: "unauthorized", message: "invalid_grant", httpStatus: 400 },
         terminal
       })
+
       const soft = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: tokenExecutor(seen),
         refresher: refresherFor(counts, failure(false)),
         prepare: (harness) => harness.pool.upsert("claude-a.json", AUTH_FILE, { mergeExisting: false })
       })
+
       const error = yield* failure_(soft.exec(executeNonStream(chatInput("claude-x"))))
       assert.strictEqual(error.status, 401)
       assert.isUndefined(error.terminalAuth)
@@ -649,6 +697,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
         refresher: refresherFor(counts, failure(true)),
         prepare: (harness) => harness.pool.upsert("claude-a.json", AUTH_FILE, { mergeExisting: false })
       })
+
       const terminal = yield* failure_(hard.exec(executeNonStream(chatInput("claude-x"))))
       assert.strictEqual(terminal.terminalAuth, true)
     })
@@ -658,22 +707,27 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
     Effect.gen(function* () {
       const seen: string[] = []
       const counts = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
       const same = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: tokenExecutor(seen),
         refresher: refresherFor(counts, (harness) => {
           const picked = harness.pool.pick({ providers: ["claude"], model: "m" })
+
           if (!picked.ok) throw new Error("pick failed")
+
           return { ok: true, refreshed: false, credential: picked.credential }
         }),
         prepare: (harness) => harness.pool.upsert("claude-a.json", AUTH_FILE, { mergeExisting: false })
       })
+
       const error = yield* failure_(same.exec(executeNonStream(chatInput("claude-x"))))
       assert.strictEqual(error.status, 401)
       assert.deepStrictEqual(seen, ["old"])
       assert.strictEqual(counts.refresh.length, 1)
 
       const fresh = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
       const other = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: Layer.succeed(
@@ -690,6 +744,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
         refresher: refresherFor(fresh, rotate("new")),
         prepare: (harness) => harness.pool.upsert("claude-a.json", AUTH_FILE, { mergeExisting: false })
       })
+
       yield* failure_(other.exec(executeNonStream(chatInput("claude-x"))))
       assert.deepStrictEqual(fresh.refresh, [])
     })
@@ -700,17 +755,21 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
       const seen: string[] = []
       const counts = { refresh: [] as Array<string | undefined>, ensure: 0 }
       const bare = { type: "claude", email: "a@x.com", refresh_token: "r" }
+
       const run = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: tokenExecutor(seen),
         refresher: refresherFor(counts, (harness) => {
           harness.pool.upsert("claude-a.json", { ...bare, access_token: "new" }, { mergeExisting: false })
           const picked = harness.pool.pick({ providers: ["claude"], model: "m" })
+
           if (!picked.ok) throw new Error("pick failed")
+
           return { ok: true, refreshed: true, credential: picked.credential }
         }),
         prepare: (harness) => harness.pool.upsert("claude-a.json", bare, { mergeExisting: false })
       })
+
       yield* run.exec(executeNonStream(chatInput("claude-x")))
       assert.strictEqual(counts.ensure, 1)
       assert.deepStrictEqual(seen, ["new"])
@@ -718,6 +777,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
 
       // A usable token needs no preparation.
       const ready = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
       const usable = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: tokenExecutor([]),
@@ -725,6 +785,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
         prepare: (harness) =>
           harness.pool.upsert("claude-a.json", { ...AUTH_FILE, access_token: "tok" }, { mergeExisting: false })
       })
+
       yield* usable.exec(executeNonStream(chatInput("claude-x")))
       assert.strictEqual(ready.ensure, 0)
     })
@@ -734,6 +795,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
     Effect.gen(function* () {
       const seen: string[] = []
       const counts = { refresh: [] as Array<string | undefined>, ensure: 0 }
+
       const run = yield* setup("", () => jsonResponse({}), {
         providers,
         executors: tokenExecutor(seen),
@@ -749,6 +811,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
             { mergeExisting: false }
           )
       })
+
       const error = yield* failure_(run.exec(executeNonStream(chatInput("claude-x"))))
       assert.strictEqual(error.status, 503)
       assert.deepStrictEqual(seen, [])

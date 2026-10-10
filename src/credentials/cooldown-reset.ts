@@ -19,6 +19,7 @@ export const resetCooldownState = (state: CredentialState, now: number): Cooldow
   const models = Object.keys(state.modelStates).filter((key) => key.trim() !== "")
   const keepError = terminalUnauthorized(state)
   const { lastError, statusMessage, ...rest } = state
+
   return {
     models,
     state: {

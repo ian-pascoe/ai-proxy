@@ -24,10 +24,13 @@ import type { FakeJwks, TestKey } from "./support/access.ts"
 import { env } from "cloudflare:workers"
 
 const NOW_MS = 1_700_000_000_000
+
 const NOW = NOW_MS / 1000
+
 const config = { issuer: ISSUER, jwksUrl: JWKS_URL, audiences: [AUD] }
 
 const keyA = await makeKey("kid-a")
+
 const keyB = await makeKey("kid-b")
 
 /** Runs `body` at a fixed virtual time with one JWKS cache shared by every verification inside it. */
@@ -37,6 +40,7 @@ const withJwks = <A, E>(
 ): Effect.Effect<A, E> =>
   Effect.gen(function* () {
     yield* TestClock.setTime(NOW_MS)
+
     return yield* body.pipe(Effect.provide(fakeJwksLayer(state)))
   })
 
@@ -141,6 +145,7 @@ describe("verifyAccessJwt", () => {
         for (const bad of ["", "not-a-jwt", "a.b.c", "eyJhbGciOiJub25lIn0.e30."]) {
           assert.strictEqual((yield* Effect.flip(verifyAccessJwt(bad, config)))._tag, "UnauthorizedError")
         }
+
         const anonymous = yield* token(keyA, { claims: {} })
         assert.strictEqual((yield* Effect.flip(verifyAccessJwt(anonymous, config)))._tag, "UnauthorizedError")
       })
@@ -149,6 +154,7 @@ describe("verifyAccessJwt", () => {
 
   it.effect("refetches the JWKS for an unknown kid, at most once per cooldown", () => {
     const state = makeFakeJwks([keyA])
+
     return withJwks(
       state,
       Effect.gen(function* () {
@@ -177,6 +183,7 @@ describe("verifyAccessJwt", () => {
   it.effect("fails with InternalError when the JWKS cannot be fetched, and recovers", () => {
     const state = makeFakeJwks([keyA])
     state.fail = true
+
     return withJwks(
       state,
       Effect.gen(function* () {
@@ -190,6 +197,7 @@ describe("verifyAccessJwt", () => {
 
   it.effect("keeps serving cached keys when a refresh fails", () => {
     const state = makeFakeJwks([keyA])
+
     return withJwks(
       state,
       Effect.gen(function* () {
@@ -212,7 +220,9 @@ describe("authenticateRequest", () => {
     ACCESS_ADMIN_EMAILS: "Admin@Example.com",
     ACCESS_ADMIN_SERVICE_TOKENS: "admin.access"
   }
+
   const context = requestContext(testEnv, {} as unknown as ExecutionContext)
+
   const run = <A, E>(
     state: FakeJwks,
     body: Effect.Effect<A, E, import("../src/platform/env.ts").WorkerEnv | import("../src/access/jwks.ts").AccessJwks>
@@ -256,14 +266,19 @@ describe("authenticateRequest", () => {
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
         const url = "https://proxy.test/v8/management/config"
+
         const lists = configAdminLists({
           access: { "api-keys": [], "admin-emails": [" Carol@Example.com "], "admin-service-tokens": ["cfg.access"] }
         })
+
         let reads = 0
+
         const extra = Effect.sync(() => {
           reads++
+
           return lists
         })
+
         const carol = { "cf-access-jwt-assertion": yield* token(keyA, { claims: userClaims("carol@example.com") }) }
         assert.strictEqual(
           (yield* authenticateRequest(carol, url, "management", extra)).principalId,
@@ -337,6 +352,7 @@ describe("config", () => {
         ACCESS_ADMIN_EMAILS: "One@x.com,two@x.com",
         ACCESS_ADMIN_SERVICE_TOKENS: "t1.access"
       })
+
       assert.strictEqual(loaded.issuer, "https://team.cloudflareaccess.com")
       assert.strictEqual(loaded.jwksUrl, "https://team.cloudflareaccess.com/cdn-cgi/access/certs")
       assert.deepStrictEqual(loaded.audiences, ["a1", "a2", "b3"])
@@ -381,6 +397,7 @@ describe("classifyPath", () => {
     expect(classifyPath("https://x.test/healthz")).toBe("public")
     expect(classifyPath("https://x.test/")).toBe("public")
     expect(classifyPath("https://x.test/nope")).toBe("public")
+
     for (const path of [
       "/v1/chat/completions",
       "/v1",
@@ -391,6 +408,7 @@ describe("classifyPath", () => {
     ]) {
       expect(classifyPath(`https://x.test${path}?q=1`)).toBe("protected")
     }
+
     expect(classifyPath("https://x.test/v8/management/config")).toBe("management")
   })
 

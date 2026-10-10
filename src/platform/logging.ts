@@ -21,5 +21,6 @@ export const redactHeaders = (headers: Headers): Record<string, string> => {
   headers.forEach((value, name) => {
     out[name] = SENSITIVE_HEADERS.has(name.toLowerCase()) ? "[redacted]" : value
   })
+
   return out
 }

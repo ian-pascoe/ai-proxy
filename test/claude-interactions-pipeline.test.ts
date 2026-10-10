@@ -19,6 +19,7 @@ import { credential, makeGeminiHarness } from "./support/gemini.ts"
 import { jsonResponse, loadConfig, postJson, sseResponse, type UpstreamResponder } from "./support/pipeline.ts"
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig("")
 })
@@ -26,6 +27,7 @@ beforeAll(async () => {
 const native = credential("gemini-interactions", "gemini-interactions:1", {
   attributes: { api_key: "AIza-native", base_url: "https://gl.test" }
 })
+
 const harness = (respond: UpstreamResponder) =>
   makeGeminiHarness({
     config,
@@ -45,6 +47,7 @@ const claudeEvents = (text: string): Array<[string, Record<string, unknown>]> =>
       const lines = block.split("\n")
       const event = lines.find((line) => line.startsWith("event: "))?.slice(7) ?? ""
       const data = lines.find((line) => line.startsWith("data: "))?.slice(6) ?? "{}"
+
       return [event, JSON.parse(data) as Record<string, unknown>]
     })
 
@@ -77,6 +80,7 @@ describe("POST /v1/messages on a gemini-interactions credential", () => {
         usage: { total_input_tokens: 30, total_output_tokens: 7, total_cached_tokens: 10, total_tokens: 37 }
       })
     )
+
     afterAll(h.dispose)
     const response = await h.call("/v1/messages", postJson(REQUEST))
     expect(response.status).toBe(200)
@@ -140,6 +144,7 @@ describe("POST /v1/messages on a gemini-interactions credential", () => {
         "data: [DONE]\n\n"
       ])
     )
+
     afterAll(h.dispose)
     const response = await h.call("/v1/messages", postJson({ ...REQUEST, stream: true }))
     expect(response.status).toBe(200)
@@ -178,6 +183,7 @@ describe("POST /v1/messages on a gemini-interactions credential", () => {
   it("refuses a request whose user turn only holds unsendable attachments before calling upstream", async () => {
     const h = harness(() => jsonResponse({}))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/messages",
       postJson({
@@ -186,6 +192,7 @@ describe("POST /v1/messages on a gemini-interactions credential", () => {
         messages: [{ role: "user", content: [{ type: "container_upload", file_id: "file-1" }] }]
       })
     )
+
     expect(response.status).toBe(400)
     expect(await response.text()).toContain("unsupported content part: container_upload")
     expect(h.calls).toHaveLength(0)
@@ -205,8 +212,10 @@ const devinFrames = (): Response => {
     out[0] = frame.flag
     new DataView(out.buffer).setUint32(1, payload.length, false)
     out.set(payload, 5)
+
     return out
   })
+
   return new Response(new Uint8Array(chunks.flatMap((chunk) => [...chunk])), {
     status: 200,
     headers: { "content-type": "application/connect+proto" }
@@ -233,16 +242,19 @@ describe("Claude clients on the Devin executor", () => {
   it("answers a non-stream Claude request with a Claude message", async () => {
     resetSessionTurnIndex("claude-devin-1")
     const h = await executorHarness(devin(), devinFrames)
+
     const response = await execute(
       executor,
       h,
       { model: "swe-2", payload: json({ ...claudeRequest, stream: false }) },
       claudeOptions(false)
     )
+
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
       model: string
       completion_config: { max_tokens: number; temperature: number }
     }
+
     expect(view.model).toBe("swe-2-high")
     expect(view.completion_config).toMatchObject({ max_tokens: 256, temperature: 0.5 })
     expect(JSON.parse(response.payload)).toMatchObject({
@@ -257,12 +269,14 @@ describe("Claude clients on the Devin executor", () => {
 
   it("streams a Claude request as Claude Messages events", async () => {
     const h = await executorHarness(devin(), devinFrames, undefined, true)
+
     const collected = await collectStream(
       executor,
       h,
       { model: "swe-2", payload: json({ ...claudeRequest, stream: true }) },
       claudeOptions(true)
     )
+
     expect(collected.error).toBeUndefined()
     const events = claudeEvents(collected.chunks.join(""))
     expect(events.map(([name]) => name)).toEqual([

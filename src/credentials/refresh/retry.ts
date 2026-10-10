@@ -22,5 +22,6 @@ export const withRetries = <A, R>(
           : Effect.sleep(`${options.delayMs(index + 1)} millis`).pipe(Effect.andThen(run(index + 1)))
       )
     )
+
   return run(0)
 }

@@ -15,6 +15,7 @@ import type { ProviderApplier, ThinkingConfig, ThinkingModelInfo } from "../type
 const applyCompatible = (body: Json | undefined, config: ThinkingConfig, path: string): Json | undefined => {
   const root = ensureBody(body)
   let effort: string
+
   switch (config.mode) {
     case "level":
       if (config.level === "") return root
@@ -28,11 +29,13 @@ const applyCompatible = (body: Json | undefined, config: ThinkingConfig, path: s
       break
     case "budget": {
       const level = convertBudgetToLevel(config.budget)
+
       if (level === undefined) return root
       effort = level
       break
     }
   }
+
   return setPath(root, path, effort)
 }
 
@@ -43,18 +46,26 @@ const applyKnown = (
   path: string
 ): Json | undefined => {
   const support = modelInfo.thinking
+
   if (support === undefined) return body
+
   // Only level and none are expressible; other modes pass through unchanged.
   if (config.mode !== "level" && config.mode !== "none") return body
 
   const root = ensureBody(body)
+
   if (config.mode === "level") return setPath(root, path, config.level)
 
   let effort = ""
+
   if (config.budget === 0 && (support.zeroAllowed === true || hasLevel(support.levels, Level.none))) effort = Level.none
+
   if (effort === "" && config.level !== "") effort = config.level
+
   if (effort === "" && (support.levels?.length ?? 0) > 0) effort = support.levels?.[0] ?? ""
+
   if (effort === "") return root
+
   return setPath(root, path, effort)
 }
 

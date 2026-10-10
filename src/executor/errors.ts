@@ -49,6 +49,7 @@ export const headersRecord = (headers: Headers): Record<string, string> => {
   headers.forEach((value, name) => {
     out[name] = value
   })
+
   return out
 }
 

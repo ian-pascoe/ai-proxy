@@ -45,6 +45,7 @@ interface FixtureCase {
  * slice adds "thinking-summary" once the summary hooks are wired into the registry).
  */
 const SUPPORTED_NEEDS = new Set<string>(["thinking-summary"])
+
 const summaryHooks = thinkingSummaryHooks
 
 const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>("./fixtures/translator/*.json", {
@@ -54,6 +55,7 @@ const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>("./fixtu
 /** Wall-clock fields the Go translators stamp with `time.Now()`; their values cannot match across runs. */
 const normalizeClock = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(normalizeClock)
+
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
@@ -70,6 +72,7 @@ const normalizeClock = (value: unknown): unknown => {
       ])
     )
   }
+
   return value
 }
 
@@ -89,6 +92,7 @@ const normalizeChunk = (text: string): string =>
     .map((line) => {
       if (!line.startsWith("data:")) return line
       const json = canonicalJson(line.slice(5).trim())
+
       return json === undefined ? line : `data: ${json}`
     })
     .join("\n")
@@ -106,6 +110,7 @@ describe("translator golden fixtures", () => {
             stream: c.stream,
             body: structuredClone(c.request)
           }
+
           const envelope =
             c.executor === undefined
               ? builtinTranslators.translateRequest(c.from, c.to, requestEnvelope, summaryHooks)
@@ -116,6 +121,7 @@ describe("translator golden fixtures", () => {
                   ),
                   isCompat: c.executor.compat === true
                 })
+
           expect(envelope.error?.message).toBe(c.requestError)
           expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest))
 
@@ -128,11 +134,14 @@ describe("translator golden fixtures", () => {
               state: { ...makeTranslationState(), claudeInputTokensHandled: true },
               ...(c.alt !== undefined ? { alt: c.alt } : {})
             }
+
             const outputs = c.responseLines.map((line) =>
               builtinTranslators.translateStream(c.from, c.to, context, line).map(normalizeChunk)
             )
+
             expect(outputs).toEqual((c.streamOutputs ?? []).map((chunks) => chunks.map(normalizeChunk)))
           }
+
           if (c.responseBodyText !== undefined) {
             const context = {
               model: c.model,
@@ -141,11 +150,13 @@ describe("translator golden fixtures", () => {
               state: makeTranslationState(),
               ...(c.alt !== undefined ? { alt: c.alt } : {})
             }
+
             const out = builtinTranslators.translateNonStream(c.from, c.to, context, c.responseBodyText)
             expect(out === undefined ? undefined : normalizeChunk(out)).toEqual(
               c.nonStreamOutput === undefined ? undefined : normalizeChunk(c.nonStreamOutput)
             )
           }
+
           if (c.tokenCount !== undefined) {
             const out = builtinTranslators.translateTokenCount(
               c.from,
@@ -153,6 +164,7 @@ describe("translator golden fixtures", () => {
               c.tokenCount,
               JSON.stringify(c.tokenCountUsage ?? null)
             )
+
             expect(normalizeChunk(out)).toBe(normalizeChunk(c.tokenCountOutput ?? ""))
           }
         })

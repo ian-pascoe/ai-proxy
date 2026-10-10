@@ -10,6 +10,7 @@ import type { ResponseContext, ResponseTransform } from "../../registry.ts"
 /** `ConvertOpenAIRequestToOpenAI`: only forces `model`. */
 export const convertOpenAIRequestToOpenAI = (model: string, body: Json, _stream: boolean): Json => {
   if (get(body, "model") === model) return body
+
   try {
     return set(body, "model", model)
   } catch {
@@ -24,10 +25,13 @@ export const convertOpenAIRequestToOpenAI = (model: string, body: Json, _stream:
 export const convertOpenAIResponseToOpenAI = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   if (context.state.value === true) return []
   const payload = line.startsWith("data:") ? line.slice(5).trim() : line
+
   if (payload === "[DONE]") {
     context.state.value = true
+
     return []
   }
+
   return [payload]
 }
 

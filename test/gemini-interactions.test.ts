@@ -6,6 +6,7 @@ import { credential, makeGeminiHarness } from "./support/gemini.ts"
 import { jsonResponse, loadConfig, postJson, sseResponse, type UpstreamResponder } from "./support/pipeline.ts"
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig("")
 })
@@ -13,7 +14,9 @@ beforeAll(async () => {
 const native = credential("gemini-interactions", "gemini-interactions:1", {
   attributes: { api_key: "AIza-native", base_url: "https://gl.test" }
 })
+
 const plain = credential("gemini", "gemini:1", { attributes: { api_key: "AIza-plain", base_url: "https://gl.test" } })
+
 const models = { "gemini-2.5-pro": ["gemini-interactions"], "gemini-2.5-flash": ["gemini"] }
 
 const harness = (respond: UpstreamResponder, cred = native) =>
@@ -30,6 +33,7 @@ describe("POST /v1beta/interactions", () => {
   it("requires exactly one of model or agent and a boolean stream", async () => {
     const h = harness(() => jsonResponse(INTERACTION))
     afterAll(h.dispose)
+
     for (const body of [
       { input: "x" },
       { model: "a", agent: "b", input: "x" },
@@ -38,16 +42,19 @@ describe("POST /v1beta/interactions", () => {
       const response = await h.call("/v1beta/interactions", postJson(body))
       expect(response.status).toBe(400)
     }
+
     expect(h.calls).toHaveLength(0)
   })
 
   it("posts natively to /v1beta/interactions with the API revision header and the request body", async () => {
     const h = harness(() => jsonResponse(INTERACTION))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/interactions",
       postJson({ model: "models/gemini-2.5-pro", input: "hello", stream: false })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ id: "int_1", status: "completed" })
     expect(h.calls[0]?.url).toBe("https://gl.test/v1beta/interactions")
@@ -61,6 +68,7 @@ describe("POST /v1beta/interactions", () => {
 
   it("streams native interaction events as SSE frames", async () => {
     const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+
     const h = harness(() =>
       sseResponse([
         frame("interaction.created", { event_type: "interaction.created", interaction: { id: "int_1" } }),
@@ -71,11 +79,14 @@ describe("POST /v1beta/interactions", () => {
         })
       ])
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/interactions",
       postJson({ model: "gemini-2.5-pro", input: "hello", stream: true })
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toContain("text/event-stream")
     const text = await response.text()
@@ -95,11 +106,14 @@ describe("POST /v1beta/interactions", () => {
         }),
       plain
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/interactions",
       postJson({ model: "gemini-2.5-flash", input: "hello", system_instruction: "be brief" })
     )
+
     expect(response.status).toBe(200)
     expect(h.calls[0]?.url).toBe("https://gl.test/v1beta/models/gemini-2.5-flash:generateContent")
     const upstream = JSON.parse(h.calls[0]?.body ?? "{}")

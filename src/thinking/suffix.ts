@@ -9,7 +9,9 @@ import type { SuffixResult, ThinkingConfig, ThinkingMode } from "./types.ts"
 /** Splits `model(value)`: the last `(` up to a final `)` (the model must end with `)`). */
 export const parseSuffix = (model: string): SuffixResult => {
   const lastOpen = model.lastIndexOf("(")
+
   if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false, rawSuffix: "" }
+
   return { modelName: model.slice(0, lastOpen), hasSuffix: true, rawSuffix: model.slice(lastOpen + 1, -1) }
 }
 
@@ -19,7 +21,9 @@ const MAX_INT64 = 9223372036854775807n
 export const parseNumericSuffix = (rawSuffix: string): number | undefined => {
   if (!/^[+-]?\d+$/.test(rawSuffix)) return undefined
   const value = BigInt(rawSuffix)
+
   if (value < 0n || value > MAX_INT64) return undefined
+
   return Number(value)
 }
 
@@ -48,6 +52,7 @@ const SUFFIX_LEVELS: ReadonlySet<string> = new Set([
 /** Discrete level names (not `none`/`auto`), case-insensitive; returns the lowercase level. */
 export const parseLevelSuffix = (rawSuffix: string): string | undefined => {
   const lower = rawSuffix.toLowerCase()
+
   return SUFFIX_LEVELS.has(lower) ? lower : undefined
 }
 
@@ -57,13 +62,17 @@ export const parseLevelSuffix = (rawSuffix: string): string | undefined => {
  */
 export const parseSuffixToConfig = (rawSuffix: string): ThinkingConfig => {
   const special = parseSpecialSuffix(rawSuffix)
+
   if (special === "none") return noneConfig()
+
   if (special === "auto") return autoConfig()
 
   const level = parseLevelSuffix(rawSuffix)
+
   if (level !== undefined) return levelConfig(level)
 
   const budget = parseNumericSuffix(rawSuffix)
+
   if (budget !== undefined) return budget === 0 ? noneConfig() : budgetConfig(budget)
 
   return EMPTY_CONFIG

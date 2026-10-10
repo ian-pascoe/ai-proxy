@@ -10,11 +10,14 @@ import { isArr, isObj, str, toArray } from "./gjson.ts"
 /** `ClaudeMessagesJSONToSSE`: returns the input unchanged (empty model) when it is not a Messages body. */
 export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] => {
   const root = tryParseJson(raw)
+
   if (root === undefined || str(get(root, "type")) !== "message" || !isArr(get(root, "content"))) return [raw, ""]
   let out = ""
+
   const emit = (event: JsonObject): void => {
     out += `data: ${JSON.stringify(event)}\n\n`
   }
+
   const message = cloneJson(root as JsonObject)
   message.content = []
   message.stop_reason = null
@@ -25,6 +28,7 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
     const start = cloneJson(block) as JsonObject
     let delta: JsonObject | undefined
     const blockType = str(get(block, "type"))
+
     switch (blockType) {
       case "text":
         start.text = ""
@@ -36,19 +40,24 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
         delta = { partial_json: input === undefined ? "{}" : JSON.stringify(input), type: "input_json_delta" }
         break
       }
+
       case "thinking":
         start.thinking = ""
         start.signature = ""
         delta = { thinking: str(get(block, "thinking")), type: "thinking_delta" }
         break
     }
+
     emit({ content_block: start, index, type: "content_block_start" })
+
     if (delta !== undefined) emit({ delta, index, type: "content_block_delta" })
+
     if (blockType === "text") {
       for (const citation of toArray(get(block, "citations"))) {
         emit({ delta: { citation, type: "citations_delta" }, index, type: "content_block_delta" })
       }
     }
+
     if (blockType === "thinking" && get(block, "signature") !== undefined) {
       emit({
         delta: { signature: str(get(block, "signature")), type: "signature_delta" },
@@ -56,6 +65,7 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
         type: "content_block_delta"
       })
     }
+
     emit({ index, type: "content_block_stop" })
   })
   const usage = get(root, "usage")
@@ -67,5 +77,6 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
     usage: isObj(usage) || isArr(usage) ? usage : {}
   })
   emit({ type: "message_stop" })
+
   return [out, str(get(root, "model"))]
 }

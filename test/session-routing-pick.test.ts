@@ -26,6 +26,7 @@ api-keys:
 `
 
 const providers = ["openai-compatible-a", "openai-compatible-b", "openai-compatible-c"]
+
 const SCOPE = "scope-1"
 
 const conversation = (...turns: string[]): Json => ({
@@ -38,24 +39,30 @@ const conversation = (...turns: string[]): Json => ({
 
 const lcpOf = (body: Json) => {
   const prepared = prepareFingerprints(extractCanonicalTurns("openai", body))
+
   return { ...prepared, callerScope: SCOPE }
 }
 
 const pickLcp = (pool: CredentialPool, body: Json, extra: Record<string, unknown> = {}) => {
   const result = pool.pick({ providers, model: "m", lcp: lcpOf(body), ...extra })
+
   if (!result.ok) throw new Error(`pick failed: ${result.failure.code}`)
+
   return result
 }
 
 const success: ReportResult = { success: true, httpStatus: 200 }
+
 const failure: ReportResult = {
   success: false,
   httpStatus: 500,
   error: { message: "boom", httpStatus: 500, retryable: false }
 }
+
 const requestScoped: ReportResult = { success: false, requestScoped: true, httpStatus: 400 }
 
 const turns2 = conversation("sys", "hello", "hi")
+
 const turns3 = conversation("sys", "hello", "hi", "next")
 
 describe("LCP affinity in the pool", () => {
@@ -64,11 +71,13 @@ describe("LCP affinity in the pool", () => {
     const first = pickLcp(pool, turns2)
     pool.report(first.lease, success)
     const credentials = new Set<string>()
+
     for (let index = 0; index < 6; index += 1) {
       const next = pickLcp(pool, turns3)
       credentials.add(next.credential.id)
       pool.report(next.lease, success)
     }
+
     expect([...credentials]).toEqual([first.credential.id])
     // The session identity is stable across the conversation.
     const again = pickLcp(pool, turns3)
@@ -85,12 +94,14 @@ describe("LCP affinity in the pool", () => {
   it("an explicit session wins over the LCP matcher", async () => {
     const { pool } = await makePool(yaml(true))
     const first = pickLcp(pool, turns2)
+
     const explicit = pool.pick({
       providers,
       model: "m",
       lcp: lcpOf(turns2),
       session: { id: "claude:s1", callerScope: SCOPE }
     })
+
     expect(explicit.ok && explicit.session).toBeFalsy()
     expect(explicit.ok && explicit.lease.lcp).toBeUndefined()
     expect(first.lease.lcp).toBeDefined()
@@ -158,6 +169,7 @@ describe("LCP affinity in the pool", () => {
 
 describe("derived and message-hash identities bind like explicit sessions", () => {
   const headers = new Headers()
+
   const route = (body: Json, explicit = false) =>
     prepareSessionRouting({
       headers,
@@ -174,22 +186,27 @@ describe("derived and message-hash identities bind like explicit sessions", () =
     const { pool } = await makePool(yaml(true))
     const routing = route(conversation("sys", "hello"))
     expect(routing.fallbackSession?.id).toMatch(/^derived:ctx:v1:[0-9a-f]{64}$/)
+
     const picks = Array.from({ length: 4 }, () => {
       const result = pool.pick({
         providers,
         model: "m",
         fallbackSession: { ...routing.fallbackSession!, callerScope: SCOPE }
       })
+
       if (!result.ok) throw new Error("pick failed")
       pool.report(result.lease, success)
+
       return result.credential.id
     })
+
     expect(new Set(picks).size).toBe(1)
   })
 
   it("the usage identity is explicit, derived or message-hash based", () => {
     expect(route(conversation("sys", "hello"), true).usageSession).toEqual({ id: "x" })
     expect(route(conversation("sys", "hello")).usageSession?.id).toMatch(/^derived:ctx:v1:/)
+
     const marked = prepareSessionRouting({
       headers: new Headers({ "X-Thread-Id": "t" }),
       body: conversation("sys", "hello"),
@@ -198,9 +215,11 @@ describe("derived and message-hash identities bind like explicit sessions", () =
       explicit: undefined,
       affinity: true
     })
+
     // A marker that the extractor does not understand disables derivation; the message hash still applies.
     expect(marked.usageSession?.id).toMatch(/^msg:[0-9a-f]{16}$/)
     expect(marked.fallbackSession?.id).toBe(marked.usageSession?.id)
+
     const off = prepareSessionRouting({
       headers,
       body: conversation("sys", "hello"),
@@ -209,6 +228,7 @@ describe("derived and message-hash identities bind like explicit sessions", () =
       explicit: undefined,
       affinity: false
     })
+
     expect(off.lcp).toBeUndefined()
     expect(off.fallbackSession).toBeUndefined()
     expect(off.usageSession?.id).toMatch(/^derived:/)
@@ -226,6 +246,7 @@ describe("picked credentials expose the session for usage", () => {
 describe("derived identity feeds executor metadata", () => {
   it("exposes the raw ctx:v1 id only without an explicit marker", () => {
     const body = conversation("sys", "hello")
+
     const plain = prepareSessionRouting({
       headers: new Headers(),
       body,
@@ -234,7 +255,9 @@ describe("derived identity feeds executor metadata", () => {
       explicit: undefined,
       affinity: false
     })
+
     expect(plain.derivedId).toMatch(/^ctx:v1:[0-9a-f]{64}$/)
+
     const marked = prepareSessionRouting({
       headers: new Headers({ "X-Session-ID": "abc" }),
       body,
@@ -243,6 +266,7 @@ describe("derived identity feeds executor metadata", () => {
       explicit: undefined,
       affinity: false
     })
+
     expect(marked.derivedId).toBeUndefined()
   })
 })

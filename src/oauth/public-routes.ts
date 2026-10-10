@@ -28,6 +28,7 @@ const page = (status: number, title: string, message: string): HttpServerRespons
   )
 
 const rejected = page(400, "Invalid request", "This sign-in link is invalid or has expired. Start the login again.")
+
 const unavailable = page(503, "Unavailable", "The login could not be processed right now. Try again.")
 
 const callbackHandler = (provider: OAuthProvider) =>
@@ -37,14 +38,18 @@ const callbackHandler = (provider: OAuthProvider) =>
     const state = params.get("state")?.trim() ?? ""
     const code = params.get("code")?.trim() ?? ""
     const error = params.get("error")?.trim() || params.get("error_description")?.trim() || ""
+
     // Cheap filter before touching the ControlPlane.
     if (!isValidOAuthState(state) || (code === "" && error === "")) return rejected
 
     const result = yield* controlPlane("oauthCallback", (stub) =>
       stub.oauthCallback({ provider, state, code, error })
     ).pipe(Effect.catch(() => Effect.succeed(undefined)))
+
     if (result === undefined) return unavailable
+
     if (!result.ok) return rejected
+
     return result.outcome === "completed"
       ? page(200, "Authentication successful!", "You can close this window and return to the management panel.")
       : page(200, "Authentication failed", "Return to the management panel to see the result and try again.")

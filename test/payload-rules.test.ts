@@ -36,7 +36,9 @@ describe("payload rules parity (golden fixtures)", () => {
         requests: { payload: unknown }
         multimedia?: { "disable-image-generation": DisableImageGenerationMode }
       }
+
       const config = makeConfig(v8.requests.payload, v8.multimedia?.["disable-image-generation"] ?? false)
+
       const request: PayloadRequest = {
         model: c.request.model,
         protocol: c.request.protocol,
@@ -48,6 +50,7 @@ describe("payload rules parity (golden fixtures)", () => {
         ...(c.request.trackedPaths !== undefined ? { trackedPaths: c.request.trackedPaths } : {}),
         ...(c.original !== undefined ? { original: structuredClone(c.original) as Json } : {})
       }
+
       const result = applyPayloadRules(config, request, structuredClone(c.payload) as Json)
       expect(result.payload).toEqual(c.out)
       expect([...result.touched].toSorted()).toEqual(c.touched)
@@ -74,6 +77,7 @@ describe("payload rules (ported Go tests)", () => {
       fromProtocol: "responses",
       headers: new Headers({ "X-Client-Tier": tier })
     })
+
     expect(get(apply(headerRule, request("tenant-alpha-region-us"), { model: "gpt-5.4" }), "metadata.enabled")).toBe(
       true
     )
@@ -86,6 +90,7 @@ describe("payload rules (ported Go tests)", () => {
       { model: "gpt-5.4", protocol: "openai", headers: { "x-client-tier": ["other", "tenant-a-region-b"] } },
       { model: "gpt-5.4" }
     )
+
     expect(get(out, "metadata.enabled")).toBe(true)
   })
 
@@ -96,6 +101,7 @@ describe("payload rules (ported Go tests)", () => {
       { request: { tools: [{ type: "image_generation" }, { type: "web_search" }] } },
       true
     )
+
     expect(get(out, "request.tools")).toEqual([{ type: "web_search" }])
   })
 
@@ -109,13 +115,16 @@ describe("payload rules (ported Go tests)", () => {
       },
       true
     )
+
     expect(exists(byType, "tool_choice")).toBe(false)
+
     const byName = apply(
       {},
       { model: "gpt-5.4", protocol: "antigravity", root: "request" },
       { request: { tools: [{ type: "image_generation" }], tool_choice: { type: "tool", name: "image_generation" } } },
       true
     )
+
     expect(exists(byName, "request.tool_choice")).toBe(false)
   })
 
@@ -124,11 +133,13 @@ describe("payload rules (ported Go tests)", () => {
       tools: [{ type: "image_generation" }, { type: "function", name: "f1" }],
       tool_choice: { type: "image_generation" }
     })
+
     const chatImages = apply({}, { model: "m", protocol: "x", requestPath: "/v1/images/generations" }, body(), "chat")
     expect(get(chatImages, "tools.#")).toBe(2)
     expect(exists(chatImages, "tool_choice")).toBe(true)
     const chatResponses = apply({}, { model: "m", protocol: "x", requestPath: "/v1/responses" }, body(), "chat")
     expect(get(chatResponses, "tools.#")).toBe(1)
+
     for (const requestPath of ["", "/v1/responses", "/v1/images/generations"]) {
       const out = apply({}, { model: "m", protocol: "x", requestPath }, body(), "passthrough")
       expect(get(out, "tools.#")).toBe(2)
@@ -157,6 +168,7 @@ describe("payload rules (ported Go tests)", () => {
       },
       true
     )
+
     expect(get(out, "tools.#")).toBe(2)
     expect(get(out, "tool_choice.type")).toBe("image_generation")
   })
@@ -174,6 +186,7 @@ describe("payload rules (ported Go tests)", () => {
       ],
       filter: [{ models: [{ name: "alias" }], params: ["late"] }]
     }
+
     const out = apply(
       rules,
       {
@@ -196,6 +209,7 @@ describe("payload rules (ported Go tests)", () => {
         ]
       }
     )
+
     expect(get(out, "missing")).toBe("user default")
     expect(get(out, "present")).toBe("caller")
     expect(exists(out, "late")).toBe(false)
@@ -210,6 +224,7 @@ describe("payload rules (ported Go tests)", () => {
       ],
       filter: [{ models: [{ name: "*", match: [{ max_tokens: 300 }] }], params: ["context_management", "messages.0"] }]
     }
+
     const result = applyPayloadRules(
       makeConfig(rules),
       {
@@ -221,6 +236,7 @@ describe("payload rules (ported Go tests)", () => {
       },
       { max_tokens: 300, context_management: { builtin: true }, messages: [{}, {}, {}] }
     )
+
     expect(exists(result.payload, "unexpected")).toBe(false)
     expect(get(result.payload, "diagnostics.user")).toBe(true)
     expect(exists(result.payload, "context_management")).toBe(false)
@@ -239,6 +255,7 @@ describe("payload rules (ported Go tests)", () => {
       ],
       filter: [{ models: [{ name: "*", match: [{ max_tokens: 200 }] }], params: ["messages.0"] }]
     }
+
     const out = apply(
       rules,
       { model: "claude-opus-5", protocol: "claude" },
@@ -252,6 +269,7 @@ describe("payload rules (ported Go tests)", () => {
         ]
       }
     )
+
     expect(get(out, "max_tokens")).toBe(200)
     expect(get(out, "temperature")).toBe(0.2)
     expect(get(out, "top_p")).toBe(0.4)
@@ -262,6 +280,7 @@ describe("payload rules (ported Go tests)", () => {
   it("observes built-in removal in conditions (TestClaudePayloadConditionsObserveBuiltinThinkingRemoval)", () => {
     const present = [{ name: "*", exist: ["thinking"] }]
     const absent = [{ name: "*", "not-exist": ["thinking"] }]
+
     const rules = {
       default: [
         { models: absent, params: { default_matched: true } },
@@ -284,16 +303,19 @@ describe("payload rules (ported Go tests)", () => {
         { models: present, params: ["system"] }
       ]
     }
+
     // The executor already removed `thinking` (forced tool choice) before calling the barrier.
     const out = apply(
       rules,
       { model: "claude-opus-5", protocol: "claude" },
       { max_tokens: 100, metadata: { a: 1 }, system: "s" }
     )
+
     for (const prefix of ["default", "default_raw", "override", "override_raw"]) {
       expect(get(out, `${prefix}_matched`)).toBe(true)
       expect(exists(out, `${prefix}_unmatched`)).toBe(false)
     }
+
     expect(exists(out, "metadata")).toBe(false)
     expect(exists(out, "system")).toBe(true)
   })
@@ -307,12 +329,14 @@ describe("payload rules (ported Go tests)", () => {
         }
       ]
     }
+
     const body = (): Json => ({
       input: "hello",
       tools: [{ type: "image_generation" }, { type: "function", name: "f" }],
       instructions: "x",
       prompt_cache_key: "k"
     })
+
     const sol = apply(rules, { model: "gpt-5.6-sol", protocol: "codex" }, body())
     expect(get(sol, 'tools.#(type=="image_generation")')).toBeUndefined()
     expect(get(sol, "tools.#")).toBe(1)
@@ -331,7 +355,9 @@ describe("payload rules (ported Go tests)", () => {
       ],
       filter: [{ models: [{ name: "gemini-*" }], params: ["sessionId", "contents.0"] }]
     }
+
     const config = makeConfig(rules)
+
     for (let attempt = 0; attempt < 2; attempt++) {
       const body: Json = {
         request: {
@@ -342,11 +368,13 @@ describe("payload rules (ported Go tests)", () => {
           ]
         }
       }
+
       const out = applyPayloadRules(
         config,
         { model: "gemini-3.1-pro-preview", protocol: "antigravity", root: "request" },
         body
       ).payload
+
       expect(get(out, "request.generationConfig.maxOutputTokens")).toBe(123)
       expect(exists(out, "request.sessionId")).toBe(false)
       expect(get(out, "request.contents.#")).toBe(1)
@@ -380,6 +408,7 @@ describe("payload rules engine details", () => {
         { models: [{ name: "*" }], params: { "shared.list.-1": 2 } }
       ]
     })
+
     const first = applyPayloadRules(config, { model: "m", protocol: "x" }, {}).payload
     const second = applyPayloadRules(config, { model: "m", protocol: "x" }, {}).payload
     expect(first).toEqual({ shared: { list: [1, 2] } })

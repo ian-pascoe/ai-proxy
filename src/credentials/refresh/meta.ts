@@ -13,18 +13,22 @@ import { clipBody, parseJsonObject, rfc3339, send, str } from "./http.ts"
 import type { RefreshContext, RefreshProtocolEffect } from "./types.ts"
 
 export const META_MINT_URL = "https://api.meta.ai/muse-code/key"
+
 /** `MintAPIKey`: a non-blank `META_MINT_URL` wins over the default endpoint. */
 export const metaMintUrl = (override: string | undefined): string =>
   override !== undefined && override.trim() !== "" ? override.trim() : META_MINT_URL
 
 export const META_DEFAULT_BASE_URL = "https://api.meta.ai/v1"
+
 const META_USER_AGENT = "muse-code/1.0.2"
 
 /** `extractDCAToken`: `dca_token`, else an `access_token` that carries the `dca:` prefix. */
 export const metaDcaToken = (metadata: Readonly<JsonObject>): string => {
   const dca = str(metadata.dca_token)
+
   if (dca !== "") return dca
   const access = str(metadata.access_token)
+
   return access.startsWith("dca:") ? access : ""
 }
 
@@ -32,8 +36,10 @@ export const metaDcaToken = (metadata: Readonly<JsonObject>): string => {
 export const metaApiKey = (metadata: Readonly<JsonObject>): string => {
   for (const key of ["api_key", "access_token"]) {
     const value = str(metadata[key])
+
     if (value !== "" && !value.startsWith("dca:")) return value
   }
+
   return ""
 }
 
@@ -50,8 +56,10 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
   Effect.gen(function* () {
     const metadata: JsonObject = { ...context.metadata }
     const dcaToken = metaDcaToken(metadata)
+
     if (dcaToken === "") {
       if (metaApiKey(metadata) !== "") return metadata
+
       return yield* Effect.fail(refreshError({ message: "meta executor: missing API key or DCA token", status: 401 }))
     }
 
@@ -63,7 +71,9 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
       }),
       HttpClientRequest.bodyJsonUnsafe({ dca_token: dcaToken })
     )
+
     const reply = yield* send(request)
+
     if (reply.status < 200 || reply.status >= 300) {
       return yield* Effect.fail(
         refreshError({
@@ -72,8 +82,10 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
         })
       )
     }
+
     const minted = parseJsonObject(reply.text)
     const apiKey = str(minted?.api_key)
+
     if (minted === undefined || apiKey === "") {
       return yield* Effect.fail(refreshError({ message: "meta executor: mint API key returned empty key" }))
     }
@@ -84,7 +96,9 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
     metadata.access_token = apiKey
     metadata.dca_token = dcaToken
     delete metadata.expired
+
     if (str(minted.user_email) !== "") metadata.email = str(minted.user_email)
+
     if (str(minted.user_full_name) !== "") metadata.name = str(minted.user_full_name)
     setOrDelete(metadata, "subs_tier_name", str(minted.subs_tier_name))
     setOrDelete(metadata, "subs_tier_id", str(minted.subs_tier_id))
@@ -92,5 +106,6 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
     metadata.has_payment_method = minted.has_payment_method === true
     metadata.type = "meta"
     metadata.last_refresh = rfc3339(context.now)
+
     return metadata
   })

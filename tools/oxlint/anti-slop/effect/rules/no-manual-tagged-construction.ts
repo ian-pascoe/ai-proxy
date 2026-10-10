@@ -22,12 +22,14 @@ export const noManualTaggedConstructionRule = defineRule({
 		return {
 			ObjectExpression(node) {
 				if (isMatchPatternObject(node)) return;
+
 				const tag = node.properties.find(
 					(property) =>
 						property.type === "Property" &&
 						propertyName(property) === "_tag" &&
 						isStringLiteral(property.value),
 				);
+
 				if (tag !== undefined) {
 					context.report({ node: tag, messageId: "manualConstruction" });
 				}

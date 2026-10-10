@@ -48,17 +48,21 @@ const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
 
 export const makeExecutorRegistry = (): { readonly get: (provider: string) => ProviderExecutor | undefined } => {
   const cache = new Map<string, ProviderExecutor>()
+
   return {
     get: (provider) => {
       const key = provider.trim().toLowerCase()
       const cached = cache.get(key)
+
       if (cached !== undefined) return cached
       const fixed = Object.hasOwn(FIXED_EXECUTORS, key) ? FIXED_EXECUTORS[key] : undefined
+
       if (fixed === undefined && !isOpenAICompatProvider(key)) return undefined
       const executor = fixed === undefined ? makeOpenAICompatExecutor(key) : fixed()
       // `ForAPIKey` (oauth_scope_executor.go): API-key credentials see the config without OAuth-only settings.
       const scoped = withApiKeyScope(key, executor)
       cache.set(key, scoped)
+
       return scoped
     }
   }

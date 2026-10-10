@@ -12,10 +12,12 @@ export const sanitizeFunctionName = (name: string): string => {
   if (name === "") return ""
   let sanitized = name.replace(/[^a-zA-Z0-9_.:-]/g, "_")
   const first = sanitized[0] as string
+
   if (!/[a-zA-Z_]/.test(first)) {
     if (sanitized.length >= 64) sanitized = sanitized.slice(0, 63)
     sanitized = `_${sanitized}`
   }
+
   return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized
 }
 
@@ -37,34 +39,47 @@ const isClaudeBase64Image = (block: Json | undefined): boolean =>
 
 const claudeImageFromBlock = (block: Json): ClaudeToolResultImage | undefined => {
   const data = asString(get(block, "source.data"))
+
   return data === "" ? undefined : { mimeType: asString(get(block, "source.media_type")), data }
 }
 
 /** `ConvertClaudeToolResultContent`: string / structured content plus separated base64 images. */
 export const convertClaudeToolResultContent = (content: Json | undefined): ClaudeToolResult => {
   if (typeof content === "string") return { result: content, resultIsRaw: false, images: [] }
+
   if (isJsonArray(content)) {
     const images: ClaudeToolResultImage[] = []
     const nonImage: Json[] = []
+
     for (const block of content) {
       if (isClaudeBase64Image(block)) {
         const image = claudeImageFromBlock(block)
+
         if (image !== undefined) images.push(image)
         continue
       }
+
       nonImage.push(block)
     }
+
     if (nonImage.length === 1) return { result: nonImage[0] as Json, resultIsRaw: true, images }
+
     if (nonImage.length > 1) return { result: nonImage, resultIsRaw: true, images }
+
     return { result: "", resultIsRaw: false, images }
   }
+
   if (isJsonObject(content)) {
     if (isClaudeBase64Image(content)) {
       const image = claudeImageFromBlock(content)
+
       return { result: "", resultIsRaw: false, images: image === undefined ? [] : [image] }
     }
+
     return { result: content, resultIsRaw: true, images: [] }
   }
+
   if (content !== undefined) return { result: content, resultIsRaw: true, images: [] }
+
   return { result: "", resultIsRaw: false, images: [] }
 }

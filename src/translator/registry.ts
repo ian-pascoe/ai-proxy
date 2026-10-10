@@ -47,6 +47,7 @@ export interface RequestEnvelope {
 
 /** Client body -> provider body. May throw {@link TranslationError}. The body is a private copy and may be mutated. */
 export type RequestTransform = (model: string, body: Json, stream: boolean) => Json
+
 /** Envelope-aware variant (Go `RequestEnvelopeTransform`). */
 export type RequestEnvelopeTransform = (envelope: RequestEnvelope) => RequestEnvelope
 
@@ -86,8 +87,10 @@ export interface ResponseContext {
 
 /** One upstream line -> zero or more complete client chunks. */
 export type ResponseStreamTransform = (context: ResponseContext, line: string) => ReadonlyArray<string>
+
 /** Whole upstream body -> client body; `undefined` signals a translation failure (Go `nil`). */
 export type ResponseNonStreamTransform = (context: ResponseContext, body: string) => string | undefined
+
 /** Locally computed token count -> client body. */
 export type ResponseTokenCountTransform = (count: number) => string
 
@@ -118,6 +121,7 @@ const wrapRequestTransform =
       if (error instanceof TranslationError) {
         return { ...envelope, ...(error.body !== undefined ? { body: error.body } : {}), error }
       }
+
       throw error
     }
   }
@@ -136,6 +140,7 @@ export class TranslatorRegistry {
   register(client: Format, provider: Format, request: RequestTransform | undefined, response: ResponseTransform): this {
     if (request !== undefined) this.#requests.set(key(client, provider), wrapRequestTransform(request))
     this.#responses.set(key(client, provider), response)
+
     return this
   }
 
@@ -146,17 +151,20 @@ export class TranslatorRegistry {
    */
   registerCompatRequest(client: Format, provider: Format, request: RequestTransform): this {
     this.#compatRequests.set(key(client, provider), wrapRequestTransform(request))
+
     return this
   }
 
   registerRequestEnvelope(client: Format, provider: Format, request: RequestEnvelopeTransform): this {
     this.#requests.set(key(client, provider), request)
+
     return this
   }
 
   unregister(client: Format, provider: Format): this {
     this.#requests.delete(key(client, provider))
     this.#responses.delete(key(client, provider))
+
     return this
   }
 
@@ -193,18 +201,25 @@ export class TranslatorRegistry {
     options: { readonly compat?: boolean } = {}
   ): RequestEnvelope {
     const input: RequestEnvelope = { ...envelope, body: cloneJson(envelope.body) }
+
     const transform =
       (options.compat === true ? this.#compatRequests.get(key(client, provider)) : undefined) ??
       this.#requests.get(key(client, provider))
+
     if (transform !== undefined) {
       const summary = hooks.extract(input.body, client, provider)
       const out = transform(input)
+
       if (out.error !== undefined) return { ...out, format: provider }
+
       return { ...out, body: hooks.apply(out.body, provider, out.model, summary), format: provider }
     }
+
     let body = input.body
+
     if (envelope.model !== "") {
       const current = get(body, "model")
+
       if (typeof current !== "string" || current !== envelope.model) {
         try {
           body = set(body, "model", envelope.model)
@@ -213,6 +228,7 @@ export class TranslatorRegistry {
         }
       }
     }
+
     return { ...input, body, format: provider }
   }
 
@@ -223,6 +239,7 @@ export class TranslatorRegistry {
   translateStream(client: Format, provider: Format, context: ResponseContext, line: string): ReadonlyArray<string> {
     const transform = this.#responses.get(key(client, provider))?.stream
     const chunks = transform === undefined ? [line] : transform(context, line)
+
     return client === Formats.Claude && provider !== Formats.Claude
       ? applyClaudeInputTokens(context.state, context.originalRequest, chunks)
       : chunks
@@ -231,15 +248,19 @@ export class TranslatorRegistry {
   /** `TranslateNonStream`: without a transform the body is returned unchanged; `undefined` on translation failure. */
   translateNonStream(client: Format, provider: Format, context: ResponseContext, body: string): string | undefined {
     const transform = this.#responses.get(key(client, provider))?.nonStream
+
     if (transform === undefined) return context.state.toolInputError === undefined ? body : undefined
     const out = transform(context, body)
+
     if (context.state.toolInputError !== undefined) return undefined
+
     return out
   }
 
   /** `TranslateTokenCount`: without a transform the provider usage JSON is returned as-is. */
   translateTokenCount(client: Format, provider: Format, count: number, rawJson: string): string {
     const transform = this.#responses.get(key(client, provider))?.tokenCount
+
     return transform === undefined ? rawJson : transform(count)
   }
 }

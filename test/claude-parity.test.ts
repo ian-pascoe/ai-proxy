@@ -40,6 +40,7 @@ const NATIVE_HEADERS = {
   "x-app": "cli",
   "anthropic-beta": "claude-code-20250219"
 }
+
 const USER_ID = JSON.stringify({
   device_id: "0".repeat(64),
   account_uuid: "",
@@ -73,6 +74,7 @@ const run = async (
     { model: "claude-3-5-sonnet-20241022", payload: json(payload) },
     options({ sourceFormat: "claude", headers: new Headers(headers) })
   )
+
   return { calls: h.calls, body: JSON.parse(h.calls[0]?.text ?? "{}") as JsonObject }
 }
 
@@ -102,6 +104,7 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
         metadata: { user_id: USER_ID }
       })
     )
+
     expect((body.system as JsonObject[])[0]?.text).toBe("Top rule")
     expect((body.messages as JsonObject[]).find((message) => message.role === "system")?.content).toBe("Mid rule")
   })
@@ -123,6 +126,7 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
       }),
       () => ok()
     )
+
     await execute(
       makeClaudeExecutor({ continuity: makeMemoryContinuityStore() }),
       h,
@@ -145,6 +149,7 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
         { role: "system", content: "  " }
       ]
     })
+
     const before = JSON.stringify(body)
     rebuildMidSystemMessagesToTopLevel(body)
     expect(JSON.stringify(body)).toBe(before)
@@ -158,6 +163,7 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
         { role: "user", content: "u" }
       ]
     })
+
     rebuildMidSystemMessagesToTopLevel(body)
     expect(body.system).toEqual([
       { type: "text", text: "A" },
@@ -170,16 +176,19 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
 
 describe("device profile stabiliser (stabilize-device-profile)", () => {
   const STABLE = "upstream:\n  claude:\n    header-defaults:\n      stabilize-device-profile: true\n"
+
   const withSdk = (extra: Record<string, string>) => ({
     ...NATIVE_HEADERS,
     "x-stainless-package-version": "0.112.1",
     "x-stainless-runtime-version": "v26.3.0",
     ...extra
   })
+
   const body = (): JsonObject =>
     obj({ messages: [{ role: "user", content: "hi" }], metadata: { user_id: USER_ID }, max_tokens: 5 })
 
   const oauthCredential = credential("claude", { kind: "oauth", metadata: { access_token: "sk-ant-oat01-profile" } })
+
   const sentProfile = async (
     headers: Record<string, string>,
     config = STABLE + claudeKeyConfig(),
@@ -187,6 +196,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
   ) => {
     const { calls } = await run(config, body(), headers, cred)
     const sent = calls[0]?.headers ?? {}
+
     return {
       userAgent: sent["user-agent"],
       os: sent["x-stainless-os"],
@@ -208,6 +218,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
       os: "MacOS",
       arch: "arm64"
     })
+
     const headers = new Headers(
       withSdk({
         "user-agent": "claude-cli/2.1.280 (external, sdk-cli)",
@@ -215,6 +226,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
         "x-stainless-arch": "x64"
       })
     )
+
     const sdk = await resolve({ id: "c1" }, "k", headers, config)
     expect(sdk).toMatchObject({ userAgent: "claude-cli/2.1.280 (external, sdk-cli)", os: "MacOS", arch: "arm64" })
     // The sdk-cli client has its own scope, the plain CLI scope keeps resolving to the baseline.
@@ -227,6 +239,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
     const store = makeMemoryDeviceProfileStore()
     const resolve = (...args: Parameters<typeof store.resolve>) => Effect.runPromise(store.resolve(...args))
     const config = await loadConfig(STABLE)
+
     for (const headers of [
       withSdk({ "user-agent": "claude-cli/2.1.281 (external, cli)" }),
       withSdk({ "x-stainless-package-version": "0.200.0" }),
@@ -242,12 +255,14 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
     const store = makeMemoryDeviceProfileStore()
     const resolve = (...args: Parameters<typeof store.resolve>) => Effect.runPromise(store.resolve(...args))
     const config = await loadConfig(STABLE)
+
     const resolved = await resolve(
       { id: "c" },
       "k",
       new Headers(withSdk({ "x-stainless-package-version": "not-a-version", "x-stainless-runtime-version": "node20" })),
       config
     )
+
     expect(resolved).toMatchObject({ packageVersion: "0.112.1", runtimeVersion: "v26.3.0" })
   })
 
@@ -259,6 +274,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
         "x-stainless-arch": "x64"
       })
     )
+
     expect(confirmed).toEqual({
       userAgent: "claude-cli/2.1.280 (external, sdk-cli)",
       os: "MacOS",
@@ -266,11 +282,13 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
       packageVersion: "0.112.1",
       runtimeVersion: "v26.3.0"
     })
+
     const unconfirmed = await sentProfile(
       { "user-agent": "my-app/1.0", "x-stainless-os": "Linux" },
       STABLE + claudeKeyConfig(),
       oauthCredential
     )
+
     expect(unconfirmed).toMatchObject({ userAgent: "claude-cli/2.1.280 (external, cli)", os: "MacOS", arch: "arm64" })
   })
 
@@ -279,15 +297,18 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
       withSdk({ "x-stainless-os": "Linux", "x-stainless-arch": "x64" }),
       claudeKeyConfig()
     )
+
     expect(legacy).toMatchObject({ os: "Linux", arch: "x64" })
   })
 
   it("honours a configured baseline", async () => {
     const store = makeMemoryDeviceProfileStore()
     const resolve = (...args: Parameters<typeof store.resolve>) => Effect.runPromise(store.resolve(...args))
+
     const config = await loadConfig(
       "upstream:\n  claude:\n    header-defaults:\n      stabilize-device-profile: true\n      user-agent: claude-cli/2.2.0 (external, cli)\n      os: Linux\n"
     )
+
     expect(await resolve({ id: "x" }, "k", new Headers(), config)).toMatchObject({
       userAgent: "claude-cli/2.2.0 (external, cli)",
       os: "Linux"
@@ -299,6 +320,7 @@ describe("device profile stabiliser (Go parity, helps.ResolveClaudeDeviceProfile
   for (const scenario of fixtures) {
     it(scenario.name, async () => {
       const defaults = scenario.defaults as Record<string, unknown>
+
       const yamlKeys = Object.entries({
         "stabilize-device-profile": defaults.stabilize_device_profile ?? defaults["stabilize-device-profile"],
         "user-agent": defaults.user_agent ?? defaults["user-agent"],
@@ -307,16 +329,20 @@ describe("device profile stabiliser (Go parity, helps.ResolveClaudeDeviceProfile
         os: defaults.os,
         arch: defaults.arch
       }).filter(([, value]) => value !== undefined && value !== "")
+
       const config = await loadConfig(
         `upstream:\n  claude:\n    header-defaults:\n${yamlKeys.map(([key, value]) => `      ${key}: ${JSON.stringify(value)}`).join("\n")}\n`
       )
+
       const store = makeMemoryDeviceProfileStore()
       const results: unknown[] = []
+
       for (const step of scenario.steps) {
         const headers = new Headers((step.headers ?? {}) as Record<string, string>)
         const resolved = await Effect.runPromise(store.resolve({ id: step.authId }, step.apiKey, headers, config))
         results.push(resolved)
       }
+
       expect(results).toEqual(
         scenario.steps.map((step) => ({
           userAgent: step.want.userAgent,
@@ -355,9 +381,11 @@ describe("Thread continuation alias state", () => {
     const store = makeMemoryToolAliasStore()
     const runIt = <A>(effect: Effect.Effect<A>) => Effect.runPromise(effect)
     await runIt(store.save("caller", ["message:first"], new Map([["alias", "Read"]])))
+
     for (let index = 0; index < 1024; index += 1) {
       await runIt(store.save("caller", [`message:m-${index}`], new Map()))
     }
+
     expect(await runIt(store.load("caller", ["message:first"]))).toBeUndefined()
     expect(await runIt(store.load("caller", ["message:m-1023"]))).toEqual(new Map())
     await runIt(store.save("other", ["message:x"], new Map([["a", "b"]])))
@@ -366,6 +394,7 @@ describe("Thread continuation alias state", () => {
   })
 
   const oauth = credential("claude", { kind: "oauth", metadata: { access_token: "sk-ant-oat01-thread" } })
+
   const createBody = obj({
     model: "claude-sonnet-4-5",
     max_tokens: 64,
@@ -376,21 +405,27 @@ describe("Thread continuation alias state", () => {
 
   it("restores the client tool name of a continuation without declarations (TestClaudeOAuthToolAliasRestoresContinuationWithoutDeclarations)", async () => {
     const toolAliases = makeMemoryToolAliasStore()
+
     const executor = makeClaudeExecutor({
       continuity: makeMemoryContinuityStore(),
       toolAliases,
       deviceProfiles: makeMemoryDeviceProfileStore()
     })
+
     let upstreamAlias = ""
+
     const h = await harness(oauth, (call) => {
       const sent = JSON.parse(call.text) as JsonObject
       const tools = sent.tools as JsonObject[] | undefined
+
       if (tools !== undefined && tools.length > 0) upstreamAlias = String(tools[0]?.name)
+
       return ok({
         id: `msg_${h.calls.length === 1 ? "one" : "two"}`,
         content: [{ type: "tool_use", id: "toolu_1", name: upstreamAlias, input: {} }]
       })
     })
+
     const opts = () => options({ sourceFormat: "claude", headers: new Headers({ "user-agent": "my-app/1.0" }) })
     const first = await execute(executor, h, { model: "claude-sonnet-4-5", payload: json(createBody) }, opts())
     expect(upstreamAlias).not.toBe("")
@@ -413,6 +448,7 @@ describe("Thread continuation alias state", () => {
       },
       opts()
     )
+
     expect(h.calls).toHaveLength(2)
     // The continuation declares no tools, so no remap happened and the saved aliases restored the name.
     expect((JSON.parse(h.calls[1]?.text ?? "{}") as JsonObject).tools).toBeUndefined()
@@ -425,7 +461,9 @@ describe("Thread continuation alias state", () => {
       toolAliases: makeMemoryToolAliasStore(),
       deviceProfiles: makeMemoryDeviceProfileStore()
     })
+
     const h = await harness(oauth, () => ok())
+
     const failure = await execute(
       executor,
       h,
@@ -443,6 +481,7 @@ describe("Thread continuation alias state", () => {
       () => undefined,
       (error: unknown) => error
     )
+
     expect(failure).toMatchObject({ status: 404, requestScoped: true })
     expect(h.calls).toHaveLength(0)
   })
@@ -450,11 +489,13 @@ describe("Thread continuation alias state", () => {
 
 describe("Fable / Opus-5.5 reconcilers (TestClaudeOpus55FallbackReconcilesAfterModelOverride, ...DisplayAfterThinkingOverride)", () => {
   const before = obj({ model: "claude-opus-5-5", system: [{ type: "text", text: "billing" }] })
+
   const cloaked = obj({
     model: "claude-opus-5-5",
     fallbacks: [{ model: "claude-opus-4-8" }],
     system: [{ type: "text", text: "billing" }]
   })
+
   const state = captureFableState(before, cloaked, true)
 
   it("captures what cloaking injected", () => {
@@ -579,6 +620,7 @@ describe("system placement reconciler", () => {
       { role: "assistant", content: "hi" }
     ]
   })
+
   const cloaked = obj({
     model: "claude-sonnet-5",
     system: [{ type: "text", text: "billing" }],
@@ -615,7 +657,9 @@ describe("system placement reconciler", () => {
     const modern = obj(JSON.parse(JSON.stringify(cloaked)))
     reconcileSystemPlacementAfterPayload(modern, state)
     expect(modern).toEqual(cloaked)
+
     const touched = obj(JSON.parse(JSON.stringify({ ...cloaked, model: "claude-haiku-4-5" })))
+
     ;((touched.messages as JsonObject[])[1] as JsonObject).content = "rewritten"
     const snapshot = JSON.stringify(touched)
     reconcileSystemPlacementAfterPayload(touched, state)
@@ -627,6 +671,7 @@ describe("experimental-cch-signing", () => {
   it("is accepted as a no-op key on Claude API keys (CCH signing is automatic)", async () => {
     const config = await loadConfig(claudeKeyConfig("experimental-cch-signing: true"))
     expect(config["api-keys"].claude[0]?.keys[0]?.["experimental-cch-signing"]).toBe(true)
+
     const { body } = await run(
       claudeKeyConfig("experimental-cch-signing: true"),
       obj({
@@ -634,6 +679,7 @@ describe("experimental-cch-signing", () => {
         max_tokens: 5
       })
     )
+
     expect(body.messages).toBeDefined()
   })
 })

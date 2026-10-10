@@ -26,11 +26,15 @@ function configuredSafetyMarkers(option: unknown): readonly string[] {
   if (typeof option !== "object" || option === null || !("markers" in option)) {
     return DEFAULT_SAFETY_MARKERS;
   }
+
   const configured = option.markers;
+
   if (!Array.isArray(configured)) return DEFAULT_SAFETY_MARKERS;
+
   const markers = configured.flatMap((marker) =>
     typeof marker === "string" && marker.trim().length > 0 ? [marker.trim()] : [],
   );
+
   return markers.length > 0 ? markers : DEFAULT_SAFETY_MARKERS;
 }
 
@@ -38,6 +42,7 @@ function markerPattern(markers: readonly string[]): RegExp {
   const alternation = markers
     .map((marker) => marker.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`))
     .join("|");
+
   return new RegExp(
     String.raw`(?:^|[^\p{L}\p{N}_])(?:${alternation})\s*:\s*\S`,
     "u",
@@ -63,16 +68,20 @@ function hasSafetyComment(
   pattern: RegExp,
 ): boolean {
   let current: ESTree.Node = node;
+
   while (true) {
     if (hasSafetyJustificationBefore(sourceCode, current, node, pattern)) return true;
+
     if (commentOwnerKinds.has(current.type)) {
       const exportDeclaration = current.parent;
+
       return (
         exportDeclaration.type === "ExportNamedDeclaration" &&
         exportDeclaration.declaration === current &&
         hasSafetyJustificationBefore(sourceCode, exportDeclaration, node, pattern)
       );
     }
+
     if (current.parent.type === "Program") return false;
     current = current.parent;
   }
@@ -115,6 +124,7 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
       const patternKey = markers.join("\u0000");
       const pattern = patterns.get(patternKey) ?? markerPattern(markers);
       patterns.set(patternKey, pattern);
+
       if (hasSafetyComment(context.sourceCode, node, pattern)) return;
       context.report({
         node,

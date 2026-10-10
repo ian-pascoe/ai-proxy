@@ -21,6 +21,7 @@ export const withModelInfoLookup = <T>(next: ModelInfoLookup | undefined, fn: ()
   if (next === undefined) return fn()
   const previous = lookup
   lookup = next
+
   try {
     return fn()
   } finally {

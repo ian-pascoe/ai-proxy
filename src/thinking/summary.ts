@@ -18,7 +18,9 @@ export interface SummaryConfig {
 }
 
 export const UNSPECIFIED_SUMMARY: SummaryConfig = { mode: "unspecified", detail: "" }
+
 const DISABLED: SummaryConfig = { mode: "disabled", detail: "" }
+
 const ENABLED_AUTO: SummaryConfig = { mode: "enabled", detail: "auto" }
 
 type Found = SummaryConfig | undefined
@@ -39,25 +41,34 @@ const summaryFormatSupported = (format: string): boolean =>
 
 const summaryBoolConfig = (body: Json | undefined, path: string): Found => {
   const value = get(body, path)
+
   if (value === true) return ENABLED_AUTO
+
   if (value === false) return DISABLED
+
   return undefined
 }
 
 const firstSummaryBoolConfig = (body: Json | undefined, paths: readonly string[]): Found => {
   for (const path of paths) {
     const config = summaryBoolConfig(body, path)
+
     if (config !== undefined) return config
   }
+
   return undefined
 }
 
 const responsesSummaryConfig = (body: Json | undefined, path: string): Found => {
   const value = get(body, path)
+
   if (value === undefined) return undefined
+
   if (value === null) return DISABLED
+
   if (typeof value !== "string") return undefined
   const raw = normalize(value)
+
   switch (raw) {
     case "auto":
     case "concise":
@@ -73,7 +84,9 @@ const responsesSummaryConfig = (body: Json | undefined, path: string): Found => 
 
 const claudeSummaryConfig = (body: Json | undefined, path: string): Found => {
   const value = get(body, path)
+
   if (typeof value !== "string") return undefined
+
   switch (normalize(value)) {
     case "summarized":
       return ENABLED_AUTO
@@ -86,7 +99,9 @@ const claudeSummaryConfig = (body: Json | undefined, path: string): Found => {
 
 const interactionsSummaryConfig = (body: Json | undefined, path: string): Found => {
   const value = get(body, path)
+
   if (typeof value !== "string") return undefined
+
   switch (normalize(value)) {
     case "auto":
       return ENABLED_AUTO
@@ -119,21 +134,27 @@ const OPENAI_EXPLICIT_BOOL_PATHS = [
 /** Explicit Chat visibility controls only (Google extension, Responses-style summary, OpenRouter bits). */
 const extractOpenAIExplicitSummaryConfig = (body: Json | undefined): Found => {
   const google = firstSummaryBoolConfig(body, OPENAI_EXPLICIT_BOOL_PATHS)
+
   if (google !== undefined) return google
 
   for (const path of ["reasoning.summary", "reasoning.generate_summary"]) {
     const config = responsesSummaryConfig(body, path)
+
     if (config !== undefined) return config
   }
 
   // reasoning.exclude is OpenRouter's "reason but hide" bit; include_reasoning its legacy inverse alias;
   // reasoning.enabled turns reasoning on with no exclusions. Only JSON booleans count.
   const exclude = getBool(body, "reasoning.exclude")
+
   if (exclude !== undefined) return exclude ? DISABLED : ENABLED_AUTO
   const include = getBool(body, "include_reasoning")
+
   if (include !== undefined) return include ? ENABLED_AUTO : DISABLED
   const enabled = getBool(body, "reasoning.enabled")
+
   if (enabled !== undefined) return enabled ? ENABLED_AUTO : DISABLED
+
   return undefined
 }
 
@@ -143,20 +164,27 @@ const extractOpenAIExplicitSummaryConfig = (body: Json | undefined): Found => {
  */
 export const extractSummaryConfig = (body: Json | undefined, format: string): SummaryConfig => {
   const normalized = normalize(format)
+
   if (!summaryFormatSupported(normalized) || body === undefined) return UNSPECIFIED_SUMMARY
 
   switch (normalized) {
     case "openai": {
       const explicit = extractOpenAIExplicitSummaryConfig(body)
+
       if (explicit !== undefined) return explicit
       const effort = get(body, "reasoning_effort")
+
       if (typeof effort === "string") {
         const value = normalize(effort)
+
         if (value === "") return UNSPECIFIED_SUMMARY
+
         return value === "none" ? DISABLED : ENABLED_AUTO
       }
+
       break
     }
+
     case "openai-response":
     case "codex":
       return (
@@ -167,6 +195,7 @@ export const extractSummaryConfig = (body: Json | undefined, format: string): Su
     case "claude":
       // Anthropic only accepts display alongside active adaptive/manual thinking.
       if (!claudeThinkingAcceptsDisplay(body)) return UNSPECIFIED_SUMMARY
+
       return claudeSummaryConfig(body, "thinking.display") ?? UNSPECIFIED_SUMMARY
     case "gemini":
       return (
@@ -189,8 +218,10 @@ export const extractSummaryConfig = (body: Json | undefined, format: string): Su
     case "interactions": {
       for (const path of ["generation_config.thinking_summaries", "generation_config.thinkingSummaries"]) {
         const config = interactionsSummaryConfig(body, path)
+
         if (config !== undefined) return config
       }
+
       // The OpenAI-style top-level compatibility object; the official generation_config selector wins.
       return (
         interactionsSummaryConfig(body, "reasoning.summary") ??
@@ -204,14 +235,18 @@ export const extractSummaryConfig = (body: Json | undefined, format: string): Su
       )
     }
   }
+
   return UNSPECIFIED_SUMMARY
 }
 
 /** Explicit visibility controls only: OpenAI Chat `reasoning_effort` is not treated as a summary proxy. */
 export const extractExplicitSummaryConfig = (body: Json | undefined, format: string): SummaryConfig => {
   const normalized = normalize(format)
+
   if (normalized !== "openai") return extractSummaryConfig(body, normalized)
+
   if (body === undefined) return UNSPECIFIED_SUMMARY
+
   return extractOpenAIExplicitSummaryConfig(body) ?? UNSPECIFIED_SUMMARY
 }
 
@@ -226,6 +261,7 @@ export const extractTranslatedSummaryConfig = (
 ): SummaryConfig => {
   const source = normalize(sourceFormat)
   const target = normalize(targetFormat)
+
   return target === "claude" && source === "openai"
     ? extractExplicitSummaryConfig(body, source)
     : extractSummaryConfig(body, source)
@@ -244,10 +280,13 @@ export const claudeThinkingAcceptsDisplay = (body: Json | undefined): boolean =>
       // Runs before ApplyThinking normalises the request: a missing budget_tokens is unfinished, not inactive.
       // -1 is the compatibility representation for auto thinking.
       const budget = get(body, "thinking.budget_tokens")
+
       if (typeof budget !== "number") return true
       const value = asInt(budget)
+
       return value === -1 || value > 0
     }
+
     default:
       return false
   }
@@ -255,7 +294,9 @@ export const claudeThinkingAcceptsDisplay = (body: Json | undefined): boolean =>
 
 const isOpenRouterProvider = (providerRaw: string): boolean => {
   const provider = normalize(providerRaw)
+
   if (provider === "openrouter") return true
+
   return provider.split(/[-_/.:]/).some((part) => part === "openrouter")
 }
 
@@ -266,17 +307,21 @@ const isOpenRouterProvider = (providerRaw: string): boolean => {
  */
 const applyOpenAIChatSummaryConfig = (body: Json | undefined, provider: string, enabled: boolean): Json | undefined => {
   let result = body
+
   if (isOpenRouterProvider(provider) || typeof get(result, "reasoning.exclude") === "boolean") {
     result = setPath(result, "reasoning.exclude", !enabled)
   }
+
   if (typeof get(result, "include_reasoning") === "boolean") {
     result = setPath(result, "include_reasoning", enabled)
   }
+
   return result
 }
 
 const normalizedSummaryDetail = (detail: string): string => {
   const value = normalize(detail)
+
   return value === "concise" || value === "detailed" ? value : "auto"
 }
 
@@ -291,12 +336,16 @@ const enableClaudeThinkingForSummary = (
   lookup: ModelInfoLookup | undefined
 ): Json | undefined => {
   let modelInfo = resolvedModelInfo
+
   if (modelInfo === undefined) {
     let baseModel = parseSuffix(model).modelName
+
     if (baseModel === "") baseModel = parseSuffix(getString(body, "model")).modelName
     modelInfo = lookup?.(baseModel.trim(), "claude")
   }
+
   const thinking = modelInfo?.thinking
+
   if (modelInfo === undefined || thinking === undefined) return body
 
   if ((thinking.levels?.length ?? 0) > 0) {
@@ -304,9 +353,12 @@ const enableClaudeThinkingForSummary = (
   }
 
   const budget = thinking.min ?? 0
+
   if (budget <= 0) return body
   const maxTokens = get(body, "max_tokens")
+
   if (maxTokens !== undefined && asInt(maxTokens) <= budget) return body
+
   return setPath(setPath(body, "thinking.type", "enabled"), "thinking.budget_tokens", budget)
 }
 
@@ -319,11 +371,15 @@ export const stripInferredClaudeSummaryActivation = (
   modelInfo: ThinkingModelInfo | undefined
 ): Json | undefined => {
   const thinking = modelInfo?.thinking
+
   if (thinking === undefined || (thinking.levels?.length ?? 0) > 0 || (thinking.min ?? 0) <= 0) return body
+
   if (normalize(getString(body, "thinking.type")) !== "adaptive") return body
 
   let result = delPaths(body, ["thinking.type", "thinking.budget_tokens", "thinking.display", "output_config.effort"])
+
   for (const path of ["thinking", "output_config"]) result = delIfEmptyObject(result, path)
+
   return result
 }
 
@@ -342,10 +398,12 @@ export const applySummaryConfigForProvider = (
   lookup?: ModelInfoLookup
 ): Json | undefined => {
   const normalized = normalize(format)
+
   if (config.mode === "unspecified" || !summaryFormatSupported(normalized) || body === undefined) return body
 
   const enabled = config.mode === "enabled"
   let result: Json | undefined = body
+
   switch (normalized) {
     case "openai":
       return applyOpenAIChatSummaryConfig(result, provider, enabled)
@@ -357,11 +415,15 @@ export const applySummaryConfigForProvider = (
       if (enabled && get(result, "thinking.type") === undefined) {
         result = enableClaudeThinkingForSummary(result, model, modelInfo, lookup)
       }
+
       if (!claudeThinkingAcceptsDisplay(result)) return result
+
       return setPath(result, "thinking.display", enabled ? "summarized" : "omitted")
     }
+
     case "gemini":
       result = setPath(result, "generationConfig.thinkingConfig.includeThoughts", enabled)
+
       return delPaths(result, [
         "generationConfig.thinkingConfig.include_thoughts",
         "generation_config.thinking_config.include_thoughts",
@@ -369,6 +431,7 @@ export const applySummaryConfigForProvider = (
       ])
     case "antigravity":
       result = setPath(result, "request.generationConfig.thinkingConfig.includeThoughts", enabled)
+
       return delPaths(result, [
         "request.generationConfig.thinkingConfig.include_thoughts",
         "request.generationConfig.thinking_config.include_thoughts",
@@ -377,15 +440,19 @@ export const applySummaryConfigForProvider = (
     case "interactions":
       // Interactions only accepts auto or none: concise/detailed collapse to the enabled value.
       result = setPath(result, "generation_config.thinking_summaries", enabled ? "auto" : "none")
+
       return delPath(result, "generation_config.thinkingSummaries")
     case "openai-response":
     case "codex":
       if (enabled) {
         result = setPath(result, "reasoning.summary", normalizedSummaryDetail(config.detail))
+
         return delPath(result, "reasoning.generate_summary")
       }
+
       // Omitting the field is the documented way to disable summaries.
       result = delPaths(result, ["reasoning.summary", "reasoning.generate_summary"])
+
       return isEmptyObject(get(result, "reasoning")) ? delPath(result, "reasoning") : result
     default:
       return result
@@ -414,5 +481,6 @@ export const applyTranslatedSummaryToClaude = (
   lookup?: ModelInfoLookup
 ): Json | undefined => {
   const config = extractTranslatedSummaryConfig(source, sourceFormat, "claude")
+
   return config.mode === "unspecified" ? out : applySummaryConfigForModel(out, "claude", model, config, lookup)
 }

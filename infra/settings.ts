@@ -61,10 +61,14 @@ export const readSettings = (dev: boolean) =>
       cpuMs: yield* Config.Number("CLIPROXY_CPU_MS").pipe(Config.withDefault(300_000)),
       devBypass: (yield* text("ACCESS_DEV_BYPASS", "dev@example.com")).trim()
     }
+
     if (dev) return settings
     const problems: Array<string> = []
+
     if (settings.domain === "") problems.push("CLIPROXY_DOMAIN is required (the Worker's custom hostname)")
+
     if (settings.teamDomain === "") problems.push("ACCESS_TEAM_DOMAIN is required (your Zero Trust team name)")
+
     if (settings.existingAud === "") {
       if (
         settings.allowEmails.length === 0 &&
@@ -75,15 +79,18 @@ export const readSettings = (dev: boolean) =>
           "set ACCESS_ALLOW_EMAILS, ACCESS_ALLOW_EMAIL_DOMAINS and/or ACCESS_SERVICE_TOKENS, or ACCESS_AUD for an existing Access application"
         )
       }
+
       for (const name of settings.serviceTokens) {
         if (!TOKEN_NAME.test(name)) problems.push(`ACCESS_SERVICE_TOKENS: "${name}" must match ${TOKEN_NAME.source}`)
       }
     } else if (settings.serviceTokens.length > 0) {
       problems.push("ACCESS_SERVICE_TOKENS needs a stack-managed Access application: unset ACCESS_AUD")
     }
+
     if (problems.length > 0) {
       // The stack's error channel only carries ConfigError: report invalid combinations as a defect with a readable message.
       return yield* Effect.die(new Error(`Invalid deploy settings:\n- ${problems.join("\n- ")}`))
     }
+
     return settings
   })

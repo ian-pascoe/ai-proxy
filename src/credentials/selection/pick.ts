@@ -93,15 +93,19 @@ const truthy = (value: unknown): boolean =>
 /** Prefix set of enabled credentials: `team-a/gpt-5` only belongs to credentials registered under `team-a`. */
 export const knownPrefixes = (credentials: ReadonlyArray<CredentialEntry>): ReadonlySet<string> => {
   const out = new Set<string>()
+
   for (const { credential } of credentials) {
     if (!credential.disabled && credential.prefix !== undefined && credential.prefix !== "") out.add(credential.prefix)
   }
+
   return out
 }
 
 const highestPriority = (candidates: ReadonlyArray<Candidate>): Candidate[] => {
   let best = Number.NEGATIVE_INFINITY
+
   for (const candidate of candidates) if (candidate.priority > best) best = candidate.priority
+
   return candidates.filter((candidate) => candidate.priority === best)
 }
 
@@ -109,6 +113,7 @@ const highestPriority = (candidates: ReadonlyArray<Candidate>): Candidate[] => {
 export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const { request, settings, runtime, now } = input
   const providers = new Set(request.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean))
+
   if (providers.size === 0) return { ok: false, failure: providerNotFound() }
 
   const routing: RoutingContext = { ...settings, knownPrefixes: knownPrefixes(input.credentials) }
@@ -119,11 +124,16 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
 
   // 1. Candidate set.
   const all: Candidate[] = []
+
   for (const entry of input.credentials) {
     const { credential } = entry
+
     if (credential.disabled) continue
+
     if (pinned !== "" && credential.id !== pinned) continue
+
     if (request.requireAuthKind !== undefined && credential.authKind !== request.requireAuthKind) continue
+
     if (
       request.disallowFreeCodex === true &&
       credential.provider === "codex" &&
@@ -131,47 +141,64 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     ) {
       continue
     }
+
     if (!providers.has(executorKey(credential))) continue
+
     if (tried.has(credential.id)) continue
+
     // Credentials age out of later retry rounds once their own `request-retry` budget is spent.
     if (round > 0 && effectiveRequestRetry(credential, request.requestRetry ?? 0) < round) continue
     let route = resolveModelRoute(credential, request.model, routing)
+
     if (route === undefined) continue
+
     if (route.upstreamModels.length > 1) {
       // Alias pools skip upstream models that are cooling (`filterExecutionModels`); a credential without any usable
       // upstream model is not a candidate.
       let poolNext = 0
+
       const usable = route.upstreamModels.filter((upstream) => {
         const block = isBlockedForModel(credential, entry.state, upstream, now)
+
         if (block.blocked && block.next > now && (poolNext === 0 || block.next < poolNext)) poolNext = block.next
+
         return !block.blocked
       })
+
       if (usable.length === 0) {
         if (poolNext !== 0 && (poolCooldownUntil === 0 || poolNext < poolCooldownUntil)) poolCooldownUntil = poolNext
         continue
       }
+
       route = { ...route, pooled: true, upstreamModel: usable[0] as string, upstreamModels: usable }
     }
+
     all.push({ entry, route, id: credential.id, weight: credential.weight, priority: credential.priority })
   }
+
   all.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
   if (all.length === 0) {
     if (poolCooldownUntil !== 0) {
       const provider = providers.size === 1 ? [...providers][0] : ""
+
       return { ok: false, failure: modelCooldown(request.model, provider ?? "", poolCooldownUntil - now) }
     }
+
     return { ok: false, failure: authNotFound() }
   }
 
   // Weighted round-robin ignores credentials with a non-positive weight before availability is evaluated.
   const weighted = settings.strategy === "weighted-round-robin"
   const pool = weighted ? all.filter((candidate) => candidate.weight > 0) : all
+
   if (pool.length === 0) return { ok: false, failure: authNotFound("no auth candidates") }
 
   // 2. Availability across all tiers.
   const available: Candidate[] = []
   let cooldownCount = 0
   let earliest = 0
+
   for (const candidate of pool) {
     const block = isBlockedForModel(
       candidate.entry.credential,
@@ -179,20 +206,26 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
       candidate.route.selectionModel,
       now
     )
+
     // The credits fallback may use credentials that are cooling down because their model quota is exhausted.
     if (!block.blocked || (request.ignoreCooldown === true && block.reason === "cooldown")) {
       available.push(candidate)
       continue
     }
+
     if (block.reason === "cooldown") cooldownCount += 1
+
     if (block.reason !== "disabled" && block.next > now && (earliest === 0 || block.next < earliest))
       earliest = block.next
   }
+
   if (available.length === 0) {
     if (cooldownCount === pool.length && earliest !== 0) {
       const provider = providers.size === 1 ? [...providers][0] : ""
+
       return { ok: false, failure: modelCooldown(request.model, provider ?? "", earliest - now) }
     }
+
     return { ok: false, failure: authUnavailable(earliest, now) }
   }
 
@@ -200,14 +233,18 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const providerLabel = [...providers].toSorted().join(",")
   const modelKey = canonicalModelKey(request.model)
   const rotationKey = `${providerLabel}:${modelKey}`
+
   const strategyPick = (candidates: ReadonlyArray<Candidate>): Candidate | undefined => {
     let list = candidates
+
     if (request.preferWebsockets === true && providers.has("codex")) {
       const websockets = list.filter(
         ({ entry }) => truthy(entry.credential.attributes.websockets) || truthy(entry.credential.metadata.websockets)
       )
+
       if (websockets.length > 0) list = websockets
     }
+
     switch (settings.strategy) {
       case "fill-first":
         return runtime.rotation.fillFirst(list)
@@ -217,6 +254,7 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
         return runtime.rotation.roundRobin(rotationKey, list)
     }
   }
+
   const fallbackTier = highestPriority(available)
 
   const done = (picked: Candidate | undefined, affinityKeys: ReadonlyArray<string>): SelectionOutcome =>
@@ -227,11 +265,13 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   // 4. Session affinity: a binding outranks priority, an unavailable binding falls back to the highest tier.
   if (!settings.sessionAffinity) return done(strategyPick(fallbackTier), [])
   const explicit = (request.session?.id.trim() ?? "") === "" ? undefined : request.session
+
   const find = (authId: string | undefined): Candidate | undefined =>
     authId === undefined ? undefined : available.find((candidate) => candidate.id === authId)
 
   // Explicit harness identities are absolute authority; the LCP matcher only sees requests without one.
   const lcpRequest = explicit === undefined ? request.lcp : undefined
+
   const lcpName =
     runtime.lcp === undefined || lcpRequest === undefined
       ? ""
@@ -240,14 +280,17 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
           modelKey,
           lcpRequest.callerScope
         )
+
   if (runtime.lcp !== undefined && lcpRequest !== undefined && lcpName !== "") {
     const matcher = runtime.lcp
+
     const sequence = {
       fingerprints: lcpRequest.fingerprints,
       minPrefixLength: lcpRequest.minPrefixLength,
       tailFingerprints: lcpRequest.tailFingerprints,
       envDigest: lcpRequest.envDigest
     }
+
     const lcpDone = (
       picked: Candidate,
       generation: number,
@@ -260,20 +303,26 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
       lcp: { namespace: lcpName, generation, sequence },
       session: resolved(identity)
     })
+
     const matched = matcher.match(lcpName, sequence, now)
     const matchedCandidate = matched === undefined ? undefined : find(matched.authId)
+
     if (matched !== undefined && matchedCandidate !== undefined) {
       return lcpDone(matchedCandidate, matched.accessNumber, matched)
     }
+
     // No (usable) match: the strategy picks among the highest tier and the sequence is bound to that credential.
     const fresh = strategyPick(fallbackTier)
+
     if (fresh === undefined) return done(undefined, [])
     const binding = matcher.bind(lcpName, sequence, fresh.id, now)
+
     return binding === undefined ? done(fresh, []) : lcpDone(fresh, binding.accessNumber, binding)
   }
 
   const session = explicit ?? request.fallbackSession
   const sessionId = session?.id.trim() ?? ""
+
   if (sessionId === "") return done(strategyPick(fallbackTier), [])
 
   const scope = session?.callerScope ?? ""
@@ -281,27 +330,38 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const parentRaw = session?.parentId?.trim() ?? ""
   const parentId = parentRaw === "" ? "" : boundSessionId(parentRaw)
   const cacheKey = affinityKey(scope, providerLabel, primaryId, modelKey)
+
   const fallbackKey =
     parentId !== "" && parentId !== primaryId ? affinityKey(scope, providerLabel, parentId, modelKey) : undefined
+
   const isFork = session?.isFork === true
   const isSubagent = !isFork && isSubagentSession(primaryId, parentId)
+
   const bind = (authId: string): string[] => {
     runtime.affinity.set(cacheKey, authId, now)
+
     if (fallbackKey !== undefined && !isSubagent && !isFork) {
       runtime.affinity.set(fallbackKey, authId, now)
+
       return [cacheKey, fallbackKey]
     }
+
     return [cacheKey]
   }
 
   const cachedId = runtime.affinity.getAndRefresh(cacheKey, now)
   const bound = find(cachedId)
+
   if (bound !== undefined) return done(bound, bind(bound.id))
+
   // A stale binding is re-picked straight away; the parent alias is only consulted without a binding.
   if (cachedId === undefined && fallbackKey !== undefined && (!isSubagent || settings.sessionAffinitySubagents)) {
     const inherited = find(runtime.affinity.get(fallbackKey, now))
+
     if (inherited !== undefined) return done(inherited, bind(inherited.id))
   }
+
   const picked = strategyPick(fallbackTier)
+
   return done(picked, picked === undefined ? [] : bind(picked.id))
 }

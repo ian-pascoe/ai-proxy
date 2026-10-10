@@ -227,20 +227,26 @@ const newState = (originalRequest: Json | undefined, requestJson: Json | undefin
 
 const runeLength = (text: string): number => {
   let count = 0
+
   for (const _ of text) {
     void _
     count++
   }
+
   return count
 }
 
 const hasEffectiveGoogleSearchTool = (request: Json | undefined): boolean => {
   if (request === undefined) return false
+
   if (get(request, "requestType") === "web_search") return true
+
   for (const path of ["request.tools", "tools"]) {
     const tools = get(request, path)
+
     if (isJsonArray(tools) && tools.some((tool) => exists(tool, "googleSearch"))) return true
   }
+
   return false
 }
 
@@ -256,22 +262,29 @@ const determineWebSearchStreamMode = (
   translated: Json | undefined
 ): boolean => {
   if (original !== undefined && !allowsResponsesWebSearchToolChoice(unwrapRequestRoot(original))) return false
+
   if (translated !== undefined) {
     const root = unwrapRequestRoot(translated)
+
     if (exists(root, "tool_choice") && !allowsResponsesWebSearchToolChoice(root)) return false
+
     if (isUpstreamGeminiRequest(translated) || hasEffectiveGoogleSearchTool(translated)) {
       return hasEffectiveGoogleSearchTool(translated)
     }
   }
+
   const requestJson = pickRequestJson(original, translated)
+
   if (requestJson !== undefined) {
     const root = unwrapRequestRoot(requestJson)
+
     return (
       hasResponsesWebSearchTool(root) &&
       allowsResponsesWebSearchToolChoice(root) &&
       (modelSupportsWebSearch(modelName) || modelSupportsWebSearch(requestModelName))
     )
   }
+
   return false
 }
 
@@ -286,31 +299,41 @@ export const convertGeminiResponseToOpenAIResponses = (
   const originalRequest = context.originalRequest
   const translatedRequest = context.translatedRequest
   const reqJson = pickRequestJson(originalRequest, translatedRequest)
+
   if (context.state.value === undefined) context.state.value = newState(originalRequest, reqJson)
   const st = context.state.value as StreamState
+
   const setToolInputError = (message: string): void => {
     context.state.toolInputError = message
   }
 
   let rawText = line.trim()
+
   if (rawText.startsWith("data:")) rawText = rawText.slice(5).trim()
+
   if (rawText === "" || st.completed) return []
   const done = rawText === "[DONE]"
+
   if (done) {
     if (!st.started) return []
+
     if (st.finishReason === "") st.finishReason = "STOP"
     rawText = "{}"
   }
+
   const parsed = tryParseJson(rawText)
+
   if (parsed === undefined) return []
   const root = unwrapGeminiResponseRoot(parsed)
   const hasUsage = mergeUsage(st.usage, root)
   let messageStatus = "completed"
 
   const out: string[] = []
+
   const emit = (event: string, payload: JsonObject): void => {
     out.push(sseEvent(event, JSON.stringify(payload)))
   }
+
   const nextSeq = (): number => ++st.seq
 
   const reasoningEncryptedContent = (): string =>
@@ -320,6 +343,7 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   const webSearchQueryFallback = (): void => {
     if (st.webSearchQuery === "" && st.webSearchQueries.length > 0) st.webSearchQuery = st.webSearchQueries[0] as string
+
     if (st.webSearchQuery === "" && reqJson !== undefined) {
       st.webSearchQuery = extractResponsesWebSearchQuery(unwrapRequestRoot(reqJson))
     }
@@ -334,12 +358,14 @@ export const convertGeminiResponseToOpenAIResponses = (
       output_index: st.webSearchIndex,
       item_id: st.webSearchItemId
     })
+
     const doneItem = buildResponsesWebSearchCallItem(
       st.webSearchItemId,
       st.webSearchQuery,
       st.webSearchQueries,
       st.webSearchSources
     )
+
     st.webSearchDoneItem = doneItem
     emit("response.output_item.done", {
       type: "response.output_item.done",
@@ -377,6 +403,7 @@ export const convertGeminiResponseToOpenAIResponses = (
       summary_index: 0,
       part: { type: "summary_text", text: "" }
     })
+
     for (const delta of st.reasoningPendingDeltas) {
       emit("response.reasoning_summary_text.delta", {
         type: "response.reasoning_summary_text.delta",
@@ -387,12 +414,14 @@ export const convertGeminiResponseToOpenAIResponses = (
         delta
       })
     }
+
     st.reasoningPendingDeltas = []
   }
 
   // Emits response.reasoning_summary_text.done followed by response.reasoning_summary_part.done exactly once.
   const finalizeReasoning = (): void => {
     openReasoning()
+
     if (!st.reasoningOpened || st.reasoningClosed) return
     const full = st.reasoningBuf
     emit("response.reasoning_summary_text.done", {
@@ -506,20 +535,26 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   const flushWebSearchBufferedText = (): void => {
     finalizeWebSearch()
+
     if (st.webSearchBufferedDeltas.length === 0) return
+
     if (st.msgClosed) {
       st.msgOpened = false
       st.msgClosed = false
       st.itemTextBuf = ""
       st.currentMsgRuneOffset = 0
     }
+
     if (!st.msgOpened) openMessage()
+
     for (const delta of st.webSearchBufferedDeltas) {
       st.itemTextBuf += delta
       textDelta(delta)
     }
+
     for (const buffered of st.webSearchBufferedParts) {
       const last = st.partMappings[st.partMappings.length - 1]
+
       if (last !== undefined && last.partIndex === buffered.partIndex && last.messageIndex === st.msgIndex) {
         last.partText += buffered.text
       } else {
@@ -530,14 +565,17 @@ export const convertGeminiResponseToOpenAIResponses = (
           partText: buffered.text
         })
       }
+
       st.currentMsgRuneOffset += runeLength(buffered.text)
     }
+
     st.webSearchBufferedDeltas = []
     st.webSearchBufferedParts = []
   }
 
   const emitNewCitationAnnotations = (msgIndex: number, itemId: string, annotations: readonly Json[]): void => {
     const emitted = st.emittedAnnotationCount.get(msgIndex) ?? 0
+
     for (let annIdx = emitted; annIdx < annotations.length; annIdx++) {
       emit("response.output_text.annotation.added", {
         type: "response.output_text.annotation.added",
@@ -550,24 +588,31 @@ export const convertGeminiResponseToOpenAIResponses = (
         annotation: annotations[annIdx] as Json
       })
     }
+
     if (annotations.length > emitted) st.emittedAnnotationCount.set(msgIndex, annotations.length)
   }
 
   // Emits new citations, then output_text.done, content_part.done and output_item.done exactly once.
   const finalizeMessage = (): void => {
     finalizeWebSearch()
+
     if (st.webSearchBufferedDeltas.length > 0) flushWebSearchBufferedText()
+
     if (!st.msgOpened || st.msgClosed) return
     const fullText = st.itemTextBuf
     let msgCitations: Json[] = []
+
     if (st.rawGroundingMetadata !== undefined) {
       const byMessage = buildResponsesUrlCitationsForMessages(st.rawGroundingMetadata, st.partMappings, [fullText])
       msgCitations = byMessage.get(st.msgIndex) ?? []
+
       if (msgCitations.length === 0 && st.completedMessages.size === 0 && (byMessage.get(0)?.length ?? 0) > 0) {
         msgCitations = byMessage.get(0) as Json[]
       }
+
       st.webSearchAnnotations = msgCitations
     }
+
     emitNewCitationAnnotations(st.msgIndex, st.currentMsgId, msgCitations)
     emit("response.output_text.done", {
       type: "response.output_text.done",
@@ -586,6 +631,7 @@ export const convertGeminiResponseToOpenAIResponses = (
       content_index: 0,
       part: { type: "output_text", annotations: msgCitations, logprobs: [], text: fullText }
     })
+
     if (msgCitations.length > 0) st.webSearchAnnotationsAttached = true
     emit("response.output_item.done", {
       type: "response.output_item.done",
@@ -612,21 +658,30 @@ export const convertGeminiResponseToOpenAIResponses = (
   const emitLateCitations = (): void => {
     if (st.rawGroundingMetadata === undefined || st.completedMessages.size === 0) return
     const messageTexts: string[] = []
+
     for (let idx = 0; idx < st.nextIndex; idx++) {
       const message = st.completedMessages.get(idx)
+
       if (message !== undefined) messageTexts.push(message.text)
     }
+
     const lateMap = buildResponsesUrlCitationsForMessages(st.rawGroundingMetadata, st.partMappings, messageTexts)
+
     if (lateMap.size === 0) return
+
     for (let idx = 0; idx < st.nextIndex; idx++) {
       const completed = st.completedMessages.get(idx)
+
       if (completed === undefined) continue
       let lateCites = lateMap.get(idx) ?? []
+
       if (lateCites.length === 0 && st.completedMessages.size === 1 && (lateMap.get(0)?.length ?? 0) > 0) {
         lateCites = lateMap.get(0) as Json[]
       }
+
       const annotations = mergeCitationAnnotations(completed.annotations, lateCites)
       emitNewCitationAnnotations(idx, completed.id, annotations)
+
       if (annotations.length > 0) {
         completed.annotations = annotations
         st.completedMessages.set(idx, completed)
@@ -636,6 +691,7 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   const emitDetachedReasoning = (signatureInput: string, direction: string, targetKind: string): void => {
     const signature = signatureInput.trim()
+
     if (signature === "" || st.seenReasoningSignatures.has(signature)) return
     finalizeReasoning()
     finalizeMessage()
@@ -664,29 +720,39 @@ export const convertGeminiResponseToOpenAIResponses = (
     switch (st.lastSemanticKind) {
       case CARRIER_TEXT: {
         const signature = signatureInput.trim()
+
         if (signature === "" || st.seenReasoningSignatures.has(signature)) return
         finalizeReasoning()
         finalizeMessage()
+
         // LastSemanticKind also includes thought text. Never bind a later thought signature to a visible message from
         // before that thought.
         if (!st.msgOpened || (st.reasoningOpened && st.reasoningIndex > st.msgIndex)) {
           emitDetachedReasoning(signature, CARRIER_PREVIOUS, CARRIER_TEXT)
+
           return
         }
+
         const signatures = [...(st.hiddenTextSignatures.get(st.currentMsgId) ?? []), signature]
         // Keep failed writes in the prefix so a later successful write cannot move a newer signature ahead of an
         // earlier fallback carrier.
         st.hiddenTextSignatures.set(st.currentMsgId, signatures)
+
         if (cacheTextSignatures(modelName, st.currentMsgId, st.itemTextBuf, signatures)) {
           st.seenReasoningSignatures.add(signature)
+
           return
         }
+
         // Preserve replay continuity if the cache cannot accept the signature.
         emitDetachedReasoning(signature, CARRIER_PREVIOUS, CARRIER_TEXT)
+
         return
       }
+
       case CARRIER_FUNCTION:
         emitDetachedReasoning(signatureInput, CARRIER_PREVIOUS, CARRIER_FUNCTION)
+
         return
       default:
         emitDetachedReasoning(signatureInput, CARRIER_STANDALONE, CARRIER_ANY)
@@ -702,12 +768,16 @@ export const convertGeminiResponseToOpenAIResponses = (
   // Initialize per-response fields and emit created/in_progress once.
   if (!st.started) {
     st.responseId = asString(get(root, "responseId"))
+
     if (st.responseId === "") st.responseId = newResponseId()
+
     if (!st.responseId.startsWith("resp_")) st.responseId = `resp_${st.responseId}`
     const createdAt = parseCreateTime(get(root, "createTime"))
     st.createdAt = createdAt === undefined || createdAt === 0 ? Math.floor(Date.now() / 1000) : createdAt
     let requestModelName = requestModelNameOf(originalRequest, translatedRequest)
+
     if (requestModelName === "") requestModelName = modelName
+
     const created: JsonObject = {
       type: "response.created",
       sequence_number: nextSeq(),
@@ -721,13 +791,16 @@ export const convertGeminiResponseToOpenAIResponses = (
         output: []
       }
     }
+
     if (requestModelName !== "") (created["response"] as JsonObject)["model"] = requestModelName
     emit("response.created", created)
+
     const inProgress: JsonObject = {
       type: "response.in_progress",
       sequence_number: nextSeq(),
       response: { id: st.responseId, object: "response", created_at: st.createdAt, status: "in_progress", output: [] }
     }
+
     if (requestModelName !== "") (inProgress["response"] as JsonObject)["model"] = requestModelName
     emit("response.in_progress", inProgress)
     st.started = true
@@ -742,16 +815,22 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   // Handle groundingMetadata for web search.
   const groundingMetadata = extractGroundingMetadata(root)
+
   if (groundingMetadata !== undefined) {
     st.rawGroundingMetadata = mergeGroundingMetadata(st.rawGroundingMetadata, groundingMetadata)
     const merged = st.rawGroundingMetadata
     const queries = extractGroundingQueries(merged)
+
     if (queries.length > 0) {
       st.webSearchQueries = queries
+
       if (st.webSearchQuery === "") st.webSearchQuery = queries[0] as string
     }
+
     const sources = extractGroundingSources(merged)
+
     if (sources.length > 0) st.webSearchSources = sources
+
     // Function calls, thoughts, or signature boundaries may finalize the search item before later grounding frames
     // arrive: keep the cached completed item aligned with the latest queries and sources.
     if (st.webSearchDone) {
@@ -762,6 +841,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.webSearchSources
       )
     }
+
     if (!st.webSearchOpened && hasValidWebGrounding(merged)) openWebSearch()
     emitLateCitations()
   }
@@ -771,10 +851,12 @@ export const convertGeminiResponseToOpenAIResponses = (
     let explicitPartIndex = -1
     const partIndexValue = get(part, "partIndex")
     const indexValue = get(part, "index")
+
     if (partIndexValue !== undefined) explicitPartIndex = asInt(partIndexValue)
     else if (indexValue !== undefined) explicitPartIndex = asInt(indexValue)
 
     let signature = asString(get(part, "thoughtSignature")).trim()
+
     if (signature === "") signature = asString(get(part, "thought_signature")).trim()
     const functionCall = get(part, "functionCall")
     const text = get(part, "text")
@@ -782,12 +864,14 @@ export const convertGeminiResponseToOpenAIResponses = (
     const textString = asString(text)
 
     let partKind: string
+
     if (isThought) partKind = "thought"
     else if (functionCall !== undefined) partKind = "function"
     else if (text !== undefined) partKind = "text"
     else partKind = "unknown"
 
     let currentPartIndex: number
+
     if (explicitPartIndex >= 0) {
       currentPartIndex = explicitPartIndex
       st.currentLogicalPartIndex = explicitPartIndex
@@ -799,6 +883,7 @@ export const convertGeminiResponseToOpenAIResponses = (
       st.currentLogicalPartIndex = 0
       st.currentPartKind = partKind
       currentPartIndex = 0
+
       if (partKind === "text") st.textPartRunActive = true
     } else {
       if (partIdxInChunk > 0) {
@@ -818,21 +903,27 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.currentPartKind = partKind
         st.textPartRunActive = true
       }
+
       currentPartIndex = st.currentLogicalPartIndex
     }
+
     st.streamPartIndex = currentPartIndex
+
     if (functionCall !== undefined && st.pendingReasoningSignature !== "") {
       if (signature === "") emitDetachedReasoning(st.pendingReasoningSignature, CARRIER_NEXT, CARRIER_FUNCTION)
       else emitTrailingDetachedReasoning(st.pendingReasoningSignature)
       st.pendingReasoningSignature = ""
     }
+
     const reasoningActive =
       (st.reasoningOpened && !st.reasoningClosed) ||
       (!st.reasoningOpened && (st.reasoningBuf.length > 0 || st.reasoningEnc !== ""))
+
     if (signature !== "" && !isThought) {
       if (reasoningActive) {
         if (st.reasoningEnc === "" || st.reasoningEnc === signature) {
           st.reasoningEnc = signature
+
           if (functionCall !== undefined) {
             st.reasoningDirection = CARRIER_NEXT
             st.reasoningTargetKind = CARRIER_FUNCTION
@@ -843,14 +934,18 @@ export const convertGeminiResponseToOpenAIResponses = (
             st.reasoningDirection = CARRIER_STANDALONE
             st.reasoningTargetKind = CARRIER_TEXT
           }
+
           st.seenReasoningSignatures.add(signature)
         } else {
           finalizeReasoning()
+
           if (functionCall !== undefined) emitDetachedReasoning(signature, CARRIER_NEXT, CARRIER_FUNCTION)
           else if (!st.seenReasoningSignatures.has(signature)) st.pendingReasoningSignature = signature
         }
+
         if (text !== undefined && textString === "" && functionCall === undefined) {
           finalizeReasoning()
+
           return true
         }
       } else if (functionCall !== undefined) {
@@ -860,18 +955,22 @@ export const convertGeminiResponseToOpenAIResponses = (
           emitTrailingDetachedReasoning(st.pendingReasoningSignature)
           st.pendingReasoningSignature = ""
         }
+
         if (!st.seenReasoningSignatures.has(signature)) st.pendingReasoningSignature = signature
       } else if (text !== undefined && textString === "") {
         if (st.pendingReasoningSignature !== "") {
           const pending = st.pendingReasoningSignature
           st.pendingReasoningSignature = ""
+
           if (pending !== signature) emitTrailingDetachedReasoning(pending)
         }
+
         if (st.msgOpened || st.funcDone.size > 0 || st.webSearchBufferedDeltas.length > 0) {
           emitTrailingDetachedReasoning(signature)
         } else if (!st.seenReasoningSignatures.has(signature)) {
           st.pendingReasoningSignature = signature
         }
+
         return true
       }
     }
@@ -879,23 +978,29 @@ export const convertGeminiResponseToOpenAIResponses = (
     // Reasoning text.
     if (isThought) {
       if (st.webSearchBufferedDeltas.length > 0) finalizeMessage()
+
       if (st.pendingReasoningSignature !== "" && st.msgOpened && !st.msgClosed) {
         emitTrailingDetachedReasoning(st.pendingReasoningSignature)
         st.pendingReasoningSignature = ""
       }
+
       let incomingSignature = ""
+
       if (signature !== "" && signature !== THOUGHT_SIGNATURE_BYPASS) {
         if (st.pendingReasoningSignature !== "") {
           if (st.pendingReasoningSignature !== signature) {
             emitDetachedReasoning(st.pendingReasoningSignature, CARRIER_STANDALONE, CARRIER_ANY)
           }
+
           st.pendingReasoningSignature = ""
         }
+
         incomingSignature = signature
       } else if (st.pendingReasoningSignature !== "") {
         incomingSignature = st.pendingReasoningSignature
         st.pendingReasoningSignature = ""
       }
+
       if (
         st.reasoningOpened &&
         !st.reasoningClosed &&
@@ -906,21 +1011,25 @@ export const convertGeminiResponseToOpenAIResponses = (
         finalizeReasoning()
         resetReasoning()
       }
+
       if (st.reasoningClosed) {
         finalizeMessage()
         resetReasoning()
       } else if (!st.reasoningOpened && st.reasoningBuf.length === 0 && st.msgOpened && !st.msgClosed) {
         finalizeMessage()
       }
+
       if (incomingSignature !== "") {
         st.reasoningEnc = incomingSignature
         st.reasoningDirection = CARRIER_STANDALONE
         st.reasoningTargetKind = CARRIER_TEXT
         st.seenReasoningSignatures.add(incomingSignature)
       }
+
       if (text !== undefined && textString !== "") {
         st.lastSemanticKind = CARRIER_TEXT
         st.reasoningBuf += textString
+
         if (st.reasoningOpened) {
           emit("response.reasoning_summary_text.delta", {
             type: "response.reasoning_summary_text.delta",
@@ -934,7 +1043,9 @@ export const convertGeminiResponseToOpenAIResponses = (
           st.reasoningPendingDeltas.push(textString)
         }
       }
+
       if (!st.reasoningOpened && st.reasoningEnc !== "") openReasoning()
+
       return true
     }
 
@@ -948,30 +1059,37 @@ export const convertGeminiResponseToOpenAIResponses = (
         emitTrailingDetachedReasoning(st.pendingReasoningSignature)
         st.pendingReasoningSignature = ""
       }
+
       // Responses output items are sequential: finish reasoning before opening the visible message. A signature that
       // arrives later is cached with the message and recombined on replay.
       finalizeReasoning()
+
       if (st.msgClosed) {
         st.msgOpened = false
         st.msgClosed = false
         st.itemTextBuf = ""
         st.currentMsgRuneOffset = 0
       }
+
       // In web search stream mode, deltas are buffered until web_search_call is finalized so the completed search item
       // includes incremental sources and strictly precedes the message.
       if (st.webSearchStreamMode && !st.webSearchDone) {
         st.lastSemanticKind = CARRIER_TEXT
         st.webSearchBufferedDeltas.push(textString)
         const last = st.webSearchBufferedParts[st.webSearchBufferedParts.length - 1]
+
         if (last !== undefined && last.partIndex === currentPartIndex) last.text += textString
         else st.webSearchBufferedParts.push({ partIndex: currentPartIndex, text: textString })
         st.textPartRunActive = true
+
         return true
       }
+
       if (!st.msgOpened) openMessage()
       st.lastSemanticKind = CARRIER_TEXT
       st.itemTextBuf += textString
       const last = st.partMappings[st.partMappings.length - 1]
+
       if (last !== undefined && last.partIndex === currentPartIndex && last.messageIndex === st.msgIndex) {
         last.partText += textString
       } else {
@@ -982,9 +1100,11 @@ export const convertGeminiResponseToOpenAIResponses = (
           partText: textString
         })
       }
+
       st.currentMsgRuneOffset += runeLength(textString)
       textDelta(textString)
       st.textPartRunActive = true
+
       return true
     }
 
@@ -994,19 +1114,25 @@ export const convertGeminiResponseToOpenAIResponses = (
     // requires message done events before the next output_item.added.
     finalizeReasoning()
     finalizeWebSearch()
+
     if (st.webSearchBufferedDeltas.length > 0) flushWebSearchBufferedText()
     finalizeMessage()
     st.lastSemanticKind = CARRIER_FUNCTION
 
     const evidence = recordFunctionEvidence(st, functionCall, explicitPartIndex, true)
+
     if (evidence.applyPatch && evidence.err !== undefined) {
       failToolInput(evidence.err)
+
       return false
     }
+
     if (evidence.rawName === "") return true
     let rawName = asString(get(functionCall, "name"))
+
     if (evidence.applyPatch) rawName = evidence.rawName
     let identity: ResponsesToolIdentity | undefined = st.toolIdentityMap.get(rawName)
+
     if (identity === undefined) {
       identity = {
         name: restoreSanitizedToolName(st.sanitizedNameMap, rawName),
@@ -1015,23 +1141,31 @@ export const convertGeminiResponseToOpenAIResponses = (
         applyPatch: false
       }
     }
+
     const { name, namespace } = identity
     const isCustom = identity.custom
     const argsValue = get(functionCall, "args")
     const argsRaw = argsValue === undefined ? "" : JSON.stringify(argsValue)
+
     if (evidence.applyPatch && evidence.patchCall !== undefined) {
       const finished = finishApplyPatchArguments(argsRaw)
+
       if ("error" in finished) {
         failToolInput(finished.error)
+
         return false
       }
+
       return true
     }
 
     const idx = st.nextIndex
     st.nextIndex++
+
     if (!st.funcArgsBuf.has(idx)) st.funcArgsBuf.set(idx, "")
+
     if (identity.applyPatch) st.funcCallIds.set(idx, evidence.upstreamId)
+
     if ((st.funcCallIds.get(idx) ?? "") === "") st.funcCallIds.set(idx, newStreamCallId())
     const callId = st.funcCallIds.get(idx) as string
     st.funcNames.set(idx, name)
@@ -1039,22 +1173,29 @@ export const convertGeminiResponseToOpenAIResponses = (
     st.funcCustom.set(idx, isCustom)
 
     const argsJson = argsValue === undefined ? "{}" : argsRaw
+
     if ((st.funcArgsBuf.get(idx) ?? "").length === 0 && argsJson !== "") st.funcArgsBuf.set(idx, argsJson)
 
     if (isCustom) {
       let inputStr = unwrapResponsesCustomToolInput(argsJson)
       let patchCall: ApplyPatchCall | undefined
+
       if (identity.applyPatch) {
         patchCall = { itemId: `ctc_${callId}`, callId, name, namespace, outputIndex: idx }
         const finished = finishApplyPatchArguments(argsJson)
+
         if ("error" in finished) {
           failToolInput(finished.error)
+
           return false
         }
+
         inputStr = finished.input
         evidence.patchCall = patchCall
       }
+
       st.funcInputBuf.set(idx, inputStr)
+
       const added: JsonObject = {
         id: `ctc_${callId}`,
         type: "custom_tool_call",
@@ -1063,6 +1204,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         call_id: callId,
         name: ""
       }
+
       setToolCallIdentity(added, name, namespace)
       emit("response.output_item.added", {
         type: "response.output_item.added",
@@ -1070,10 +1212,12 @@ export const convertGeminiResponseToOpenAIResponses = (
         output_index: idx,
         item: added
       })
+
       // Gemini delivers complete arguments; this delta is not an early preview.
       if (patchCall !== undefined && inputStr !== "") {
         emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, inputStr, nextSeq()))
       }
+
       if (st.funcDone.get(idx) !== true) {
         const inputDone =
           patchCall !== undefined
@@ -1085,7 +1229,9 @@ export const convertGeminiResponseToOpenAIResponses = (
                 output_index: idx,
                 input: inputStr
               }
+
         emit("response.custom_tool_call_input.done", inputDone)
+
         const itemDone: JsonObject = {
           id: `ctc_${callId}`,
           type: "custom_tool_call",
@@ -1094,6 +1240,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           call_id: callId,
           name: ""
         }
+
         setToolCallIdentity(itemDone, name, namespace)
         emit("response.output_item.done", {
           type: "response.output_item.done",
@@ -1112,6 +1259,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         call_id: callId,
         name: ""
       }
+
       setToolCallIdentity(added, name, namespace)
       emit("response.output_item.added", {
         type: "response.output_item.added",
@@ -1119,6 +1267,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         output_index: idx,
         item: added
       })
+
       // Gemini sends the full call at once; "{}" keeps the Responses event order when args are omitted.
       if (argsJson !== "") {
         emit("response.function_call_arguments.delta", {
@@ -1129,6 +1278,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           delta: argsJson
         })
       }
+
       if (st.funcDone.get(idx) !== true) {
         emit("response.function_call_arguments.done", {
           type: "response.function_call_arguments.done",
@@ -1137,6 +1287,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           output_index: idx,
           arguments: argsJson
         })
+
         const itemDone: JsonObject = {
           id: `fc_${callId}`,
           type: "function_call",
@@ -1145,6 +1296,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           call_id: callId,
           name: ""
         }
+
         setToolCallIdentity(itemDone, name, namespace)
         emit("response.output_item.done", {
           type: "response.output_item.done",
@@ -1155,10 +1307,12 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.funcDone.set(idx, true)
       }
     }
+
     return true
   }
 
   const parts = get(root, "candidates.0.content.parts")
+
   if (isJsonArray(parts)) {
     for (let index = 0; index < parts.length; index++) {
       if (!handlePart(parts[index] as Json, index)) break
@@ -1169,20 +1323,27 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   // Preserve the first source finish, including across a usage-only tail or [DONE].
   const finishReason = asString(get(root, "candidates.0.finishReason"))
+
   if (finishReason !== "" && st.finishReason === "") st.finishReason = finishReason
+
   if (st.finishReason !== "") {
     const identityError = pendingIdentityError(st)
+
     if (identityError !== undefined) {
       failToolInput(identityError)
+
       return out
     }
+
     if (!done && !hasUsage) return out
     const { eventType, status, incompleteDetails } = terminalState(st.finishReason)
     messageStatus = status
+
     if (st.pendingReasoningSignature !== "") {
       emitTrailingDetachedReasoning(st.pendingReasoningSignature)
       st.pendingReasoningSignature = ""
     }
+
     // Finalize web search with the complete incremental sources, then reasoning, then the message so web_search_call
     // precedes later output items.
     finalizeWebSearch()
@@ -1193,6 +1354,7 @@ export const convertGeminiResponseToOpenAIResponses = (
     for (const idx of [...st.funcArgsBuf.keys()].toSorted((a, b) => a - b)) {
       if (st.funcDone.get(idx) === true) continue
       const callId = st.funcCallIds.get(idx) ?? ""
+
       if (st.funcCustom.get(idx) === true) {
         const inputStr = st.funcInputBuf.get(idx) ?? ""
         emit("response.custom_tool_call_input.done", {
@@ -1202,6 +1364,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           output_index: idx,
           input: inputStr
         })
+
         const itemDone: JsonObject = {
           id: `ctc_${callId}`,
           type: "custom_tool_call",
@@ -1210,6 +1373,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           call_id: callId,
           name: ""
         }
+
         setToolCallIdentity(itemDone, st.funcNames.get(idx) ?? "", st.funcNamespaces.get(idx) ?? "")
         emit("response.output_item.done", {
           type: "response.output_item.done",
@@ -1227,6 +1391,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           output_index: idx,
           arguments: args
         })
+
         const itemDone: JsonObject = {
           id: `fc_${callId}`,
           type: "function_call",
@@ -1235,6 +1400,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           call_id: callId,
           name: ""
         }
+
         setToolCallIdentity(itemDone, st.funcNames.get(idx) ?? "", st.funcNamespaces.get(idx) ?? "")
         emit("response.output_item.done", {
           type: "response.output_item.done",
@@ -1243,6 +1409,7 @@ export const convertGeminiResponseToOpenAIResponses = (
           item: itemDone
         })
       }
+
       st.funcDone.set(idx, true)
     }
 
@@ -1255,16 +1422,20 @@ export const convertGeminiResponseToOpenAIResponses = (
       background: false,
       error: null
     }
+
     const completed: JsonObject = { type: eventType, sequence_number: 0, response }
+
     if (incompleteDetails !== undefined) response["incomplete_details"] = incompleteDetails
     completed["sequence_number"] = nextSeq()
     const requestJson = pickRequestJson(originalRequest, translatedRequest)
+
     if (requestJson !== undefined) echoRequestFields(response, "", unwrapRequestRoot(requestJson))
 
     emitLateCitations()
 
     // Compose outputs in output_index order.
     const outputs: Json[] = []
+
     for (let idx = 0; idx < st.nextIndex; idx++) {
       if (st.webSearchDone && idx === st.webSearchIndex) {
         outputs.push(
@@ -1277,7 +1448,9 @@ export const convertGeminiResponseToOpenAIResponses = (
         )
         continue
       }
+
       const completedReasoning = st.completedReasoning.get(idx)
+
       if (completedReasoning !== undefined) {
         outputs.push({
           id: completedReasoning.id,
@@ -1287,7 +1460,9 @@ export const convertGeminiResponseToOpenAIResponses = (
         })
         continue
       }
+
       const completedMessage = st.completedMessages.get(idx)
+
       if (completedMessage !== undefined) {
         outputs.push({
           id: completedMessage.id,
@@ -1305,12 +1480,16 @@ export const convertGeminiResponseToOpenAIResponses = (
         })
         continue
       }
+
       const detached = st.detachedReasoning.get(idx)
+
       if (detached !== undefined) {
         outputs.push({ id: detached.id, type: "reasoning", encrypted_content: detached.signature, summary: [] })
         continue
       }
+
       const callId = st.funcCallIds.get(idx)
+
       if (callId !== undefined && callId !== "") {
         if (st.funcCustom.get(idx) === true) {
           const item: JsonObject = {
@@ -1321,10 +1500,12 @@ export const convertGeminiResponseToOpenAIResponses = (
             call_id: callId,
             name: ""
           }
+
           setToolCallIdentity(item, st.funcNames.get(idx) ?? "", st.funcNamespaces.get(idx) ?? "")
           outputs.push(item)
         } else {
           const buffered = st.funcArgsBuf.get(idx) ?? ""
+
           const item: JsonObject = {
             id: `fc_${callId}`,
             type: "function_call",
@@ -1333,16 +1514,21 @@ export const convertGeminiResponseToOpenAIResponses = (
             call_id: callId,
             name: ""
           }
+
           setToolCallIdentity(item, st.funcNames.get(idx) ?? "", st.funcNamespaces.get(idx) ?? "")
           outputs.push(item)
         }
       }
     }
+
     if (outputs.length > 0) response["output"] = outputs
+
     if (st.webSearchDone) response["tool_usage"] = { web_search: { num_requests: 1 } }
+
     if (st.usage.present) response["usage"] = usageJson(st.usage)
     emit(eventType, completed)
     st.completed = true
   }
+
   return out
 }

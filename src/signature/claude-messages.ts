@@ -54,25 +54,30 @@ const TOOL_USE_SIGNATURE_PATHS = [
 /** `deleteEmptyJSONObjectPath`. */
 const deleteEmptyObjectPath = (part: JsonObject, path: string): boolean => {
   const value = get(part, path)
+
   if (!isJsonObject(value) || Object.keys(value).length !== 0) return false
   del(part, path)
+
   return true
 }
 
 const cleanExtraContent = (part: JsonObject): boolean => {
   const google = deleteEmptyObjectPath(part, "extra_content.google")
   const extra = deleteEmptyObjectPath(part, "extra_content")
+
   return google || extra
 }
 
 /** `stripClaudeToolUseSignatureFields`: every signature field and the `model` provenance of a tool_use block. */
 const stripToolUseSignatureFields = (part: JsonObject): boolean => {
   let changed = false
+
   for (const path of [...TOOL_USE_SIGNATURE_PATHS, "model"]) {
     if (!exists(part, path)) continue
     del(part, path)
     changed = true
   }
+
   return cleanExtraContent(part) || changed
 }
 
@@ -86,23 +91,29 @@ const sanitizeToolUseSignature = (
 ): { readonly changed: boolean; readonly decisions: SignatureCompatibilityDecision[] } => {
   let changed = false
   const decisions: SignatureCompatibilityDecision[] = []
+
   for (const path of TOOL_USE_SIGNATURE_PATHS) {
     const current = get(part, path)
+
     if (current === undefined) continue
+
     const blockKind: SignatureBlockKind =
       target === "claude" ? "claude_thinking" : target === "gpt" ? "gpt_reasoning" : "gemini_function_call"
+
     const raw = asString(current)
     const decision = decideSignatureCompatibility(target, raw, blockKind, targetModel)
     decisions.push({
       ...decision,
       reason: `messages[${messageIndex}].content[${partIndex}].${path}: ${decision.reason}`
     })
+
     switch (decision.action) {
       case "preserve":
         if (decision.normalizedSignature !== "" && decision.normalizedSignature !== raw) {
           set(part, path, decision.normalizedSignature)
           changed = true
         }
+
         break
       case "replace_with_gemini_bypass":
         set(part, path, decision.replacementSignature)
@@ -113,6 +124,7 @@ const sanitizeToolUseSignature = (
         changed = true
     }
   }
+
   return { changed: cleanExtraContent(part) || changed, decisions }
 }
 
@@ -127,7 +139,9 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
 ): SignatureSanitizeReport => {
   let target: SignatureProvider = options.targetProvider === "gemini_bypass" ? "gemini" : options.targetProvider
   const targetModel = options.targetModel ?? ""
+
   if (target === "unknown" && targetModel !== "") target = signatureProviderFromModelName(targetModel)
+
   const report: SignatureSanitizeReport = {
     targetProvider: target,
     preserved: 0,
@@ -136,21 +150,28 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
     replacedSignatures: 0,
     decisions: []
   }
+
   const messages = get(payload, "messages")
+
   if (!isJsonArray(messages) || !isJsonObject(payload)) return report
 
   const keptMessages: Json[] = []
   let modified = false
+
   for (const [i, message] of messages.entries()) {
     const content = get(message, "content")
+
     if (!isJsonObject(message) || !isJsonArray(content)) {
       keptMessages.push(message)
       continue
     }
+
     const keptParts: Json[] = []
     let messageModified = false
+
     for (const [j, part] of content.entries()) {
       const partType = asString(get(part, "type"))
+
       if (partType === "tool_use" && isJsonObject(part)) {
         if (options.dropToolSignatures === true) {
           if (stripToolUseSignatureFields(part)) {
@@ -160,25 +181,31 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
         } else {
           const result = sanitizeToolUseSignature(part, target, targetModel, i, j)
           report.decisions.push(...result.decisions)
+
           if (result.changed) messageModified = true
+
           for (const decision of result.decisions) {
             if (decision.action === "preserve") report.preserved++
             else if (decision.action === "replace_with_gemini_bypass") report.replacedSignatures++
             else report.droppedSignatures++
           }
         }
+
         keptParts.push(part)
         continue
       }
+
       if (partType !== "thinking" || !isJsonObject(part)) {
         keptParts.push(part)
         continue
       }
+
       if (options.preserveEmptyThinkingBlocks === true) {
         report.preserved++
         keptParts.push(part)
         continue
       }
+
       if (
         target === "claude" &&
         isEmptyClaudeThinkingPlaceholder(part) &&
@@ -187,16 +214,20 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
         keptParts.push(part)
         continue
       }
+
       const raw = asString(get(part, "signature"))
       const decision = decideSignatureCompatibility(target, raw, "claude_thinking", targetModel)
       report.decisions.push({ ...decision, reason: `messages[${i}].content[${j}]: ${decision.reason}` })
+
       switch (decision.action) {
         case "preserve":
           report.preserved++
+
           if (decision.normalizedSignature !== "" && decision.normalizedSignature !== raw) {
             part["signature"] = decision.normalizedSignature
             messageModified = true
           }
+
           keptParts.push(part)
           break
         case "replace_with_gemini_bypass":
@@ -216,16 +247,21 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
           messageModified = true
       }
     }
+
     if (!messageModified) {
       keptMessages.push(message)
       continue
     }
+
     modified = true
+
     if (keptParts.length === 0 && options.dropEmptyMessages === true) continue
     message["content"] = keptParts
     keptMessages.push(message)
   }
+
   if (modified) payload["messages"] = keptMessages
+
   return report
 }
 

@@ -73,6 +73,7 @@ export const newSocketState = (): SocketState => ({
 /** `responsesWebsocketProviderSetForModel` model key: the base model without its `(thinking)` suffix. */
 export const modelKeyOf = (modelName: string): string => {
   const base = parseSuffix(modelName.trim()).modelName.trim()
+
   return base === "" ? modelName.trim() : base
 }
 
@@ -105,31 +106,38 @@ export const requiresCurrentUpstream = (payload: JsonObject): boolean =>
  */
 export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
   const explicitModel = trimmed(payload["model"])
+
   const requestModel =
     explicitModel !== ""
       ? explicitModel
       : state.passthroughModelName !== ""
         ? state.passthroughModelName
         : trimmed(state.lastRequest?.["model"])
+
   const modelKey = modelKeyOf(requestModel)
 
   if (state.pinned !== undefined && state.pinned.modelKey !== modelKey) state.pinned = undefined
 
   // The pinned credential is only ever a WebSocket-capable one (see module header).
   const useUpstreamWebsocket = state.pinned !== undefined
+
   const nativePassthrough =
     state.upstreamMode === "websocket" &&
     useUpstreamWebsocket &&
     state.pinned?.authId !== "" &&
     state.pinned?.authId === state.upstreamWebsocketAuthId
+
   const requiresCurrent = requiresCurrentUpstream(payload)
+
   if (state.upstreamMode === "websocket" && !nativePassthrough && requiresCurrent) return { _tag: "replay" }
+
   if (explicitModel !== "" && !useUpstreamWebsocket) state.passthroughModelName = ""
 
   const compactionSupported =
     state.observedCompaction !== undefined &&
     state.observedCompaction.modelKey === modelKey &&
     state.observedCompaction.authId === state.upstreamWebsocketAuthId
+
   const allowCompactionReplayBypass = compactionSupported || (!nativePassthrough && state.lastProvider === "codex")
 
   const previousResponseId = trimmed(payload["previous_response_id"])
@@ -140,6 +148,7 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
   let request: JsonObject | undefined
   let last: JsonObject | undefined
   let error: WsRequestError | undefined
+
   const apply = (result: ReturnType<typeof normalizeRequest>) => {
     if (result.ok) {
       request = result.request
@@ -158,6 +167,7 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
     else apply(normalizeCreateRequest(normalizeTranscriptReplacement(payload, state.lastRequest)))
   } else if (nativePassthrough) {
     const result = normalizePassthroughRequest(payload, requestModel)
+
     if (result.ok) request = result.request
     else error = result.error
   } else if (state.lastRequest === undefined && previousResponseId !== "") {
@@ -177,12 +187,15 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
       )
     )
   }
+
   if (error !== undefined || request === undefined) {
     return { _tag: "error", error: error ?? { status: 400, message: "invalid websocket request" } }
   }
+
   if (isPrewarm) {
     return { _tag: "prewarm", request: withoutGenerate(request), last: withoutGenerate(last ?? request) }
   }
+
   return {
     _tag: "execute",
     request,
@@ -196,7 +209,9 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
 
 const withoutGenerate = (request: JsonObject): JsonObject => {
   const out: JsonObject = {}
+
   for (const [key, value] of Object.entries(request)) if (key !== "generate") out[key] = value
+
   return out
 }
 
@@ -231,6 +246,7 @@ export const commitTurn = (state: SocketState, outcome: TurnOutcome): void => {
   const mode: UpstreamMode = selected?.websockets === true ? "websocket" : "http"
   state.upstreamMode = mode
   state.lastProvider = selected?.provider ?? ""
+
   if (mode === "websocket" && selected !== undefined) {
     state.upstreamWebsocketAuthId = selected.authId
     state.pinned = { authId: selected.authId, provider: selected.provider, modelKey: modelKeyOf(outcome.modelName) }
@@ -240,16 +256,20 @@ export const commitTurn = (state: SocketState, outcome: TurnOutcome): void => {
     state.observedCompaction = undefined
     state.lastResponseId = ""
     state.lastPendingToolCallIds = []
+
     return
   }
+
   state.upstreamWebsocketAuthId = ""
   state.lastRequest = outcome.executedRequest === undefined ? undefined : cloneJson(outcome.executedRequest)
   state.lastResponseOutput = outcome.completedOutput
   const modelKey = modelKeyOf(outcome.modelName)
+
   if (inputContainsFullTranscript(outcome.completedOutput)) {
     state.observedCompaction = { modelKey, authId: selected?.authId ?? "" }
   } else if (state.observedCompaction !== undefined) {
     const observed = state.observedCompaction
+
     if (
       observed.modelKey !== modelKey ||
       (observed.authId !== "" && selected !== undefined && observed.authId !== selected.authId)
@@ -257,6 +277,7 @@ export const commitTurn = (state: SocketState, outcome: TurnOutcome): void => {
       state.observedCompaction = undefined
     }
   }
+
   state.lastResponseId = outcome.completedResponseId.trim()
   state.lastPendingToolCallIds = [...outcome.pendingToolCallIds]
 }
@@ -264,5 +285,6 @@ export const commitTurn = (state: SocketState, outcome: TurnOutcome): void => {
 /** Whether the turn's credential supports the upstream socket (`upstreamModeForAuth` provider rule). */
 export const isWebsocketProvider = (provider: string): boolean => {
   const key = provider.trim().toLowerCase()
+
   return key === "codex" || key === "xai"
 }

@@ -8,7 +8,9 @@
  * unverifiable panel is an error (pass `allowUnverified` to accept a release without a digest).
  */
 export const DEFAULT_REPOSITORY = "router-for-me/Cli-Proxy-API-Management-Center"
+
 export const ASSET_NAME = "management.html"
+
 /** Go reads at most 50 MiB. */
 export const MAX_PANEL_BYTES = 50 * 1024 * 1024
 
@@ -36,11 +38,13 @@ export const releaseApiUrl = (repository: string, tag?: string): string => {
   const text = repository.trim().replace(/\/+$/, "")
   let slug: string | undefined
   const direct = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(text)
+
   if (direct !== null) slug = `${direct[1]}/${(direct[2] as string).replace(/\.git$/, "")}`
   else {
     try {
       const url = new URL(text)
       const parts = url.pathname.split("/").filter((part) => part !== "")
+
       if (url.hostname === "github.com" && parts.length >= 2) {
         slug = `${parts[0]}/${(parts[1] as string).replace(/\.git$/, "")}`
       } else if (url.hostname === "api.github.com" && parts[0] === "repos" && parts.length >= 3) {
@@ -50,13 +54,16 @@ export const releaseApiUrl = (repository: string, tag?: string): string => {
       // Falls through to the error below.
     }
   }
+
   if (slug === undefined) throw new PanelSyncError("invalid_repository", `unsupported panel repository: ${repository}`)
   const suffix = tag === undefined || tag === "" ? "latest" : `tags/${encodeURIComponent(tag)}`
+
   return `https://api.github.com/repos/${slug}/releases/${suffix}`
 }
 
 export const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>)
+
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
@@ -74,8 +81,10 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
 export const selectPanelAsset = (release: unknown): PanelRelease => {
   const document = asRecord(release)
   const assets = Array.isArray(document?.assets) ? document.assets : []
+
   for (const raw of assets) {
     const asset = asRecord(raw)
+
     if (
       asset === undefined ||
       String(asset.name ?? "")
@@ -84,14 +93,17 @@ export const selectPanelAsset = (release: unknown): PanelRelease => {
     )
       continue
     const downloadUrl = String(asset.browser_download_url ?? "").trim()
+
     if (downloadUrl === "") continue
     const digest = typeof asset.digest === "string" ? /^sha256:([0-9a-f]{64})$/i.exec(asset.digest.trim()) : null
+
     return {
       tag: String(document?.tag_name ?? "").trim(),
       downloadUrl,
       sha256: digest === null ? undefined : (digest[1] as string).toLowerCase()
     }
   }
+
   throw new PanelSyncError("asset_missing", `the release has no ${ASSET_NAME} asset`)
 }
 
@@ -115,44 +127,56 @@ export type FetchPanelResult =
 
 export const fetchPanel = async (options: FetchPanelOptions = {}): Promise<FetchPanelResult> => {
   const doFetch = options.fetch ?? fetch
+
   const apiHeaders: Record<string, string> = {
     accept: "application/vnd.github+json",
     "user-agent": "CLIProxyAPI-management-updater"
   }
+
   if (options.token !== undefined && options.token !== "") apiHeaders.authorization = `Bearer ${options.token}`
 
   const releaseResponse = await doFetch(releaseApiUrl(options.repository ?? DEFAULT_REPOSITORY, options.tag), {
     headers: apiHeaders
   }).catch(() => undefined)
+
   if (releaseResponse === undefined || !releaseResponse.ok) {
     throw new PanelSyncError(
       "release_unavailable",
       `could not read the panel release (${releaseResponse === undefined ? "network error" : `HTTP ${releaseResponse.status}`})`
     )
   }
+
   const release = selectPanelAsset(await releaseResponse.json().catch(() => undefined))
+
   if (release.sha256 === undefined && options.allowUnverified !== true) {
     throw new PanelSyncError("digest_missing", "the release asset has no sha256 digest; refusing to install it")
   }
+
   if (release.sha256 !== undefined && options.installedSha256?.toLowerCase() === release.sha256) {
     return { status: "up-to-date", tag: release.tag, sha256: release.sha256 }
   }
 
   const limit = options.maxBytes ?? MAX_PANEL_BYTES
+
   const download = await doFetch(release.downloadUrl, {
     headers: { "user-agent": apiHeaders["user-agent"] as string }
   }).catch(() => undefined)
+
   if (download === undefined || !download.ok) {
     throw new PanelSyncError(
       "download_failed",
       `could not download ${ASSET_NAME} (${download === undefined ? "network error" : `HTTP ${download.status}`})`
     )
   }
+
   const bytes = new Uint8Array(await download.arrayBuffer())
+
   if (bytes.length > limit) throw new PanelSyncError("too_large", `${ASSET_NAME} exceeds ${limit} bytes`)
   const actual = await sha256Hex(bytes)
+
   if (release.sha256 !== undefined && actual !== release.sha256) {
     throw new PanelSyncError("digest_mismatch", `digest mismatch: expected ${release.sha256}, got ${actual}`)
   }
+
   return { status: "downloaded", tag: release.tag, sha256: actual, bytes }
 }

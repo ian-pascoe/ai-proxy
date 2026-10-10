@@ -51,13 +51,16 @@ export const mockHttpClient = (
                   ])
                 )
               : ""
+
         const call: UpstreamCall = {
           url: url.toString(),
           method: request.method,
           headers: { ...request.headers },
           body
         }
+
         calls.push(call)
+
         return HttpClientResponse.fromWeb(request, await respond(call))
       })
     )
@@ -71,12 +74,14 @@ export const loadConfig = (yaml: string): Promise<Config> => Effect.runPromise(p
 /** SSE response body streamed in the given pieces (pieces may split lines). */
 export const sseResponse = (pieces: ReadonlyArray<string>, init: ResponseInit = {}): Response => {
   const encoder = new TextEncoder()
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       for (const piece of pieces) controller.enqueue(encoder.encode(piece))
       controller.close()
     }
   })
+
   return new Response(stream, { status: 200, headers: { "content-type": "text/event-stream" }, ...init })
 }
 
@@ -125,6 +130,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
   const calls: Array<UpstreamCall> = []
   const records: Array<UsageRecord> = []
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
+
   const routes = makeProxyRoutes({
     configReader: staticConfigReader(options.config),
     httpClient: mockHttpClient(calls, options.respond),
@@ -137,18 +143,22 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
     ...(options.websocketConnector !== undefined ? { websocketConnector: options.websocketConnector } : {}),
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})
   })
+
   const { handler, dispose } = HttpRouter.toWebHandler(
     Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(routes), options.extraLayers ?? Layer.empty),
     {
       disableLogger: true
     }
   )
+
   const call = async (path: string, init: RequestInit = {}) => {
     const token = await signToken({ key, now: Math.floor(Date.now() / 1000), claims: userClaims("dev@example.com") })
     const headers = new Headers(init.headers)
     headers.set("Cf-Access-Jwt-Assertion", token)
+
     return handler(new Request(`https://proxy.test${path}`, { ...init, headers }), requestContext(accessEnv, ctx))
   }
+
   return { calls, records, call, dispose }
 }
 

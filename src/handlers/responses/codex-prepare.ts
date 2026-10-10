@@ -25,14 +25,19 @@ import { ModelProviders } from "../model-providers.ts"
 export const prepareCodexResponsesRequest = (body: Json, headers: HeaderInput, tools: boolean) =>
   Effect.gen(function* () {
     const config = yield* Effect.orElseSucceed(currentConfig, () => undefined)
+
     if (config === undefined) return
+
     if (tools && codexMultiAgentV2Enabled(headers, config)) {
       const providers = yield* ModelProviders
+
       const source =
         providers.spawnAgentSource === undefined
           ? undefined
           : yield* Effect.orElseSucceed(providers.spawnAgentSource, () => undefined)
+
       prepareCodexMultiAgentV2Tools(headers, body, true, source)
     }
+
     rewriteCodexOrphanDelegationInputForConfig(headers, body, config)
   })

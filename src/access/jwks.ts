@@ -8,6 +8,7 @@ import type { JWK } from "jose"
 
 /** Keys are considered fresh for this long (same default as jose's `createRemoteJWKSet`). */
 export const JWKS_MAX_AGE_MS = 600_000
+
 /** Minimum delay between two refresh attempts for one JWKS URL once keys are cached. */
 export const JWKS_REFRESH_COOLDOWN_MS = 30_000
 
@@ -31,6 +32,7 @@ export class AccessJwks extends Context.Service<
     AccessJwks,
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient
+
       return AccessJwks.of(makeJwksCache(client))
     })
   )
@@ -47,18 +49,23 @@ interface CacheEntry {
 
 const importKeys = async (body: unknown): Promise<ReadonlyMap<string, CryptoKey>> => {
   const list = (body as { readonly keys?: unknown } | null)?.keys
+
   if (!Array.isArray(list)) throw new Error("JWKS document has no keys array")
   const keys = new Map<string, CryptoKey>()
+
   for (const candidate of list as ReadonlyArray<JWK>) {
     if (candidate?.kty !== "RSA" || typeof candidate.kid !== "string") continue
+
     try {
       const key = await importJWK(candidate, "RS256")
+
       if (key instanceof Uint8Array) continue
       keys.set(candidate.kid, key)
     } catch {
       // Skip keys that cannot be imported; the remaining keys stay usable.
     }
   }
+
   return keys
 }
 
@@ -80,21 +87,28 @@ const makeJwksCache = (httpClient: HttpClient.HttpClient) => {
       const now = yield* Clock.currentTimeMillis
       const entry = cache.get(url)
       const cached = entry?.keys.get(kid)
+
       if (entry !== undefined) {
         if (cached !== undefined && now - entry.fetchedAt < JWKS_MAX_AGE_MS) return cached
+
         // Within the cooldown serve whatever is cached; an unknown kid is then a plain rejection.
         if (now - entry.attemptedAt < JWKS_REFRESH_COOLDOWN_MS) {
           return cached ?? (yield* unknownKey)
         }
+
         // Mark the attempt before fetching so concurrent requests do not stampede the endpoint.
         cache.set(url, { ...entry, attemptedAt: now })
       }
+
       const refreshed = yield* fetchKeys(url).pipe(Effect.result)
+
       if (refreshed._tag === "Failure") {
         // Keep serving a stale key when the endpoint is down.
         return cached ?? (yield* refreshed.failure)
       }
+
       cache.set(url, { keys: refreshed.success, fetchedAt: now, attemptedAt: now })
+
       return refreshed.success.get(kid) ?? (yield* unknownKey)
     })
 

@@ -8,6 +8,7 @@
  */
 
 export const WireType = { Varint: 0, Fixed64: 1, Bytes: 2, Fixed32: 5 } as const
+
 export type WireTypeValue = (typeof WireType)[keyof typeof WireType]
 
 export class ProtoError extends Error {
@@ -15,6 +16,7 @@ export class ProtoError extends Error {
 }
 
 const encoder = new TextEncoder()
+
 const decoder = new TextDecoder()
 
 /** Append-only byte buffer with protobuf field writers. */
@@ -25,6 +27,7 @@ export class ProtoWriter {
   #reserve(extra: number): void {
     if (this.#length + extra <= this.#buffer.length) return
     let size = this.#buffer.length * 2
+
     while (size < this.#length + extra) size *= 2
     const next = new Uint8Array(size)
     next.set(this.#buffer.subarray(0, this.#length))
@@ -35,10 +38,12 @@ export class ProtoWriter {
     if (!Number.isSafeInteger(value) || value < 0) throw new ProtoError(`varint out of range: ${value}`)
     this.#reserve(10)
     let rest = value
+
     while (rest >= 0x80) {
       this.#buffer[this.#length++] = (rest % 0x80) | 0x80
       rest = Math.floor(rest / 0x80)
     }
+
     this.#buffer[this.#length++] = rest
   }
 
@@ -55,6 +60,7 @@ export class ProtoWriter {
   varint(field: number, value: number): this {
     this.#tag(field, WireType.Varint)
     this.#rawVarint(value)
+
     return this
   }
 
@@ -62,6 +68,7 @@ export class ProtoWriter {
     this.#tag(field, WireType.Bytes)
     this.#rawVarint(data.length)
     this.#rawBytes(data)
+
     return this
   }
 
@@ -75,6 +82,7 @@ export class ProtoWriter {
     this.#reserve(8)
     new DataView(this.#buffer.buffer).setFloat64(this.#length, value, true)
     this.#length += 8
+
     return this
   }
 
@@ -84,12 +92,14 @@ export class ProtoWriter {
     this.#reserve(4)
     new DataView(this.#buffer.buffer).setFloat32(this.#length, value, true)
     this.#length += 4
+
     return this
   }
 
   /** Copies already encoded fields (opaque pass-through). */
   raw(data: Uint8Array): this {
     this.#rawBytes(data)
+
     return this
   }
 
@@ -113,28 +123,35 @@ const readVarint = (data: Uint8Array, start: number): { readonly value: number; 
   let value = 0
   let scale = 1
   let position = start
+
   for (let index = 0; index < 10; index++) {
     const byte = data[position++]
+
     if (byte === undefined) throw new ProtoError(`truncated varint at offset ${start}`)
     value += (byte & 0x7f) * scale
+
     if ((byte & 0x80) === 0) return { value, next: position }
     scale *= 0x80
   }
+
   throw new ProtoError(`varint overflow at offset ${start}`)
 }
 
 /** Iterates the fields of one message; throws {@link ProtoError} on malformed input. */
 export function* readFields(data: Uint8Array): Generator<ProtoField> {
   let position = 0
+
   while (position < data.length) {
     const fieldStart = position
     const tag = readVarint(data, position)
     position = tag.next
     const num = Math.floor(tag.value / 8)
     const wire = (tag.value % 8) as WireTypeValue
+
     if (num === 0) throw new ProtoError(`invalid field number 0 at offset ${fieldStart}`)
     let varint = 0
     let bytes: Uint8Array = new Uint8Array(0)
+
     switch (wire) {
       case WireType.Varint: {
         const parsed = readVarint(data, position)
@@ -142,25 +159,31 @@ export function* readFields(data: Uint8Array): Generator<ProtoField> {
         position = parsed.next
         break
       }
+
       case WireType.Fixed64:
       case WireType.Fixed32: {
         const size = wire === WireType.Fixed64 ? 8 : 4
+
         if (position + size > data.length) throw new ProtoError(`truncated fixed value at offset ${position}`)
         bytes = data.subarray(position, position + size)
         position += size
         break
       }
+
       case WireType.Bytes: {
         const length = readVarint(data, position)
         position = length.next
+
         if (position + length.value > data.length) throw new ProtoError(`truncated bytes at offset ${position}`)
         bytes = data.subarray(position, position + length.value)
         position += length.value
         break
       }
+
       default:
         throw new ProtoError(`unsupported wire type ${String(wire)} at offset ${position}`)
     }
+
     yield { num, wire, varint, bytes, encoded: data.subarray(fieldStart, position) }
   }
 }

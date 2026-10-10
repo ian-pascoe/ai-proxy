@@ -25,6 +25,7 @@ const SCOPED_PROVIDERS: ReadonlySet<string> = new Set([
 ])
 
 let defaults: Config | undefined
+
 const defaultConfig = (): Config => (defaults ??= Schema.decodeUnknownSync(Config)({}))
 
 /** `Config.ForAPIKey`: a request-local view without the OAuth-only provider settings (the input is not modified). */

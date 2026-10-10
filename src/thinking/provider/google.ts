@@ -13,8 +13,10 @@ import type { ThinkingConfig } from "../types.ts"
 export const readIncludeThoughts = (body: Json | undefined, prefix: string): boolean | undefined => {
   for (const key of ["includeThoughts", "include_thoughts"]) {
     const value = get(body, `${prefix}.${key}`)
+
     if (typeof value === "boolean") return value
   }
+
   return undefined
 }
 
@@ -41,10 +43,14 @@ export const applyLevelFormat = (body: Json | undefined, config: ThinkingConfig,
 
   if (config.mode === "none") {
     if (config.budget === 0 && config.level === "") return delPath(result, prefix)
+
     if (config.level !== "") result = setPath(result, `${prefix}.thinkingLevel`, config.level)
+
     return restoreIncludeThoughts(result, prefix, include)
   }
+
   result = setPath(result, `${prefix}.thinkingLevel`, config.level)
+
   return restoreIncludeThoughts(result, prefix, include)
 }
 
@@ -62,13 +68,17 @@ export const applyBudgetFormat = (
   let result = clearConflicting(body, prefix, ["thinkingLevel", "thinking_level", "thinking_budget"])
 
   let budget = config.budget
+
   if (normalize !== undefined) {
     const normalized = normalize(budget, result)
     result = normalized.body
+
     // The thinking amount was removed entirely; keep an explicit visibility control.
     if (normalized.budget === "removed") return restoreIncludeThoughts(result, prefix, include)
     budget = normalized.budget
   }
+
   result = setPath(result, `${prefix}.thinkingBudget`, budget)
+
   return restoreIncludeThoughts(result, prefix, include)
 }

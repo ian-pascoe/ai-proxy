@@ -6,6 +6,7 @@ import {
   functionParameterBindingName,
   functionParameterTypeAnnotation,
 } from "../shared/function-parameters.ts";
+
 type ParameterOwner =
   | ESTree.ArrowFunctionExpression
   | ESTree.Function
@@ -17,6 +18,7 @@ type ParameterOwner =
 
 function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): boolean {
   const predicate = owner.returnType?.typeAnnotation;
+
   return (
     predicate?.type === "TSTypePredicate" &&
     predicate.parameterName.type === "Identifier" &&
@@ -41,9 +43,12 @@ export const noUnknownParametersRule = defineRule({
     const checkParameters = (node: ParameterOwner) => {
       for (const parameter of node.params) {
         const annotation = functionParameterTypeAnnotation(parameter);
+
         if (annotation === null || annotation === undefined) continue;
+
         if (!containsUnknownType(annotation.typeAnnotation)) continue;
         const name = functionParameterBindingName(parameter, context.sourceCode);
+
         if (name === "cause" || isTypePredicateSubject(node, name)) continue;
         context.report({
           node: annotation.typeAnnotation,

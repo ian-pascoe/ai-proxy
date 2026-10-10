@@ -6,20 +6,26 @@ import { claudeFile, controlPlane, jsonInit, makeHarness, resetControlPlane } fr
 // The ControlPlane runs in the test isolate and refreshes through Effect's FetchHttpClient, which resolves
 // `globalThis.fetch` once: install one stable fetch that delegates to the current test's upstream.
 type Upstream = (url: string) => Response
+
 const okUpstream: Upstream = () =>
   Response.json({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 3600 })
+
 let upstream: Upstream = okUpstream
+
 const realFetch = globalThis.fetch
 
 const harness = makeHarness()
+
 beforeAll(() => {
   globalThis.fetch = (async (input: RequestInfo | URL) =>
     upstream(input instanceof Request ? input.url : String(input))) as typeof fetch
 })
+
 afterAll(async () => {
   globalThis.fetch = realFetch
   await harness.dispose()
 })
+
 beforeEach(async () => {
   upstream = okUpstream
   await resetControlPlane()
@@ -39,12 +45,15 @@ interface Entry {
   readonly auth_index: string
   readonly [key: string]: unknown
 }
+
 const list = async (query = ""): Promise<{ files: Entry[]; [key: string]: unknown }> =>
   (await json(`/v8/management/credentials${query}`)).body as { files: Entry[] }
 
 const form = (files: Array<[string, string]>) => {
   const body = new FormData()
+
   for (const [name, content] of files) body.append("file", new File([content], name, { type: "application/json" }))
+
   return { method: "POST", body }
 }
 
@@ -131,6 +140,7 @@ describe("management credentials: list and upload", () => {
       status: 200,
       body: { status: "ok" }
     })
+
     const several = await json(
       "/v8/management/credentials",
       form([
@@ -138,10 +148,12 @@ describe("management credentials: list and upload", () => {
         ["three.json", JSON.stringify(claudeFile())]
       ])
     )
+
     expect(several).toMatchObject({
       status: 200,
       body: { status: "ok", uploaded: 2, files: ["two.json", "three.json"] }
     })
+
     const partial = await json(
       "/v8/management/credentials",
       form([
@@ -149,6 +161,7 @@ describe("management credentials: list and upload", () => {
         ["bad.txt", "x"]
       ])
     )
+
     expect(partial).toMatchObject({
       status: 207,
       body: {
@@ -274,9 +287,11 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
   it("refuses to toggle config API keys", async () => {
     await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n")
+
     const config = (await json("/v8/management/config/api-keys/claude")).body as Array<{
       keys: Array<{ auth_index: string }>
     }>
+
     const authIndex = config[0]!.keys[0]!.auth_index
     const entries = await controlPlane().listCredentials()
     const id = entries.find((entry) => entry.source === "config")!.id
@@ -290,6 +305,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
   it("patches fields by dotted path, canonicalises keys and merges headers", async () => {
     await upload("x.json", claudeFile({ headers: { "X-A": "1", "X-B": "2" } }))
+
     const patch = (fields: Record<string, unknown>) =>
       json("/v8/management/credentials/fields", jsonInit("PATCH", { name: "x.json", ...fields }))
 
@@ -400,6 +416,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     await upload("x.json", claudeFile())
     const stub = controlPlane()
     const picked = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" })
+
     if (!picked.ok) throw new Error("pick failed")
     await stub.report(picked.lease, { success: false, httpStatus: 429, error: { message: "limit", retryable: true } })
     expect((await list()).files[0]).toMatchObject({ failed: 1 })

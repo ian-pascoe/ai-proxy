@@ -15,7 +15,9 @@ export const randomHex = (length: number): string => toHex(randomBytes(length))
 /** `base64.RawURLEncoding`: URL-safe alphabet without padding. */
 export const base64Url = (bytes: Uint8Array): string => {
   let binary = ""
+
   for (const byte of bytes) binary += String.fromCharCode(byte)
+
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
@@ -25,6 +27,7 @@ export const sha256 = async (text: string): Promise<Uint8Array> =>
 /** Lowercase hex of the first `bytes` bytes of SHA-256 (`hex.EncodeToString(digest[:n])`). */
 export const sha256Hex = async (text: string, bytes?: number): Promise<string> => {
   const hex = sha256HexFull(text)
+
   return bytes === undefined ? hex : hex.slice(0, bytes * 2)
 }
 
@@ -36,6 +39,7 @@ export interface PkceCodes {
 /** PKCE S256 pair; `entropyBytes` is 96 for Claude/Codex (128 chars) and 64 for Devin. */
 export const generatePkce = async (entropyBytes: number): Promise<PkceCodes> => {
   const codeVerifier = base64Url(randomBytes(entropyBytes))
+
   return { codeVerifier, codeChallenge: base64Url(await sha256(codeVerifier)) }
 }
 

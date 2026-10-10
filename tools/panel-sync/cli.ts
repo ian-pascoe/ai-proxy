@@ -21,12 +21,15 @@ const out = (line: string): void => {
 const parseArgs = (argv: ReadonlyArray<string>) => {
   const values = new Map<string, string>()
   const flags = new Set<string>()
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index] as string
+
     if (arg === "--allow-unverified") flags.add("allow-unverified")
     else if (arg.startsWith("--") && index + 1 < argv.length) values.set(arg.slice(2), argv[(index += 1)] as string)
     else throw new PanelSyncError("invalid_repository", `unknown argument: ${arg}`)
   }
+
   return { values, flags }
 }
 
@@ -34,14 +37,17 @@ const main = async (): Promise<void> => {
   const { values, flags } = parseArgs(process.argv.slice(2))
   const target = resolve(root, values.get("out") ?? "public/management.html")
   let installed: string | undefined
+
   try {
     installed = createHash("sha256").update(readFileSync(target)).digest("hex")
   } catch {
     installed = undefined
   }
+
   const repository = values.get("repository")
   const tag = values.get("tag")
   const token = process.env.GITHUB_TOKEN
+
   const result = await fetchPanel({
     ...(repository === undefined ? {} : { repository }),
     ...(tag === undefined ? {} : { tag }),
@@ -49,10 +55,13 @@ const main = async (): Promise<void> => {
     ...(installed === undefined ? {} : { installedSha256: installed }),
     allowUnverified: flags.has("allow-unverified")
   })
+
   if (result.status === "up-to-date") {
     out(`management.html is up to date (${result.tag}, sha256 ${result.sha256})`)
+
     return
   }
+
   mkdirSync(dirname(target), { recursive: true })
   const temporary = `${target}.tmp`
   writeFileSync(temporary, result.bytes)

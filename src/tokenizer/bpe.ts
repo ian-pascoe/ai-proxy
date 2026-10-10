@@ -12,6 +12,7 @@
  */
 
 const NO_RANK = Number.POSITIVE_INFINITY
+
 /** Pieces up to this many bytes use the Go-identical merge loop; longer ones the heap variant. */
 export const HEAP_MERGE_THRESHOLD = 192
 
@@ -23,29 +24,35 @@ const parseVocabulary = (data: ArrayBuffer): Map<string, number> => {
   const count = new DataView(data).getUint32(0, true)
   const vocab = new Map<string, number>()
   let offset = 4
+
   for (let rank = 0; rank < count; rank++) {
     const length = bytes[offset++] as number
     vocab.set(String.fromCharCode.apply(null, bytes.subarray(offset, offset + length) as unknown as number[]), rank)
     offset += length
   }
+
   return vocab
 }
 
 /** UTF-8 bytes of `piece` as a binary string. */
 const toBinaryString = (piece: string): string => {
   let ascii = true
+
   for (let i = 0; i < piece.length; i++) {
     if (piece.charCodeAt(i) > 0x7f) {
       ascii = false
       break
     }
   }
+
   if (ascii) return piece
   const bytes = encoder.encode(piece)
   let out = ""
+
   for (let i = 0; i < bytes.length; i += 4096) {
     out += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096) as unknown as number[])
   }
+
   return out
 }
 
@@ -53,35 +60,46 @@ const toBinaryString = (piece: string): string => {
 const mergeCountNaive = (vocab: Map<string, number>, piece: string): number => {
   const offsets: number[] = []
   const ranks: number[] = []
+
   for (let i = 0; i <= piece.length; i++) {
     offsets.push(i)
     ranks.push(NO_RANK)
   }
+
   const rankAt = (index: number, skip: number): number => {
     if (index + skip + 2 < offsets.length) {
       const rank = vocab.get(piece.slice(offsets[index] as number, offsets[index + skip + 2] as number))
+
       if (rank !== undefined) return rank
     }
+
     return NO_RANK
   }
+
   for (let i = 0; i < offsets.length - 2; i++) ranks[i] = rankAt(i, 0)
+
   for (;;) {
     if (offsets.length === 1) break
     let minRank = NO_RANK
     let minIndex = 0
+
     for (let i = 0; i < offsets.length - 1; i++) {
       const rank = ranks[i] as number
+
       if (rank < minRank) {
         minRank = rank
         minIndex = i
       }
     }
+
     if (minRank === NO_RANK) break
     ranks[minIndex] = rankAt(minIndex, 1)
+
     if (minIndex > 0) ranks[minIndex - 1] = rankAt(minIndex - 1, 1)
     offsets.splice(minIndex + 1, 1)
     ranks.splice(minIndex + 1, 1)
   }
+
   return offsets.length - 1
 }
 
@@ -98,6 +116,7 @@ class MergeHeap {
   #less(a: number, b: number): boolean {
     const ra = this.#ranks[a] as number
     const rb = this.#ranks[b] as number
+
     return ra < rb || (ra === rb && (this.#indexes[a] as number) < (this.#indexes[b] as number))
   }
 
@@ -114,8 +133,10 @@ class MergeHeap {
     this.#indexes.push(index)
     this.#stamps.push(stamp)
     let child = this.#ranks.length - 1
+
     while (child > 0) {
       const parent = (child - 1) >> 1
+
       if (!this.#less(child, parent)) break
       this.#swap(child, parent)
       child = parent
@@ -131,16 +152,21 @@ class MergeHeap {
     this.#indexes.pop()
     this.#stamps.pop()
     let parent = 0
+
     for (;;) {
       const left = parent * 2 + 1
       const right = left + 1
       let smallest = parent
+
       if (left < last && this.#less(left, smallest)) smallest = left
+
       if (right < last && this.#less(right, smallest)) smallest = right
+
       if (smallest === parent) break
       this.#swap(parent, smallest)
       parent = smallest
     }
+
     return top
   }
 }
@@ -154,33 +180,44 @@ const mergeCountHeap = (vocab: Map<string, number>, piece: string): number => {
   const stamp = Array.from({ length: n }, () => 0)
   const alive = Array.from({ length: n }, () => true)
   const heap = new MergeHeap()
+
   // Rank of joining part `i` with its successor, or NO_RANK when it has none.
   const pairRank = (i: number): number => {
     const successor = next[i] as number
+
     if (successor >= n) return NO_RANK
+
     return vocab.get(piece.slice(i, next[successor] as number)) ?? NO_RANK
   }
+
   const schedule = (i: number): void => {
     stamp[i] = (stamp[i] as number) + 1
     const rank = pairRank(i)
+
     if (rank !== NO_RANK) heap.push(rank, i, stamp[i] as number)
   }
+
   for (let i = 0; i < n - 1; i++) schedule(i)
 
   let parts = n
+
   while (heap.size > 0) {
     const top = heap.pop()
+
     if (!alive[top.index] || stamp[top.index] !== top.stamp) continue
     const i = top.index
     const removed = next[i] as number
     alive[removed] = false
     next[i] = next[removed] as number
+
     if ((next[i] as number) < n) prev[next[i] as number] = i
     parts--
     schedule(i)
     const before = prev[i] as number
+
     if (before >= 0) schedule(before)
   }
+
   return parts
 }
 
@@ -205,6 +242,7 @@ export class BpeCodec {
 
   #vocab(): Map<string, number> {
     this.#vocabulary ??= parseVocabulary(this.#vocabularyData)
+
     return this.#vocabulary
   }
 
@@ -214,11 +252,14 @@ export class BpeCodec {
     const vocab = this.#vocab()
     const pattern = new RegExp(this.#pattern.source, "gu")
     let tokens = 0
+
     for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
       const piece = toBinaryString(match[0])
+
       if (vocab.has(piece)) tokens++
       else tokens += piece.length > HEAP_MERGE_THRESHOLD ? mergeCountHeap(vocab, piece) : mergeCountNaive(vocab, piece)
     }
+
     return tokens
   }
 
@@ -226,6 +267,7 @@ export class BpeCodec {
   mergeCounts(piece: string): { naive: number; heap: number } {
     const vocab = this.#vocab()
     const binary = toBinaryString(piece)
+
     return { naive: mergeCountNaive(vocab, binary), heap: mergeCountHeap(vocab, binary) }
   }
 }

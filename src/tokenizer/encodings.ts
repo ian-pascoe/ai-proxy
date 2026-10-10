@@ -15,10 +15,13 @@ import { GO_SPACE_CLASS, GO_SPACE_NO_NEWLINE_CLASS, goTrimSpace } from "./text.t
 export type EncodingName = "o200k_base" | "cl100k_base"
 
 const S = GO_SPACE_CLASS
+
 // Go's generated matcher behaves as if `\s*[\r\n]+` were lazy: the piece ends at the first newline run, so " \n \n" is two pieces.
 const LEADING_SPACE = GO_SPACE_NO_NEWLINE_CLASS
+
 // Go's generated matcher (regexp2cg) never matches U+007F: DEL is not part of any negated class, so it is dropped.
 const DEL = "\\u007f"
+
 const CONTRACTION = "'[sS\u017f]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD]"
 
 const O200K_PATTERN = [
@@ -46,6 +49,7 @@ const codecs = new Map<EncodingName, BpeCodec>()
 /** The codec of an encoding. Creating it is cheap; its vocabulary is parsed on the first `count`. */
 export const getCodec = (name: EncodingName): BpeCodec => {
   let codec = codecs.get(name)
+
   if (codec === undefined) {
     codec =
       name === "o200k_base"
@@ -53,22 +57,30 @@ export const getCodec = (name: EncodingName): BpeCodec => {
         : new BpeCodec(name, cl100kRanks, new RegExp(CL100K_PATTERN, "u"))
     codecs.set(name, codec)
   }
+
   return codec
 }
 
 /** `helps.TokenizerForModel` (OpenAI-compatibility counting). */
 export const encodingForModel = (model: string): EncodingName => {
   const m = goTrimSpace(model).toLowerCase()
+
   if (m === "") return "cl100k_base"
+
   if (m.startsWith("gpt-5") || m.startsWith("gpt-4.1") || m.startsWith("gpt-4o")) return "o200k_base"
+
   if (m.startsWith("gpt-4") || m.startsWith("gpt-3")) return "cl100k_base"
+
   if (m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4")) return "o200k_base"
+
   return "o200k_base"
 }
 
 /** `tokenizerForCodexModel` (Codex counting; unknown models use `cl100k_base`). */
 export const encodingForCodexModel = (model: string): EncodingName => {
   const m = goTrimSpace(model).toLowerCase()
+
   if (m.startsWith("gpt-5") || m.startsWith("gpt-4.1") || m.startsWith("gpt-4o")) return "o200k_base"
+
   return "cl100k_base"
 }

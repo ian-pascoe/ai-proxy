@@ -23,29 +23,37 @@ interface FakeSocket {
 const fakeSocket = (): FakeSocket => {
   const messages = Effect.runSync(Queue.unbounded<UpstreamMessage>())
   const listeners = new Set<(message: UpstreamMessage) => void>()
+
   const fake: FakeSocket = {
     sent: [],
     closed: undefined,
     failNextSend: false,
     push: (message) => {
       Queue.offerUnsafe(messages, message)
+
       if (message._tag === "close" || message._tag === "error") {
         open = false
+
         for (const listener of listeners) listener(message)
       }
     },
     socket: undefined as unknown as UpstreamSocket
   }
+
   let open = true
+
   ;(fake as { socket: UpstreamSocket }).socket = {
     headers: new Headers(),
     send: (text) =>
       Effect.suspend(() => {
         if (fake.failNextSend || !open) {
           fake.failNextSend = false
+
           return Effect.fail(new UpstreamSendError({ message: "boom" }))
         }
+
         fake.sent.push(text)
+
         return Effect.void
       }),
     messages,
@@ -57,15 +65,18 @@ const fakeSocket = (): FakeSocket => {
     isOpen: () => open,
     onEnd: (listener) => {
       listeners.add(listener)
+
       return () => void listeners.delete(listener)
     }
   }
+
   return fake
 }
 
 /** Connector that hands out the given sockets in order and records dials. */
 const connector = (sockets: FakeSocket[], dials: Array<{ url: string }> = []) => {
   let index = 0
+
   return Layer.succeed(
     UpstreamWebSocketConnector,
     UpstreamWebSocketConnector.of({
@@ -73,6 +84,7 @@ const connector = (sockets: FakeSocket[], dials: Array<{ url: string }> = []) =>
         Effect.suspend(() => {
           dials.push({ url: request.url })
           const next = sockets[index++]
+
           return next === undefined
             ? Effect.fail(new HandshakeError({ status: 503, body: "busy", headers: {}, message: "no more sockets" }))
             : Effect.succeed(next.socket)
@@ -102,10 +114,12 @@ describe("upstream execution sessions", () => {
       const store = new UpstreamSessionStore()
       const socket = fakeSocket()
       const scope = yield* Scope.make()
+
       const turn = yield* openTurn(input(store)).pipe(
         Effect.provideService(Scope.Scope, scope),
         Effect.provide(connector([socket]))
       )
+
       const fiber = yield* turn.read.pipe(Effect.flip, Effect.forkChild)
       yield* TestClock.adjust("299 seconds")
       assert.isUndefined(fiber.pollUnsafe())
@@ -124,6 +138,7 @@ describe("upstream execution sessions", () => {
       const socket = fakeSocket()
       const dials: Array<{ url: string }> = []
       const layer = connector([socket], dials)
+
       for (const frame of ["one", "two"]) {
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -134,6 +149,7 @@ describe("upstream execution sessions", () => {
           })
         ).pipe(Effect.provide(layer))
       }
+
       assert.deepStrictEqual(socket.sent, ["one", "two"])
       assert.lengthOf(dials, 1)
       assert.isUndefined(socket.closed)
@@ -184,10 +200,12 @@ describe("upstream execution sessions", () => {
   it.effect("asks the client to replay when a continuation has no live socket or the send fails", () =>
     Effect.gen(function* () {
       const store = new UpstreamSessionStore()
+
       const missing = yield* Effect.scoped(openTurn(input(store, { requireUpstream: true }))).pipe(
         Effect.provide(connector([])),
         Effect.flip
       )
+
       assert.strictEqual(missing.code, "upstream_websocket_replay_required")
       assert.strictEqual(missing.status, 426)
       assert.isTrue(missing.requestScoped)
@@ -201,10 +219,12 @@ describe("upstream execution sessions", () => {
         })
       ).pipe(Effect.provide(layer))
       socket.failNextSend = true
+
       const failed = yield* Effect.scoped(openTurn(input(store, { requireUpstream: true }))).pipe(
         Effect.provide(layer),
         Effect.flip
       )
+
       assert.strictEqual(failed.code, "upstream_websocket_replay_required")
       assert.isDefined(socket.closed)
     })
@@ -217,6 +237,7 @@ describe("upstream execution sessions", () => {
       const second = fakeSocket()
       const dials: Array<{ url: string }> = []
       const layer = connector([first, second], dials)
+
       const run = (overrides: Partial<OpenTurnInput>) =>
         Effect.scoped(
           Effect.gen(function* () {
@@ -224,6 +245,7 @@ describe("upstream execution sessions", () => {
             turn.complete()
           })
         ).pipe(Effect.provide(layer))
+
       yield* run({})
       yield* run({ authId: "auth-2" })
       assert.lengthOf(dials, 2)
@@ -238,14 +260,17 @@ describe("upstream execution sessions", () => {
         Effect.gen(function* () {
           const socket = fakeSocket()
           const store = new UpstreamSessionStore()
+
           return yield* Effect.scoped(
             Effect.gen(function* () {
               const turn = yield* openTurn(input(store))
               socket.push(message)
+
               return yield* Effect.flip(turn.read)
             })
           ).pipe(Effect.provide(connector([socket])))
         })
+
       const tooBig = yield* read({ _tag: "close", code: 1009, reason: "too big" })
       assert.strictEqual(tooBig.status, 413)
       assert.isTrue(tooBig.requestScoped)
@@ -263,6 +288,7 @@ describe("upstream execution sessions", () => {
       const rejected = yield* Effect.scoped(openTurn(input(store))).pipe(Effect.provide(connector([])), Effect.flip)
       assert.strictEqual(rejected.status, 503)
       assert.strictEqual(rejected.message, "classified:busy")
+
       const unreachable = yield* Effect.scoped(openTurn(input(store))).pipe(
         Effect.provide(
           Layer.succeed(
@@ -274,6 +300,7 @@ describe("upstream execution sessions", () => {
         ),
         Effect.flip
       )
+
       assert.strictEqual(unreachable.code, "transient_transport")
     })
   )

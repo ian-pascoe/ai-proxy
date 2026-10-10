@@ -19,10 +19,13 @@ export const USAGE_PATHS = [
 export const hasAntigravityResponsePayload = (raw: Json | undefined): boolean => {
   for (const path of ["response.candidates", "candidates"]) {
     const candidates = get(raw, path)
+
     if (isJsonArray(candidates) && candidates.length > 0) return true
   }
+
   return USAGE_PATHS.some((path) => {
     const usage = get(raw, path)
+
     return isJsonObject(usage) && Object.keys(usage).length > 0
   })
 }

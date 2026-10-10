@@ -23,6 +23,7 @@ const DEFAULT_META_BASE_URL = "https://api.meta.ai/v1"
 /** Trims, strips surrounding `/`, and rejects prefixes that still contain `/`. */
 export const normalizeModelPrefix = (prefix: string | undefined): string => {
   const trimmed = (prefix ?? "").trim().replace(/^\/+|\/+$/g, "")
+
   return trimmed.includes("/") ? "" : trimmed
 }
 
@@ -31,11 +32,14 @@ export const normalizeHeaders = (
   headers: Readonly<Record<string, string>> | undefined
 ): Record<string, string> | undefined => {
   const clean: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(headers ?? {})) {
     const k = key.trim()
     const v = value.trim()
+
     if (k !== "" && v !== "") clean[k] = v
   }
+
   return Object.keys(clean).length === 0 ? undefined : clean
 }
 
@@ -43,17 +47,21 @@ export const normalizeHeaders = (
 export const normalizeExcludedModels = (models: readonly string[] | undefined): string[] | undefined => {
   const seen = new Set<string>()
   const out: string[] = []
+
   for (const raw of models ?? []) {
     const value = raw.trim().toLowerCase()
+
     if (value === "" || seen.has(value)) continue
     seen.add(value)
     out.push(value)
   }
+
   return out.length === 0 ? undefined : out
 }
 
 const trimmedOrUndefined = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim()
+
   return trimmed === undefined || trimmed === "" ? undefined : trimmed
 }
 
@@ -66,13 +74,16 @@ const normalizeScopedErrors = (
 ): RequestScopedErrorRule[] | undefined => {
   if (rules === undefined) return undefined
   const clean: RequestScopedErrorRule[] = []
+
   for (const rule of rules) {
     const action = (rule.action ?? "").trim().toLowerCase()
     const match = (rule.match ?? []).map((m) => m.trim()).filter((m) => m !== "")
     const matchRegexr = (rule["match-regexr"] ?? []).map((m) => m.trim()).filter((m) => m !== "")
+
     if ((rule.status ?? 0) <= 0 || (match.length === 0 && matchRegexr.length === 0) || action === "") continue
     clean.push({ status: rule.status as number, match, "match-regexr": matchRegexr, action })
   }
+
   return clean
 }
 
@@ -81,6 +92,7 @@ const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
   const excluded = normalizeExcludedModels(group["excluded-models"])
   const prefix = group.prefix === undefined ? undefined : normalizeModelPrefix(group.prefix)
   const scoped = normalizeScopedErrors(group["request-scoped-errors"])
+
   return {
     ...group,
     name: trimmedOrUndefined(group.name),
@@ -135,15 +147,20 @@ const dedupeAcrossGroups = (
 ): ApiKeyGroup[] => {
   const seen = new Set<string>()
   const out: ApiKeyGroup[] = []
+
   for (const group of groups) {
     const keys = group.keys.filter((key) => {
       const id = identity(group, key)
+
       if (seen.has(id)) return false
       seen.add(id)
+
       return true
     })
+
     if (keys.length > 0) out.push({ ...group, keys })
   }
+
   return out
 }
 
@@ -163,43 +180,56 @@ const normalizeFamily = (
   groups: readonly ApiKeyGroup[]
 ): ApiKeyGroup[] => {
   const out: ApiKeyGroup[] = []
+
   for (const raw of groups) {
     const group = compact<ApiKeyGroup>(normalizeGroup(raw))
+
     if ((family === "codex" || family === "xai") && group["base-url"] === undefined) continue
+
     if (family === "meta") {
       const keys = group.keys
         .filter((key) => key["api-key"] !== "" && !key["api-key"].startsWith("dca:"))
         .map((key) => ({ ...key, "alpha-search": false }))
+
       if (keys.length === 0) continue
       out.push({ ...group, "base-url": group["base-url"] ?? DEFAULT_META_BASE_URL, keys })
       continue
     }
+
     if (family === "xai") {
       out.push({ ...group, keys: group.keys.map((key) => ({ ...key, "alpha-search": false })) })
       continue
     }
+
     if (family === "gemini" || family === "interactions") {
       // Keys without credentials are meaningful only together with a base URL.
       const keys = group.keys.filter((key) => key["api-key"] !== "" || group["base-url"] !== undefined)
+
       if (keys.length === 0) continue
       out.push({ ...group, keys })
       continue
     }
+
     if (family === "vertex") {
       const keys = group.keys.filter((key) => key["api-key"] !== "")
+
       if (keys.length === 0) continue
       out.push({ ...group, ...modelsWithAliasAndName(group.models), keys: keys.map(withVertexModels) })
       continue
     }
+
     out.push(group)
   }
+
   return out
 }
 
 const normalizeCompat = (groups: readonly OpenAICompatGroup[]): OpenAICompatGroup[] => {
   const out: OpenAICompatGroup[] = []
+
   for (const group of groups) {
     const baseUrl = group["base-url"].trim()
+
     if (baseUrl === "") continue
     out.push(
       compact<OpenAICompatGroup>({
@@ -212,6 +242,7 @@ const normalizeCompat = (groups: readonly OpenAICompatGroup[]): OpenAICompatGrou
       })
     )
   }
+
   return out
 }
 
@@ -221,15 +252,20 @@ const normalizeAliases = (
   input: Readonly<Record<string, readonly OAuthModelAlias[]>>
 ): Record<string, OAuthModelAlias[]> => {
   const out: Record<string, OAuthModelAlias[]> = {}
+
   for (const [rawChannel, aliases] of Object.entries(input)) {
     const channel = lowerKey(rawChannel)
+
     if (channel === "") continue
     const seen = new Set<string>()
     const clean: OAuthModelAlias[] = []
+
     for (const entry of aliases) {
       const name = entry.name.trim()
       const alias = entry.alias.trim()
+
       if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue
+
       if (seen.has(alias.toLowerCase())) continue
       seen.add(alias.toLowerCase())
       clean.push(
@@ -242,8 +278,10 @@ const normalizeAliases = (
         })
       )
     }
+
     if (clean.length > 0) out[channel] = clean
   }
+
   return out
 }
 
@@ -252,32 +290,42 @@ const normalizeSettings = (
   input: Readonly<Record<string, readonly OAuthModelSetting[]>>
 ): Record<string, OAuthModelSetting[]> => {
   const out: Record<string, OAuthModelSetting[]> = {}
+
   for (const [rawChannel, settings] of Object.entries(input)) {
     const channel = lowerKey(rawChannel)
+
     if (channel === "") continue
     const seen = new Set<string>()
     const reversed: OAuthModelSetting[] = []
+
     for (const entry of settings.toReversed()) {
       const name = entry.name.trim()
+
       if (name === "") continue
       const alias = (entry.alias ?? "").trim()
       const key = `${name.toLowerCase()}->${alias.toLowerCase()}`
+
       if (seen.has(key)) continue
       seen.add(key)
       reversed.push(compact<OAuthModelSetting>({ name, alias, "max-context-length": entry["max-context-length"] }))
     }
+
     if (reversed.length > 0) out[channel] = reversed.toReversed()
   }
+
   return out
 }
 
 const normalizeExcludedMap = (input: Readonly<Record<string, readonly string[]>>): Record<string, string[]> => {
   const out: Record<string, string[]> = {}
+
   for (const [provider, models] of Object.entries(input)) {
     const key = lowerKey(provider)
     const normalized = normalizeExcludedModels(models)
+
     if (key !== "" && normalized !== undefined) out[key] = normalized
   }
+
   return out
 }
 
@@ -285,11 +333,14 @@ const normalizeScopedErrorMap = (
   input: Readonly<Record<string, readonly RequestScopedErrorRule[]>>
 ): Record<string, RequestScopedErrorRule[]> => {
   const out: Record<string, RequestScopedErrorRule[]> = {}
+
   for (const [channel, rules] of Object.entries(input)) {
     const key = lowerKey(channel)
     const clean = normalizeScopedErrors(rules) ?? []
+
     if (key !== "" && clean.length > 0) out[key] = clean
   }
+
   return out
 }
 
@@ -297,7 +348,9 @@ const normalizeScopedErrorMap = (
 const sanitizeRawRules = (rules: readonly PayloadRule[]): PayloadRule[] =>
   rules.filter((rule) => {
     const params = Object.entries(rule.params ?? {})
+
     if (params.length === 0) return false
+
     return params.every(
       ([, value]) => typeof value !== "string" || (value.trim() !== "" && tryParseJson(value.trim()) !== undefined)
     )
@@ -311,6 +364,7 @@ export const normalizeConfig = (config: Config): Config => {
   const retention = usage["redis-usage-queue-retention-seconds"]
   const apiKeys = config["api-keys"]
   const payload = config.requests.payload
+
   return {
     ...config,
     access: {

@@ -47,6 +47,7 @@ describe("model names", () => {
     ] as const) {
       expect(matchWildcard(pattern, value), `${pattern} ~ ${value}`).toBe(expected)
     }
+
     expect(isModelExcluded(["gemini-*-preview"], "Gemini-3-Preview(8192)")).toBe(true)
     expect(isModelExcluded(["gemini-3"], "gemini-3-preview")).toBe(false)
   })
@@ -115,6 +116,7 @@ describe("exclusions", () => {
       excludedModels: ["gpt-5"],
       modelAliases: [{ name: "gpt-5", alias: "fast" }]
     })
+
     expect(resolveModelRoute(aliased, "fast", context())).toBeUndefined()
     expect(resolveModelRoute(aliased, "gpt-5", context())).toBeUndefined()
   })
@@ -162,9 +164,11 @@ describe("OAuth aliases", () => {
 
   it("force-mapping reports the alias as the response model", () => {
     const credential = cred("a", { provider: "claude" })
+
     const ctx = context({
       oauthModelAlias: { claude: [{ name: "claude-sonnet-4-5", alias: "sonnet", "force-mapping": true }] }
     })
+
     expect(resolveModelRoute(credential, "sonnet(low)", ctx)).toMatchObject({
       upstreamModel: "claude-sonnet-4-5(low)",
       forceMapping: true,
@@ -174,10 +178,12 @@ describe("OAuth aliases", () => {
 
   it("selection exposes the alias-resolved cooldown key", () => {
     const h = new Harness({ ...defaultSettings, oauthModelAlias: global })
+
     const outcome = h.select([entry(cred("a", { provider: "claude" }))], {
       providers: ["claude"],
       model: "sonnet(8192)"
     })
+
     expect(outcome.ok && outcome.route.selectionModel).toBe("claude-sonnet-4-5(8192)")
   })
 })
@@ -214,6 +220,7 @@ describe("API-key model aliases and pools", () => {
       models: [{ name: "a" }, { name: "b-*" }],
       excludedModels: ["b-*"]
     })
+
     expect(resolveModelRoute(excluding, "a", context())).toBeDefined()
     expect(resolveModelRoute(excluding, "b-1", context())).toBeUndefined()
   })

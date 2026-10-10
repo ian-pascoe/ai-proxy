@@ -54,6 +54,7 @@ const pad = (value: number): string => String(value).padStart(2, "0")
 export const formatTraceId = (selectedAt: number, authIndex: string, requestId: string): string => {
   if (authIndex === "" || requestId === "") return ""
   const date = new Date(selectedAt)
+
   const stamp =
     String(date.getUTCFullYear()) +
     pad(date.getUTCMonth() + 1) +
@@ -61,6 +62,7 @@ export const formatTraceId = (selectedAt: number, authIndex: string, requestId: 
     pad(date.getUTCHours()) +
     pad(date.getUTCMinutes()) +
     pad(date.getUTCSeconds())
+
   return `${stamp}-${authIndex}-${requestId}`
 }
 
@@ -68,6 +70,7 @@ export const formatTraceId = (selectedAt: number, authIndex: string, requestId: 
 export const noteSelection = (credentialId: string, provider: string, model: string) =>
   Effect.gen(function* () {
     const trace = yield* RequestTrace
+
     if (trace === undefined) return
     const authIndex = authIndexOf(credentialId)
     trace.authIndex = authIndex
@@ -81,6 +84,7 @@ export const noteSelection = (credentialId: string, provider: string, model: str
 export const notePrincipal = (principalId: string) =>
   Effect.gen(function* () {
     const trace = yield* RequestTrace
+
     if (trace !== undefined && principalId !== "") trace.principal = principalId
   })
 
@@ -105,6 +109,7 @@ const logFields = (
 
 const logRequest = (fields: Record<string, unknown>, status: number) => {
   const log = status >= 500 ? Effect.logError : status >= 400 ? Effect.logWarning : Effect.logInfo
+
   return log("request").pipe(Effect.annotateLogs(fields))
 }
 
@@ -125,12 +130,17 @@ export const TraceLayer = HttpRouter.middleware()(
       const path = new URL(request.originalUrl, "http://localhost").pathname
       // Like Go, health probes are not logged.
       const quiet = path === "/healthz"
+
       if (Exit.isFailure(exit)) {
         if (!quiet) yield* logRequest({ ...logFields(trace, request.method, path, 0, latencyMs), failed: true }, 400)
+
         return yield* exit
       }
+
       const response = exit.value
+
       if (!quiet) yield* logRequest(logFields(trace, request.method, path, response.status, latencyMs), response.status)
+
       return quiet
         ? response
         : HttpServerResponse.setHeader(response, CPA_TRACE_ID_HEADER, trace.traceId ?? trace.requestId)

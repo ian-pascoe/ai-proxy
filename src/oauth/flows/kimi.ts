@@ -13,8 +13,11 @@ import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from 
 import { type DeviceFlow, flowFailure } from "./types.ts"
 
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
 const MIN_INTERVAL_MS = 5_000
+
 const MAX_POLL_MS = 15 * 60_000
+
 const MAX_ERROR_TEXT = 512
 
 export interface KimiDomain {
@@ -34,6 +37,7 @@ const KIMI_COM: KimiDomain = {
   baseUrl: "https://api.kimi.com/coding",
   statePrefix: "kmi"
 }
+
 const KIMI_AI: KimiDomain = {
   provider: "kimi-ai",
   domain: "kimi.ai",
@@ -46,6 +50,7 @@ const KIMI_AI: KimiDomain = {
 /** `IsKimiAIDomain`. */
 export const isKimiAiDomain = (domain: string): boolean => {
   const value = domain.trim().toLowerCase()
+
   return value === "kimi.ai" || value === "ai" || value === "kimi-ai" || value.endsWith(".kimi.ai")
 }
 
@@ -69,17 +74,22 @@ export const kimiFlow = (target: KimiDomain): DeviceFlow => ({
   start: () =>
     Effect.gen(function* () {
       const deviceId = crypto.randomUUID()
+
       const request = HttpClientRequest.post(`${target.oauthHost}/api/oauth/device_authorization`).pipe(
         HttpClientRequest.setHeaders(deviceHeaders(deviceId)),
         HttpClientRequest.bodyUrlParams({ client_id: KIMI_CLIENT_ID })
       )
+
       const reply = yield* call(request)
       const device = reply.status === 200 ? parseJsonObject(reply.text) : undefined
+
       if (device === undefined) {
         return yield* flowFailure(`kimi: device code request failed with status ${reply.status}`)
       }
+
       const expiresIn = Math.trunc(seconds(device.expires_in))
       const intervalMs = Math.max(Math.trunc(seconds(device.interval)) * 1000, MIN_INTERVAL_MS)
+
       return {
         url: str(device.verification_uri_complete) || str(device.verification_uri),
         ...(str(device.user_code) === "" ? {} : { userCode: str(device.user_code) }),
@@ -93,6 +103,7 @@ export const kimiFlow = (target: KimiDomain): DeviceFlow => ({
   poll: ({ data, now }) =>
     Effect.gen(function* () {
       const deviceId = str(data.device_id)
+
       const reply = yield* tryCall(
         HttpClientRequest.post(`${target.oauthHost}/api/oauth/token`).pipe(
           HttpClientRequest.setHeaders(deviceHeaders(deviceId)),
@@ -103,12 +114,15 @@ export const kimiFlow = (target: KimiDomain): DeviceFlow => ({
           })
         )
       )
+
       if (reply === undefined || reply.status >= 500) return { _tag: "pending" as const }
       // Kimi answers 200 for both success and pending states.
       const payload = parseJsonObject(reply.text)
+
       if (payload === undefined)
         return yield* flowFailure("Authentication failed: kimi: failed to parse token response")
       const error = str(payload.error)
+
       if (error !== "") {
         switch (error) {
           // `slow_down` keeps the interval (Go does not increase it).
@@ -125,10 +139,13 @@ export const kimiFlow = (target: KimiDomain): DeviceFlow => ({
             )
         }
       }
+
       const accessToken = str(payload.access_token)
+
       if (accessToken === "") return yield* flowFailure("Authentication failed: kimi: empty access token in response")
 
       const expiresIn = seconds(payload.expires_in)
+
       const metadata: JsonObject = {
         type: target.provider,
         access_token: accessToken,
@@ -139,9 +156,12 @@ export const kimiFlow = (target: KimiDomain): DeviceFlow => ({
         domain: target.domain,
         base_url: target.baseUrl
       }
+
       if (expiresIn > 0) metadata.expired = rfc3339((Math.floor(now / 1000) + Math.trunc(expiresIn)) * 1000)
+
       if (deviceId !== "") metadata.device_id = deviceId
       const prefix = target.provider === "kimi-ai" ? "kimi-ai" : "kimi"
+
       return { _tag: "done" as const, record: { fileName: `${prefix}-${now}.json`, metadata } }
     })
 })

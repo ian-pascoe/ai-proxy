@@ -14,6 +14,7 @@ import { applyPayloadRules } from "../src/config/payload/index.ts"
 import { get } from "../src/json/index.ts"
 
 const parse = (yaml: string) => parseConfigYaml(yaml)
+
 const failure = <A>(effect: Effect.Effect<A, ConfigValidationError>) =>
   effect.pipe(
     Effect.flip,
@@ -180,11 +181,13 @@ describe("config schema and normalisation", () => {
     Effect.gen(function* () {
       const config = yield* parse(V8_YAML)
       assert.strictEqual(config.requests.payload["override-raw"].length, 1)
+
       const out = applyPayloadRules(
         { requests: config.requests, multimedia: config.multimedia },
         { model: "gpt-5", protocol: "openai" },
         {}
       )
+
       assert.deepStrictEqual(get(out.payload, "reasoning.effort"), "high")
       assert.deepStrictEqual(get(out.payload, "tools"), [{ type: "web_search" }])
     })
@@ -234,6 +237,7 @@ openai-compatibility:
     base-url: https://compat.example.com/v1
     api-key-entries: [{ api-key: ck }]
 `)
+
       const v8 = yield* parse(`
 access: { api-keys: ["legacy-key"] }
 routing:
@@ -285,6 +289,7 @@ api-keys:
       base-url: https://compat.example.com/v1
       keys: [{ api-key: ck }]
 `)
+
       assert.deepStrictEqual(encodeConfig(legacy), encodeConfig(v8))
       // null is a real value inside payload rules
       assert.deepStrictEqual(legacy.requests.payload.override[0]?.params, { temperature: null })
@@ -299,6 +304,7 @@ force-model-prefix: true
 codex: { response-steering: true }
 upstream: { codex: { response-steering: false } }
 `)
+
       assert.strictEqual(config.routing["force-model-prefix"], false)
       assert.strictEqual(config.upstream.codex["response-steering"], false)
     })
@@ -313,6 +319,7 @@ oauth:
     claude: { model-level-cooling: true, header-defaults: { os: "Linux" } }
     xai: { inject-x-search: true }
 `)
+
       assert.strictEqual(config.client.codex["optimize-multi-agent-v2"], true)
       assert.strictEqual(config.upstream.codex["disable-codex-cloaking"], true)
       assert.strictEqual(config.upstream.claude["model-level-cooling"], true)
@@ -335,6 +342,7 @@ api-keys:
       prefix: null
       keys: [{ api-key: k, weight: null }]
 `)
+
       assert.strictEqual(config.routing.strategy, "round-robin")
       assert.isUndefined(config["api-keys"].gemini[0]?.prefix)
       assert.isUndefined(config["api-keys"].gemini[0]?.keys[0]?.weight)
@@ -447,6 +455,7 @@ routing: { session-affinity-ttl: "500ms" }
 upstream: { codex: { stream-bootstrap-timeout: "15" } }
 multimedia: { video-result-auth-cache-ttl: "30m", gpt-image-2-base-model: " GPT-6 " }
 `)
+
       assert.strictEqual(sessionAffinityTtlMs(custom), 1000)
       assert.strictEqual(codexStreamBootstrapTimeoutMs(custom), 15_000)
       assert.strictEqual(videoResultAuthCacheTtlMs(custom), 1_800_000)
@@ -457,6 +466,7 @@ routing: { session-affinity-ttl: "soon" }
 upstream: { codex: { stream-bootstrap-timeout: "Unlimited" } }
 multimedia: { video-result-auth-cache-ttl: "-1h", gpt-image-2-base-model: "claude" }
 `)
+
       assert.strictEqual(sessionAffinityTtlMs(invalid), 3_600_000)
       assert.strictEqual(codexStreamBootstrapTimeoutMs(invalid), 0)
       assert.strictEqual(videoResultAuthCacheTtlMs(invalid), 10_800_000)

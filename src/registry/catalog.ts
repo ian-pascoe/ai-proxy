@@ -35,6 +35,7 @@ export const SECTIONS = [
   "devin",
   "meta"
 ] as const
+
 export type Section = (typeof SECTIONS)[number]
 
 /** `validateModelsCatalog` checks every section but the optional `devin` fallback section. */
@@ -52,6 +53,7 @@ export interface ModelCatalogs {
 }
 
 const SectionList = Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel))))
+
 const ModelsFile = Schema.Struct(Object.fromEntries(SECTIONS.map((section) => [section, SectionList])))
 
 const decodeModelsFile = Schema.decodeUnknownResult(ModelsFile)
@@ -59,28 +61,38 @@ const decodeModelsFile = Schema.decodeUnknownResult(ModelsFile)
 /** Parses and validates a `models.json` payload (`validateModelsCatalog`). */
 export const parseModelsCatalog = (parsed: unknown): CatalogResult<ModelsCatalog> => {
   const decoded = decodeModelsFile(parsed)
+
   if (decoded._tag === "Failure") return { ok: false, error: `decode models catalog: ${String(decoded.failure)}` }
   const file = decoded.success as Record<string, ReadonlyArray<WireModel | null> | null | undefined>
   const out: Partial<Record<Section, ModelInfo[]>> = {}
+
   for (const section of SECTIONS) {
     const entries = file[section] ?? []
     const seen = new Set<string>()
     const models: ModelInfo[] = []
+
     for (const [index, wire] of entries.entries()) {
       if (wire === null) {
         if (section === "devin") continue
+
         return { ok: false, error: `${section}[${index}] is null` }
       }
+
       if (isValidated(section)) {
         const id = wire.id.trim()
+
         if (id === "") return { ok: false, error: `${section}[${index}] has empty id` }
+
         if (seen.has(id)) return { ok: false, error: `${section} contains duplicate model id ${JSON.stringify(id)}` }
         seen.add(id)
       }
+
       models.push(fromWire(wire))
     }
+
     out[section] = models
   }
+
   return { ok: true, value: out as ModelsCatalog }
 }
 
@@ -92,15 +104,21 @@ export const withMetaFallback = (next: ModelsCatalog, previous: ModelsCatalog | 
 
 const requiredString = (model: Record<string, unknown>, field: string): string => {
   const value = model[field]
+
   if (typeof value !== "string" || value.trim() === "") throw new Error(`field "${field}" must be a non-empty string`)
+
   return value.trim()
 }
 
 const requiredInteger = (model: Record<string, unknown>, field: string, positive: boolean): number => {
   const value = model[field]
+
   if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`field "${field}" must be an integer`)
+
   if (positive && value <= 0) throw new Error(`field "${field}" must be positive`)
+
   if (!positive && value < 0) throw new Error(`field "${field}" must not be negative`)
+
   return value
 }
 
@@ -118,22 +136,29 @@ const validateCodexClientModel = (model: Record<string, unknown>): void => {
   ]) {
     requiredString(model, field)
   }
+
   const contextWindow = requiredInteger(model, "context_window", true)
   const maxContextWindow = requiredInteger(model, "max_context_window", true)
+
   if (contextWindow > maxContextWindow)
     throw new Error(`context_window ${contextWindow} exceeds max_context_window ${maxContextWindow}`)
   requiredInteger(model, "priority", false)
   const levels = model.supported_reasoning_levels
+
   if (!Array.isArray(levels) || levels.length === 0)
     throw new Error(`field "supported_reasoning_levels" must be a non-empty array`)
   const efforts = new Set<string>()
+
   for (const [index, level] of levels.entries()) {
     if (!isRecord(level)) throw new Error(`field "supported_reasoning_levels" entry ${index} must be an object`)
     const effort = requiredString(level, "effort")
+
     if (efforts.has(effort)) throw new Error(`field "supported_reasoning_levels" contains duplicate effort "${effort}"`)
     efforts.add(effort)
   }
+
   const defaultLevel = requiredString(model, "default_reasoning_level")
+
   if (!efforts.has(defaultLevel))
     throw new Error(`default_reasoning_level "${defaultLevel}" is not listed in supported_reasoning_levels`)
 }
@@ -142,20 +167,26 @@ const validateCodexClientModel = (model: Record<string, unknown>): void => {
 export const validateCodexClientModels = (parsed: unknown): CatalogResult<unknown> => {
   try {
     const models = isRecord(parsed) ? parsed.models : undefined
+
     if (!Array.isArray(models) || models.length === 0) throw new Error("Codex client model catalog has no models")
     const slugs = new Set<string>()
+
     for (const [index, model] of models.entries()) {
       if (!isRecord(model)) throw new Error(`models[${index}] must be an object`)
       const slug = requiredString(model, "slug")
+
       if (slugs.has(slug)) throw new Error(`duplicate slug "${slug}"`)
       slugs.add(slug)
+
       try {
         validateCodexClientModel(model)
       } catch (cause) {
         throw new Error(`model "${slug}": ${cause instanceof Error ? cause.message : String(cause)}`, { cause })
       }
     }
+
     if (!slugs.has("gpt-5.5")) throw new Error(`missing default template "gpt-5.5"`)
+
     return { ok: true, value: parsed }
   } catch (cause) {
     return { ok: false, error: cause instanceof Error ? cause.message : String(cause) }
@@ -172,8 +203,10 @@ const decodeBuiltins = Schema.decodeUnknownSync(
     staticDevin: Schema.Array(WireModel)
   })
 )
+
 const builtins = (() => {
   const wire = decodeBuiltins(builtinsJson)
+
   return {
     codex: wire.codex.map(fromWire),
     xai: wire.xai.map(fromWire),
@@ -186,35 +219,47 @@ const builtins = (() => {
 const upsert = (models: ReadonlyArray<ModelInfo>, extras: ReadonlyArray<ModelInfo>): ModelInfo[] => {
   const extraIds = new Set<string>()
   const extraList: ModelInfo[] = []
+
   for (const extra of extras) {
     const key = extra.id.trim().toLowerCase()
+
     if (key === "" || extraIds.has(key)) continue
     extraIds.add(key)
     extraList.push(cloneModelInfo(extra))
   }
+
   if (extraList.length === 0) return [...models]
+
   const kept = models.filter((model) => {
     const id = model.id.trim()
+
     return id !== "" && !extraIds.has(id.toLowerCase())
   })
+
   return [...kept, ...extraList]
 }
 
 export const withCodexBuiltins = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => upsert(models, builtins.codex)
+
 export const withXaiBuiltins = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => upsert(models, builtins.xai)
+
 export const withDevinBuiltins = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => upsert(models, builtins.devin)
 
 // --- embedded catalogs ---------------------------------------------------------------------------------------------
 
 const parseEmbeddedModels = (): ModelsCatalog => {
   const parsed = parseModelsCatalog(modelsJson)
+
   if (!parsed.ok) throw new Error(`embedded models.json is invalid: ${parsed.error}`)
+
   return parsed.value
 }
 
 const parseEmbeddedDevin = (): ReadonlyArray<ModelInfo> => {
   const parsed = parseDevinCatalog(devinJson)
+
   if (!parsed.ok) throw new Error(`embedded devin_models.json is invalid: ${parsed.error}`)
+
   return withDevinBuiltins(parsed.value)
 }
 
@@ -227,9 +272,11 @@ let embedded: ModelCatalogs | undefined
 export const embeddedCatalogs = (): ModelCatalogs => {
   if (embedded === undefined) {
     const codexClient = validateCodexClientModels(codexClientJson)
+
     if (!codexClient.ok) throw new Error(`embedded codex_client_models.json is invalid: ${codexClient.error}`)
     embedded = { models: parseEmbeddedModels(), devin: parseEmbeddedDevin(), codexClient: codexClient.value }
   }
+
   return embedded
 }
 
@@ -240,7 +287,9 @@ const cloneAll = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => models.map(c
 /** `GetDevinModels`: the active Devin catalog, else the `models.json` section, else the hard-coded list. */
 export const devinModels = (catalogs: ModelCatalogs): ModelInfo[] => {
   if (catalogs.devin.length > 0) return withDevinBuiltins(cloneAll(catalogs.devin))
+
   if (catalogs.models.devin.length > 0) return withDevinBuiltins(cloneAll(catalogs.models.devin))
+
   return withDevinBuiltins(cloneAll(builtins.staticDevin))
 }
 
@@ -303,8 +352,10 @@ export const lookupStaticModelInfoByChannel = (
   channel: string
 ): ModelInfo | undefined => {
   const id = modelId.trim()
+
   if (id === "") return undefined
   const found = staticModelsByChannel(catalogs, channel)?.find((model) => model.id === id)
+
   return found === undefined ? undefined : cloneModelInfo(found)
 }
 
@@ -312,6 +363,7 @@ export const lookupStaticModelInfoByChannel = (
 export const lookupStaticModelInfo = (catalogs: ModelCatalogs, modelId: string): ModelInfo | undefined => {
   if (modelId === "") return undefined
   const { models } = catalogs
+
   const lists = [
     models.claude,
     models.gemini,
@@ -325,10 +377,13 @@ export const lookupStaticModelInfo = (catalogs: ModelCatalogs, modelId: string):
     builtins.staticDevin,
     models.meta
   ]
+
   for (const list of lists) {
     const found = list.find((model) => model.id === modelId)
+
     if (found !== undefined) return cloneModelInfo(found)
   }
+
   return undefined
 }
 
@@ -358,10 +413,14 @@ export const detectChangedProviders = (previous: ModelsCatalog, next: ModelsCata
     ["devin", "devin"],
     ["meta", "meta"]
   ]
+
   const changed: string[] = []
+
   for (const [provider, section] of pairs) {
     if (changed.includes(provider)) continue
+
     if (JSON.stringify(previous[section]) !== JSON.stringify(next[section])) changed.push(provider)
   }
+
   return changed
 }

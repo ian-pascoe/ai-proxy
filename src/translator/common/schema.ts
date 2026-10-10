@@ -39,11 +39,15 @@ export const SCHEMA_VALUE_KEYWORDS: readonly string[] = [
 export const hasUnsupportedUnicodePropertyEscape = (pattern: string): boolean => {
   for (let i = 0; i < pattern.length; i++) {
     if (pattern[i] !== "\\") continue
+
     if (i + 1 >= pattern.length) break
     const next = pattern[i + 1]
+
     if ((next === "p" || next === "P") && i + 2 < pattern.length && pattern[i + 2] === "{") return true
+
     if (next === "0") return true
     i++ // skip the escaped character (including an escaped backslash)
   }
+
   return false
 }

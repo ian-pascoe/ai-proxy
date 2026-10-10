@@ -73,14 +73,19 @@ export const fromGo = (wire: unknown): ModelInfo => fromWire(decodeWireModel(wir
 /** Drops Go zero values (`omitempty`) so records from different decoders compare equal. */
 export const canon = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.length === 0 ? undefined : value.map(canon)
+
   if (value !== null && typeof value === "object") {
     const out: Record<string, unknown> = {}
+
     for (const [key, entry] of Object.entries(value).toSorted(([a], [b]) => (a < b ? -1 : 1))) {
       const next = canon(entry)
+
       if (next !== undefined) out[key] = next
     }
+
     return Object.keys(out).length === 0 ? undefined : out
   }
+
   return value === false || value === 0 || value === "" || value === null ? undefined : value
 }
 
@@ -93,12 +98,16 @@ export const scenarioClients = (scenario: FixtureScenario): ClientRegistration[]
       client.section !== undefined
         ? sectionModels(catalogs, client.section)
         : (client.models ?? []).map((model) => fromGo(model))
+
     const events = (scenario.events ?? []).filter((event) => event.client === client.id)
+
     const projection = (model: ModelInfo): ClientProjection | undefined => {
       const mine = events.filter((event) => event.model === model.id)
+
       if (mine.length === 0) return undefined
       const suspend = mine.find((event) => event.op === "suspend")
       const quota = mine.some((event) => event.op === "quota")
+
       return {
         suspended: suspend !== undefined,
         suspendReason: suspend?.reason ?? "",
@@ -106,6 +115,7 @@ export const scenarioClients = (scenario: FixtureScenario): ClientRegistration[]
         quotaSince: fixture.generatedAt
       }
     }
+
     return { id: client.id, provider: client.provider, models, projection }
   })
 
@@ -115,15 +125,19 @@ export const scenarioIndex = (scenario: FixtureScenario): ModelRegistryIndex =>
 /** Sorts the entries of the named arrays by `key`, for comparing Go bodies whose order is map-iteration order. */
 export const sortedBody = (body: string, sort: Record<string, string>): Json => {
   const parsed = JSON.parse(body) as JsonObject
+
   for (const [field, key] of Object.entries(sort)) {
     const list = parsed[field]
+
     if (Array.isArray(list)) {
       list.sort((a, b) => {
         const left = String((a as JsonObject)[key] ?? "")
         const right = String((b as JsonObject)[key] ?? "")
+
         return left < right ? -1 : left > right ? 1 : 0
       })
     }
   }
+
   return parsed
 }

@@ -13,6 +13,7 @@ import type { ProviderApplier, ThinkingConfig } from "../types.ts"
 const applyEnabledThinking = (body: Json, effort: string): Json | undefined => {
   let result = delPath(body, "reasoning_effort")
   result = setPath(result, "thinking.type", "enabled")
+
   return setPath(result, "thinking.effort", effort)
 }
 
@@ -20,16 +21,19 @@ const applyEnabledThinking = (body: Json, effort: string): Json | undefined => {
 const applyDisabledThinking = (body: Json): Json | undefined => {
   let result = delPath(body, "thinking")
   result = delPath(result, "reasoning_effort")
+
   return setPath(result, "thinking.type", "disabled")
 }
 
 export const kimiApplier: ProviderApplier = {
   apply(body: Json | undefined, config: ThinkingConfig, modelInfo): Json | undefined {
     const userDefined = isUserDefinedModel(modelInfo)
+
     if (!userDefined && modelInfo?.thinking === undefined) return body
 
     const root = ensureBody(body)
     let effort: string
+
     switch (config.mode) {
       case "level":
         if (config.level === "") return root
@@ -42,15 +46,19 @@ export const kimiApplier: ProviderApplier = {
         break
       case "budget": {
         const level = convertBudgetToLevel(config.budget)
+
         if (level === undefined) return root
         effort = level
         break
       }
+
       case "auto":
         effort = Level.auto
         break
     }
+
     if (effort === "") return root
+
     return applyEnabledThinking(root, effort)
   }
 }

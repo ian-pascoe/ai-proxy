@@ -20,7 +20,9 @@ import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../re
 import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts"
 
 const GEMINI_INTERACTIONS = "gemini-interactions"
+
 const INTERACTIONS_AGENT_AUTH_SELECTION_MODEL = "gemini-2.5-flash"
+
 const MODELS_PREFIX = "/v1beta/models/"
 
 const badRequest = (message: string, status = 400): HttpServerResponse.HttpServerResponse =>
@@ -38,13 +40,16 @@ export const parseGeminiAction = (
   pathname: string
 ): { readonly model: string; readonly method: string } | undefined => {
   let rest = pathname.slice(MODELS_PREFIX.length)
+
   try {
     rest = decodeURIComponent(rest)
   } catch {
     // keep the raw text
   }
+
   const parts = rest.replace(/^\//, "").split(":")
   const [model, method] = parts
+
   return parts.length === 2 && model !== undefined && method !== undefined ? { model, method } : undefined
 }
 
@@ -59,13 +64,18 @@ interface Context {
 /** Reads the config and the JSON body shared by every route. */
 const readContext = Effect.fnUntraced(function* (request: HttpServerRequest.HttpServerRequest) {
   const configResult = yield* Effect.result(currentConfig)
+
   if (configResult._tag === "Failure") {
     return { response: errorResponse("openai", configResult.failure, { passthroughHeaders: false }) }
   }
+
   const config = configResult.success
   const read = yield* Effect.result(readRequestBody(request))
+
   if (read._tag === "Failure") return { response: badRequest(read.failure.message, read.failure.status) }
+
   if (read.success.json === undefined) return { response: badRequest("request body is not valid JSON") }
+
   return {
     context: {
       request,
@@ -84,6 +94,7 @@ const run = (
 ) => {
   const onError = (error: ExecutionError) =>
     errorResponse("openai", error, { passthroughHeaders: context.passthroughHeaders })
+
   if (options.stream) {
     return streamResponse(executeStream(input), {
       framer: options.framer(),
@@ -92,10 +103,12 @@ const run = (
       ...(options.contentType !== undefined ? { contentType: options.contentType } : {})
     })
   }
+
   return withNonStreamKeepAlive(
     context.nonStreamKeepAliveSeconds,
     Effect.gen(function* () {
       const result = yield* Effect.result(executeNonStream(input))
+
       return result._tag === "Failure"
         ? onError(result.failure)
         : jsonResponse(result.success.payload, result.success.headers)
@@ -107,10 +120,13 @@ const geminiAction = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const url = new URL(request.originalUrl, "http://localhost")
   const action = parseGeminiAction(url.pathname)
+
   if (action === undefined) return notFound(url.pathname)
+
   if (!["generateContent", "streamGenerateContent", "countTokens"].includes(action.method))
     return notFound(url.pathname)
   const read = yield* readContext(request)
+
   if (read.response !== undefined) return read.response
   const { context } = read
   const alt = altOf(request)
@@ -118,11 +134,14 @@ const geminiAction = Effect.gen(function* () {
 
   if (action.method === "countTokens") {
     const result = yield* Effect.result(executeCountTokens(input))
+
     return result._tag === "Failure"
       ? errorResponse("openai", result.failure, { passthroughHeaders: context.passthroughHeaders })
       : jsonResponse(result.success.payload, result.success.headers)
   }
+
   const stream = action.method === "streamGenerateContent"
+
   return yield* run(context, input, {
     stream,
     framer: () => geminiFramer(alt),
@@ -137,38 +156,49 @@ export const parseInteractionsTarget = (
 ): { readonly model: string; readonly agent: string; readonly stream: boolean } | { readonly error: string } => {
   const model = asString(get(body, "model")).trim()
   const agent = asString(get(body, "agent")).trim()
+
   if ((model === "" && agent === "") || (model !== "" && agent !== "")) {
     return { error: "request requires exactly one of model or agent" }
   }
+
   const stream = get(body, "stream")
+
   if (stream !== undefined && typeof stream !== "boolean") return { error: "stream must be a boolean" }
+
   return { model, agent, stream: stream === true }
 }
 
 /** `normalizeGeminiModelResourceName`: `models/<name>` -> `<name>`. */
 const normalizeModelResourceName = (model: string): string => {
   const trimmed = model.trim()
+
   return trimmed.startsWith("models/") && trimmed.length > "models/".length ? trimmed.slice("models/".length) : trimmed
 }
 
 const interactions = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const read = yield* readContext(request)
+
   if (read.response !== undefined) return read.response
   const { context } = read
   const target = parseInteractionsTarget(context.body)
+
   if ("error" in target) {
     return HttpServerResponse.text(
       JSON.stringify({ error: { message: target.error, type: "invalid_request_error" } }),
       { status: 400, contentType: "application/json" }
     )
   }
+
   let body = context.body
   let model = target.agent
+
   if (target.agent === "") {
     model = normalizeModelResourceName(target.model)
+
     if (model !== target.model && isJsonObject(body)) body = set(body, "model", model)
   }
+
   const input: ExecutionInput = {
     entryProtocol: Formats.Interactions,
     model,
@@ -179,6 +209,7 @@ const interactions = Effect.gen(function* () {
       ? { forcedProvider: GEMINI_INTERACTIONS, authSelectionModel: INTERACTIONS_AGENT_AUTH_SELECTION_MODEL }
       : {})
   }
+
   return yield* run(context, input, { stream: target.stream, framer: interactionsFramer })
 })
 

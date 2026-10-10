@@ -30,6 +30,7 @@ describe("embedded catalogs match the Go registry", () => {
 
 const sha256Hex = async (text: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
@@ -37,17 +38,22 @@ const replyFor = (scenario: (typeof fixture.scenarios)[number], request: Fixture
   const index = scenarioIndex(scenario)
   const models = index.availableModels(fixtureNow())
   const headers = request.headers ?? {}
+
   const info = {
     userAgent: headers["User-Agent"] ?? "",
     anthropicVersion: headers["Anthropic-Version"] ?? "",
     clientVersion: undefined
   }
+
   const options = { disableCloaking: scenario.disableCloaking === true, codexClient: () => ({}) }
+
   if (request.path.startsWith("/v1beta/models/")) {
     return respondGeminiDetail(models, request.path.slice("/v1beta/models/".length))
   }
+
   if (request.path === "/v1beta/models") return respondGeminiList(models)
   const rest = request.path.startsWith("/v1/models/") ? request.path.slice("/v1/models/".length) : undefined
+
   return respondModels(models, info, options, rest)
 }
 
@@ -64,6 +70,7 @@ describe("listing parity with the Go handlers", () => {
         const reply = replyFor(scenario, request)
         expect(reply.status).toBe(request.status)
         const sort = UNORDERED[request.name]
+
         if (sort === undefined) {
           expect(reply.body).toBe(request.body)
         } else {
@@ -118,6 +125,7 @@ describe("Codex client catalog (client_version) parity with Go", () => {
   for (const scenario of fixture.scenarios) {
     describe(scenario.name, () => {
       const index = scenarioIndex(scenario)
+
       const build = (variant: string, clientVersion: string) =>
         buildCodexClientModels({
           catalog: catalogs.codexClient,
@@ -138,19 +146,24 @@ describe("Codex client catalog (client_version) parity with Go", () => {
         const payload = build(result.variant, result.version)
         const entries = (payload.models ?? []) as JsonObject[]
         const actualHashes: Record<string, string> = {}
+
         for (const entry of entries) actualHashes[entry.slug as string] = await sha256Hex(goCompactJson(entry))
+
         // Readable first: per-model summaries where the fixture keeps them.
         if ((result.models ?? []).length > 0) {
           const summary = entries.map((entry) =>
             Object.fromEntries(SUMMARY_KEYS.map((key) => [key, entry[key] === undefined ? "<absent>" : entry[key]]))
           )
+
           expect(summary.toSorted((a, b) => String(a.slug).localeCompare(String(b.slug)))).toEqual(
             (result.models ?? []).toSorted((a, b) => String(a.slug).localeCompare(String(b.slug)))
           )
         }
+
         expect(actualHashes).toEqual(result.entries)
         const priorities = entries.map((entry) => (typeof entry.priority === "number" ? entry.priority : 100))
         expect(priorities).toEqual(priorities.toSorted((a, b) => a - b))
+
         // Ties follow Go's map iteration order; scenarios without ties must match the whole body.
         if (scenario.name !== "catalog-all") {
           expect(await sha256Hex(goCompactJson(payload))).toBe(result.sha256)

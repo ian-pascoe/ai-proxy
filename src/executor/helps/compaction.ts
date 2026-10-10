@@ -25,8 +25,11 @@ import {
 import { parseOpenAIUsage } from "../../usage/record.ts"
 
 export const COMPACTION_CAPSULE_PREFIX = "cpa-ag-compact-v1:"
+
 const KEY_SECRET = "CLIProxyAPI"
+
 const NONCE_BYTES = 12
+
 const GCM_TAG_BYTES = 16
 
 const SUMMARY_PROMPT_TEXT =
@@ -44,6 +47,7 @@ export const recognizedCompactionCapsule = (encryptedContent: string): boolean =
 
 const inputItems = (payload: Json | undefined): ReadonlyArray<Json> => {
   const input = get(payload, "input")
+
   return isJsonArray(input) ? input : []
 }
 
@@ -62,6 +66,7 @@ export const hasResponsesCompactionItem = (payload: Json | undefined): boolean =
 export const prepareCompactionSummaryPayload = (payload: Json): Json => {
   const out = cloneJson(payload)
   const input = get(out, "input")
+
   if (isJsonArray(input)) {
     set(out, "input", [
       ...input.filter((item) => asString(get(item, "type")) !== "compaction_trigger"),
@@ -75,6 +80,7 @@ export const prepareCompactionSummaryPayload = (payload: Json): Json => {
   } else {
     set(out, "input", [summaryPrompt()])
   }
+
   for (const field of [
     "stream",
     "tools",
@@ -87,7 +93,9 @@ export const prepareCompactionSummaryPayload = (payload: Json): Json => {
   ]) {
     del(out, field)
   }
+
   set(out, "stream", false)
+
   return out
 }
 
@@ -98,27 +106,34 @@ export const prepareCompactionSummaryPayload = (payload: Json): Json => {
 const encoder = new TextEncoder()
 
 let keyPromise: Promise<CryptoKey> | undefined
+
 /** `deriveAntigravityCompactionKey`: SHA-256 of the fixed secret as an AES-GCM key (derived once per isolate). */
 const capsuleKey = (): Promise<CryptoKey> => {
   keyPromise ??= crypto.subtle
     .digest("SHA-256", encoder.encode(KEY_SECRET))
     .then((digest) => crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]))
+
   return keyPromise
 }
 
 const toBase64Url = (bytes: Uint8Array): string => {
   let binary = ""
+
   for (const byte of bytes) binary += String.fromCharCode(byte)
+
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "")
 }
 
 /** Go `base64.RawURLEncoding.DecodeString` (no padding, URL alphabet; trailing bits are ignored). */
 const fromBase64Url = (text: string): Uint8Array => {
   const bad = text.search(/[^A-Za-z0-9_-]/)
+
   if (bad >= 0) throw new Error(`illegal base64 data at input byte ${bad}`)
+
   if (text.length % 4 === 1) throw new Error(`illegal base64 data at input byte ${text.length}`)
   const standard = text.replaceAll("-", "+").replaceAll("_", "/")
   const binary = atob(standard + "=".repeat((4 - (standard.length % 4)) % 4))
+
   return Uint8Array.from(binary, (char) => char.charCodeAt(0))
 }
 
@@ -137,6 +152,7 @@ export const sealCompaction = async (
 ): Promise<string> => {
   const createdAt = options.createdAtSec ?? Math.floor(Date.now() / 1000)
   const nonce = options.nonce ?? crypto.getRandomValues(new Uint8Array(NONCE_BYTES))
+
   const encrypted = new Uint8Array(
     await crypto.subtle.encrypt(
       { name: "AES-GCM", iv: nonce },
@@ -144,9 +160,11 @@ export const sealCompaction = async (
       encoder.encode(capsulePlaintext(summary, modelName, createdAt))
     )
   )
+
   const sealed = new Uint8Array(nonce.length + encrypted.length)
   sealed.set(nonce)
   sealed.set(encrypted, nonce.length)
+
   return COMPACTION_CAPSULE_PREFIX + toBase64Url(sealed)
 }
 
@@ -154,6 +172,7 @@ export const sealCompaction = async (
 export const unsealCompaction = async (encryptedContent: string): Promise<string> => {
   if (!encryptedContent.startsWith(COMPACTION_CAPSULE_PREFIX)) throw new Error("unrecognized compaction capsule format")
   let ciphertext: Uint8Array
+
   try {
     ciphertext = fromBase64Url(encryptedContent.slice(COMPACTION_CAPSULE_PREFIX.length))
   } catch (error) {
@@ -161,8 +180,10 @@ export const unsealCompaction = async (encryptedContent: string): Promise<string
       cause: error
     })
   }
+
   if (ciphertext.length < NONCE_BYTES + GCM_TAG_BYTES) throw new Error("compaction capsule ciphertext too short")
   let plaintext: ArrayBuffer
+
   try {
     plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: ciphertext.subarray(0, NONCE_BYTES) },
@@ -172,7 +193,9 @@ export const unsealCompaction = async (encryptedContent: string): Promise<string
   } catch (error) {
     throw new Error("invalid or corrupted compaction capsule: cipher: message authentication failed", { cause: error })
   }
+
   let data: unknown
+
   try {
     data = JSON.parse(new TextDecoder().decode(plaintext))
   } catch (error) {
@@ -180,6 +203,7 @@ export const unsealCompaction = async (encryptedContent: string): Promise<string
       cause: error
     })
   }
+
   return isJsonObject(data as Json) ? asString((data as JsonObject)["summary"]) : ""
 }
 
@@ -190,15 +214,19 @@ export const unsealCompaction = async (encryptedContent: string): Promise<string
  */
 export const expandCompactionCapsules = async (payload: Json): Promise<Json> => {
   const input = get(payload, "input")
+
   if (!isJsonArray(input)) return payload
   let changed = false
   const expanded: Json[] = []
+
   for (const item of input) {
     if (asString(get(item, "type")) !== "compaction") {
       expanded.push(item)
       continue
     }
+
     let summary: string
+
     try {
       summary = await unsealCompaction(asString(get(item, "encrypted_content")))
     } catch (error) {
@@ -206,6 +234,7 @@ export const expandCompactionCapsules = async (payload: Json): Promise<Json> => 
         cause: error
       })
     }
+
     expanded.push({
       type: "message",
       role: "developer",
@@ -213,59 +242,75 @@ export const expandCompactionCapsules = async (payload: Json): Promise<Json> => 
     })
     changed = true
   }
+
   if (!changed) return payload
   const out = cloneJson(payload)
   set(out, "input", expanded)
+
   return out
 }
 
 /** `ExtractAntigravitySummaryText`: Responses, Gemini/Antigravity, Claude or Chat Completions response bodies. */
 export const extractSummaryText = (response: Json): string => {
   const output = get(response, "output")
+
   if (isJsonArray(output)) {
     const parts: string[] = []
+
     for (const item of output) {
       if (asString(get(item, "type")) !== "message") continue
       const content = get(item, "content")
+
       if (isJsonArray(content)) {
         for (const part of content) {
           if (asString(get(part, "type")) !== "output_text") continue
           const text = asString(get(part, "text"))
+
           if (text !== "") parts.push(text)
         }
       } else if (typeof content === "string" && content !== "") {
         parts.push(content)
       }
     }
+
     if (parts.length > 0) return parts.join("\n")
   }
 
   const candidates = get(response, "response.candidates") ?? get(response, "candidates")
+
   if (isJsonArray(candidates) && candidates.length > 0) {
     const parts: string[] = []
     const content = get(candidates[0], "content.parts")
+
     if (isJsonArray(content)) {
       for (const part of content) {
         if (get(part, "thought") === true) continue
         const text = asString(get(part, "text"))
+
         if (text !== "") parts.push(text)
       }
     }
+
     if (parts.length > 0) return parts.join("\n")
   }
 
   const blocks = get(response, "content")
+
   if (isJsonArray(blocks)) {
     const parts: string[] = []
+
     for (const block of blocks) {
       if (asString(get(block, "type")) !== "text") continue
       const text = asString(get(block, "text"))
+
       if (text !== "") parts.push(text)
     }
+
     if (parts.length > 0) return parts.join("\n")
   }
 
   const chat = asString(get(response, "choices.0.message.content"))
+
   if (chat !== "") return chat
   throw new Error("no summary text found in upstream response")
 }
@@ -322,12 +367,14 @@ export const buildCompactionStreamChunks = (
   const now = Math.floor(nowMs / 1000)
   const responseId = `resp_ag_compact_${unixNano(nowMs)}`
   const itemId = `cmp_ag_compact_${unixNano(nowMs)}`
+
   const item = (status: string): JsonObject => ({
     type: "compaction",
     status,
     id: itemId,
     encrypted_content: capsule
   })
+
   const created = (): JsonObject => ({
     object: "response",
     status: "in_progress",
@@ -338,6 +385,7 @@ export const buildCompactionStreamChunks = (
     created_at: now,
     model: modelName
   })
+
   const completed: JsonObject = {
     object: "response",
     status: "completed",
@@ -350,7 +398,9 @@ export const buildCompactionStreamChunks = (
     output: [item("completed")],
     usage: usageNode(inputTokens, outputTokens, totalTokens)
   }
+
   const frame = (name: string, payload: JsonObject): string => sseEvent(name, JSON.stringify(payload))
+
   return [
     frame("response.created", { type: "response.created", sequence_number: 0, response: created() }),
     frame("response.in_progress", { type: "response.in_progress", sequence_number: 1, response: created() }),
@@ -378,9 +428,12 @@ export const responsesSummaryUsage = (
   const input = asInt(get(payload, "usage.input_tokens"))
   const output = asInt(get(payload, "usage.output_tokens"))
   const total = asInt(get(payload, "usage.total_tokens"))
+
   if (total === 0 && input === 0) {
     const usage = parseOpenAIUsage(rawText)
+
     return { input: usage.inputTokens, output: usage.outputTokens, total: usage.totalTokens }
   }
+
   return { input, output, total }
 }

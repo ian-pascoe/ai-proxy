@@ -106,10 +106,13 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
     Effect.gen(function* () {
       const state = generateState()
       const started = yield* flow.start({ state }).pipe(Effect.result)
+
       if (started._tag === "Failure") {
         yield* Effect.logError(`oauth ${flow.provider}: failed to build the authorization URL`)
+
         return { ok: false, status: 500, error: "failed to generate authorization url" } as const
       }
+
       sessions.register(
         {
           state,
@@ -120,6 +123,7 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
         },
         now
       )
+
       return { ok: true, url: started.success.url, state } as const
     })
 
@@ -130,10 +134,13 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
   ): Effect.Effect<StartResult, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
       const started = yield* flow.start().pipe(Effect.result)
+
       if (started._tag === "Failure") {
         yield* Effect.logError(`oauth ${flow.provider}: failed to start the device flow: ${started.failure.message}`)
+
         return { ok: false, status: 500, error: flow.startFailureMessage } as const
       }
+
       const device = started.success
       sessions.register(
         {
@@ -147,6 +154,7 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
         },
         now
       )
+
       return {
         ok: true,
         url: device.url,
@@ -161,28 +169,38 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
   const finish = (state: string, flow: Flow, record: CredentialRecord): Effect.Effect<StatusResult> =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
+
       // A cancel (or timeout) that raced with the exchange wins: nothing is saved for a dead session.
       if (!sessions.isPending(state, now, flow.provider)) return { status: "wait" } as const
       const saved = yield* Effect.promise(() => saveCredentialRecord(record, sink))
       const done = yield* Clock.currentTimeMillis
+
       if (!saved.ok) {
         yield* Effect.logError(`oauth ${flow.provider}: failed to store the credential`)
         sessions.setError(state, flow.saveMessage, done)
+
         return { status: "error", error: flow.saveMessage } as const
       }
+
       sessions.complete(state, done)
+
       return { status: "ok" } as const
     })
 
   const pollDevice = (session: OAuthSession, now: number): Effect.Effect<StatusResult, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
       const flow = deviceFlows[session.provider]?.(metaMintUrl)
+
       if (flow === undefined) return { status: "error", error: "unsupported provider" } as const
+
       if (now > session.deadlineAt) {
         sessions.setError(session.state, flow.expiredMessage, now)
+
         return { status: "error", error: flow.expiredMessage } as const
       }
+
       if (now < session.nextPollAt) return { status: "wait" } as const
+
       if (!sessions.acquire(session.state, now)) return { status: "wait" } as const
 
       // The lease covers the poll and the save: a second poll must not replay a consumed device code.
@@ -190,17 +208,23 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
         const outcome = yield* flow
           .poll({ data: session.data, now, intervalMs: session.intervalMs })
           .pipe(Effect.result)
+
         const after = yield* Clock.currentTimeMillis
+
         if (outcome._tag === "Failure") {
           sessions.setError(session.state, outcome.failure.message, after)
           yield* Effect.logWarning(`oauth ${session.provider}: device login failed`)
+
           return { status: "error", error: outcome.failure.message } as const
         }
+
         if (outcome.success._tag === "pending") {
           const intervalMs = outcome.success.intervalMs ?? session.intervalMs
           sessions.release(session.state, after, { nextPollAt: now + intervalMs, intervalMs })
+
           return { status: "wait" } as const
         }
+
         return yield* finish(session.state, flow, outcome.success.record)
       }).pipe(Effect.ensuring(Effect.sync(() => sessions.release(session.state, now))))
     })
@@ -209,6 +233,7 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
     start: (input) =>
       Effect.gen(function* () {
         const provider = input.provider.trim().toLowerCase()
+
         if (provider === "") return { ok: false, status: 400, error: "provider is required" } as const
         const now = yield* Clock.currentTimeMillis
 
@@ -230,8 +255,10 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
           case "kimi":
           case "kimi-ai": {
             const target = kimiDomain(provider === "kimi-ai" ? "kimi.ai" : (input.domain ?? "kimi.com"))
+
             return yield* startDevice(kimiFlow(target), newDeviceState(kimiStatePrefix(target), now), now)
           }
+
           default:
             return { ok: false, status: 404, error: "provider_not_found" } as const
         }
@@ -241,18 +268,25 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const session = sessions.get(state, now)
+
         if (session === undefined) return { status: "error", error: "unknown or expired state" } as const
+
         if (session.completed) return { status: "ok" } as const
+
         if (session.status !== "") return { status: "error", error: session.status } as const
 
         if (session.flow === "callback") {
           const flow = callbackFlows[session.provider]?.()
+
           if (flow !== undefined && now > session.deadlineAt) {
             sessions.setError(state, flow.timeoutMessage, now)
+
             return { status: "error", error: flow.timeoutMessage } as const
           }
+
           return { status: "wait" } as const
         }
+
         return yield* pollDevice(session, now)
       }),
 
@@ -261,48 +295,66 @@ export const makeOAuthService = ({ sessions, sink, metaMintUrl }: OAuthServiceOp
         const state = input.state.trim()
         const code = input.code.trim()
         const error = input.error.trim()
+
         if (state === "") return { ok: false, status: 400, error: "state is required" } as const
+
         if (!isValidOAuthState(state)) return { ok: false, status: 400, error: "invalid state" } as const
+
         if (code === "" && error === "") return { ok: false, status: 400, error: "code or error is required" } as const
 
         const now = yield* Clock.currentTimeMillis
         const found = sessions.get(state, now)
+
         if (found === undefined) return { ok: false, status: 404, error: "unknown or expired state" } as const
+
         if (found.completed) return { ok: false, status: 409, error: "oauth flow is already completed" } as const
         const requested = input.provider?.trim() ?? ""
         const provider = normalizeCallbackProvider(requested === "" ? found.provider : requested)
+
         if (provider === undefined) return { ok: false, status: 400, error: "unsupported provider" } as const
 
         const flow = found.flow === "callback" ? callbackFlows[found.provider]?.() : undefined
+
         // The callback window closed before this request: Go's waiter would have recorded the timeout already.
         if (flow !== undefined && found.status === "" && now > found.deadlineAt) {
           sessions.setError(state, flow.timeoutMessage, now)
+
           return { ok: false, status: 409, error: flow.timeoutMessage } as const
         }
+
         if (found.status !== "") return { ok: false, status: 409, error: found.status } as const
+
         if (found.provider !== provider) {
           return { ok: false, status: 400, error: "provider does not match state" } as const
         }
+
         // Device logins finish by polling, never through a redirect.
         if (flow === undefined)
           return { ok: false, status: 409, error: "oauth flow does not accept a callback" } as const
+
         if (!sessions.acquire(state, now))
           return { ok: false, status: 409, error: "oauth flow is not pending" } as const
 
         if (error !== "") {
           sessions.setError(state, flow.deniedMessage, now)
+
           return { ok: true, outcome: "failed" } as const
         }
+
         // The lease covers exchange and save, so a duplicate callback cannot exchange the code twice.
         return yield* Effect.gen(function* () {
           const exchanged = yield* flow.complete({ state, code, data: found.data, now }).pipe(Effect.result)
           const after = yield* Clock.currentTimeMillis
+
           if (exchanged._tag === "Failure") {
             sessions.setError(state, exchanged.failure.message, after)
             yield* Effect.logWarning(`oauth ${flow.provider}: authorization code exchange failed`)
+
             return { ok: true, outcome: "failed" } as const
           }
+
           const finished = yield* finish(state, flow, exchanged.success)
+
           return {
             ok: true,
             outcome: finished.status === "ok" ? "completed" : finished.status === "wait" ? "cancelled" : "failed"

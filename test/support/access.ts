@@ -6,8 +6,11 @@ import type { JWK } from "jose"
 import { AccessJwks } from "../../src/access/jwks.ts"
 
 export const TEAM = "team.cloudflareaccess.com"
+
 export const ISSUER = `https://${TEAM}`
+
 export const JWKS_URL = `${ISSUER}/cdn-cgi/access/certs`
+
 export const AUD = "aud-tag-1"
 
 export interface TestKey {
@@ -18,6 +21,7 @@ export interface TestKey {
 
 export const makeKey = async (kid: string): Promise<TestKey> => {
   const { privateKey, publicKey } = await generateKeyPair("RS256", { extractable: true })
+
   return { kid, privateKey, jwk: { ...(await exportJWK(publicKey)), kid, alg: "RS256", use: "sig" } }
 }
 
@@ -41,11 +45,14 @@ export const signToken = (options: TokenOptions): Promise<string> => {
     .setAudience([...(typeof options.audience === "string" ? [options.audience] : (options.audience ?? [AUD]))])
     .setIssuedAt(options.now)
     .setExpirationTime(options.now + (options.expiresIn ?? 3600))
+
   if (options.notBefore !== undefined) jwt.setNotBefore(options.notBefore)
+
   return jwt.sign(options.key.privateKey)
 }
 
 export const userClaims = (email: string) => ({ email, sub: `sub-${email}`, type: "app" })
+
 export const serviceClaims = (commonName: string) => ({ common_name: commonName, sub: "", type: "app" })
 
 /** Mutable state behind the fake JWKS endpoint. */
@@ -71,6 +78,7 @@ export const fakeJwksLayer = (state: FakeJwks): Layer.Layer<AccessJwks> =>
           Effect.sync(() => {
             state.fetches++
             const body = state.fail ? "boom" : JSON.stringify({ keys: state.keys, public_cert: {} })
+
             return HttpClientResponse.fromWeb(
               request,
               new Response(body, { status: state.fail ? 500 : 200, headers: { "content-type": "application/json" } })

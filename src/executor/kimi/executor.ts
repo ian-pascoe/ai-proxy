@@ -107,14 +107,17 @@ const normalizePatchRequest = (body: Json) =>
 const usageOf = (text: string): UsageDetail | undefined => {
   const parsed = tryParseJson(text)
   const codex = parseCodexUsage(parsed)
+
   if (codex !== undefined && (codex.totalTokens > 0 || codex.inputTokens > 0)) return codex
   const openai = parseOpenAIUsage(text)
+
   return openai.totalTokens > 0 || openai.inputTokens > 0 ? openai : undefined
 }
 
 export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): ProviderExecutor => {
   const registry = executorOptions.translators ?? builtinTranslators
   const replayStore = executorOptions.replay ?? defaultReplay
+
   const claude = makeClaudeExecutor({
     translators: registry,
     profile: { normalizeModel: normalizeKimiUpstreamModel, stripDefaultAttribution: true, upstreamCountTokens: true }
@@ -153,6 +156,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const baseModel = parseSuffix(request.model).modelName
     const from = options.sourceFormat
     const to = Formats.OpenAI
+
     const translate = (payload: Json) =>
       translateRequestForExecutor(
         registry,
@@ -162,7 +166,9 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
         thinking.summary,
         { headers: options.headers, config: context.config }
       )
+
     const translated = translate(request.payload)
+
     if (translated.error !== undefined) {
       return yield* new ExecutionError({
         status: translated.error.status,
@@ -170,6 +176,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
         requestScoped: true
       })
     }
+
     const original =
       options.originalRequest === undefined || options.originalRequest === request.payload
         ? cloneJson(translated.body)
@@ -188,6 +195,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       modelInfo: request.modelInfo,
       lookupModelInfo: request.modelLookup
     })
+
     if (stream) body = set(body, "stream_options.include_usage", true)
     body = normalizeKimiToolMessageLinks(body)
     body = normalizeKimiTools(body)
@@ -209,6 +217,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       },
       body
     )
+
     return { url: kimiChatUrl(context.credential), body, translated: translatedForResponse, to }
   })
 
@@ -221,6 +230,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     stream: boolean
   ) {
     const client = yield* HttpClient.HttpClient
+
     const httpRequest = HttpClientRequest.post(url).pipe(
       HttpClientRequest.bodyText(JSON.stringify(body), "application/json"),
       HttpClientRequest.setHeaders(
@@ -233,15 +243,20 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
         )
       )
     )
+
     const response = yield* client
       .execute(httpRequest)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
       context.usage.fail(response.status, text)
+
       return yield* new ExecutionError({ status: response.status, message: text })
     }
+
     return response
   })
 
@@ -255,15 +270,19 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const data = yield* response.text.pipe(Effect.mapError(transportError))
     context.usage.observeResponseModel(responseModelOf(tryParseJson(data)))
     const responseFormat = responseFormatOf(options)
+
     let out = registry.translateNonStream(
       responseFormat,
       prepared.to,
       responseContext(request, options, prepared.translated),
       data
     )
+
     if (out === undefined || out === "") return yield* badGateway()
     context.usage.publish(parseOpenAIUsage(data))
+
     if (responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -276,16 +295,20 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const response = yield* post(context, prepared.url, prepared.body, options, true)
     const responseFormat = responseFormatOf(options)
     const state = responseContext(request, options, prepared.translated)
+
     const translate = (line: string): Stream.Stream<string, ExecutionError> => {
       const chunks = registry.translateStream(responseFormat, prepared.to, state, line)
       const emitted = Stream.fromIterable(chunks)
+
       return state.state.toolInputError === undefined ? emitted : Stream.concat(emitted, Stream.fail(badGateway()))
     }
+
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.tap((line) =>
         Effect.sync(() => {
           const usage = parseOpenAIStreamUsage(line)
+
           if (usage !== undefined) context.usage.publish(usage)
           context.usage.observeResponseModel(responseModelOf(ssePayloadObject(line)))
         })
@@ -294,6 +317,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       Stream.concat(Stream.suspend(() => translate("data: [DONE]"))),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -344,6 +368,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       },
       body
     )
+
     return { url: kimiResponsesUrl(context.credential), body, translated }
   })
 
@@ -373,14 +398,18 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const original = options.originalRequest ?? request.payload
     const bridge = new ApplyPatchResponsesState(options.sourceFormat, original, original)
     let out = data
+
     if (bridge.active) {
       const parsed = tryParseJson(data)
       const bridged = parsed === undefined ? undefined : bridge.bridge.transformNonStream(parsed)
+
       if (bridged === undefined || "error" in bridged) {
         return yield* new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE })
       }
+
       out = JSON.stringify(bridged.body)
     }
+
     if (responseFormat !== Formats.OpenAIResponse) {
       const translated = registry.translateNonStream(
         responseFormat,
@@ -388,12 +417,17 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
         responseContext(request, options, prepared.translated),
         out
       )
+
       if (translated === undefined || translated === "") return yield* badGateway()
       out = translated
     }
+
     const usage = usageOf(data)
+
     if (usage !== undefined) context.usage.publish(usage)
+
     if (responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out)
+
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -410,33 +444,43 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     const original = options.originalRequest ?? request.payload
     const bridge = new ApplyPatchResponsesState(options.sourceFormat, original, original)
     let stopped = false
+
     /** `emitTranslatedLine`: Responses clients get the line as is, others the translated chunks. */
     const emit = (line: string): StepResult => {
       if (responseFormat === Formats.OpenAIResponse) return { chunks: [`${line}\n`] }
       const chunks = [...registry.translateStream(responseFormat, Formats.OpenAIResponse, state, line)]
+
       return state.state.toolInputError === undefined ? { chunks } : { chunks, error: badGateway() }
     }
+
     const lines = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.mapEffect((line) =>
         Effect.sync((): StepResult => {
           if (stopped) return { chunks: [] }
           context.usage.observeResponseModel(responseModelOf(ssePayloadObject(line)))
+
           if (line.startsWith("data:")) {
             const payload = line.slice(5).trim()
             const type = asString(get(tryParseJson(payload), "type"))
+
             if (type === "response.completed" || type === "response.incomplete" || type === "response.done") {
               const usage = usageOf(payload)
+
               if (usage !== undefined) context.usage.publish(usage)
             }
           }
+
           const bridged = bridge.stream(line)
           const chunks: string[] = []
+
           for (const converted of bridged.lines) {
             const step = emit(converted)
             chunks.push(...step.chunks)
+
             if (step.error !== undefined) return { chunks, error: step.error }
           }
+
           return bridged.error === undefined ? { chunks } : { chunks, error: badGateway() }
         })
       ),
@@ -446,24 +490,29 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
         })
       )
     )
+
     // `FinishStream`: EOF without a validated completion emits the local failure once.
     const tail = Stream.suspend(() => {
       if (stopped) return Stream.empty
       const finished = bridge.finishStream()
       const chunks = finished.lines.flatMap((line) => emit(line).chunks)
       const emitted = Stream.fromIterable(chunks)
+
       return finished.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(badGateway()))
     })
+
     const chunks = Stream.concat(
       lines.pipe(
         Stream.takeUntil((step) => step.error !== undefined),
         Stream.flatMap((step) => {
           const emitted = Stream.fromIterable(step.chunks)
+
           return step.error === undefined ? emitted : Stream.concat(emitted, Stream.fail(step.error))
         })
       ),
       tail
     ).pipe(Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message))))
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -478,13 +527,18 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
   ) {
     const replay = yield* prepareKimiReplay(replayStore, request, options)
     const result = yield* Effect.result(claude.execute(claudeContext(context), replay.request, options))
+
     if (result._tag === "Failure") {
       if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
         yield* clearReplay(replayStore, replay.scope)
+
       return yield* result.failure
     }
+
     const content = get(tryParseJson(result.success.payload), "content")
+
     if (Array.isArray(content)) yield* cacheReplay(replayStore, replay.scope, content)
+
     return result.success
   })
 
@@ -495,11 +549,14 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
   ) {
     const replay = yield* prepareKimiReplay(replayStore, request, options)
     const result = yield* Effect.result(claude.executeStream(claudeContext(context), replay.request, options))
+
     if (result._tag === "Failure") {
       if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
         yield* clearReplay(replayStore, replay.scope)
+
       return yield* result.failure
     }
+
     return {
       headers: result.success.headers,
       chunks: wrapReplayStream(result.success.chunks, replayStore, replay.scope)
@@ -512,13 +569,17 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
 
   const execute: ProviderExecutor["execute"] = (context, request, options) => {
     if (options.sourceFormat === Formats.Claude) return executeClaude(context, request, options)
+
     if (options.sourceFormat === Formats.OpenAIResponse) return executeResponses(context, request, options)
+
     return executeChat(context, request, options)
   }
 
   const executeStream: ProviderExecutor["executeStream"] = (context, request, options) => {
     if (options.sourceFormat === Formats.Claude) return executeClaudeStream(context, request, options)
+
     if (options.sourceFormat === Formats.OpenAIResponse) return executeResponsesStream(context, request, options)
+
     return executeChatStream(context, request, options)
   }
 
@@ -529,6 +590,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
       options.sourceFormat === Formats.OpenAIResponse
         ? { ...request, payload: yield* normalizePatchRequest(request.payload) }
         : request
+
     return yield* claude.countTokens(claudeContext(context), counted, options)
   })
 

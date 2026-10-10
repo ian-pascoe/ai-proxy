@@ -26,7 +26,9 @@ export const delPath = (root: Json | undefined, path: string): Json | undefined 
 
 export const delPaths = (root: Json | undefined, paths: readonly string[]): Json | undefined => {
   let result = root
+
   for (const path of paths) result = delPath(result, path)
+
   return result
 }
 
@@ -48,19 +50,23 @@ export const getString = (root: Json | undefined, path: string): string => asStr
 export const getFirst = (root: Json | undefined, paths: readonly string[]): Json | undefined => {
   for (const path of paths) {
     const value = get(root, path)
+
     if (value !== undefined) return value
   }
+
   return undefined
 }
 
 /** `value.Type == gjson.String` guard returning the string, else undefined. */
 export const getStringValue = (root: Json | undefined, path: string): string | undefined => {
   const value = get(root, path)
+
   return typeof value === "string" ? value : undefined
 }
 
 export const getBool = (root: Json | undefined, path: string): boolean | undefined => {
   const value = get(root, path)
+
   return typeof value === "boolean" ? value : undefined
 }
 

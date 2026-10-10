@@ -22,16 +22,19 @@ import {
 import { bodyText, controlPlane, handled, jsonReply, Reply, replyError } from "./http.ts"
 
 const PREFIX = "/v8/management/config"
+
 const MAX_ATTEMPTS = 4
 
 const pathRemainder = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
+
   return new URL(request.originalUrl, "http://localhost").pathname.slice(PREFIX.length)
 })
 
 const storedDocument = Effect.gen(function* () {
   const wire = yield* controlPlane("getConfig", (stub) => stub.getConfig())
   const text = wire.document ?? "{}"
+
   return { version: wire.version, text, document: JSON.parse(text) as JsonObject }
 })
 
@@ -40,6 +43,7 @@ const decodeConfig = (text: string) =>
 
 const readPath = (rest: string) => {
   const parts = parseConfigPath(rest)
+
   return parts === undefined ? Effect.fail(replyError(400, "invalid_path")) : Effect.succeed(parts)
 }
 
@@ -52,6 +56,7 @@ const store = (text: string, expectedVersion: number | undefined) =>
       if (result.ok) {
         // Go config files often carry keys that do nothing on Workers; say so instead of silently ignoring them.
         const { notApplied } = result
+
         return notApplied.length === 0
           ? Effect.succeed("saved" as const)
           : Effect.logWarning("config keys not applied on Workers (see MIGRATION.md)").pipe(
@@ -59,7 +64,9 @@ const store = (text: string, expectedVersion: number | undefined) =>
               Effect.as("saved" as const)
             )
       }
+
       if (result.error === "conflict") return Effect.succeed("conflict" as const)
+
       return Effect.fail(replyError(422, "invalid_config", { message: result.message }))
     })
   )
@@ -72,10 +79,13 @@ const modify = (edit: (document: JsonObject) => JsonObject | Reply) =>
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
       const current = yield* storedDocument
       const edited = edit(current.document)
+
       if (edited instanceof Reply) return yield* edited
       const outcome = yield* store(JSON.stringify(stripAuthIndexes(edited)), current.version)
+
       if (outcome === "saved") return okReply
     }
+
     return yield* conflict
   })
 
@@ -84,20 +94,26 @@ const getConfig = (yaml: boolean) =>
     const rest = yaml ? "" : yield* pathRemainder
     const parts = yield* readPath(rest)
     const current = yield* storedDocument
+
     if (yaml) {
       const config = yield* decodeConfig(current.text)
+
       return HttpServerResponse.text(stringifyConfigYaml(config), { contentType: "application/yaml; charset=utf-8" })
     }
+
     const config = yield* decodeConfig(current.text)
     const document = injectAuthIndexes(current.document, config)
     const value = getAtPath(document, parts)
+
     if (value === undefined) return yield* replyError(404, "not_found")
+
     return jsonReply(200, value)
   })
 
 /** Parses a JSON request body (`invalid_json` when the text is not valid JSON). */
 const jsonValue = Effect.gen(function* () {
   const text = yield* bodyText
+
   return yield* Effect.try({
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(400, "invalid_json")
@@ -110,27 +126,37 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
       const text = yield* bodyText
       // Validate before storing so a malformed document answers the same way as a bad JSON write.
       const parsed = yield* Effect.result(parseConfigYaml(text))
+
       if (parsed._tag === "Failure")
         return yield* replyError(422, "invalid_config", { message: parsed.failure.message })
       const outcome = yield* store(text, undefined)
+
       return outcome === "saved" ? okReply : yield* conflict
     }
+
     const parts = yield* readPath(yield* pathRemainder)
     const value = yield* jsonValue
+
     if (parts.length === 0 && !isJsonObject(value)) return yield* replyError(400, "config_must_be_object")
+
     if (parts.length === 0 && mode === "put") {
       const outcome = yield* store(JSON.stringify(stripAuthIndexes(value as JsonObject)), undefined)
+
       return outcome === "saved" ? okReply : yield* conflict
     }
+
     return yield* modify((document) => {
       const written = writeAtPath(document, parts, value, mode)
+
       return written === "invalid_path" ? replyError(400, "invalid_path") : written
     })
   })
 
 const deleteConfig = Effect.gen(function* () {
   const parts = yield* readPath(yield* pathRemainder)
+
   if (parts.length === 0) return yield* replyError(400, "cannot_delete_config")
+
   return yield* modify((document) => deleteAtPath(document, parts) ?? replyError(404, "not_found"))
 })
 
@@ -144,6 +170,7 @@ const routes = (path: `/${string}`, yaml: boolean, methods: ReadonlyArray<"GET" 
           : method === "PATCH"
             ? writeConfig("patch", yaml)
             : deleteConfig
+
     return HttpRouter.route(method, path, handled(handler))
   })
 

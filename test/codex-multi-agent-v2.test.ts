@@ -39,6 +39,7 @@ interface Result {
 }
 
 const blobs = fixture.blobs as Record<string, Json>
+
 const cases = fixture.cases as Record<string, Json>
 
 const source: SpawnAgentSource = {
@@ -50,6 +51,7 @@ const source: SpawnAgentSource = {
   catalog: codexClientCatalog,
   lookupModel: (id) => {
     const found = (fixture.lookups as Record<string, { description?: string; levels?: string[] }>)[id]
+
     return found === undefined
       ? undefined
       : {
@@ -66,8 +68,11 @@ const configFor = (combo: Combo) =>
 
 const headersFor = (combo: Combo): Headers => {
   const headers = new Headers()
+
   if (combo.userAgent !== "") headers.set("User-Agent", combo.userAgent)
+
   if (combo.subagent !== "") headers.set("X-Openai-Subagent", combo.subagent)
+
   return headers
 }
 
@@ -81,6 +86,7 @@ const expectSame = (actual: Json, ref: string, input: Json, label: string): void
 describe("Codex multi-agent v2 rewriting (Go parity)", () => {
   it("rewrites orphan delegations, agent messages, tool definitions and namespaces like Go", () => {
     expect(fixture.results.length).toBeGreaterThan(800)
+
     for (const result of fixture.results as unknown as Result[]) {
       const input = cases[result.case] as Json
       const copy = (): Json => structuredClone(input)
@@ -122,9 +128,11 @@ describe("Codex multi-agent v2 rewriting (Go parity)", () => {
 
   it("lists the available models in the spawn_agent description (template models first, then by display name)", () => {
     const combo: Combo = { userAgent: "codex-tui/0.150.0", subagent: "", optimize: true, orphan: false, compat: false }
+
     const payload = structuredClone(cases["collaboration-tools"]) as {
       tools: Array<{ name: string; description: string }>
     }
+
     prepareCodexMultiAgentV2Tools(headersFor(combo), payload, true, source)
     const description = payload.tools[0]?.description ?? ""
     expect(description).toContain("Available model overrides (optional; inherited parent model is preferred):")

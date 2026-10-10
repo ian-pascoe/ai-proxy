@@ -44,7 +44,9 @@ export class RegistrySnapshot {
   providersForModel = (modelId: string): string[] => {
     if (modelId === "") return []
     const exact = this.index.providersForModel(modelId)
+
     if (exact.length > 0 || modelId.toLowerCase() === modelId) return exact
+
     return this.index.providersForModel(modelId.toLowerCase())
   }
 
@@ -56,7 +58,9 @@ export class RegistrySnapshot {
   modelOverrideHeaders = (modelId: string, provider = ""): Record<string, string> | undefined => {
     const headers = this.lookupModelInfo(modelId, provider)?.config?.overrideHeader
     const out: Record<string, string> = {}
+
     for (const [key, value] of Object.entries(headers ?? {})) if (key.trim() !== "") out[key.trim()] = value
+
     return Object.keys(out).length === 0 ? undefined : out
   }
 
@@ -88,8 +92,10 @@ export const buildSnapshot = (input: {
   const { sources, config, catalogs, now } = input
   const nowSeconds = Math.floor(now / 1000)
   const clients: ClientRegistration[] = []
+
   for (const source of sources.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     const assembled = assembleCredentialModels(source, { config, catalogs, nowSeconds })
+
     if (assembled === undefined) continue
     clients.push({
       id: source.id,
@@ -98,6 +104,7 @@ export const buildSnapshot = (input: {
       projection: (model) => projectModel(source, model, now)
     })
   }
+
   return new RegistrySnapshot(new ModelRegistryIndex(clients, now), catalogs, config, now)
 }
 
@@ -118,6 +125,7 @@ export class ModelRegistry extends Context.Service<
 
       const build = Effect.gen(function* () {
         const env = yield* WorkerEnv
+
         const [{ config }, catalogs, sources] = yield* Effect.all(
           [
             configReader.get,
@@ -130,28 +138,36 @@ export class ModelRegistry extends Context.Service<
           ],
           { concurrency: "unbounded" }
         )
+
         const now = yield* Clock.currentTimeMillis
         // Antigravity credentials serve the entitlements of their last `fetchAvailableModels` probe (KV).
         const enriched = yield* Effect.promise(() => withAntigravityHints(env.CACHE, sources))
+
         return buildSnapshot({ sources: enriched, config, catalogs, now })
       })
 
       const snapshot = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const cached = yield* Ref.get(cache)
+
         if (cached !== undefined && now - cached.now < SNAPSHOT_TTL_MS) return cached
         const built = yield* build.pipe(Effect.result)
+
         if (built._tag === "Success") {
           yield* Ref.set(cache, built.success)
+
           return built.success
         }
+
         // Stale-if-error, like the config reader: keep serving the previous registry while the DO is unreachable.
         if (cached !== undefined) {
           yield* Effect.logWarning(
             `model registry refresh failed, serving the previous snapshot: ${built.failure.message}`
           )
+
           return cached
         }
+
         return yield* built.failure
       })
 

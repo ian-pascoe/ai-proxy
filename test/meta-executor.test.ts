@@ -23,6 +23,7 @@ interface Item {
 }
 
 const executor = makeMetaExecutor()
+
 const metaKey = () =>
   credential("meta", { kind: "apikey", attributes: { api_key: "meta-key-1", base_url: "https://meta.test/v1" } })
 
@@ -122,6 +123,7 @@ describe("error rules", () => {
     ]) {
       expect(wrapMetaUpstreamError(429, JSON.stringify({ error }), now).credentialScoped).toBe(true)
     }
+
     expect(wrapMetaUpstreamError(429, '{"error":{"code":"rate_limit_exceeded"}}', now).credentialScoped).toBeUndefined()
     expect(isMetaSubscriptionQuota(500, { error: { message: "subscription quota" } })).toBe(false)
     expect(wrapMetaUpstreamError(500, "boom", now)).toMatchObject({ status: 500, message: "boom" })
@@ -151,6 +153,7 @@ describe("web_search sanitising", () => {
         }
       ]
     })
+
     expect(sanitizeMetaWebSearchTools(body)).toEqual({
       tools: [
         { type: "web_search", keep: 1 },
@@ -164,6 +167,7 @@ describe("web_search sanitising", () => {
 describe("Meta executor", () => {
   it("posts a shaped streaming Responses request with the Muse headers", async () => {
     const h = await harness(metaKey(), () => sse([completed([message("hello")])]))
+
     const response = await execute(
       executor,
       h,
@@ -188,6 +192,7 @@ describe("Meta executor", () => {
       },
       responsesOptions()
     )
+
     const call = h.calls[0]
     expect(call?.url).toBe("https://meta.test/v1/responses")
     expect(call?.headers["authorization"]).toBe("Bearer meta-key-1")
@@ -197,6 +202,7 @@ describe("Meta executor", () => {
     expect(call?.headers["cache-control"]).toBe("no-cache")
     const body = JSON.parse(call?.text ?? "{}") as Record<string, unknown> & { input: Array<Record<string, unknown>> }
     expect(body["stream"]).toBe(true)
+
     for (const field of [
       "generate",
       "safety_identifier",
@@ -206,6 +212,7 @@ describe("Meta executor", () => {
     ]) {
       expect(body).not.toHaveProperty(field)
     }
+
     expect(body["instructions"]).toBe("")
     expect(body["tools"]).toEqual([{ type: "web_search" }])
     // Foreign reasoning blobs are replayed; recognisable other-provider signatures are dropped.
@@ -218,42 +225,50 @@ describe("Meta executor", () => {
 
   it("patches an empty completed output from output_item.done events", async () => {
     const item = message("assembled")
+
     const h = await harness(metaKey(), () =>
       sse([{ type: "response.output_item.done", output_index: 0, item }, completed([])])
     )
+
     const response = await execute(
       executor,
       h,
       { model: "muse-spark", payload: json(responsesRequest()) },
       responsesOptions()
     )
+
     expect((JSON.parse(response.payload) as { output: unknown[] }).output).toEqual([item])
   })
 
   it("accepts a plain JSON response body instead of SSE", async () => {
     const body = { id: "resp_9", object: "response", status: "completed", output: [message("plain")], usage: {} }
     const h = await harness(metaKey(), () => new Response(JSON.stringify(body)))
+
     const response = await execute(
       executor,
       h,
       { model: "muse-spark", payload: json(responsesRequest()) },
       responsesOptions()
     )
+
     expect((JSON.parse(response.payload) as { output: unknown[] }).output).toEqual([message("plain")])
   })
 
   it("fails with 408 when the stream ends before a terminal event", async () => {
     const h = await harness(metaKey(), () => sse([{ type: "response.created", response: { id: "r" } }]))
+
     const error = await runFail(
       executor.execute(h.context, { model: "muse-spark", payload: json(responsesRequest()) }, responsesOptions()),
       h.layers
     )
+
     expect(error.status).toBe(408)
     expect(error.message).toContain("stream disconnected before response.completed or response.incomplete")
   })
 
   it("applies the 429/404 rules to upstream HTTP errors", async () => {
     const resetsAt = Math.floor(Date.now() / 1000) + 120
+
     const quota = await harness(
       metaKey(),
       () =>
@@ -261,25 +276,30 @@ describe("Meta executor", () => {
           status: 429
         })
     )
+
     const quotaError = await runFail(
       executor.execute(quota.context, { model: "muse-spark", payload: json(responsesRequest()) }, responsesOptions()),
       quota.layers
     )
+
     expect(quotaError).toMatchObject({ status: 429, credentialScoped: true })
     expect(quotaError.retryAfterMs).toBeGreaterThan(100_000)
     expect(quotaError.retryAfterMs).toBeLessThanOrEqual(120_000)
 
     const missing = await harness(metaKey(), () => new Response('{"error":{"message":"no model"}}', { status: 404 }))
+
     const missingError = await runFail(
       executor.execute(missing.context, { model: "muse-spark", payload: json(responsesRequest()) }, responsesOptions()),
       missing.layers
     )
+
     expect(missingError).toMatchObject({ status: 404, retryAfterMs: META_NOT_FOUND_COOLDOWN_MS })
     expect(missing.usage.failed).toBe(true)
   })
 
   it("answers /responses/compact with 501 and fails without a key", async () => {
     const h = await harness(metaKey(), () => sse([completed()]))
+
     const compact = await runFail(
       executor.execute(
         h.context,
@@ -288,12 +308,15 @@ describe("Meta executor", () => {
       ),
       h.layers
     )
+
     expect(compact.status).toBe(501)
     const noKey = await harness(credential("meta"), () => sse([completed()]))
+
     const unauthorized = await runFail(
       executor.execute(noKey.context, { model: "muse-spark", payload: json(responsesRequest()) }, responsesOptions()),
       noKey.layers
     )
+
     expect(unauthorized.status).toBe(401)
     expect(noKey.calls).toHaveLength(0)
   })
@@ -310,6 +333,7 @@ describe("Meta executor", () => {
 
   it("streams Responses events, patching the terminal output and reporting usage", async () => {
     const item = message("streamed")
+
     const h = await harness(
       metaKey(),
       () =>
@@ -321,18 +345,22 @@ describe("Meta executor", () => {
       undefined,
       true
     )
+
     const collected = await collectStream(
       executor,
       h,
       { model: "muse-spark", payload: json(responsesRequest()) },
       responsesOptions(true)
     )
+
     expect(collected.error).toBeUndefined()
     const joined = collected.chunks.join("")
     expect(joined).toContain("response.created")
+
     const terminal = collected.chunks
       .filter((chunk) => chunk.startsWith("data:") && chunk.includes("response.completed"))
       .map((chunk) => JSON.parse(chunk.slice(5)) as { response: { output: unknown[] } })[0]
+
     expect(terminal?.response.output).toEqual([item])
     expect(h.usage.failed).toBe(false)
   })
@@ -347,12 +375,14 @@ describe("Meta executor", () => {
       undefined,
       true
     )
+
     const collected = await collectStream(
       executor,
       h,
       { model: "muse-spark", payload: json(responsesRequest()) },
       responsesOptions(true)
     )
+
     expect(collected.error?.status).toBe(429)
     expect(collected.error?.retryAfterMs).toBeGreaterThan(0)
     expect(h.usage.failed).toBe(true)
@@ -360,11 +390,13 @@ describe("Meta executor", () => {
 
   it("counts tokens locally without calling the upstream", async () => {
     const h = await harness(metaKey(), () => sse([completed()]))
+
     const response = await Effect.runPromise(
       executor
         .countTokens(h.context, { model: "muse-spark", payload: json(responsesRequest()) as Json }, responsesOptions())
         .pipe(Effect.provide(h.layers))
     )
+
     expect(JSON.parse(response.payload)).toEqual({
       response: { usage: { input_tokens: 1, output_tokens: 0, total_tokens: 1 } }
     })
@@ -375,6 +407,7 @@ describe("Meta executor", () => {
 describe("apply_patch bridge", () => {
   const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch"
   const ARGS = JSON.stringify({ input: PATCH })
+
   const call = (args: string) => ({
     id: "fc_1",
     type: "function_call",
@@ -383,6 +416,7 @@ describe("apply_patch bridge", () => {
     arguments: args,
     status: "completed"
   })
+
   const patchRequest = () =>
     responsesRequest({
       tools: [{ type: "custom", name: "apply_patch", description: "Patch files" }],
@@ -395,19 +429,23 @@ describe("apply_patch bridge", () => {
 
   it("sends the strict function and restores custom_tool_call output (non-stream)", async () => {
     const item = call(ARGS)
+
     const h = await harness(metaKey(), () =>
       sse([{ type: "response.output_item.done", output_index: 0, item }, completed([item])])
     )
+
     const response = await execute(
       executor,
       h,
       { model: "muse-spark", payload: json(patchRequest()) },
       responsesOptions()
     )
+
     const upstream = JSON.parse(h.calls[0]?.text ?? "{}") as {
       tools: Array<Item>
       input: Array<Item>
     }
+
     expect(upstream.tools[0]).toMatchObject({ type: "function", name: "apply_patch" })
     expect(upstream.tools[0]?.parameters?.required).toEqual(["input"])
     expect(upstream.input[1]).toMatchObject({ type: "function_call", arguments: ARGS })
@@ -418,6 +456,7 @@ describe("apply_patch bridge", () => {
 
   it("restores a plain JSON response through the non-stream bridge", async () => {
     const item = call(ARGS)
+
     const h = await harness(
       metaKey(),
       () =>
@@ -425,12 +464,14 @@ describe("apply_patch bridge", () => {
           status: 200
         })
     )
+
     const response = await execute(
       executor,
       h,
       { model: "muse-spark", payload: json(patchRequest()) },
       responsesOptions()
     )
+
     expect((JSON.parse(response.payload) as { output: Array<Item> }).output[0]).toMatchObject({
       type: "custom_tool_call",
       input: PATCH
@@ -439,6 +480,7 @@ describe("apply_patch bridge", () => {
 
   it("streams custom tool input events and fails on malformed arguments without leaking them", async () => {
     const good = call(ARGS)
+
     const h = await harness(
       metaKey(),
       () =>
@@ -452,30 +494,35 @@ describe("apply_patch bridge", () => {
       undefined,
       true
     )
+
     const collected = await collectStream(
       executor,
       h,
       { model: "muse-spark", payload: json(patchRequest()) },
       responsesOptions(true)
     )
+
     const text = collected.chunks.join("")
     expect(collected.error).toBeUndefined()
     expect(text).toContain("response.custom_tool_call_input.delta")
     expect(text).not.toContain("response.function_call_arguments.delta")
 
     const bad = call('{"nope":"secret text"}')
+
     const failing = await harness(
       metaKey(),
       () => sse([{ type: "response.output_item.done", output_index: 0, item: bad }, completed([bad])]),
       undefined,
       true
     )
+
     const failed = await collectStream(
       executor,
       failing,
       { model: "muse-spark", payload: json(patchRequest()) },
       responsesOptions(true)
     )
+
     expect(failed.error?.status).toBe(502)
     expect(failed.chunks.join("")).not.toContain("secret text")
     expect(failed.chunks.join("")).toContain("invalid_tool_arguments")
@@ -483,13 +530,16 @@ describe("apply_patch bridge", () => {
 
   it("fails a non-stream call whose arguments are malformed with a sanitised 502", async () => {
     const bad = call('{"nope":"secret text"}')
+
     const h = await harness(metaKey(), () =>
       sse([{ type: "response.output_item.done", output_index: 0, item: bad }, completed([bad])])
     )
+
     const error = await runFail(
       executor.execute(h.context, { model: "muse-spark", payload: json(patchRequest()) }, responsesOptions()),
       h.layers
     )
+
     expect(error.status).toBe(502)
     expect(error.message).not.toContain("secret text")
   })

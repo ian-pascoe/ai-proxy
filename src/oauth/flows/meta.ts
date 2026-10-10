@@ -14,22 +14,33 @@ import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from 
 import { type DeviceFlow, flowFailure } from "./types.ts"
 
 export const META_DEVICE_AUTHORIZATION_URL = "https://auth.meta.com/oidc/device/authorization/"
+
 export const META_TOKEN_URL = "https://auth.meta.com/oidc/device/token/"
+
 export const META_CLIENT_ID = "1031625952748946"
+
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+
 const USER_AGENT = "muse-code/1.0.2"
+
 const MAX_POLL_MS = 15 * 60_000
+
 const DEFAULT_INTERVAL_MS = 5_000
+
 const MAX_ERROR_TEXT = 512
 
 /** `CredentialFileName`: sanitised email + hash of the original, else a hash of the identity, else `meta-oauth`. */
 export const metaFileName = async (email: string, sub: string): Promise<string> => {
   const clean = email.trim()
+
   if (clean !== "") {
     const sanitized = clean.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120)
+
     return `meta-${sanitized}-${await sha256Hex(clean, 8)}.json`
   }
+
   const cleanSub = sub.trim()
+
   return cleanSub === "" ? "meta-oauth.json" : `meta-${await sha256Hex(cleanSub, 8)}.json`
 }
 
@@ -50,9 +61,12 @@ const mintApiKey = (dcaToken: string, mintUrl: string | undefined) =>
       }),
       HttpClientRequest.bodyJsonUnsafe({ dca_token: dcaToken })
     )
+
     const reply = yield* tryCall(request)
+
     if (reply === undefined || reply.status < 200 || reply.status >= 300) return undefined
     const minted = parseJsonObject(reply.text)
+
     return minted !== undefined && str(minted.api_key) !== "" ? minted : undefined
   })
 
@@ -68,13 +82,16 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       const device = reply.status >= 200 && reply.status < 300 ? parseJsonObject(reply.text) : undefined
       const deviceCode = str(device?.device_code)
       const userCode = str(device?.user_code)
+
       if (device === undefined || deviceCode === "" || userCode === "") {
         return yield* flowFailure("meta device flow: response missing required device_code or user_code")
       }
+
       const url = str(device.verification_uri_complete) || str(device.verification_uri)
       const interval = Math.trunc(seconds(device.interval))
       const expiresIn = Math.trunc(seconds(device.expires_in))
       const intervalMs = interval > 0 ? interval * 1000 : DEFAULT_INTERVAL_MS
+
       return {
         url,
         userCode,
@@ -95,12 +112,14 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
           client_id: META_CLIENT_ID
         })
       )
+
       // Network and read errors are retried silently, like Go.
       if (reply === undefined) return { _tag: "pending" as const }
 
       if (reply.status !== 200) {
         const failure = parseJsonObject(reply.text) ?? {}
         const error = str(failure.error)
+
         switch (error) {
           case "authorization_pending":
             return { _tag: "pending" as const }
@@ -120,10 +139,13 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       }
 
       const token = parseJsonObject(reply.text)
+
       if (token === undefined) {
         return yield* flowFailure("Authentication failed: meta auth: parse token response failed")
       }
+
       const dcaToken = str(token.access_token)
+
       if (dcaToken === "") return yield* flowFailure("Authentication failed: meta auth: response missing access_token")
 
       const expiresIn = Math.trunc(seconds(token.expires_in))
@@ -137,25 +159,36 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       // `MetaTokenStorage.SaveTokenToFile` omits empty values; the minted key is the usable credential.
       const metadata: JsonObject = { type: "meta", auth_kind: "oauth", access_token: apiKey === "" ? dcaToken : apiKey }
       metadata.dca_token = dcaToken
+
       if (apiKey !== "") metadata.api_key = apiKey
+
       if (str(token.token_type) !== "") metadata.token_type = str(token.token_type)
+
       if (expiresIn > 0) metadata.expires_in = expiresIn
+
       // With a minted key `expired` stays empty so the selector does not block the credential on the DCA timer.
       if (apiKey === "" && dcaExpired !== "") metadata.expired = dcaExpired
+
       if (dcaExpired !== "") metadata.dca_expired = dcaExpired
+
       if (dcaExpiresAt > 0) metadata.dca_expires_at = dcaExpiresAt
       metadata.last_refresh = rfc3339(now)
       metadata.base_url = str(minted?.base_url) || META_DEFAULT_BASE_URL
+
       if (email !== "") metadata.email = email
+
       if (name !== "") metadata.name = name
+
       if (minted !== undefined) {
         metadata.subs_tier_name = str(minted.subs_tier_name)
         metadata.subs_tier_id = str(minted.subs_tier_id)
         metadata.is_subs_active = minted.is_subs_active === true
         metadata.has_payment_method = minted.has_payment_method === true
       }
+
       // The management handler passes the DCA token as the `sub` argument of the file name.
       const fileName = yield* Effect.promise(() => metaFileName(email, dcaToken))
+
       return { _tag: "done" as const, record: { fileName, metadata } }
     })
 })

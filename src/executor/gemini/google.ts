@@ -151,14 +151,18 @@ const requestError = (envelope: RequestEnvelope) =>
 export const convertToImagenRequest = (payload: Json): Json | undefined => {
   let prompt = ""
   const contentsText = get(payload, "contents.0.parts.0.text")
+
   if (contentsText !== undefined)
     prompt = typeof contentsText === "string" ? contentsText : JSON.stringify(contentsText)
+
   if (prompt === "") {
     const messages = get(payload, "messages")
+
     if (Array.isArray(messages)) {
       for (const message of messages) {
         const content = get(message, "content")
         const text = typeof content === "string" ? content : content === undefined ? "" : JSON.stringify(content)
+
         if (text !== "") {
           prompt = text
           break
@@ -166,32 +170,42 @@ export const convertToImagenRequest = (payload: Json): Json | undefined => {
       }
     }
   }
+
   if (prompt === "") {
     const direct = get(payload, "prompt")
+
     if (direct !== undefined) prompt = typeof direct === "string" ? direct : JSON.stringify(direct)
   }
+
   if (prompt === "") return undefined
   const instance: Record<string, Json> = { prompt }
   const parameters: Record<string, Json> = { sampleCount: 1 }
   const aspectRatio = get(payload, "aspectRatio")
+
   if (aspectRatio !== undefined)
     parameters["aspectRatio"] = typeof aspectRatio === "string" ? aspectRatio : JSON.stringify(aspectRatio)
   const sampleCount = get(payload, "sampleCount")
+
   if (sampleCount !== undefined) parameters["sampleCount"] = asInt(sampleCount)
   const negativePrompt = get(payload, "negativePrompt")
+
   if (negativePrompt !== undefined)
     instance["negativePrompt"] = typeof negativePrompt === "string" ? negativePrompt : JSON.stringify(negativePrompt)
+
   return { instances: [instance], parameters }
 }
 
 /** Go `convertImagenToGeminiResponse`: Imagen predictions -> a Gemini response the translators understand. */
 export const convertImagenToGeminiResponse = (data: string, model: string, nowNanos: string): string => {
   const predictions = get(tryParseJson(data), "predictions")
+
   if (!Array.isArray(predictions)) return data
   const parts: Json[] = []
+
   for (const prediction of predictions) {
     const imageData = get(prediction, "bytesBase64Encoded")
     const mimeType = get(prediction, "mimeType")
+
     if (typeof imageData === "string" && imageData !== "") {
       parts.push({
         inlineData: {
@@ -201,6 +215,7 @@ export const convertImagenToGeminiResponse = (data: string, model: string, nowNa
       })
     }
   }
+
   return JSON.stringify({
     candidates: [{ content: { parts, role: "model" }, finishReason: "STOP" }],
     modelVersion: model,
@@ -216,19 +231,25 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
 
   const send = Effect.fnUntraced(function* (context: ExecutionContext, prepared: PreparedRequest) {
     const client = yield* HttpClient.HttpClient
+
     const request = HttpClientRequest.post(prepared.url).pipe(
       HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json"),
       HttpClientRequest.setHeaders(prepared.headers)
     )
+
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(request)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
       context.usage.fail(response.status, text)
+
       return yield* toExecutionError(response.status, text, new Headers(response.headers))
     }
+
     return response
   })
 
@@ -238,7 +259,9 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       ...attempt.target.authHeaders,
       ...extra
     }
+
     applyCustomHeaders(headers, attempt.context.credential, attempt.options.headers, attempt.options.metadata.sessionId)
+
     return headers
   }
 
@@ -251,6 +274,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
   ): Json => {
     const { options, request, context } = attempt
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
     return applyPayloadRules(
       context.config,
@@ -278,8 +302,10 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
 
     let body: Json
     let original: Json | undefined
+
     if (imagen) {
       const imagenBody = convertToImagenRequest(request.payload)
+
       if (imagenBody === undefined) {
         return yield* new ExecutionError({
           status: 400,
@@ -287,19 +313,25 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
           requestScoped: true
         })
       }
+
       body = imagenBody
       original = structuredClone(imagenBody)
+
       if (options.originalRequest !== undefined) original = convertToImagenRequest(options.originalRequest) ?? original
     } else {
       if (from === Formats.OpenAIResponse) {
         // Cached text signatures of the assistant messages in the history, loaded in one round trip.
         const history = [options.originalRequest, request.payload].flatMap((payload) => {
           const input = get(payload, "input")
+
           return Array.isArray(input) ? textSignatureKeys(input) : []
         })
+
         yield* attempt.replay.prefetch(baseModel, history)
       }
+
       const rewrite = { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
+
       const translateWithReplay = (body: Json) =>
         withReplayCache(attempt.replay, () =>
           translateRequestForExecutor(
@@ -311,8 +343,10 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
             rewrite
           )
         )
+
       original = translateWithReplay(options.originalRequest ?? request.payload).body
       const translated = translateWithReplay(request.payload)
+
       if (translated.error !== undefined) return yield* requestError(translated)
       body = yield* thinking.apply({
         body: translated.body,
@@ -325,32 +359,42 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       })
       body = fixGeminiImageAspectRatio(baseModel, body)
       body = set(body, "model", baseModel)
+
       if (variant.vertex) body = stripVertexOpenAIResponsesToolCallIds(body, from)
       else body = capGeminiMaxOutputTokens(body, baseModel)
+
       if (mode === "count") {
         del(body, "tools")
         del(body, "generationConfig")
         del(body, "safetySettings")
       }
+
       sanitizeGeminiRequestThoughtSignatures(body, "contents")
     }
+
     if (mode === "stream") body = ensureGeminiBoundaryUserContent(body, "contents")
     else {
       body = ensureGeminiLeadingUserContent(body, "contents")
+
       if (mode === "generate") body = ensureGeminiTrailingUserContent(body, "contents")
     }
+
     del(body, "session_id")
     const effort = get(body, "generationConfig.thinkingConfig.thinkingLevel")
     context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
 
     const action: GoogleAction =
       mode === "count" ? "countTokens" : imagen ? "predict" : stream ? "streamGenerateContent" : "generateContent"
+
     let url = target.url(action, baseModel)
+
     if (action !== "countTokens" && action !== "predict") {
       if (stream) url += options.alt === "" ? "?alt=sse" : `?$alt=${options.alt}`
       else if (options.alt !== "") url += `?$alt=${options.alt}`
     }
+
     const finalBody = payloadRules(attempt, baseModel, to, original, body)
+
     return {
       url,
       headers: headersFor(attempt),
@@ -381,11 +425,14 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
             thinking.summary,
             { headers: options.headers, config: context.config, isCompat: modelIsCompat(request) }
           )
+
     const working = translate(request.payload)
+
     if (working.error !== undefined) return yield* requestError(working)
     const original = options.originalRequest === undefined ? working : translate(options.originalRequest)
 
     let body = working.body
+
     if (get(body, "model") !== undefined && targetName !== "") body = set(body, "model", targetName)
     body = yield* thinking.apply({
       body,
@@ -396,6 +443,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       source: request.payload
     })
     body = sanitizeGeminiInteractionsUnsupportedInputIds(body)
+
     const continuation = yield* prepareAntigravityInteractions(
       continuations,
       attempt.context.credential,
@@ -404,11 +452,14 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       targetName,
       body
     )
+
     body = continuation.body
+
     if (stream) body = set(body, "stream", true)
     const finalBody = payloadRules(attempt, targetName, providerFormat, original.body, body)
     const headers = headersFor(attempt)
     applyInteractionsRevisionHeaders(headers, options.headers)
+
     return {
       url: target.interactionsUrl(stream),
       headers,
@@ -434,6 +485,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     options: ExecutorOptions
   ) {
     const target = yield* variant.resolveTarget(context, options)
+
     return {
       context,
       request,
@@ -451,17 +503,23 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     if (options.alt === "responses/compact") return yield* notImplemented("/responses/compact not supported")
     const attempt = yield* resolve(context, request, options)
     const native = variant.nativeInteractions(context, options)
+
     const prepared: PreparedRequest = native
       ? yield* prepareInteractions(attempt, false)
       : yield* prepareGenerate(attempt, "generate")
+
     const response = yield* send(context, prepared)
     let text = yield* response.text.pipe(Effect.mapError(transportError))
+
     if (prepared.imagen) {
       text = convertImagenToGeminiResponse(text, prepared.baseModel, `${yield* Clock.currentTimeMillis}000000`)
     }
+
     const parsed = tryParseJson(text)
     context.usage.observeResponseModel(responseModelOf(parsed))
+
     if (prepared.continuation !== undefined) yield* prepared.continuation.observe(parsed)
+
     const out = withReplayCache(attempt.replay, () =>
       registry.translateNonStream(
         responseFormatOf(options),
@@ -470,11 +528,15 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         text
       )
     )
+
     yield* attempt.replay.flush
+
     if (out === undefined || out === "") {
       return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
     }
+
     context.usage.publish(native ? parseInteractionsUsageBody(parsed) : parseGeminiUsageBody(parsed))
+
     return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -487,6 +549,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const { context, options } = attempt
     const responseFormat = responseFormatOf(options)
     const ctx = responseContext(attempt, prepared)
+
     // The text signatures a chunk produced are stored before the chunk reaches the client.
     const translate = (payload: string) =>
       Effect.sync(() =>
@@ -494,7 +557,9 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
           registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload)
         )
       ).pipe(Effect.tap(() => attempt.replay.flush))
+
     const failToolInput = ctx.state
+
     const check = (chunks: ReadonlyArray<string>) =>
       failToolInput.toolInputError !== undefined
         ? Stream.concat(
@@ -502,16 +567,20 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
             Stream.fail(new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE }))
           )
         : Stream.fromIterable(chunks)
+
     const translated = (payload: string) => Stream.unwrap(translate(payload).pipe(Effect.map(check)))
     const lines = splitLines(response.stream).pipe(Stream.mapError(transportError))
+
     return Stream.concat(
       lines.pipe(
         Stream.flatMap((line) => {
           context.usage.observeResponseModel(responseModelOf(tryParseJson(jsonPayload(line) ?? "")))
           const usage = parseGeminiStreamUsage(line)
+
           if (usage !== undefined) context.usage.publish(usage)
           const filtered = variant.vertex ? line : filterSseUsageMetadata(line)
           const payload = jsonPayload(filtered)
+
           return payload === undefined ? Stream.empty : translated(payload)
         })
       ),
@@ -528,24 +597,35 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const { context, options } = attempt
     const responseFormat = responseFormatOf(options)
     const ctx = responseContext(attempt, prepared)
+
     const framePayload = (frame: string): string | undefined => {
       let payload = interactionsSsePayload(frame)
+
       if (payload === undefined && interactionsSseDone(frame)) payload = "[DONE]"
+
       if (payload === undefined && frame.trim().startsWith("{")) payload = frame.trim()
+
       return payload
     }
+
     const emit = (frame: string): Stream.Stream<string, ExecutionError> => {
       const trimmed = frame.trim()
+
       if (trimmed === "") return Stream.empty
       const payload = framePayload(frame)
+
       if (payload !== undefined) {
         context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
         const usage = parseInteractionsStreamUsage(payload)
+
         if (usage !== undefined) context.usage.publish(usage)
       }
+
       if (responseFormat === Formats.Interactions) return Stream.succeed(`${frame.replace(/[\r\n]+$/, "")}\n\n`)
+
       if (payload === undefined) return Stream.empty
       const chunks = registry.translateStream(responseFormat, Formats.Interactions, ctx, payload)
+
       return ctx.state.toolInputError !== undefined
         ? Stream.concat(
             Stream.fromIterable(chunks),
@@ -553,6 +633,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
           )
         : Stream.fromIterable(chunks)
     }
+
     const frames = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.mapAccum(
@@ -562,15 +643,19 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         { onHalt: (frame: ReadonlyArray<string>) => [frame.join("\n")] }
       )
     )
+
     // Antigravity continuation: completed `requires_action` interactions are remembered before their frames go out.
     const observed = (frame: string): Stream.Stream<string, ExecutionError> => {
       const payload = prepared.continuation === undefined ? undefined : framePayload(frame)
+
       const observe =
         prepared.continuation !== undefined && payload !== undefined && payload !== "[DONE]"
           ? prepared.continuation.observe(tryParseJson(payload))
           : Effect.void
+
       return Stream.unwrap(observe.pipe(Effect.as(emit(frame))))
     }
+
     return frames.pipe(Stream.flatMap(observed))
   }
 
@@ -582,10 +667,13 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     if (options.alt === "responses/compact") return yield* notImplemented("/responses/compact not supported")
     const attempt = yield* resolve(context, request, options)
     const native = variant.nativeInteractions(context, options)
+
     const prepared: PreparedRequest = native
       ? yield* prepareInteractions(attempt, true)
       : yield* prepareGenerate(attempt, "stream")
+
     const response = yield* send(context, prepared)
+
     const chunks = (
       native
         ? interactionsStream(attempt, prepared, response)
@@ -593,6 +681,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
           ? imagenStream(attempt, prepared, response)
           : geminiStream(attempt, prepared, response)
     ).pipe(Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message))))
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -608,6 +697,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         const ctx = responseContext(attempt, prepared)
         const responseFormat = responseFormatOf(attempt.options)
         const payload = jsonPayload(data) ?? data
+
         return Stream.fromIterable([
           ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload),
           ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, "[DONE]")
@@ -626,6 +716,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const text = yield* response.text.pipe(Effect.mapError(transportError))
     const count = asInt(get(tryParseJson(text), "totalTokens"))
     const payload = registry.translateTokenCount(responseFormatOf(options), prepared.providerFormat, count, text)
+
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 

@@ -10,6 +10,7 @@ import {
 } from "../tools/panel-sync/release.ts"
 
 const html = new TextEncoder().encode("<!doctype html><title>panel</title>")
+
 const htmlDigest = await sha256Hex(html)
 
 const releaseDocument = (asset: Record<string, unknown> = {}) => ({
@@ -32,11 +33,14 @@ interface Call {
 
 const fakeFetch = (release: unknown, download: () => Response = () => new Response(html)) => {
   const calls: Call[] = []
+
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     calls.push({ url, headers: Object.fromEntries(new Headers(init?.headers)) })
+
     return url.startsWith("https://api.github.com/") ? Response.json(release) : download()
   }) as typeof fetch
+
   return { impl, calls }
 }
 
@@ -47,6 +51,7 @@ const failure = async (promise: Promise<unknown>): Promise<PanelSyncError> => {
     if (error instanceof PanelSyncError) return error
     throw error
   }
+
   throw new Error("expected a PanelSyncError")
 }
 
@@ -116,9 +121,11 @@ describe("fetchPanel", () => {
   it("reports unavailable releases, failed downloads and oversized files", async () => {
     const down = (async () => new Response("nope", { status: 500 })) as typeof fetch
     expect((await failure(fetchPanel({ fetch: down }))).code).toBe("release_unavailable")
+
     const offline = (async () => {
       throw new TypeError("offline")
     }) as typeof fetch
+
     expect((await failure(fetchPanel({ fetch: offline }))).code).toBe("release_unavailable")
     expect(
       (

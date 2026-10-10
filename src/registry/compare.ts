@@ -6,10 +6,13 @@ export const compareStrings = (a: string, b: string): number => {
   const left = Array.from(a)
   const right = Array.from(b)
   const length = Math.min(left.length, right.length)
+
   for (let index = 0; index < length; index += 1) {
     const x = (left[index] as string).codePointAt(0) as number
     const y = (right[index] as string).codePointAt(0) as number
+
     if (x !== y) return x < y ? -1 : 1
   }
+
   return left.length - right.length
 }

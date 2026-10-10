@@ -29,7 +29,9 @@ import type { ReportResult } from "../src/credentials/selection/types.ts"
 import { cred, NOW } from "./support/credentials.ts"
 
 const MIN = 60_000
+
 const HOUR = 60 * MIN
+
 const credential = cred("auth", { provider: "claude" })
 
 const mark = (
@@ -79,6 +81,7 @@ describe("quota ladder (cooldown_backoff_test.go)", () => {
     const quota = fail(429, "quota", {
       error: { code: "rate_limit", message: "quota", retryable: true, httpStatus: 429 }
     })
+
     let state = mark(emptyState(), "gpt-5", quota)
     expect(state.modelStates["gpt-5"]?.quota.backoffLevel).toBe(1)
     const window = state.modelStates["gpt-5"]?.quota.nextRecoverAt as number
@@ -100,6 +103,7 @@ describe("quota ladder (cooldown_backoff_test.go)", () => {
         }
       }
     }
+
     const escalated = mark(expired, "gpt-5", quota)
     expect(escalated.modelStates["gpt-5"]?.quota.backoffLevel).toBe(4)
     expect(escalated.modelStates["gpt-5"]?.quota.nextRecoverAt).toBe(NOW + 8000)
@@ -141,9 +145,12 @@ describe("deadlines (conductor_quota_clock_test.go, conductor_subsecond_cooldown
 
 describe("monotonic deadlines (conductor_cooldown_monotonic_test.go)", () => {
   const models = ["model-a", "model-b"]
+
   const prime = (): CredentialState => {
     let state = emptyState()
+
     for (const model of models) state = mark(state, model, { success: true })
+
     return state
   }
 
@@ -272,12 +279,15 @@ describe("error table (MarkResult)", () => {
     const custom = mark(emptyState(), "m", fail(520), {
       settings: { disableCooling: false, transientErrorCooldownSeconds: 5 }
     })
+
     expect(custom.modelStates.m?.nextRetryAfter).toBe(NOW + 5000)
     const off = { disableCooling: false, transientErrorCooldownSeconds: -1 }
+
     for (const result of [fail(520), fail(503, "x", { retryAfterMs: 7000 })]) {
       const state = mark(emptyState(), "m", result, { settings: off })
       expect(state.modelStates.m).toMatchObject({ nextRetryAfter: 0, unavailable: false })
     }
+
     expect(mark(emptyState(), "", fail(520), { settings: off })).toMatchObject({
       nextRetryAfter: 0,
       unavailable: false
@@ -321,6 +331,7 @@ describe("error table (MarkResult)", () => {
     const forced = fail(400, "stop", {
       error: { code: "force_cooldown", message: "stop", retryable: false, httpStatus: 400 }
     })
+
     const state = mark(emptyState(), "m", forced, { metadata: { disable_cooling: true } })
     expect(state.modelStates.m).toMatchObject({ unavailable: true, nextRetryAfter: NOW + MIN })
   })
@@ -336,6 +347,7 @@ describe("error table (MarkResult)", () => {
       expect(state.modelStates.m, JSON.stringify(result)).toBeUndefined()
       expect(state).toMatchObject({ failed: 1, unavailable: false })
     }
+
     // An HTTP status with lifecycle-looking text still cools.
     const withStatus = mark(emptyState(), "m", fail(503, "context canceled"))
     expect(withStatus.modelStates.m?.unavailable).toBe(true)

@@ -14,6 +14,7 @@ describe("registry index parity with Go (model_registry.go)", () => {
         for (const [model, providers] of Object.entries(scenario.registry.providers)) {
           expect(index.providersForModel(model), model).toEqual(providers)
         }
+
         expect(index.providersForModel("unknown-model")).toEqual([])
       })
 
@@ -32,6 +33,7 @@ describe("registry index parity with Go (model_registry.go)", () => {
             `${query.model}@${query.provider}`
           ).toEqual(canon(fromGo(query.info)))
         }
+
         expect(index.lookupModelInfo(catalogs, "   ")).toBeUndefined()
       })
 
@@ -64,6 +66,7 @@ describe("LookupStaticModelInfo", () => {
 
 describe("quota window", () => {
   const scenario = fixture.scenarios.find((candidate) => candidate.name === "quota-and-suspension")
+
   if (scenario === undefined) throw new Error("fixture scenario missing")
   const index = new ModelRegistryIndex(scenarioClients(scenario), fixtureNow())
 
@@ -124,6 +127,7 @@ describe("native web search capability (GetResponsesWebSearchCapability)", () =>
       [{ id: "c", provider: "claude", models: sectionModels(catalogs, "claude") }],
       fixtureNow()
     )
+
     expect(claude.responsesWebSearchCapability("claude-opus-5")).toBe(true)
     expect(claude.responsesWebSearchCapability("claude-sonnet-4-6")).toBeUndefined()
   })

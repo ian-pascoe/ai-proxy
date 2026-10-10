@@ -21,10 +21,12 @@ import {
 /** `safeUsageTokenSum`. */
 const safeSum = (...values: ReadonlyArray<number>): number | undefined => {
   let total = 0
+
   for (const value of values) {
     if (value < 0 || total > Number.MAX_SAFE_INTEGER - value) return undefined
     total += value
   }
+
   return total
 }
 
@@ -42,6 +44,7 @@ export const parseClaudeUsageNode = (node: Json): UsageDetail => {
   const cacheRead = tokenInt(get(node, "cache_read_input_tokens"))
   const cacheCreation = tokenInt(get(node, "cache_creation_input_tokens"))
   const rawOutput = tokenInt(get(node, "output_tokens"))
+
   const reasoning = Math.max(
     0,
     tokenInt(
@@ -53,10 +56,12 @@ export const parseClaudeUsageNode = (node: Json): UsageDetail => {
       )
     )
   )
+
   // An inconsistent upstream (thinking > output) never invents extra non-reasoning output.
   const nonReasoningOutput = reasoning > rawOutput ? 0 : rawOutput - reasoning
   const input = tokenInt(get(node, "input_tokens"))
   const total = input + rawOutput + cacheRead + cacheCreation
+
   return {
     inputTokens: input,
     outputTokens: rawOutput,
@@ -72,12 +77,14 @@ export const parseClaudeUsageNode = (node: Json): UsageDetail => {
 /** `ParseClaudeUsage` over a non-stream response body. */
 export const parseClaudeUsage = (body: string): UsageDetail => {
   const node = get(tryParseJson(body), "usage")
+
   return node === undefined ? emptyUsageDetail : parseClaudeUsageNode(node)
 }
 
 /** `parseClaudePayloadUsage` for an already parsed event/message (`usage` or `message.usage`). */
 export const parseClaudePayloadUsage = (payload: Json | undefined): UsageDetail | undefined => {
   const node = get(payload, "usage") ?? get(payload, "message.usage")
+
   return node === undefined ? undefined : parseClaudeUsageNode(node)
 }
 
@@ -94,6 +101,7 @@ export const parseGeminiFamilyNode = (node: Json): UsageDetail => {
   const cached = tokenInt(get(node, "cachedContentTokenCount"))
   const toolUse = tokenInt(firstExisting(node, "toolUsePromptTokenCount", "tool_use_prompt_token_count"))
   const input = safeSum(tokenInt(get(node, "promptTokenCount")), toolUse)
+
   const base: UsageDetail = {
     ...emptyUsageDetail,
     inputTokens: input ?? 0,
@@ -103,17 +111,21 @@ export const parseGeminiFamilyNode = (node: Json): UsageDetail => {
     cachedTokens: cached,
     cacheReadTokens: cached
   }
+
   return finishSeparateReasoning(base, input !== undefined)
 }
 
 const finishSeparateReasoning = (detail: UsageDetail, inputValid: boolean): UsageDetail => {
   if (!inputValid) return invalidDetail(detail, detail.totalTokens)
   let total = detail.totalTokens
+
   if (total === 0) {
     const sum = safeSum(detail.inputTokens, detail.outputTokens, detail.reasoningTokens)
+
     if (sum === undefined) return invalidDetail({ ...detail, totalTokens: 0 }, 0)
     total = sum
   }
+
   return {
     ...detail,
     totalTokens: total,
@@ -133,6 +145,7 @@ const geminiNode = (root: Json | undefined): Json | undefined => firstExisting(r
 /** `ParseGeminiUsage` over a parsed non-stream response body. */
 export const parseGeminiUsageBody = (root: Json | undefined): UsageDetail => {
   const node = geminiNode(root)
+
   return node === undefined ? emptyUsageDetail : parseGeminiFamilyNode(node)
 }
 
@@ -142,8 +155,10 @@ export const parseGeminiUsage = (body: string): UsageDetail => parseGeminiUsageB
 /** `ParseGeminiStreamUsage`: zero placeholders (`usageMetadata` without counts) are skipped. */
 export const parseGeminiStreamUsage = (line: string): UsageDetail | undefined => {
   const node = geminiNode(ssePayloadObject(line))
+
   if (node === undefined) return undefined
   const detail = parseGeminiFamilyNode(node)
+
   return hasNonZeroTokenUsage(detail) ? detail : undefined
 }
 
@@ -157,12 +172,14 @@ const antigravityNode = (root: Json | undefined): Json | undefined =>
 /** `ParseAntigravityUsage`. */
 export const parseAntigravityUsage = (body: string): UsageDetail => {
   const node = antigravityNode(tryParseJson(body))
+
   return node === undefined ? emptyUsageDetail : parseGeminiFamilyNode(node)
 }
 
 /** `ParseAntigravityStreamUsage` (unlike Gemini, zero placeholders are kept). */
 export const parseAntigravityStreamUsage = (line: string): UsageDetail | undefined => {
   const node = antigravityNode(ssePayloadObject(line))
+
   return node === undefined ? undefined : parseGeminiFamilyNode(node)
 }
 
@@ -175,11 +192,14 @@ const exists = (value: Json | undefined): boolean => value !== undefined
 /** `parseInteractionsUsageDetail`. */
 export const parseInteractionsNode = (node: Json): UsageDetail => {
   const cacheRead = firstExisting(node, "cache_read_tokens", "cacheReadTokens")
+
   const toolUse = tokenInt(
     firstExisting(node, "tool_use_tokens", "total_tool_use_tokens", "toolUseTokens", "totalToolUseTokens")
   )
+
   const input = safeSum(tokenInt(firstExisting(node, "input_tokens", "prompt_tokens", "total_input_tokens")), toolUse)
   const cached = tokenInt(firstExisting(node, "cached_tokens", "cachedContentTokenCount", "total_cached_tokens"))
+
   const base: UsageDetail = {
     ...emptyUsageDetail,
     inputTokens: input ?? 0,
@@ -192,8 +212,10 @@ export const parseInteractionsNode = (node: Json): UsageDetail => {
       firstExisting(node, "cache_creation_tokens", "cacheCreationTokens", "cache_write_tokens", "cacheWriteTokens")
     )
   }
+
   if (input === undefined) return invalidDetail(base, base.totalTokens)
   const withCache = !exists(cacheRead) && cached > 0 ? { ...base, cacheReadTokens: cached } : base
+
   return finishSeparateReasoning(withCache, true)
 }
 
@@ -211,13 +233,16 @@ const INTERACTIONS_USAGE_PATHS = [
 
 const withTier = (detail: UsageDetail, root: Json | undefined): UsageDetail => {
   const tier = responseServiceTier(root)
+
   return tier === undefined ? detail : { ...detail, responseServiceTier: tier }
 }
 
 const parseInteractionsRoot = (root: Json | undefined): UsageDetail => {
   const node = firstExisting(root, ...INTERACTIONS_USAGE_PATHS)
+
   if (node === undefined) return emptyUsageDetail
   const geminiShaped = exists(get(node, "promptTokenCount")) || exists(get(node, "candidatesTokenCount"))
+
   return withTier(geminiShaped ? parseGeminiFamilyNode(node) : parseInteractionsNode(node), root)
 }
 
@@ -230,8 +255,10 @@ export const parseInteractionsUsage = (body: string): UsageDetail => parseIntera
 /** `ParseInteractionsStreamUsage`: the payload is the line's JSON (or the line itself). */
 export const parseInteractionsStreamUsage = (line: string): UsageDetail | undefined => {
   const payload = ssePayloadObject(line) ?? tryParseJson(line.trim())
+
   if (!isJsonObject(payload)) return undefined
   const detail = parseInteractionsRoot(payload)
+
   return hasNonZeroTokenUsage(detail) ? detail : undefined
 }
 
@@ -253,10 +280,12 @@ export const mergeStreamUsageDetail = (existing: UsageDetail, update: UsageDetai
   const outputTokens = pick(update.outputTokens, existing.outputTokens)
   const reasoningTokens = pick(update.reasoningTokens, existing.reasoningTokens)
   let cache = cacheReadTokens + cacheCreationTokens
+
   if (cache === 0) cache = cachedTokens
   const calculated = inputTokens + outputTokens + cache
   const totalTokens = update.totalTokens === 0 || update.totalTokens < calculated ? calculated : update.totalTokens
   const tier = update.responseServiceTier ?? existing.responseServiceTier
+
   return {
     inputTokens,
     outputTokens,

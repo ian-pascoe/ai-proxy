@@ -15,15 +15,20 @@ import type { ModelInfo } from "./model-info.ts"
 export { compareStrings }
 
 export const DEFAULT_CLAUDE_MAX_INPUT_TOKENS = 200000
+
 export const DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS = 64000
 
 const sortKeys = (value: Json): Json => {
   if (Array.isArray(value)) return value.map(sortKeys)
+
   if (value !== null && typeof value === "object") {
     const out: JsonObject = {}
+
     for (const key of Object.keys(value).toSorted(compareStrings)) out[key] = sortKeys(value[key] as Json)
+
     return out
   }
+
   return value
 }
 
@@ -53,6 +58,7 @@ export const goStructJson = (value: Json): string => escapeLikeGo(JSON.stringify
 // --- per-model entries ---------------------------------------------------------------------------------------------
 
 const positive = (value: number | undefined): value is number => value !== undefined && value > 0
+
 const nonEmpty = (value: string | undefined): value is string => value !== undefined && value !== ""
 
 /** `OpenAIModels`: the four fields that survive the handler's filter. */
@@ -127,10 +133,13 @@ export const resolveClaudeModelIdPrefix = (id: string): string => {
   const hasSuffix = open !== -1 && id.endsWith(")")
   const base = hasSuffix ? id.slice(0, open) : id
   const suffix = hasSuffix ? id.slice(open + 1, -1) : ""
+
   if (!base.startsWith(CLAUDE_DD_PREFIX)) return id
   const encoded = base.slice(CLAUDE_DD_PREFIX.length)
+
   if (encoded === "") return id
   const resolved = reverseCodePoints(encoded)
+
   return hasSuffix ? `${resolved}(${suffix})` : resolved
 }
 
@@ -140,12 +149,15 @@ const text = (entry: JsonObject, key: string): string => (typeof entry[key] === 
 export const claudeList = (models: ReadonlyArray<ModelInfo>, disableCloaking: boolean): JsonObject => {
   const entries = models.map((model) => {
     const entry = claudeEntry(model)
+
     return disableCloaking ? entry : { ...entry, id: ensureClaudeModelIdPrefix(model.id) }
   })
+
   const sorted = entries.toSorted(
     (a, b) =>
       compareStrings(text(a, "display_name"), text(b, "display_name")) || compareStrings(text(a, "id"), text(b, "id"))
   )
+
   return {
     data: sorted,
     has_more: false,
@@ -161,12 +173,17 @@ export const geminiList = (models: ReadonlyArray<ModelInfo>): JsonObject => ({
   models: models.map((model) => {
     const entry = { ...geminiEntry(model) }
     const name = entry.name as string
+
     if (name !== "") {
       if (!name.startsWith("models/")) entry.name = `models/${name}`
+
       if (typeof entry.displayName !== "string" || entry.displayName === "") entry.displayName = name
+
       if (typeof entry.description !== "string" || entry.description === "") entry.description = name
     }
+
     if (entry.supportedGenerationMethods === undefined) entry.supportedGenerationMethods = ["generateContent"]
+
     return entry
   })
 })
@@ -176,9 +193,12 @@ export const geminiDetail = (models: ReadonlyArray<ModelInfo>, action: string): 
   for (const model of models) {
     const entry = geminiEntry(model)
     const name = entry.name as string
+
     if (name !== action && name !== `models/${action}`) continue
+
     return name !== "" && !name.startsWith("models/") ? { ...entry, name: `models/${name}` } : entry
   }
+
   return undefined
 }
 
@@ -192,6 +212,7 @@ export const grokList = (models: ReadonlyArray<ModelInfo>): JsonObject => ({
       .map((level) => level.trim())
       .filter((level) => level !== "")
       .map((value) => ({ value }))
+
     return {
       id: model.id,
       model: model.id,

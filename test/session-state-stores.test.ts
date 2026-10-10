@@ -27,6 +27,7 @@ import type { SessionAddress } from "../src/session-state/protocol.ts"
 import { grokCiphertext } from "./support/xai.ts"
 
 const workerEnv = env as unknown as Env
+
 /** One Worker invocation: the effect runs with its own request context (the bindings of `env`). */
 const invocation = <A, E>(effect: Effect.Effect<A, E, never>): Effect.Effect<A, E> =>
   effect.pipe(Effect.provideService(WorkerEnv, workerEnv))
@@ -34,22 +35,27 @@ const invocation = <A, E>(effect: Effect.Effect<A, E, never>): Effect.Effect<A, 
 // The Durable Object arms alarms at absolute expiry times: start the test clock at the real time so they stay in the
 // future, then move it with TestClock.
 const startClock = TestClock.setTime(Date.now())
+
 const unique = (name: string): string => `${name}-${crypto.randomUUID()}`
+
 const MINUTE = 60_000
 
 /** Counts backend round trips. */
 const counting = (inner: SessionStateBackend): { backend: SessionStateBackend; runs: () => number } => {
   let count = 0
+
   return {
     backend: {
       run: (address, ops) => {
         count++
+
         return inner.run(address, ops)
       }
     },
     runs: () => count
   }
 }
+
 const countingDo = () => counting(durableObjectBackend(workerEnv.SESSION_STATE))
 
 // A structurally valid GPT reasoning signature (version 0x80, 73 bytes), as in codex-unit.test.ts.
@@ -57,6 +63,7 @@ const gptSignature = (() => {
   const bytes = new Uint8Array(73)
   bytes[0] = 0x80
   bytes.fill(7, 5)
+
   return btoa(String.fromCharCode(...bytes))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
@@ -82,6 +89,7 @@ describe("Codex reasoning replay over SessionState", () => {
       yield* invocation(second.append("gpt-5.4", session, turn("t2")))
       const items = yield* invocation(makeCodexStore().get("gpt-5.4", session))
       assert.strictEqual(items?.length, 6)
+
       // The entry lives in the Durable Object, not in this isolate.
       const [raw] = yield* Effect.promise(
         async () =>
@@ -90,6 +98,7 @@ describe("Codex reasoning replay over SessionState", () => {
             Date.now()
           )
       )
+
       assert.strictEqual(raw?.status, "ok")
       assert.isTrue(raw?.status === "ok" && raw.value !== undefined)
 
@@ -218,6 +227,7 @@ describe("Claude continuity over SessionState", () => {
 
       const first = yield* invocation(a.begin(identity, session, true, "", "2026-01-01"))
       assert.isDefined(first)
+
       if (first === undefined) return
       assert.strictEqual(runs(), 2) // read + write of the new prompt id and date
       assert.strictEqual(first.previousMessageId, "")
@@ -256,6 +266,7 @@ describe("Claude continuity over SessionState", () => {
       const session = unique("session")
       const store = makeSessionStateContinuityStore()
       const state = yield* invocation(store.begin(identity, session, true, "", "2026-01-01"))
+
       if (state === undefined) return assert.fail("no state")
       yield* TestClock.adjust(61 * MINUTE)
       yield* invocation(store.commit(state, "msg_late", "req_x", state.promptId))
@@ -271,15 +282,18 @@ describe("Devin turn counter over SessionState", () => {
       yield* startClock
       const session = unique("devin-session")
       const indexes: number[] = []
+
       for (let turn = 0; turn < 3; turn++) indexes.push(yield* invocation(nextSessionTurnIndex(session, "alice")))
       assert.deepStrictEqual(indexes, [0, 1, 2])
       assert.strictEqual(yield* invocation(nextSessionTurnIndex(session, "bob")), 0)
       assert.strictEqual(yield* invocation(nextSessionTurnIndex("", "alice")), 0)
+
       // Two concurrent turns of one session get distinct ordinals.
       const [x, y] = yield* Effect.all(
         [invocation(nextSessionTurnIndex(session, "alice")), invocation(nextSessionTurnIndex(session, "alice"))],
         { concurrency: 2 }
       )
+
       assert.deepStrictEqual([x, y].toSorted(), [3, 4])
     })
   )
@@ -348,10 +362,12 @@ describe("backend resolution", () => {
       const address: SessionAddress = { store: "probe", scope: "", session: unique("probe") }
       const withBinding = yield* invocation(resolveBackend())
       yield* withBinding.run(address, [{ op: "put", key: "k", value: "v", ttlMs: 60_000 }])
+
       const direct = yield* Effect.promise(
         async () =>
           await workerEnv.SESSION_STATE.getByName(addressName(address)).run([{ op: "get", key: "k" }], Date.now())
       )
+
       assert.strictEqual(direct[0]?.status === "ok" ? direct[0].value : undefined, "v")
 
       const memory = yield* resolveBackend()

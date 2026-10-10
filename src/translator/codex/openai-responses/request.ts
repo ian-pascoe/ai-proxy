@@ -16,17 +16,22 @@ const setRequiredBool = (body: JsonObject, path: string, value: boolean): void =
 }
 
 const REASONING = "reasoning.encrypted_content"
+
 const SOURCES = "web_search_call.action.sources"
 
 /** `setCodexRequiredInclude`. */
 const setRequiredInclude = (body: JsonObject): void => {
   const current = get(body, "include")
   let includeSources = false
+
   if (isJsonArray(current)) {
     includeSources = current.some((value) => value === SOURCES)
+
     if (!includeSources && current.length === 1 && current[0] === REASONING) return
+
     if (includeSources && current.length === 2 && current[0] === REASONING && current[1] === SOURCES) return
   }
+
   set(body, "include", includeSources ? [REASONING, SOURCES] : [REASONING])
 }
 
@@ -39,13 +44,18 @@ const stripPromptCacheBreakpointFromParts = (parts: Json[]): void => {
 /** `stripCodexResponsesCacheBreakpoints`: removes `prompt_cache_breakpoint` hints from input items and their parts. */
 const stripCacheBreakpoints = (body: JsonObject): void => {
   const input = get(body, "input")
+
   if (!isJsonArray(input)) return
+
   for (const item of input) {
     if (!isJsonObject(item)) continue
+
     for (const arrayPath of ["content", "output"]) {
       const array = get(item, arrayPath)
+
       if (isJsonArray(array)) stripPromptCacheBreakpointFromParts(array)
     }
+
     if (get(item, "prompt_cache_breakpoint") !== undefined) delete item["prompt_cache_breakpoint"]
   }
 }
@@ -53,7 +63,9 @@ const stripCacheBreakpoints = (body: JsonObject): void => {
 /** `convertSystemRoleToDeveloper`: Codex does not accept the `system` role in `input`. */
 const convertSystemRoleToDeveloper = (body: JsonObject): void => {
   const input = get(body, "input")
+
   if (!isJsonArray(input)) return
+
   for (const item of input) {
     if (isJsonObject(item) && asString(get(item, "role")) === "system") set(item, "role", "developer")
   }
@@ -65,9 +77,12 @@ const normalizeBuiltinToolType = (toolType: string): string =>
 
 const normalizeBuiltinToolArray = (body: JsonObject, path: string): void => {
   const tools = get(body, path)
+
   if (!isJsonArray(tools)) return
+
   for (const tool of tools) {
     const normalized = normalizeBuiltinToolType(asString(get(tool, "type")))
+
     if (normalized !== "") set(tool, "type", normalized)
   }
 }
@@ -76,6 +91,7 @@ const normalizeBuiltinToolArray = (body: JsonObject, path: string): void => {
 const normalizeBuiltinTools = (body: JsonObject): void => {
   normalizeBuiltinToolArray(body, "tools")
   const normalized = normalizeBuiltinToolType(asString(get(body, "tool_choice.type")))
+
   if (normalized !== "") set(body, "tool_choice.type", normalized)
   normalizeBuiltinToolArray(body, "tool_choice.tools")
 }
@@ -86,10 +102,13 @@ const normalizeBuiltinTools = (body: JsonObject): void => {
  */
 const normalizeEmptyFunctionCallArguments = (body: JsonObject): void => {
   const input = get(body, "input")
+
   if (!isJsonArray(input)) return
+
   for (const item of input) {
     if (!isJsonObject(item) || asString(get(item, "type")) !== "function_call") continue
     const args = get(item, "arguments")
+
     if (typeof args === "string" && args.trim() === "") item["arguments"] = "{}"
   }
 }
@@ -99,6 +118,7 @@ export const convertOpenAIResponsesRequestToCodex = (_modelName: string, request
   if (!isJsonObject(request)) return request
   const body = request
   const input = get(body, "input")
+
   if (typeof input === "string") {
     set(body, "input", [{ type: "message", role: "user", content: [{ type: "input_text", text: input }] }])
   }
@@ -110,6 +130,7 @@ export const convertOpenAIResponsesRequestToCodex = (_modelName: string, request
   // Codex Responses rejects token limit fields.
   deleteFields(body, "max_output_tokens", "max_completion_tokens", "temperature", "top_p")
   const serviceTier = get(body, "service_tier")
+
   if (serviceTier !== undefined) {
     if (typeof serviceTier === "string") {
       switch (serviceTier.trim().toLowerCase()) {
@@ -136,5 +157,6 @@ export const convertOpenAIResponsesRequestToCodex = (_modelName: string, request
   convertSystemRoleToDeveloper(body)
   normalizeBuiltinTools(body)
   normalizeEmptyFunctionCallArguments(body)
+
   return body
 }

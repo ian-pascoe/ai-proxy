@@ -54,6 +54,7 @@ const CONSTANT_BETAS: readonly string[] = [
   "context-management-2025-06-27",
   "prompt-caching-scope-2026-01-05"
 ]
+
 const TRAILING_BETAS: readonly string[] = [BETA.serverSideFallback, BETA.fallbackCredit, BETA.structuredOutputs]
 
 const MANAGED = new Set<string>([...Object.values(BETA), ...CONSTANT_BETAS, ...TRAILING_BETAS])
@@ -64,8 +65,11 @@ export const isManagedBeta = (beta: string): boolean => MANAGED.has(beta.trim())
 /** `claudeRequestedBetas`: caller header betas plus body `betas`. */
 export const requestedBetas = (incoming: string, extra: readonly string[]): Set<string> => {
   const requested = new Set<string>()
+
   for (const beta of incoming.split(",")) if (beta.trim() !== "") requested.add(beta.trim())
+
   for (const beta of extra) if (beta.trim() !== "") requested.add(beta.trim())
+
   return requested
 }
 
@@ -74,29 +78,37 @@ export const extractAndRemoveBetas = (body: JsonObject): string[] => {
   if (!Object.hasOwn(body, "betas")) return []
   const betas = body.betas
   const out: string[] = []
+
   if (isArr(betas)) {
     for (const item of betas) if (str(item).trim() !== "") out.push(str(item).trim())
   } else if (str(betas).trim() !== "") {
     out.push(str(betas).trim())
   }
+
   delete body.betas
+
   return out
 }
 
 const thinkingDisplaySet = (body: JsonObject): boolean => {
   const display = get(body, "thinking.display")
+
   return typeof display === "string" && display.trim() !== ""
 }
 
 const includePerTurnTiming = (body: JsonObject, requested: Set<string>): boolean => {
   if (requested.has(BETA.perTurnTiming)) return true
+
   if (!hasPerTurnTiming(str(body.model))) return false
+
   if (get(body, "output_config.timing") !== undefined) return true
+
   return toArray(body.messages).some((message) => get(message, "output_config.timing") !== undefined)
 }
 
 const includeInlineTools = (body: JsonObject, requested: Set<string>): boolean => {
   if (requested.has(BETA.inlineTools)) return true
+
   return toArray(body.messages).some((message) =>
     toArray(get(message, "content")).some(
       (block) =>
@@ -113,13 +125,17 @@ const includeMidConvClearAt = (body: JsonObject, requested: Set<string>): boolea
 /** `claudeRequestSupportsEffort`. */
 export const requestSupportsEffort = (body: JsonObject | undefined): boolean => {
   if (body === undefined || Object.keys(body).length === 0) return true
+
   if (isProbeOrHelperRequest(body)) return false
+
   if (isHaikuModel(str(body.model).trim())) return false
+
   return str(get(body, "thinking.type")).trim().toLowerCase() !== "disabled"
 }
 
 const thinkingDisplayUpdates = (body: JsonObject): boolean => {
   const display = get(body, "thinking.display")
+
   return typeof display === "string" && display.trim().toLowerCase() === "updates"
 }
 
@@ -144,34 +160,51 @@ const usesFastMode = (body: JsonObject, requested: Set<string>): boolean =>
 /** `claudeCodeCLIBetas`. */
 export const claudeCodeCLIBetas = (body: JsonObject, requested: Set<string>, oauthToken: boolean): string => {
   const betas: string[] = [BETA.claudeCode]
+
   if (oauthToken) betas.push(BETA.oauth)
+
   if (requested.has(BETA.context1M)) betas.push(BETA.context1M)
   const redactThinking = !thinkingDisplaySet(body)
+
   for (const beta of CONSTANT_BETAS) {
     if (beta === BETA.redactThinking && !redactThinking) continue
     betas.push(beta)
   }
+
   const model = str(body.model)
   const perTurnControl = requested.has(BETA.perTurnControl) || hasPerTurnEffort(model)
+
   if (!usesLegacySystemReminder(body)) {
     betas.push(BETA.midConvSystem)
+
     if (perTurnControl) betas.push(BETA.perTurnControl)
+
     if (includePerTurnTiming(body, requested)) betas.push(BETA.perTurnTiming)
+
     if (!isSonnet5Model(model)) betas.push(BETA.midConvToolChanges)
+
     if (includeInlineTools(body, requested)) betas.push(BETA.inlineTools)
   } else {
     if (perTurnControl) betas.push(BETA.perTurnControl)
+
     if (includePerTurnTiming(body, requested)) betas.push(BETA.perTurnTiming)
   }
+
   if (requested.has(BETA.advisorTool) || hasAdvisorTool(body)) betas.push(BETA.advisorTool)
+
   if (requested.has(BETA.advancedToolUse) || usesAdvancedToolUse(body)) betas.push(BETA.advancedToolUse)
+
   if (!usesLegacySystemReminder(body) && includeMidConvClearAt(body, requested)) betas.push(BETA.midConvSystemClearAt)
+
   if (requested.has(BETA.dangerousToolUse) || get(body, "safeguards") !== undefined) betas.push(BETA.dangerousToolUse)
+
   if (requestSupportsEffort(body)) betas.push(BETA.effort)
   const probeOrHelper = isProbeOrHelperRequest(body)
+
   if (!probeOrHelper && (requested.has(BETA.serverSideFallback) || get(body, "fallbacks") !== undefined)) {
     betas.push(BETA.serverSideFallback)
   }
+
   if (
     requested.has(BETA.fallbackCredit) ||
     get(body, "fallback_credit_token") !== undefined ||
@@ -179,11 +212,15 @@ export const claudeCodeCLIBetas = (body: JsonObject, requested: Set<string>, oau
   ) {
     betas.push(BETA.fallbackCredit)
   }
+
   for (const beta of TRAILING_BETAS) {
     if (beta === BETA.serverSideFallback || beta === BETA.fallbackCredit) continue
+
     if (requested.has(beta)) betas.push(beta)
   }
+
   const thinkingType = str(get(body, "thinking.type"))
+
   if (
     requested.has(BETA.thinkingBinding) ||
     get(body, "thinking.block_binding") !== undefined ||
@@ -191,6 +228,7 @@ export const claudeCodeCLIBetas = (body: JsonObject, requested: Set<string>, oau
   ) {
     betas.push(BETA.thinkingBinding)
   }
+
   if (
     !probeOrHelper &&
     thinkingType !== "disabled" &&
@@ -198,41 +236,54 @@ export const claudeCodeCLIBetas = (body: JsonObject, requested: Set<string>, oau
   ) {
     betas.push(BETA.thinkingDisplayUpdates)
   }
+
   if (requested.has(BETA.thinkingResumption)) betas.push(BETA.thinkingResumption)
+
   if (usesFastMode(body, requested)) betas.push(BETA.fastMode)
+
   if (requested.has(BETA.afkMode)) betas.push(BETA.afkMode)
+
   if (!probeOrHelper) {
     const includeExtended =
       (oauthToken && !isSubagentRequest(undefined, body)) ||
       requested.has(BETA.extendedCacheTTL) ||
       payloadHas1hTTL(body)
+
     if (includeExtended) betas.push(BETA.extendedCacheTTL)
   }
+
   if (requested.has(BETA.promptCachingEvict) || JSON.stringify(body).includes('"evict_on_complete"')) {
     betas.push(BETA.promptCachingEvict)
   }
+
   if (isObj(body.diagnostics)) betas.push(BETA.cacheDiagnosis)
+
   return betas.join(",")
 }
 
 /** `claudeCountTokensBetasForCredential`. */
 export const countTokensBetas = (oauthToken: boolean): string => {
   const betas: string[] = [BETA.claudeCode]
+
   if (oauthToken) betas.push(BETA.oauth)
   betas.push("interleaved-thinking-2025-05-14", "context-management-2025-06-27", BETA.tokenCounting)
+
   return betas.join(",")
 }
 
 const splitBetas = (betas: string): string[] => {
   const parts: string[] = []
   const seen = new Set<string>()
+
   for (const beta of betas.split(",")) {
     const trimmedBeta = beta.trim()
+
     if (trimmedBeta !== "" && !seen.has(trimmedBeta)) {
       parts.push(trimmedBeta)
       seen.add(trimmedBeta)
     }
   }
+
   return parts
 }
 
@@ -245,6 +296,7 @@ const insertOAuth = (parts: string[]): void => {
 export const withCountTokensOAuthBeta = (betas: string): string => {
   const parts = splitBetas(betas)
   insertOAuth(parts)
+
   return parts.join(",")
 }
 
@@ -252,7 +304,9 @@ export const withCountTokensOAuthBeta = (betas: string): string => {
 export const withOAuthCredentialBetas = (betas: string, includeExtendedCacheTTL: boolean): string => {
   const parts = splitBetas(betas)
   insertOAuth(parts)
+
   if (includeExtendedCacheTTL && !parts.includes(BETA.extendedCacheTTL)) parts.push(BETA.extendedCacheTTL)
+
   return parts.join(",")
 }
 
@@ -265,7 +319,9 @@ export const withoutBeta = (betas: string, remove: string): string =>
 
 export const withExtendedCacheTTLBeta = (betas: string): string => {
   const parts = splitBetas(betas)
+
   if (!parts.includes(BETA.extendedCacheTTL)) parts.push(BETA.extendedCacheTTL)
+
   return parts.join(",")
 }
 
@@ -286,7 +342,9 @@ export const withAdvisorToolBeta = (betas: string): string => {
   if (betas.trim() === "") return BETA.advisorTool
   const parts = splitBetas(betas).filter((beta) => beta !== BETA.advisorTool)
   let insertAt = parts.findIndex((beta) => ADVISOR_BEFORE.has(beta))
+
   if (insertAt < 0) insertAt = parts.length
   parts.splice(insertAt, 0, BETA.advisorTool)
+
   return parts.join(",")
 }

@@ -19,12 +19,19 @@ import {
 import type { SessionAddress } from "../../../session-state/protocol.ts"
 
 export const REPLAY_TTL_MS = 60 * 60 * 1000
+
 export const REPLAY_MAX_ITEMS_PER_ENTRY = 4096
+
 export const REPLAY_MAX_BYTES_PER_ENTRY = 16 << 20
+
 const MIN_THOUGHT_SIGNATURE_LEN = 16
+
 const STORE_NAME = "antigravity-replay"
+
 const MAX_MODELS_PER_SESSION = 64
+
 const SKIP_VALIDATOR = "skip_thought_signature_validator"
+
 const TOMBSTONE = JSON.stringify({ deleted: true })
 
 /** The exact ledger state one request read (`AntigravityReasoningReplaySnapshot`). */
@@ -65,52 +72,74 @@ const numberOf = (value: Json | undefined): number | undefined => (typeof value 
 
 const normalizeThoughtSignature = (item: Json): JsonObject | undefined => {
   let signature = asString(get(item, "thoughtSignature")).trim()
+
   if (signature === "") signature = asString(get(item, "thought_signature")).trim()
+
   if (signature === "" || signature === SKIP_VALIDATOR || signature.length < MIN_THOUGHT_SIGNATURE_LEN) return undefined
   const out: JsonObject = { type: "thought_signature", thoughtSignature: signature }
   const contentIndex = numberOf(get(item, "contentIndex"))
+
   if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex)
   const partIndex = numberOf(get(item, "partIndex"))
+
   if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex)
   const targetKind = asString(get(item, "targetKind")).trim()
+
   if (targetKind === "text" || targetKind === "thought") out["targetKind"] = targetKind
   const targetHash = asString(get(item, "targetHash")).trim()
+
   if (targetHash !== "") out["targetHash"] = targetHash
   const occurrence = numberOf(get(item, "targetOccurrence"))
+
   if (occurrence !== undefined && Math.trunc(occurrence) >= 0) out["targetOccurrence"] = Math.trunc(occurrence)
   const contextHash = asString(get(item, "contextHash")).trim()
+
   if (contextHash !== "") out["contextHash"] = contextHash
+
   return out
 }
 
 const normalizeFunctionCallPart = (item: Json): JsonObject | undefined => {
   let callId = asString(get(item, "call_id")).trim()
+
   if (callId === "") callId = asString(get(item, "id")).trim()
   let name = asString(get(item, "name")).trim()
   let args = get(item, "args")
+
   if (name === "" || args === undefined) {
     const call = get(item, "functionCall")
+
     if (call !== undefined) {
       if (callId === "") callId = asString(get(call, "id")).trim()
+
       if (name === "") name = asString(get(call, "name")).trim()
+
       if (args === undefined) args = get(call, "args")
     }
   }
+
   if (name === "" || args === undefined) return undefined
   const out: JsonObject = { type: "function_call_part" }
+
   if (callId !== "") out["call_id"] = callId
   out["name"] = name
   out["args"] = args
   const signature = asString(get(item, "thoughtSignature")).trim()
+
   if (signature !== "" && signature !== SKIP_VALIDATOR) out["thoughtSignature"] = signature
   const contentIndex = numberOf(get(item, "contentIndex"))
+
   if (contentIndex !== undefined) out["contentIndex"] = Math.trunc(contentIndex)
   const partIndex = numberOf(get(item, "partIndex"))
+
   if (partIndex !== undefined) out["partIndex"] = Math.trunc(partIndex)
   const occurrence = numberOf(get(item, "targetOccurrence"))
+
   if (occurrence !== undefined && Math.trunc(occurrence) >= 0) out["targetOccurrence"] = Math.trunc(occurrence)
   const contextHash = asString(get(item, "contextHash")).trim()
+
   if (contextHash !== "") out["contextHash"] = contextHash
+
   return out
 }
 
@@ -119,8 +148,10 @@ export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undef
   if (items.length > REPLAY_MAX_ITEMS_PER_ENTRY) return undefined
   const normalized: Json[] = []
   let totalBytes = 0
+
   for (const item of items) {
     let out: JsonObject | undefined
+
     switch (asString(get(item, "type")).trim()) {
       case "thought_signature":
         out = normalizeThoughtSignature(item)
@@ -129,11 +160,14 @@ export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undef
         out = normalizeFunctionCallPart(item)
         break
     }
+
     if (out === undefined) continue
     totalBytes += JSON.stringify(out).length
+
     if (totalBytes > REPLAY_MAX_BYTES_PER_ENTRY) return undefined
     normalized.push(out)
   }
+
   return normalized.length > 0 ? normalized : undefined
 }
 
@@ -141,9 +175,12 @@ const addressOf = (sessionKey: string): SessionAddress => ({ store: STORE_NAME, 
 
 const parseEntry = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined
+
   try {
     const parsed: unknown = JSON.parse(text)
+
     if (!isJsonArray(parsed as Json)) return undefined
+
     return parsed as Json[]
   } catch {
     return undefined
@@ -156,20 +193,26 @@ const cacheKey = (modelName: string, sessionKey: string): string =>
 export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveBackend()): ReplayLedger => ({
   get: (modelName, sessionKey) => {
     const key = cacheKey(modelName, sessionKey)
+
     if (key === "") return Effect.succeed({ items: undefined, snapshot: UNLOADED_SNAPSHOT })
+
     return bestEffort(
       "antigravity replay get",
       { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead,
       Effect.gen(function* () {
         const state = yield* backend
         const [result] = yield* state.run(addressOf(sessionKey), [{ op: "get", key, extendTtlMs: REPLAY_TTL_MS }])
+
         if (result?.status !== "ok") return { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead
         const snapshot: LedgerSnapshot = { loaded: true, generation: result.generation }
         const stored = parseEntry(result.value)
+
         if (stored === undefined || stored.length === 0 || stored.length > REPLAY_MAX_ITEMS_PER_ENTRY) {
           return { items: undefined, snapshot } satisfies LedgerRead
         }
+
         const normalized = normalizeReplayItems(stored)
+
         return {
           items: normalized !== undefined && normalized.length === stored.length ? normalized : undefined,
           snapshot
@@ -180,12 +223,15 @@ export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveB
   replaceIfUnchanged: (modelName, sessionKey, snapshot, items) => {
     const key = cacheKey(modelName, sessionKey)
     const normalized = key === "" ? undefined : normalizeReplayItems(items)
+
     if (normalized === undefined) return Effect.succeed(false)
+
     return bestEffort(
       "antigravity replay replace",
       false,
       Effect.gen(function* () {
         const state = yield* backend
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           {
             op: "put",
@@ -196,18 +242,22 @@ export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveB
             ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {})
           }
         ])
+
         return result?.status === "ok"
       })
     )
   },
   deleteIfUnchanged: (modelName, sessionKey, snapshot) => {
     const key = cacheKey(modelName, sessionKey)
+
     if (key === "") return Effect.succeed(false)
+
     return bestEffort(
       "antigravity replay delete",
       false,
       Effect.gen(function* () {
         const state = yield* backend
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           {
             op: "put",
@@ -218,6 +268,7 @@ export const makeSessionStateReplayLedger = (backend: BackendResolver = resolveB
             ...(snapshot.loaded ? { ifGeneration: snapshot.generation } : {})
           }
         ])
+
         return result?.status === "ok"
       })
     )

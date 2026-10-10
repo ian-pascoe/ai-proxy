@@ -23,14 +23,17 @@ const bareId = (modelId: string): string =>
 const catalog = (): ReadonlyMap<string, CatalogEntry> => {
   if (entries === undefined) {
     const map = new Map<string, CatalogEntry>()
+
     for (const model of devinModels(embeddedCatalogs())) {
       map.set(bareId(model.id), {
         levels: model.thinking?.levels ?? [],
         maxCompletionTokens: model.maxCompletionTokens ?? 0
       })
     }
+
     entries = map
   }
+
   return entries
 }
 

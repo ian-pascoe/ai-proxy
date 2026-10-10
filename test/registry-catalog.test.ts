@@ -20,7 +20,9 @@ const wire = (id: string, extra: Record<string, unknown> = {}) => ({
   type: "x",
   ...extra
 })
+
 const section = (...ids: string[]) => ids.map((id) => wire(id))
+
 const catalog = (overrides: Record<string, unknown> = {}) => ({
   claude: section("c1"),
   gemini: section("g1"),
@@ -61,6 +63,7 @@ describe("models catalog validation (validateModelsCatalog)", () => {
   it("keeps the previous meta section when the new catalog has none (publishCatalogBytes)", () => {
     const previous = parseModelsCatalog(catalog())
     const next = parseModelsCatalog(catalog({ meta: [] }))
+
     if (!previous.ok || !next.ok) throw new Error("unexpected")
     expect(withMetaFallback(next.value, previous.value).meta.map((model) => model.id)).toEqual(["m1"])
     expect(withMetaFallback(previous.value, undefined).meta.map((model) => model.id)).toEqual(["m1"])
@@ -68,9 +71,11 @@ describe("models catalog validation (validateModelsCatalog)", () => {
 
   it("reports changed providers like detectChangedProviders", () => {
     const base = parseModelsCatalog(catalog())
+
     const changed = parseModelsCatalog(
       catalog({ gemini: [wire("g1", { display_name: "New" })], "codex-plus": section("p1", "p2") })
     )
+
     if (!base.ok || !changed.ok) throw new Error("unexpected")
     expect(detectChangedProviders(base.value, changed.value)).toEqual(["gemini", "gemini-interactions", "codex"])
     expect(detectChangedProviders(base.value, base.value)).toEqual([])
@@ -137,6 +142,7 @@ describe("Devin catalog", () => {
       info(wire("devin/gpt-6-astra", { display_name: "GPT-6 Astra", context_length: 2000, owned_by: "openai" })),
       info(wire("devin/gpt-6-astra-low-fast", { thinking: { levels: ["priority", "medium"] } }))
     ])
+
     expect(rest).toEqual([])
     expect(aggregated).toMatchObject({
       id: "devin/gpt-6-astra",
@@ -154,10 +160,12 @@ describe("Devin catalog", () => {
     const fromDevin = parseDevinCatalog({ devin: [wire("Model-A")] })
     const fromModels = parseDevinCatalog({ models: [wire("devin/model-a-high"), wire("devin/model-a")] })
     const fromArray = parseDevinCatalog([wire("model-a")])
+
     for (const parsed of [fromDevin, fromModels, fromArray]) {
       if (!parsed.ok) throw new Error(parsed.error)
       expect(parsed.value.map((model) => model.id)).toEqual(["devin/model-a"])
     }
+
     expect(parseDevinCatalog({ devin: [wire("a"), wire("devin/A")] }).ok).toBe(false)
     expect(parseDevinCatalog({ devin: [null] }).ok).toBe(false)
     expect(parseDevinCatalog({ devin: [wire(" ")] }).ok).toBe(false)
@@ -178,6 +186,7 @@ describe("catalogsFromTexts (KV contents -> catalogs)", () => {
       models: JSON.stringify(catalog({ claude: section("stored-claude") })),
       devin: JSON.stringify({ devin: [wire("only-devin")] })
     })
+
     expect(warnings).toEqual([])
     expect(catalogs.models.claude.map((model) => model.id)).toEqual(["stored-claude"])
     expect(catalogs.devin.map((model) => model.id)).toEqual(["devin/only-devin", "devin/swe-1-6-slow"])
@@ -190,6 +199,7 @@ describe("catalogsFromTexts (KV contents -> catalogs)", () => {
       devin: JSON.stringify({ devin: [] }),
       codexClient: JSON.stringify({ models: [] })
     })
+
     expect(catalogs).toEqual(embeddedCatalogs())
     expect(warnings).toHaveLength(3)
   })

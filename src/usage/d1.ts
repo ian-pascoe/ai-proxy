@@ -118,6 +118,7 @@ const INSERT_SQL = `INSERT OR IGNORE INTO usage_records (${INSERT_COLUMNS.join("
 
 const trimmedOrNull = (value: string | undefined): string | null => {
   const trimmed = value?.trim() ?? ""
+
   return trimmed === "" ? null : trimmed
 }
 
@@ -125,6 +126,7 @@ const trimmedOrNull = (value: string | undefined): string | null => {
 export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> => {
   const detail = ensureTokenBreakdown(record.detail, record.provider, record.executorType)
   const breakdown = detail.tokenBreakdown as TokenBreakdown
+
   return {
     request_id: record.requestId,
     trace_id: trimmedOrNull(record.traceId),
@@ -189,14 +191,17 @@ export const insertUsageRecord = async (db: D1Database, record: UsageRecord): Pr
 /** `session_id`/`parent_session_id` of the export: canonical UUIDs, the parent only when it differs (redisqueue). */
 const sessionPayload = (row: UsageRow): Record<string, string> => {
   const sessionId = normalizeToCanonicalUuid(row.session_id ?? "")
+
   if (sessionId === "") return {}
   const parent = normalizeToCanonicalUuid(row.parent_session_id ?? "")
+
   return { session_id: sessionId, ...(parent === "" || parent === sessionId ? {} : { parent_session_id: parent }) }
 }
 
 /** The export JSON of one record. `api_key` carries the Access principal id (the Go client API key). */
 export const rowToPayload = (row: UsageRow): Record<string, unknown> => {
   const failed = row.failed === 1
+
   return {
     timestamp: new Date(row.requested_at).toISOString(),
     latency_ms: row.latency_ms,
@@ -266,6 +271,7 @@ export const MAX_QUEUE_COUNT = 1000
  */
 export const popUsageQueue = async (db: D1Database, count: number, now: number): Promise<ReadonlyArray<UsageRow>> => {
   const limit = Math.max(1, Math.min(MAX_QUEUE_COUNT, Math.trunc(count)))
+
   const result = await db
     .prepare(
       `UPDATE usage_records SET exported_at = ?1 WHERE request_id IN (
@@ -274,6 +280,7 @@ export const popUsageQueue = async (db: D1Database, count: number, now: number):
     )
     .bind(now, limit)
     .run<UsageRow>()
+
   return result.results.toSorted(
     (a, b) =>
       a.requested_at - b.requested_at || (a.request_id < b.request_id ? -1 : a.request_id > b.request_id ? 1 : 0)
@@ -299,21 +306,31 @@ export interface UsageFilter {
 const filterClauses = (filter: UsageFilter): { readonly where: string; readonly params: Array<string | number> } => {
   const clauses: string[] = []
   const params: Array<string | number> = []
+
   const add = (clause: string, value: string | number) => {
     params.push(value)
     clauses.push(clause.replace("?", `?${params.length}`))
   }
+
   if (filter.since !== undefined) add("requested_at >= ?", filter.since)
+
   if (filter.until !== undefined) add("requested_at < ?", filter.until)
+
   if (filter.provider !== undefined) add("provider = ?", filter.provider)
+
   if (filter.model !== undefined) add("model = ?", filter.model)
+
   if (filter.principal !== undefined) add("principal_id = ?", filter.principal)
+
   if (filter.authId !== undefined) add("auth_id = ?", filter.authId)
+
   if (filter.failed !== undefined) add("failed = ?", filter.failed ? 1 : 0)
+
   return { where: clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`, params }
 }
 
 export const MAX_LIST_LIMIT = 1000
+
 export const DEFAULT_LIST_LIMIT = 100
 
 export interface UsageListQuery extends UsageFilter {
@@ -329,8 +346,10 @@ export interface UsageListPage {
 
 export const parseCursor = (cursor: string): { readonly at: number; readonly id: string } | undefined => {
   const separator = cursor.indexOf(":")
+
   if (separator <= 0) return undefined
   const at = Number(cursor.slice(0, separator))
+
   return Number.isSafeInteger(at) ? { at, id: cursor.slice(separator + 1) } : undefined
 }
 
@@ -340,24 +359,30 @@ export const listUsageRecords = async (db: D1Database, query: UsageListQuery): P
   const { where, params } = filterClauses(query)
   const cursor = query.before === undefined ? undefined : parseCursor(query.before)
   let sql = `SELECT * FROM usage_records${where}`
+
   if (cursor !== undefined) {
     params.push(cursor.at, cursor.id)
     const cursorClause = `(requested_at < ?${params.length - 1} OR (requested_at = ?${params.length - 1} AND request_id < ?${params.length}))`
     sql += where === "" ? ` WHERE ${cursorClause}` : ` AND ${cursorClause}`
   }
+
   params.push(limit + 1)
   sql += ` ORDER BY requested_at DESC, request_id DESC LIMIT ?${params.length}`
+
   const result = await db
     .prepare(sql)
     .bind(...params)
     .all<UsageRow>()
+
   const rows = result.results.slice(0, limit)
   const last = rows[rows.length - 1]
   const more = result.results.length > limit && last !== undefined
+
   return { rows, nextBefore: more ? `${last.requested_at}:${last.request_id}` : undefined }
 }
 
 export const GROUP_BY = ["model", "provider", "principal", "auth", "endpoint", "day"] as const
+
 export type GroupBy = (typeof GROUP_BY)[number]
 
 const GROUP_EXPRESSIONS: Readonly<Record<GroupBy, string>> = {
@@ -417,6 +442,7 @@ export const summarizeUsage = async (db: D1Database, query: UsageSummaryQuery): 
   const limit = Math.max(1, Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)))
   const expression = GROUP_EXPRESSIONS[query.groupBy]
   const order = query.groupBy === "day" ? "key DESC" : "total_tokens DESC, requests DESC, key ASC"
+
   const [totals, groups] = await db.batch<UsageTotals & { key?: string }>([
     db.prepare(`SELECT ${AGGREGATES} FROM usage_records${where}`).bind(...params),
     db
@@ -425,6 +451,7 @@ export const summarizeUsage = async (db: D1Database, query: UsageSummaryQuery): 
       )
       .bind(...params)
   ])
+
   return {
     totals: (totals?.results[0] ?? {
       requests: 0,
@@ -449,11 +476,13 @@ export const summarizeUsage = async (db: D1Database, query: UsageSummaryQuery): 
 // ---------------------------------------------------------------------------------------------------------------
 
 export const PRUNE_BATCH = 5000
+
 const MAX_PRUNE_BATCHES = 40
 
 /** Deletes records older than `cutoff` (epoch ms) in bounded batches; returns the number removed. */
 export const pruneUsageRecords = async (db: D1Database, cutoff: number): Promise<number> => {
   let removed = 0
+
   for (let batch = 0; batch < MAX_PRUNE_BATCHES; batch += 1) {
     const result = await db
       .prepare(
@@ -463,9 +492,12 @@ export const pruneUsageRecords = async (db: D1Database, cutoff: number): Promise
       )
       .bind(cutoff, PRUNE_BATCH)
       .run()
+
     const changes = result.meta.changes ?? 0
     removed += changes
+
     if (changes < PRUNE_BATCH) break
   }
+
   return removed
 }

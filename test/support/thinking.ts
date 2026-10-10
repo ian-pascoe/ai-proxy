@@ -121,6 +121,7 @@ export const encodeConfig = (c: ThinkingConfig): string => {
 export const decodeConfig = (text: string): ThinkingConfig => {
   const [mode, ...rest] = text.split(":")
   const value = rest.join(":")
+
   switch (mode) {
     case "budget":
       return { mode: "budget", budget: Number(value), level: "" }
@@ -136,13 +137,16 @@ export const decodeConfig = (text: string): ThinkingConfig => {
 /** Resolves a model key of the `applier` section: synthetic id, `catalog:<id>` or empty (no model info). */
 export const resolveApplierModel = (key: string | undefined): ModelSpec | undefined => {
   if (key === undefined || key === "") return undefined
+
   if (key.startsWith("catalog:")) return fixture.catalog[key.slice("catalog:".length)]
+
   return fixture.synthetic[key]
 }
 
 /** Lossless `mode|budget|level` config form used by the `applier` section. */
 export const decodeFullConfig = (text: string): ThinkingConfig => {
   const [mode, budget, ...level] = text.split("|")
+
   return { mode: mode as ThinkingConfig["mode"], budget: Number(budget), level: level.join("|") }
 }
 
@@ -153,12 +157,16 @@ export const collectMismatches = <T>(
   limit = 8
 ): string[] => {
   const failures: string[] = []
+
   for (const testCase of cases) {
     const failure = check(testCase)
+
     if (failure !== undefined) {
       failures.push(failure)
+
       if (failures.length >= limit) break
     }
   }
+
   return failures
 }

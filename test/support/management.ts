@@ -50,26 +50,32 @@ export const makeHarness = (http: MockHandler = () => ({ status: 404 }), binding
   const outbound = mockHttp(http)
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
   const routes = ManagementRoutes.pipe(Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer)))
+
   const web = HttpRouter.toWebHandler(
     Layer.mergeAll(RootRoutes, OAuthCallbackRoutes, access, makeWithAccess(access)(routes)),
     {
       disableLogger: true
     }
   )
+
   const call: Harness["call"] = async (path, init = {}) => {
     const { auth, ...rest } = init
     const headers = new Headers(rest.headers)
+
     if (auth !== false) headers.set("Cf-Access-Jwt-Assertion", auth ?? (await token()))
+
     return await web.handler(
       new Request(`https://proxy.test${path}`, { ...rest, headers }),
       requestContext({ ...baseEnv, ...bindings } as Env, ctx)
     )
   }
+
   return {
     call,
     json: async (path, init) => {
       const response = await call(path, init)
       const text = await response.text()
+
       return {
         status: response.status,
         body: text === "" ? undefined : (JSON.parse(text) as unknown),

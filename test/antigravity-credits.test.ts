@@ -44,6 +44,7 @@ const reply = {
 }
 
 const bearer = (call: UpstreamCall): string => (call.headers["authorization"] ?? "").replace("Bearer ", "")
+
 const hasCredits = (call: UpstreamCall): boolean => JSON.parse(call.body).enabledCreditTypes !== undefined
 
 const run = async (
@@ -56,8 +57,10 @@ const run = async (
   } = {}
 ) => {
   resetMemoryAntigravityState()
+
   if (options.seed !== undefined) await options.seed(antigravityStateFor({} as Env))
   const harness = await makePool(yaml)
+
   for (const name of options.names ?? ["a", "b"]) {
     harness.store.upsert(`antigravity-${name}.json`, "antigravity", {
       type: "antigravity",
@@ -66,8 +69,10 @@ const run = async (
       expired: new Date(harness.clock.now() + 3_600_000).toISOString()
     })
   }
+
   const calls: UpstreamCall[] = []
   const records: UsageRecord[] = []
+
   const layer = Layer.mergeAll(
     poolPickerLayer(harness.pool),
     Layer.succeed(
@@ -84,6 +89,7 @@ const run = async (
     mockHttpClient(calls, respond),
     Thinking.live
   ).pipe(Layer.provideMerge(staticConfigReader(harness.config)))
+
   const result = await Effect.runPromise(
     executeNonStream({
       entryProtocol: Formats.Claude,
@@ -98,6 +104,7 @@ const run = async (
       Effect.result
     ) as unknown as Effect.Effect<{ _tag: string; success?: { payload: string }; failure?: ExecutionError }>
   )
+
   return { calls, records, result, harness }
 }
 
@@ -111,6 +118,7 @@ describe("antigravity credits fallback", () => {
           ? sseResponse([`data: ${JSON.stringify(reply)}\n\n`])
           : jsonResponse(quotaExhausted, { status: 429 })
     )
+
     expect(outcome.result._tag).toBe("Success")
     expect(outcome.result.success?.payload).toContain("paid")
     // Normal rotation: both credentials fail without credits; then the credits pass uses a (cooling) credential.
@@ -126,17 +134,20 @@ describe("antigravity credits fallback", () => {
     const off = await run("", "claude-sonnet-4-5", () => jsonResponse(quotaExhausted, { status: 429 }))
     expect(off.result._tag).toBe("Failure")
     expect(off.calls.some(hasCredits)).toBe(false)
+
     const gemini = await run(
       "oauth:\n  providers:\n    antigravity:\n      antigravity-credits: true\n",
       "gemini-3-pro-high",
       () => jsonResponse(quotaExhausted, { status: 429 })
     )
+
     expect(gemini.result._tag).toBe("Failure")
     expect(gemini.calls.some(hasCredits)).toBe(false)
   })
 
   it("skips credentials whose credits are known to be exhausted and keeps the original error", async () => {
     resetMemoryAntigravityState()
+
     const exhausted = {
       error: {
         code: 429,
@@ -144,11 +155,13 @@ describe("antigravity credits fallback", () => {
         details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "INSUFFICIENT_G1_CREDITS_BALANCE" }]
       }
     }
+
     const outcome = await run(
       "oauth:\n  providers:\n    antigravity:\n      antigravity-credits: true\n",
       "claude-sonnet-4-5",
       (call) => jsonResponse(hasCredits(call) ? exhausted : quotaExhausted, { status: 429 })
     )
+
     expect(outcome.result._tag).toBe("Failure")
     expect(outcome.result.failure?.status).toBe(429)
     // One credits attempt marks that credential as out of credits; the other credential is tried next, then both are skipped.
@@ -157,6 +170,7 @@ describe("antigravity credits fallback", () => {
 
   it("walks known-available credentials first, then unknown ones, each sorted by id; known-empty ones are skipped", async () => {
     const record = (amount: number) => ({ creditAmount: amount, minCreditAmount: 1, paidTierId: "", updatedAt: 1 })
+
     const outcome = await run(
       "oauth:\n  providers:\n    antigravity:\n      antigravity-credits: true\n",
       "claude-sonnet-4-5",
@@ -174,6 +188,7 @@ describe("antigravity credits fallback", () => {
         }
       }
     )
+
     expect(outcome.result._tag).toBe("Success")
     // Order of the credits pass: c, e (known, sorted), then b, d (unknown, sorted); a never runs with credits.
     expect(outcome.calls.filter(hasCredits).map(bearer)).toEqual(["tok-c", "tok-e", "tok-b", "tok-d"])

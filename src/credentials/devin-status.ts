@@ -17,7 +17,9 @@ import { rfc3339 } from "./refresh/http.ts"
 import type { CredentialState } from "./model.ts"
 
 const GET_USER_STATUS_PATH = "/exa.seat_management_pb.SeatManagementService/GetUserStatus"
+
 const MAX_RESPONSE_BYTES = 4 << 20
+
 const REQUEST_TIMEOUT = "30 seconds"
 
 /** `FetchUserStatus`: `undefined` with a reason when the call fails (no body text: it may echo credentials). */
@@ -29,6 +31,7 @@ export const fetchDevinUserStatus = (input: {
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
     const token = input.sessionToken.trim()
+
     const request = HttpClientRequest.post(`${input.baseUrl.replace(/\/+$/, "")}${GET_USER_STATUS_PATH}`).pipe(
       HttpClientRequest.setHeaders({
         authorization: `Basic ${token}-${token}`,
@@ -42,12 +45,16 @@ export const fetchDevinUserStatus = (input: {
         "application/proto"
       )
     )
+
     const response = yield* client.execute(request).pipe(Effect.mapError(() => "devin user status request failed"))
+
     const bytes = new Uint8Array(
       yield* response.arrayBuffer.pipe(Effect.mapError(() => "devin user status response unreadable"))
     )
+
     if (response.status !== 200) return yield* Effect.fail(`devin seat management error (status ${response.status})`)
     const status = parseUserStatus(bytes.subarray(0, MAX_RESPONSE_BYTES))
+
     return status === undefined ? yield* Effect.fail("empty response data") : status
   }).pipe(
     Effect.timeoutOrElse({
@@ -70,14 +77,20 @@ const PROFILE_KEYS = [
 /** `Quota.Signals` of `Refresh` (percentages as `N%`, timestamps RFC3339 UTC). */
 export const devinQuotaSignals = (status: DevinUserStatus): Record<string, string> => {
   const signals: Record<string, string> = {}
+
   if (status.plan !== "") signals["plan"] = status.plan
   signals["daily_quota_remaining_percent"] = `${status.dailyQuotaRemainingPercent}%`
   signals["weekly_quota_remaining_percent"] = `${status.weeklyQuotaRemainingPercent}%`
   const time = (seconds: number) => rfc3339(seconds * 1000)
+
   if (status.dailyQuotaResetAt > 0) signals["daily_quota_reset_at"] = time(status.dailyQuotaResetAt)
+
   if (status.weeklyQuotaResetAt > 0) signals["weekly_quota_reset_at"] = time(status.weeklyQuotaResetAt)
+
   if (status.planStart > 0) signals["plan_start"] = time(status.planStart)
+
   if (status.planEnd > 0) signals["plan_end"] = time(status.planEnd)
+
   return signals
 }
 
@@ -89,8 +102,10 @@ export const applyDevinStatus = (
   nowMs: number
 ): { readonly metadata: JsonObject; readonly state: CredentialState } => {
   const next: JsonObject = { ...metadata }
+
   for (const [key, field] of PROFILE_KEYS) if (status[field] !== "") next[key] = status[field]
   next["last_refresh"] = rfc3339(nowMs)
+
   return {
     metadata: next,
     state: {
@@ -115,10 +130,12 @@ export const refreshDevinStatuses = (
     let refreshed = 0
     let failed = 0
     let skipped = 0
+
     for (const { credential, state } of pool.entries()) {
       if (credential.source !== "file" || credential.provider.trim().toLowerCase() !== "devin" || credential.disabled) {
         continue
       }
+
       const { apiKey, baseUrl, deviceSeed } = devinCredentials({
         id: credential.id,
         provider: credential.provider,
@@ -126,11 +143,14 @@ export const refreshDevinStatuses = (
         attributes: credential.attributes,
         metadata: credential.metadata
       })
+
       if (apiKey === "") {
         skipped += 1
         continue
       }
+
       const result = yield* Effect.result(fetchDevinUserStatus({ sessionToken: apiKey, baseUrl, deviceSeed }))
+
       if (result._tag === "Failure") {
         failed += 1
         yield* Effect.logWarning(
@@ -138,9 +158,11 @@ export const refreshDevinStatuses = (
         )
         continue
       }
+
       const updated = applyDevinStatus(credential.metadata, state, result.success, nowMs())
       pool.commitRefresh(credential.id, updated)
       refreshed += 1
     }
+
     return { refreshed, failed, skipped }
   })

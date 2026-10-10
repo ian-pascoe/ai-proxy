@@ -34,6 +34,7 @@ const meta: CredentialSnapshot = {
 describe("Kimi via /v1/chat/completions", () => {
   it("routes an OpenAI chat request to the Kimi chat endpoint and returns the OpenAI answer", async () => {
     const config = await loadConfig("requests: {}")
+
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([kimi]),
@@ -48,11 +49,14 @@ describe("Kimi via /v1/chat/completions", () => {
           usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 }
         })
     })
+
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "kimi-k2.8", temperature: 0.3, messages: [{ role: "user", content: "hello" }] })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { choices: Array<{ message: { content: string } }> }
     expect(body.choices[0]?.message.content).toBe("hi there")
@@ -68,6 +72,7 @@ describe("Kimi via /v1/chat/completions", () => {
 describe("Meta via /v1/responses", () => {
   it("streams the aggregated Responses answer for a non-stream client", async () => {
     const config = await loadConfig("requests: {}")
+
     const completed = {
       type: "response.completed",
       response: {
@@ -79,12 +84,14 @@ describe("Meta via /v1/responses", () => {
         usage: { input_tokens: 3, output_tokens: 1, total_tokens: 4 }
       }
     }
+
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([meta]),
       modelProviders: providers("meta") as never,
       respond: () => sseResponse([`data: ${JSON.stringify(completed)}\n\n`])
     })
+
     afterAll(p.dispose)
     const response = await p.call("/v1/responses", postJson({ model: "muse-spark", input: "hello" }))
     expect(response.status).toBe(200)
@@ -97,6 +104,7 @@ describe("Meta via /v1/responses", () => {
 
   it("passes a credential-scoped quota failure to the client as 429", async () => {
     const config = await loadConfig("requests: {}")
+
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([meta]),
@@ -104,6 +112,7 @@ describe("Meta via /v1/responses", () => {
       respond: () =>
         new Response(JSON.stringify({ error: { message: "subscription quota exhausted" } }), { status: 429 })
     })
+
     afterAll(p.dispose)
     const response = await p.call("/v1/responses", postJson({ model: "muse-spark", input: "hello" }))
     expect(response.status).toBe(429)

@@ -28,11 +28,14 @@ describe("fetchConnector", () => {
       upstream = pair[1]
       upstream.accept()
       upstream.addEventListener("message", (event) => upstream?.send(`echo:${String((event as MessageEvent).data)}`))
+
       return Promise.resolve(new Response(null, { status: 101, webSocket: pair[0], headers: { "x-upstream": "1" } }))
     })
+
     const socket = await Effect.runPromise(
       fetchConnector().connect({ url: "wss://upstream.test/v1/responses", headers: { authorization: "Bearer t" } })
     )
+
     expect(seen[0]?.url).toBe("https://upstream.test/v1/responses")
     expect(seen[0]?.headers.get("upgrade")).toBe("websocket")
     expect(seen[0]?.headers.get("authorization")).toBe("Bearer t")
@@ -49,9 +52,11 @@ describe("fetchConnector", () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(new Response('{"error":"nope"}', { status: 426, headers: { "x-reason": "upgrade" } }))
     )
+
     const error = await Effect.runPromise(
       Effect.flip(fetchConnector().connect({ url: "ws://upstream.test/x", headers: {} }))
     )
+
     expect(error).toBeInstanceOf(HandshakeError)
     expect(error).toMatchObject({ status: 426, body: '{"error":"nope"}', headers: { "x-reason": "upgrade" } })
   })

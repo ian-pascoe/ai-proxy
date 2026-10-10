@@ -40,6 +40,7 @@ const created = {
   type: "response.created",
   response: { id: "resp_1", object: "response", created_at: 1767225600, model: "grok-4.3", status: "in_progress" }
 }
+
 const completed = (
   output: unknown[] = [],
   usage: unknown = { input_tokens: 10, output_tokens: 4, total_tokens: 14 }
@@ -47,10 +48,13 @@ const completed = (
   type: "response.completed",
   response: { id: "resp_1", status: "completed", created_at: 1767225600, model: "grok-4.3", output, usage }
 })
+
 const frame = (event: unknown): string => {
   const type = (event as { type: string }).type
+
   return `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`
 }
+
 const MESSAGE_ITEM = {
   id: "msg_1",
   type: "message",
@@ -58,6 +62,7 @@ const MESSAGE_ITEM = {
   role: "assistant",
   content: [{ type: "output_text", text: "Hello!", annotations: [] }]
 }
+
 const TEXT_STREAM = [
   frame(created),
   frame({ type: "response.output_text.delta", item_id: "msg_1", output_index: 0, delta: "Hel" }),
@@ -67,7 +72,9 @@ const TEXT_STREAM = [
 ]
 
 let config: Config
+
 let plainConfig: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
   plainConfig = await loadConfig("requests: {}")
@@ -80,19 +87,23 @@ interface Options {
 
 const pipeline = (respond: UpstreamResponder, options: Options = {}) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
+
   const p = makePipeline({
     config: options.config ?? plainConfig,
     respond,
     credentialPicker: xaiPicker(options.credentials ?? [xaiOauth()], log),
     modelProviders: xaiModels
   })
+
   afterAll(p.dispose)
+
   return { ...p, log }
 }
 
 describe("POST /v1/responses (non-stream)", () => {
   it("routes OAuth credentials to the CLI chat proxy with the Grok CLI identity and unwraps the completed response", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM))
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -107,6 +118,7 @@ describe("POST /v1/responses (non-stream)", () => {
         stream_options: { include_usage: true }
       })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { id: string; output: unknown[]; usage: Record<string, unknown> }
     expect(body.id).toBe("resp_1")
@@ -142,6 +154,7 @@ describe("POST /v1/responses (non-stream)", () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), {
       credentials: [xaiKey({ attributes: { api_key: "k", "header:X-Org": "acme" } })]
     })
+
     const response = await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi" }))
     expect(response.status).toBe(200)
     const call = p.calls[0]!
@@ -156,6 +169,7 @@ describe("POST /v1/responses (non-stream)", () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), {
       credentials: [xaiOauth({ attributes: { auth_kind: "oauth", base_url: "https://grok.example.test/v1/" } })]
     })
+
     await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi" }))
     const call = p.calls[0]!
     expect(call.url).toBe("https://grok.example.test/v1/responses")
@@ -165,6 +179,7 @@ describe("POST /v1/responses (non-stream)", () => {
 
   it("translates Chat Completions requests to xAI and back", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM))
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({
@@ -177,6 +192,7 @@ describe("POST /v1/responses (non-stream)", () => {
         ]
       })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { choices: Array<{ message: { content: string }; finish_reason: string }> }
     expect(body.choices[0]?.message.content).toBe("Hello!")
@@ -204,6 +220,7 @@ describe("POST /v1/responses (stream)", () => {
       summary: [],
       content: [{ type: "reasoning_text", text: "thinking" }]
     }
+
     const p = pipeline(() =>
       sseResponse([
         frame(created),
@@ -232,6 +249,7 @@ describe("POST /v1/responses (stream)", () => {
         frame(completed())
       ])
     )
+
     const response = await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi", stream: true }))
     expect(response.status).toBe(200)
     const text = await response.text()
@@ -241,18 +259,22 @@ describe("POST /v1/responses (stream)", () => {
     expect(text).toContain("event: response.reasoning_summary_part.done")
     expect(text).not.toContain("reasoning_text")
     expect(text).toContain('"summary_index":0')
+
     // The empty completed output is rebuilt from the done items, with summary_text parts.
     const completedLine = text
       .split("\n")
       .find((line) => line.startsWith("data:") && line.includes('"response.completed"'))!
+
     const output = (JSON.parse(completedLine.slice(5)) as { response: { output: Array<{ summary: unknown[] }> } })
       .response.output
+
     expect(output[0]?.summary).toEqual([{ type: "summary_text", text: "thinking" }])
     expect(p.records[0]?.detail.outputTokens).toBe(4)
   })
 
   it("hides server-side X Search traces when x_search is injected", async () => {
     const trace = { id: "fc_x", type: "custom_tool_call", call_id: "xs_call_1", name: "x_keyword_search", input: "{}" }
+
     const p = pipeline(
       () =>
         sseResponse([
@@ -265,6 +287,7 @@ describe("POST /v1/responses (stream)", () => {
         ]),
       { config }
     )
+
     const response = await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi", stream: true }))
     const text = await response.text()
     expect(text).not.toContain("x_keyword_search")
@@ -304,11 +327,13 @@ describe("request shaping", () => {
         tool_choice: { type: "function", name: "gone" }
       })
     )
+
     const upstream = JSON.parse(p.calls[0]!.body) as {
       tools: Array<Record<string, unknown>>
       input: Array<Record<string, unknown>>
       tool_choice?: unknown
     }
+
     expect(upstream.tools).toEqual([
       { type: "function", name: "shell", description: "d", parameters: { type: "object", properties: {} } },
       { type: "function", name: "mcp_ns__run", parameters: { type: "object" } },
@@ -333,6 +358,7 @@ describe("request shaping", () => {
       description: `tool ${index}`,
       parameters: { type: "object", properties: { a: { type: "string" } } }
     }))
+
     const call = {
       id: "fc_1",
       type: "function_call",
@@ -340,6 +366,7 @@ describe("request shaping", () => {
       name: "big",
       arguments: '{"name":"t7","arguments":{"a":"x"}}'
     }
+
     const p = pipeline(() =>
       sseResponse([
         frame(created),
@@ -354,6 +381,7 @@ describe("request shaping", () => {
         frame(completed([call]))
       ])
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -363,9 +391,11 @@ describe("request shaping", () => {
         tools: [{ type: "namespace", name: "big", description: "many", tools: children }]
       })
     )
+
     const upstream = JSON.parse(p.calls[0]!.body) as {
       tools: Array<{ name: string; description: string; parameters: { properties: { name: { enum: string[] } } } }>
     }
+
     expect(upstream.tools).toHaveLength(1)
     expect(upstream.tools[0]?.name).toBe("big")
     expect(upstream.tools[0]?.description).toContain("- t7: tool 7")
@@ -377,6 +407,7 @@ describe("request shaping", () => {
 
   it("aliases a client function named web_search and restores it in the response", async () => {
     const call = { id: "fc_1", type: "function_call", call_id: "call_1", name: "clientfn_web_search", arguments: "{}" }
+
     const p = pipeline(() =>
       sseResponse([
         frame(created),
@@ -384,6 +415,7 @@ describe("request shaping", () => {
         frame(completed([call]))
       ])
     )
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -393,6 +425,7 @@ describe("request shaping", () => {
         tools: [{ type: "function", name: "web_search", parameters: { type: "object" } }]
       })
     )
+
     expect((JSON.parse(p.calls[0]!.body) as { tools: Array<{ name: string }> }).tools[0]?.name).toBe(
       "clientfn_web_search"
     )
@@ -462,6 +495,7 @@ describe("error rules", () => {
           status: 429
         })
     )
+
     const response = await exhausted.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi" }))
     expect(response.status).toBe(429)
     expect(exhausted.log.reports[0]?.result).toMatchObject({
@@ -488,6 +522,7 @@ describe("/v1/responses/compact and compaction triggers", () => {
 
   it("posts compaction to the official API even for OAuth credentials", async () => {
     const p = pipeline(() => jsonResponse(COMPACT_RESPONSE))
+
     const response = await p.call(
       "/v1/responses/compact",
       postJson({
@@ -498,12 +533,14 @@ describe("/v1/responses/compact and compaction triggers", () => {
         previous_response_id: "resp_0"
       })
     )
+
     expect(response.status).toBe(200)
     const call = p.calls[0]!
     expect(call.url).toBe("https://api.x.ai/v1/responses/compact")
     expect(call.headers["authorization"]).toBe("Bearer xai-access-1")
     expect(call.headers["x-xai-token-auth"]).toBeUndefined()
     const upstream = JSON.parse(call.body) as Record<string, unknown>
+
     for (const field of ["stream", "tools", "temperature", "max_output_tokens"]) expect(field in upstream).toBe(false)
     expect(upstream["previous_response_id"]).toBe("resp_0")
     expect(((await response.json()) as { id: string }).id).toBe("cmp_abc")
@@ -512,10 +549,12 @@ describe("/v1/responses/compact and compaction triggers", () => {
 
   it("applies payload rules after the compact-specific shaping re-added previous_response_id", async () => {
     const p = pipeline(() => jsonResponse(COMPACT_RESPONSE), { config })
+
     const response = await p.call(
       "/v1/responses/compact",
       postJson({ model: "grok-4.3", input: "hi", previous_response_id: "resp_0" })
     )
+
     expect(response.status).toBe(200)
     const upstream = JSON.parse(p.calls[0]!.body) as Record<string, unknown>
     expect(upstream["metadata"]).toEqual({ compact: true })
@@ -524,6 +563,7 @@ describe("/v1/responses/compact and compaction triggers", () => {
 
   it("re-emits a compaction_trigger stream request as a synthetic Responses stream", async () => {
     const p = pipeline(() => jsonResponse(COMPACT_RESPONSE))
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -532,6 +572,7 @@ describe("/v1/responses/compact and compaction triggers", () => {
         input: [{ type: "message", role: "user", content: "hi" }, { type: "compaction_trigger" }]
       })
     )
+
     expect(response.status).toBe(200)
     expect(p.calls[0]!.url).toBe("https://api.x.ai/v1/responses/compact")
     expect((JSON.parse(p.calls[0]!.body) as { input: unknown[] }).input).toHaveLength(1)
@@ -555,6 +596,7 @@ describe("reasoning replay", () => {
     const encrypted = grokCiphertext(21)
     const reasoning = { id: "rs_1", type: "reasoning", summary: [], encrypted_content: encrypted }
     const call = { id: "fc_1", type: "function_call", call_id: "call_1", name: "f", arguments: "{}" }
+
     const p = pipeline(() =>
       sseResponse([
         frame(created),
@@ -563,12 +605,16 @@ describe("reasoning replay", () => {
         frame(completed([reasoning, call]))
       ])
     )
+
     const tools = [{ type: "function", name: "f", parameters: { type: "object" } }]
+
     const first = await p.call(
       "/v1/responses",
       postJson({ model: "grok-4.3", prompt_cache_key: "conv-replay-1", input: "go", tools, stream: true })
     )
+
     await first.text()
+
     const second = await p.call(
       "/v1/responses",
       postJson({
@@ -583,6 +629,7 @@ describe("reasoning replay", () => {
         ]
       })
     )
+
     await second.text()
     const upstream = JSON.parse(p.calls[1]!.body) as { input: Array<Record<string, unknown>>; prompt_cache_key: string }
     expect(upstream.prompt_cache_key).toBe("conv-replay-1")
@@ -616,6 +663,7 @@ describe("client version", () => {
   it("reads the Grok CLI version the cron task stored in KV", async () => {
     await env.CACHE.put(XAI_VERSION_KV_KEY, "1.0.99")
     resetXaiClientVersionCache()
+
     try {
       const p = pipeline(() => sseResponse(TEXT_STREAM))
       await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi" }))

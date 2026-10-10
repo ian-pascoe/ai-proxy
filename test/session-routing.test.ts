@@ -49,6 +49,7 @@ describe("derived identity and message hash (Go parity)", () => {
       const body = parse(entry.body)
       const derived = hasExplicitSession(headers, body) ? "" : deriveId(entry.format, body, entry.callerScope)
       expect(derived).toBe(entry.derived)
+
       // Go's ExtractSessionID falls back to the message hash only without an explicit identity.
       if (extractSessionInfo(new Headers(), body) === undefined) {
         expect(messageHashIds(body).primary).toBe(entry.messageHash)
@@ -63,6 +64,7 @@ describe("derived identity and message hash (Go parity)", () => {
         { role: "user", content: "hello" }
       ]
     }
+
     const full = { messages: [...opening.messages, { role: "assistant", content: "hi" }] }
     const hashes = messageHashIds(full)
     expect(hashes.fallback).toBe(messageHashIds(opening).primary)
@@ -89,17 +91,21 @@ describe("LCP matcher scenarios (Go parity)", () => {
         ...(scenario.config.maxPrefixes === undefined ? {} : { maxPrefixes: scenario.config.maxPrefixes }),
         ...(scenario.config.maxTurns === undefined ? {} : { maxTurns: scenario.config.maxTurns })
       })
+
       let now = 1_700_000_000_000
       const results: Array<Record<string, unknown>> = []
       const steps = scenario.steps as Step[]
       steps.forEach((step, index) => {
         const expected = scenario.results[index] as Record<string, unknown>
+
         const prepared = prepareFingerprints(
           step.body === undefined ? [] : extractCanonicalTurns(step.format ?? "openai", parse(step.body))
         )
+
         const namespace = step.namespace ?? ""
         const auth = step.auth ?? ""
         let actual: Record<string, unknown> = { ok: true }
+
         switch (step.op) {
           case "advance":
             now += step.ms ?? 0
@@ -120,6 +126,7 @@ describe("LCP matcher scenarios (Go parity)", () => {
                   }
             break
           }
+
           case "match": {
             const result = matcher.match(namespace, prepared, now)
             actual =
@@ -138,15 +145,18 @@ describe("LCP matcher scenarios (Go parity)", () => {
                   }
             break
           }
+
           case "touch":
             actual = { ok: matcher.touch(namespace, prepared, auth, now) }
             break
           case "remove": {
             const generation =
               step.generationOf >= 0 ? ((results[step.generationOf]?.["accessNumber"] as number) ?? 0) : 0
+
             actual = { ok: matcher.removeBefore(namespace, prepared.fingerprints, auth, generation, now) }
             break
           }
+
           case "invalidate":
             matcher.invalidateAuth(auth)
             break
@@ -163,9 +173,11 @@ describe("LCP matcher scenarios (Go parity)", () => {
                   }
             break
           }
+
           default:
             throw new Error(`unknown op ${step.op}`)
         }
+
         results.push(actual)
         expect(actual, `step ${index} (${step.op})`).toEqual(expected)
       })

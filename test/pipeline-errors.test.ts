@@ -88,6 +88,7 @@ describe("claudeErrorBody", () => {
       404,
       '{"error":{"type":"not_found_error","message":"Thread state for previous_message_id was not found"}}'
     )
+
     expect(JSON.parse(body)).toEqual({
       type: "error",
       error: {
@@ -138,6 +139,7 @@ describe("enrichSelectionError", () => {
       ["claude", "x"],
       "m(high)"
     )
+
     expect(error.message).toBe(
       "no auth available (providers=claude,x, model=m(high)); check Claude auth/key session and cooldown state via /v0/management/auth-files"
     )
@@ -165,6 +167,7 @@ describe("upstream header filtering", () => {
         "x-request-id": "keep"
       })
     )
+
     expect([...filtered.keys()]).toEqual(["x-request-id"])
   })
 

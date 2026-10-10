@@ -29,6 +29,7 @@ describe("applyOAuthModelAliasEntries", () => {
       [{ name: "gpt-5", alias: "g5", "display-name": "Configured GPT Five" }],
       [model("gpt-5", { name: "models/gpt-5", displayName: "Upstream GPT Five" })]
     )
+
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
       id: "g5",
@@ -43,6 +44,7 @@ describe("applyOAuthModelAliasEntries", () => {
       [{ name: "gpt-5", alias: "g5" }],
       [model("gpt-5", { displayName: "Upstream" })]
     )
+
     expect(out[0]?.displayName).toBe("Upstream")
   })
 
@@ -54,6 +56,7 @@ describe("applyOAuthModelAliasEntries", () => {
       ],
       [model("gpt-5", { name: "models/gpt-5", displayName: "Upstream" })]
     )
+
     expect(ids(out)).toEqual(["gpt-5", "g5", "g5-2"])
     expect(out.map((entry) => entry.name)).toEqual(["models/gpt-5", "models/g5", "models/g5-2"])
     expect(out[0]?.displayName).toBe("Upstream")
@@ -69,6 +72,7 @@ describe("applyOAuthModelAliasEntries", () => {
       ],
       [model("gpt-6-astra"), model("gpt-5.6-luna"), model("same")]
     )
+
     expect(ids(out)).toEqual(["gpt-6-astra", "codex-main", "codex-luna", "same"])
     expect(out.find((entry) => entry.id === "codex-main")?.metadataModelId).toBe("gpt-6-astra")
     expect(out.find((entry) => entry.id === "codex-luna")?.metadataModelId).toBe("gpt-5.6-luna")
@@ -77,6 +81,7 @@ describe("applyOAuthModelAliasEntries", () => {
 
 describe("applyModelPrefixes", () => {
   const webSearch = { webSearch: true }
+
   const models = [
     model("gpt-6-astra"),
     model("codex-main", { metadataModelId: "gpt-6-astra", nativeCapabilities: webSearch })
@@ -140,6 +145,7 @@ describe("assembleCredentialModels: catalog providers", () => {
       source("c", "codex", planType === undefined ? {} : { planType }),
       options()
     )
+
     expect(ids(assembled?.models)).toEqual(ids(sectionModels(catalogs, section)))
   })
 
@@ -153,6 +159,7 @@ describe("assembleCredentialModels: catalog providers", () => {
       }),
       options("routing:\n  force-model-prefix: false\n")
     )
+
     expect(ids(assembled?.models)).toEqual([
       "gpt-5.5",
       "acme/gpt-5.5",
@@ -186,12 +193,14 @@ oauth:
     gemini:
       - { name: gemini-2.5-pro, alias: pro }
 `
+
     const claude = assembleCredentialModels(
       source("a", "claude", {
         modelAliases: [{ name: "claude-sonnet-4-5-20250929", alias: "sonnet", "display-name": "Mine" }]
       }),
       options(yaml)
     )
+
     const sonnet = claude?.models.find((entry) => entry.id === "sonnet")
     expect(sonnet?.displayName).toBe("Mine")
     expect(ids(claude?.models)).toContain("s46")
@@ -211,15 +220,18 @@ oauth:
     claude:
       - { name: claude-sonnet-4-6, max-context-length: 123000 }
 `
+
     const oauth = assembleCredentialModels(source("a", "claude"), options(yaml))
     expect(oauth?.models.find((entry) => entry.id === "s46")).toMatchObject({
       contextLength: 123000,
       maxContextLength: 123000
     })
+
     const apikey = assembleCredentialModels(
       source("k", "claude", { authKind: "apikey", source: "config" }),
       options(yaml)
     )
+
     expect(apikey?.models.find((entry) => entry.id === "claude-sonnet-4-6")?.contextLength).not.toBe(123000)
   })
 
@@ -234,6 +246,7 @@ oauth:
       source("a", "meta", { prefix: "m" }),
       options("routing:\n  force-model-prefix: true\n")
     )
+
     expect(ids(assembled?.models).every((id) => id.startsWith("m/"))).toBe(true)
   })
 
@@ -259,6 +272,7 @@ describe("assembleCredentialModels: config API keys", () => {
       }),
       options()
     )
+
     expect(ids(assembled?.models)).toEqual(["sonnet", "custom-model"])
     const [sonnet, custom] = assembled?.models ?? []
     expect(sonnet).toMatchObject({
@@ -282,6 +296,7 @@ describe("assembleCredentialModels: config API keys", () => {
       source("k", "gemini", { authKind: "apikey", source: "config" }),
       options()
     )
+
     expect(ids(assembled?.models)).toEqual(ids(sectionModels(catalogs, "gemini")))
   })
 
@@ -290,6 +305,7 @@ describe("assembleCredentialModels: config API keys", () => {
       source("k", "codex", { authKind: "apikey", source: "config" }),
       options()
     )
+
     expect(ids(assembled?.models)).toEqual(ids(sectionModels(catalogs, "codex-pro")))
     expect(assembled?.models.every((entry) => entry.supportConfigurationUpdate === false)).toBe(true)
   })
@@ -306,6 +322,7 @@ describe("assembleCredentialModels: config API keys", () => {
       }),
       options()
     )
+
     expect(
       assembled?.models.map((entry) => [entry.id, entry.displayName, entry.supportConfigurationUpdate, entry.ownedBy])
     ).toEqual([
@@ -338,6 +355,7 @@ describe("assembleCredentialModels: config API keys", () => {
       }),
       options("routing:\n  force-model-prefix: true\n")
     )
+
     expect(assembled?.provider).toBe("openai-compatible-acme")
     expect(ids(assembled?.models)).toEqual(["pfx/pool", "pfx/img-1"])
     const [pool, image] = assembled?.models ?? []
@@ -370,6 +388,7 @@ describe("assembleCredentialModels: config API keys", () => {
       }),
       options()
     )
+
     expect(ids(assembled?.models)).toEqual(["pool", "pool"])
   })
 

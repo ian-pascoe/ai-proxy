@@ -36,10 +36,13 @@ const STRIP_PATHS: ReadonlyMap<string, readonly string[]> = new Map([
 export const stripThinkingConfig = (body: Json | undefined, provider: string): Json | undefined => {
   if (body === undefined) return body
   const paths = STRIP_PATHS.get(provider)
+
   if (paths === undefined) return body
 
   let result = delPaths(body, paths)
+
   // Do not leave an empty output_config object when effort was its only field.
   if (provider === "claude") result = delIfEmptyObject(result, "output_config")
+
   return result
 }

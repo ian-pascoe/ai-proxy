@@ -26,19 +26,25 @@ const decoder = new TextDecoder()
 const decodeEncodings = (raw: Uint8Array, encoding: string, limit: number): Uint8Array => {
   let body = raw
   const parts = encoding.split(",")
+
   for (let i = parts.length - 1; i >= 0; i--) {
     const enc = (parts[i] as string).trim().toLowerCase()
+
     if (enc === "" || enc === "identity") continue
+
     if (enc !== "zstd") throw new RequestBodyDecodeError(`unsupported request content encoding: ${enc}`)
+
     try {
       body = inflateZstd(body, limit)
     } catch (cause) {
       if (cause instanceof DecodedBodyTooLargeError) {
         throw new RequestBodyTooLargeError(`decoded request body exceeds ${limit} bytes`)
       }
+
       throw new RequestBodyDecodeError(`failed to decode zstd request body: ${String(cause)}`)
     }
   }
+
   return body
 }
 
@@ -53,11 +59,14 @@ export const decodeRequestBody = (
   limit: number = MAX_DECODED_BODY_BYTES
 ): string => {
   const encoding = (contentEncoding ?? "").trim()
+
   if (encoding === "" || encoding.toLowerCase() === "identity") return decoder.decode(raw)
+
   try {
     return decoder.decode(decodeEncodings(raw, encoding, limit))
   } catch (error) {
     const text = decoder.decode(raw)
+
     if (isValidJson(text)) return text
     throw error
   }

@@ -56,16 +56,21 @@ export class MemoryStateTable implements StateTable {
   }
   evictOldest(count: number): void {
     const oldest = [...this.rows.entries()].toSorted((a, b) => a[1].generation - b[1].generation).slice(0, count)
+
     for (const [key] of oldest) this.rows.delete(key)
   }
   nextExpiry(): number | undefined {
     let next: number | undefined
+
     for (const row of this.rows.values()) if (next === undefined || row.expiresAt < next) next = row.expiresAt
+
     return next
   }
   maxGeneration(): number {
     let max = 0
+
     for (const row of this.rows.values()) if (row.generation > max) max = row.generation
+
     return max
   }
 }
@@ -88,16 +93,21 @@ export class StateEngine {
    */
   #nextGeneration(now: number): number {
     this.#last = Math.max(this.#last + 1, Math.trunc(now))
+
     return this.#last
   }
 
   #live(key: string, now: number): StateRow | undefined {
     const row = this.#table.get(key)
+
     if (row === undefined) return undefined
+
     if (row.expiresAt <= now) {
       this.#table.delete(key)
+
       return undefined
     }
+
     return row
   }
 
@@ -110,43 +120,57 @@ export class StateEngine {
     if (typeof op.key !== "string" || op.key === "") return { status: "rejected", reason: "invalid" }
     const current = this.#live(op.key, now)
     const currentGeneration = current?.generation ?? 0
+
     switch (op.op) {
       case "get": {
         if (current === undefined) return { status: "ok", generation: 0 }
+
         if (op.extendTtlMs !== undefined) {
           const expiresAt = Math.max(current.expiresAt, now + clampTtl(op.extendTtlMs))
+
           if (expiresAt !== current.expiresAt) this.#table.put(op.key, { ...current, expiresAt })
         }
+
         return { status: "ok", generation: current.generation, value: current.value }
       }
+
       case "put": {
         if (typeof op.value !== "string") return { status: "rejected", reason: "invalid" }
+
         if (op.value.length > MAX_VALUE_CHARS) return { status: "rejected", reason: "too_large" }
+
         if (op.ifGeneration !== undefined && op.ifGeneration !== currentGeneration) {
           return current === undefined
             ? { status: "conflict", generation: 0 }
             : { status: "conflict", generation: current.generation, value: current.value }
         }
+
         const generation = this.#nextGeneration(now)
         this.#table.put(op.key, { value: op.value, generation, expiresAt: now + clampTtl(op.ttlMs) })
         this.#enforceBound(op.maxEntries ?? DEFAULT_MAX_ENTRIES, now)
+
         return { status: "ok", generation }
       }
+
       case "incr": {
         const count = Number.parseInt(current?.value ?? "0", 10)
         const next = (Number.isSafeInteger(count) && count >= 0 ? count : 0) + 1
         const generation = this.#nextGeneration(now)
         this.#table.put(op.key, { value: String(next), generation, expiresAt: now + clampTtl(op.ttlMs) })
         this.#enforceBound(op.maxEntries ?? DEFAULT_MAX_ENTRIES, now)
+
         return { status: "ok", generation, value: String(next) }
       }
+
       case "delete": {
         if (op.ifGeneration !== undefined && op.ifGeneration !== currentGeneration) {
           return current === undefined
             ? { status: "conflict", generation: 0 }
             : { status: "conflict", generation: current.generation, value: current.value }
         }
+
         if (current !== undefined) this.#table.delete(op.key)
+
         return { status: "ok", generation: 0 }
       }
     }
@@ -155,15 +179,18 @@ export class StateEngine {
   /** Drops expired entries first, then the oldest writes; the entry written last always has the highest generation. */
   #enforceBound(maxEntries: number, now: number): void {
     const limit = Math.max(1, Math.trunc(maxEntries))
+
     if (this.#table.count() <= limit) return
     this.#table.purgeExpired(now)
     const overflow = this.#table.count() - limit
+
     if (overflow > 0) this.#table.evictOldest(overflow)
   }
 
   /** Alarm work: drops expired entries; returns the next expiry (undefined when the instance is empty). */
   sweep(now: number): number | undefined {
     this.#table.purgeExpired(now)
+
     return this.#table.nextExpiry()
   }
 

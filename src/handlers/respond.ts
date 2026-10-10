@@ -33,28 +33,38 @@ export const errorResponse = (
 ): HttpServerResponse.HttpServerResponse => {
   const status = error.status > 0 ? error.status : 500
   const headers: Record<string, string> = {}
+
   if (error.direct === true) {
     if (error.headers !== undefined) {
       filterUpstreamHeaders(new Headers(error.headers)).forEach((value, name) => {
         if (!isCPAReservedResponseHeader(name)) headers[name] = value
       })
     }
+
     headers["content-type"] ??= isValidJson(error.message) ? "application/json" : "text/plain; charset=utf-8"
+
     return HttpServerResponse.text(error.message, { status, headers })
   }
+
   const retryAfter = error.safeHeaders?.["retry-after"] ?? error.safeHeaders?.["Retry-After"]
+
   if (retryAfter !== undefined) headers["retry-after"] = retryAfter
+
   if (options.passthroughHeaders && error.headers !== undefined) {
     for (const [name, value] of Object.entries(error.headers)) {
       if (!isCPAReservedResponseHeader(name)) headers[name.toLowerCase()] = value
     }
   }
+
   const text = error.message.trim() !== "" ? error.message : statusText(status)
+
   const body =
     protocol === "claude"
       ? claudeErrorBody(status, text)
       : openAIErrorBody(status, text, error.terminalAuth === true ? { terminalAuth: true } : {})
+
   headers["content-type"] = "application/json"
+
   return HttpServerResponse.text(body, { status, headers })
 }
 
@@ -94,37 +104,46 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
   options: StreamResponseOptions
 ) {
   const started = yield* Effect.result(start)
+
   if (started._tag === "Failure") return options.onError(started.failure)
   const output = started.success
   const pull = yield* Stream.toPull(output.chunks)
+
   const first: FirstPull<string> = yield* pull.pipe(
     Effect.map((chunk): FirstPull<string> => ({ _tag: "chunk", chunk })),
     Pull.catchDone(() => Effect.succeed<FirstPull<string>>({ _tag: "done" })),
     Effect.catch((error: ExecutionError) => Effect.succeed<FirstPull<string>>({ _tag: "error", error }))
   )
+
   if (first._tag === "error") return options.onError(first.error)
 
   const headers = mergeUpstreamHeaders(
     { ...SSE_HEADERS, ...(options.contentType !== undefined ? { "content-type": options.contentType } : {}) },
     output.headers
   )
+
   const { framer } = options
+
   if (first._tag === "done") {
     return HttpServerResponse.stream(Stream.make(framer.emptyBody).pipe(Stream.encodeText), { headers })
   }
 
   const rest = Stream.fromPull(Effect.succeed(pull))
+
   const framed = Stream.concat(Stream.fromIterable(first.chunk), rest).pipe(
     Stream.map(framer.chunk),
     Stream.concat(
       Stream.suspend(() => {
         const closeError = framer.closeError()
+
         return Stream.make(closeError === undefined ? framer.done() : framer.terminalError(closeError))
       })
     ),
     Stream.catch((error: ExecutionError) => Stream.make(framer.terminalError(error)))
   )
+
   const keepAlive = framer.keepAlive
+
   const withKeepAlive =
     keepAlive !== undefined && options.keepAliveSeconds > 0
       ? Stream.merge(
@@ -136,10 +155,12 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
           { haltStrategy: "left" }
         )
       : framed
+
   const body = withKeepAlive.pipe(
     Stream.filter((text) => text !== ""),
     Stream.encodeText
   )
+
   return HttpServerResponse.stream(body, { headers })
 })
 
@@ -155,23 +176,30 @@ export const withNonStreamKeepAlive = <E, R>(
   run: Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, E, R | Scope.Scope> => {
   if (!(intervalSeconds > 0)) return run
+
   return Effect.gen(function* () {
     const fiber = yield* Effect.forkScoped(run)
     const interval = Duration.seconds(intervalSeconds)
+
     const ready = yield* Effect.raceFirst(
       Fiber.join(fiber).pipe(Effect.map((response) => ({ done: true as const, response }))),
       Effect.sleep(interval).pipe(Effect.as({ done: false as const }))
     )
+
     if (ready.done) return ready.response
     const blank = new Uint8Array([10])
+
     const final = Stream.fromEffect(
       Effect.gen(function* () {
         const response = yield* Fiber.join(fiber)
+
         // The final body is emitted as one chunk so no blank line can interleave with it.
         return new Uint8Array(yield* Effect.promise(() => HttpServerResponse.toWeb(response).arrayBuffer()))
       })
     )
+
     const body = Stream.merge(Stream.tick(interval).pipe(Stream.map(() => blank)), final, { haltStrategy: "right" })
+
     return HttpServerResponse.stream(body, { status: 200, headers: { "content-type": "application/json" } })
   })
 }

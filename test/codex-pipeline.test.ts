@@ -32,6 +32,7 @@ const created = (model = "gpt-5.4") => ({
   type: "response.created",
   response: { id: "resp_1", object: "response", created_at: 1767225600, model, status: "in_progress" }
 })
+
 const completed = (
   output: unknown[] = [],
   usage: unknown = { input_tokens: 10, output_tokens: 4, total_tokens: 14 }
@@ -39,10 +40,13 @@ const completed = (
   type: "response.completed",
   response: { id: "resp_1", status: "completed", created_at: 1767225600, model: "gpt-5.4", output, usage }
 })
+
 const frame = (event: unknown): string => {
   const type = (event as { type: string }).type
+
   return `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`
 }
+
 const MESSAGE_ITEM = {
   id: "msg_1",
   type: "message",
@@ -50,6 +54,7 @@ const MESSAGE_ITEM = {
   role: "assistant",
   content: [{ type: "output_text", text: "Hello!", annotations: [] }]
 }
+
 const TEXT_STREAM = [
   frame(created()),
   frame({ type: "response.output_text.delta", item_id: "msg_1", output_index: 0, delta: "Hel" }),
@@ -59,7 +64,9 @@ const TEXT_STREAM = [
 ]
 
 let config: Config
+
 let plainConfig: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
   plainConfig = await loadConfig("requests: {}")
@@ -72,13 +79,16 @@ interface Options {
 
 const pipeline = (respond: UpstreamResponder, options: Options = {}) => {
   const log: PickerLog = { picks: [], reports: [] }
+
   const p = makePipeline({
     config: options.config ?? plainConfig,
     respond,
     credentialPicker: fixedPicker(options.credentials ?? [oauthCredential()], log),
     modelProviders: codexModels
   })
+
   afterAll(p.dispose)
+
   return { ...p, log }
 }
 
@@ -95,10 +105,12 @@ const RESPONSES_REQUEST = {
 describe("POST /v1/responses (non-stream)", () => {
   it("shapes the upstream request, authenticates as the OAuth account and unwraps the completed response", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM.concat([])))
+
     const response = await p.call(
       "/v1/responses",
       postJson(RESPONSES_REQUEST, { "User-Agent": "my-client/1.0", Originator: "my-app", "Session-Id": "sess-7" })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { id: string; output: unknown[]; usage: Record<string, unknown> }
     expect(body.id).toBe("resp_1")
@@ -141,6 +153,7 @@ describe("POST /v1/responses (non-stream)", () => {
 
   it("translates Chat Completions requests to Codex and back", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM))
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({
@@ -151,6 +164,7 @@ describe("POST /v1/responses (non-stream)", () => {
         ]
       })
     )
+
     expect(response.status).toBe(200)
     const body = (await response.json()) as { choices: Array<{ message: { content: string }; finish_reason: string }> }
     expect(body.choices[0]?.message.content).toBe("Hello!")
@@ -175,6 +189,7 @@ describe("POST /v1/responses (non-stream)", () => {
 describe("payload rules are the final mutation", () => {
   it("applies rules after every built-in change and after input id sanitising", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), { config })
+
     const response = await p.call(
       "/v1/responses",
       postJson({
@@ -184,6 +199,7 @@ describe("payload rules are the final mutation", () => {
         service_tier: "fast"
       })
     )
+
     expect(response.status).toBe(200)
     const body = JSON.parse(p.calls[0]!.body) as Record<string, unknown> & { input: Array<{ id: string }> }
     // Built-ins force store=false/parallel_tool_calls=true, the override rule has the last word.
@@ -236,18 +252,23 @@ describe("POST /v1/responses (stream)", () => {
       frame({ type: "codex.response.metadata", metadata: {} }),
       ...TEXT_STREAM
     ]
+
     const ordinary = pipeline(() => sseResponse(events))
+
     const plain = await (
       await ordinary.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi", stream: true }))
     ).text()
+
     expect(plain).not.toContain("codex.")
     const official = pipeline(() => sseResponse(events))
+
     const codex = await (
       await official.call(
         "/v1/responses",
         postJson({ model: "gpt-5.4", input: "hi", stream: true }, { "User-Agent": "codex-tui/0.154.0" })
       )
     ).text()
+
     expect(codex).toContain("codex.response.metadata")
     expect(codex).not.toContain("codex.rate_limits")
   })
@@ -268,11 +289,14 @@ describe("POST /v1/responses (stream)", () => {
         response: { error: { code: "server_error", message: "boom" } }
       })
     ]
+
     const p = pipeline(() => sseResponse(events))
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi", stream: true }, { Originator: "codex_cli_rs" })
     )
+
     const text = await response.text()
     expect(text).toContain("event: response.failed")
     expect(text).toContain("boom")
@@ -298,6 +322,7 @@ describe("POST /v1/responses (stream)", () => {
       type: "response.incomplete",
       response: { status: "incomplete", output: [], usage: { output_tokens: 0 } }
     }
+
     const p = pipeline(() => sseResponse([frame(created()), frame(incomplete)]))
     const response = await p.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi", stream: true }))
     expect(await response.text()).toContain("incomplete empty response (0 tokens)")
@@ -307,9 +332,11 @@ describe("POST /v1/responses (stream)", () => {
 describe("upstream error classification", () => {
   it("maps usage_limit_reached to a credential-scoped 429 with the reset time", async () => {
     const reset = Math.floor(Date.now() / 1000) + 600
+
     const p = pipeline(() =>
       jsonResponse({ error: { type: "usage_limit_reached", message: "limit", resets_at: reset } }, { status: 400 })
     )
+
     const response = await p.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi" }))
     expect(response.status).toBe(429)
     const result = p.log.reports[0]!.result
@@ -328,6 +355,7 @@ describe("upstream error classification", () => {
     const tooLong = pipeline(() =>
       jsonResponse({ error: { code: "context_length_exceeded", message: "too long" } }, { status: 400 })
     )
+
     const r400 = await tooLong.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi" }))
     expect(await r400.text()).toContain("context_too_large")
   })
@@ -345,6 +373,7 @@ describe("upstream error classification", () => {
         ]
       }
     )
+
     const response = await p.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi" }))
     expect(response.status).toBe(200)
     expect(p.calls.map((call) => call.headers["chatgpt-account-id"])).toEqual(["acct_123", "acct_2"])
@@ -355,6 +384,7 @@ describe("upstream error classification", () => {
     const p = pipeline(() =>
       sseResponse([frame(created()), frame({ type: "error", error: { type: "rate_limit_error", message: "slow" } })])
     )
+
     const response = await p.call("/v1/responses", postJson({ model: "gpt-5.4", input: "hi" }))
     expect(response.status).toBe(429)
   })
@@ -374,6 +404,7 @@ describe("POST /v1/responses/compact", () => {
       output: [],
       usage: { input_tokens: 1, output_tokens: 1 }
     }
+
     const p = pipeline(() => jsonResponse(compaction))
     const response = await p.call("/v1/responses/compact", postJson({ model: "gpt-5.4", input: "hi", stream: false }))
     expect(response.status).toBe(200)
@@ -388,10 +419,12 @@ describe("POST /v1/responses/compact", () => {
 
   it("rejects streaming requests", async () => {
     const p = pipeline(() => jsonResponse({}))
+
     const response = await p.call(
       "/backend-api/codex/responses/compact",
       postJson({ model: "gpt-5.4", input: "x", stream: true })
     )
+
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({
       error: { message: "Streaming not supported for compact responses", type: "invalid_request_error" }
@@ -405,10 +438,12 @@ describe("images", () => {
 
   it("generations go to the direct Codex images endpoint with the model set", async () => {
     const p = pipeline(() => jsonResponse(IMAGE))
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ model: "openai/gpt-image-2", prompt: "a cat", size: "1024x1024" }, { "User-Agent": "client/1" })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(IMAGE)
     const call = p.calls[0]!
@@ -423,10 +458,13 @@ describe("images", () => {
     form.set("n", "2")
     form.append("image[]", new File([new Uint8Array([1, 2, 3])], "a.png", { type: "image/png" }))
     form.set("mask", new File([new Uint8Array([9])], "m.png", { type: "image/png" }))
+
     const p = pipeline(() => jsonResponse(IMAGE), {
       credentials: [oauthCredential({ id: "free", attributes: { plan_type: "free" } }), oauthCredential({ id: "paid" })]
     })
+
     const response = await p.call("/v1/images/edits", { method: "POST", body: form })
+
     if (response.status !== 200) throw new Error(await response.text())
     expect(response.status).toBe(200)
     expect(p.log.picks.map((pick) => pick.disallowFree)).toEqual([true])
@@ -460,10 +498,12 @@ describe("POST /v1/alpha/search", () => {
     const p = pipeline(
       () => new Response('{"results":[]}', { status: 202, headers: { "content-type": "application/json" } })
     )
+
     const response = await p.call(
       "/v1/alpha/search",
       postJson({ id: "s1", model: "gpt-5.4", query: "q", prompt_cache_key: "k", prompt_cache_retention: "24h" })
     )
+
     expect(response.status).toBe(202)
     expect(await response.text()).toBe('{"results":[]}')
     const call = p.calls[0]!
@@ -483,6 +523,7 @@ describe("POST /v1/alpha/search", () => {
         })
       ]
     })
+
     const response = await p.call("/backend-api/codex/alpha/search", postJson({ model: "gpt-5.4", query: "q" }))
     expect(response.status).toBe(200)
     expect(p.calls[0]!.url).toBe("https://s.test/v1/alpha/search")
@@ -499,6 +540,7 @@ upstream:
   codex:
     orphan-delegation-compatibility: true
 `
+
   const spawnTool = {
     type: "function",
     name: "spawn_agent",
@@ -508,7 +550,9 @@ upstream:
       properties: { message: { type: "string", encrypted: true } }
     }
   }
+
   const collaboration = (name = "collaboration") => ({ type: "namespace", name, tools: [spawnTool] })
+
   const callItem = {
     id: "fc_1",
     type: "function_call",
@@ -518,7 +562,9 @@ upstream:
     call_id: "call_1",
     arguments: '{"message":"go"}'
   }
+
   const CODEX_UA = { "User-Agent": "codex-tui/0.150.0" }
+
   const toolStream = [
     frame(created()),
     frame({ type: "response.output_item.done", output_index: 0, item: callItem }),
@@ -528,6 +574,7 @@ upstream:
   it("renames the collaboration namespace upstream, restores it in the answer and converts agent messages", async () => {
     const multi = await loadConfig(COLLAB_YAML)
     const p = pipeline(() => sseResponse(toolStream), { config: multi })
+
     const response = await p.call(
       "/v1/responses",
       postJson(
@@ -543,11 +590,14 @@ upstream:
         CODEX_UA
       )
     )
+
     expect(response.status).toBe(200)
+
     const upstream = JSON.parse(p.calls[0]!.body) as {
       tools: Array<{ name: string; tools: Array<{ parameters: { properties: { message: Record<string, unknown> } } }> }>
       input: Array<Record<string, unknown>>
     }
+
     expect(upstream.tools[0]?.name).toBe("collaboration-optimize")
     expect(upstream.tools[0]?.tools[0]?.parameters.properties.message).toEqual({ type: "string" })
     // The Codex executor keeps agent_message items (only compat models convert them); the encrypted part is plain text.
@@ -559,10 +609,12 @@ upstream:
   it("restores the namespace in streamed events too", async () => {
     const multi = await loadConfig(COLLAB_YAML)
     const p = pipeline(() => sseResponse(toolStream), { config: multi })
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", stream: true, tools: [collaboration()], input: "go" }, CODEX_UA)
     )
+
     const text = await response.text()
     expect(text).toContain('"namespace":"collaboration"')
     expect(text).not.toContain("collaboration-optimize")
@@ -585,19 +637,23 @@ upstream:
         CODEX_UA
       )
     )
+
     const names = (JSON.parse(p.calls[1]!.body) as { tools: Array<{ name: string }> }).tools
       .map((tool) => tool.name)
       .filter((name) => name !== undefined)
+
     expect(names).toEqual(["collaboration", "collaboration-optimize"])
   })
 
   it("downgrades orphan codex_app delegation outputs for collab_spawn subagents only", async () => {
     const multi = await loadConfig(COLLAB_YAML)
     const p = pipeline(() => sseResponse(TEXT_STREAM.concat([])), { config: multi })
+
     const input = [
       { type: "message", role: "user", content: [{ type: "input_text", text: "hi" }] },
       { type: "function_call_output", call_id: "orphan", namespace: "codex_app", name: "create_thread", output: "T1" }
     ]
+
     await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", stream: false, input }, { "X-Openai-Subagent": "collab_spawn" })

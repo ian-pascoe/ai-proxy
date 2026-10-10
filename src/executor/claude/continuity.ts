@@ -23,7 +23,9 @@ import {
 import type { SessionAddress } from "../../session-state/protocol.ts"
 
 const TTL_MS = 60 * 60 * 1000
+
 const STORE_NAME = "claude-continuity"
+
 const ENTRY_KEY = "state"
 
 export interface ContinuityState {
@@ -66,6 +68,7 @@ interface Entry {
 }
 
 const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 const REQUEST_ID = /^req_[A-Za-z0-9_-]{1,36}$/
 
 export const isValidPromptId = (id: string): boolean => PROMPT_ID.test(id.trim())
@@ -76,6 +79,7 @@ export const deterministicPromptId = (seed: string): string => {
   digest[6] = ((digest[6] as number) & 0x0f) | 0x40
   digest[8] = ((digest[8] as number) & 0x3f) | 0x80
   const hex = digest.toString("hex")
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
@@ -83,10 +87,13 @@ const emptyEntry = (): Entry => ({ previousMessageId: "", previousRequestId: "",
 
 const parseEntry = (text: string | undefined): Entry | undefined => {
   if (text === undefined) return undefined
+
   try {
     const parsed = JSON.parse(text) as Partial<Entry> | null
+
     if (parsed === null || typeof parsed !== "object") return undefined
     const field = (value: unknown): string => (typeof value === "string" ? value : "")
+
     return {
       previousMessageId: field(parsed.previousMessageId),
       previousRequestId: field(parsed.previousRequestId),
@@ -107,9 +114,11 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
   begin: (credentialIdentity, sessionId, isNewPromptTurn, explicitPromptId, date) => {
     const identity = credentialIdentity.trim()
     const session = sessionId.trim()
+
     if (identity === "" || session === "") return Effect.succeed(undefined)
     const key = createHash("sha256").update(`${identity}\u0000${session}`).digest("hex")
     const explicit = explicitPromptId.trim()
+
     return bestEffort(
       "claude continuity begin",
       // The backend is unreachable: continue without stored history (previous ids empty, new prompt id).
@@ -125,6 +134,7 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
       Effect.gen(function* () {
         const state = yield* backend
         let next = emptyEntry()
+
         const outcome = yield* updateEntry(
           state,
           addressOf(key),
@@ -133,33 +143,42 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
           (current) => {
             const stored = parseEntry(current)
             const entry: Entry = { ...(stored ?? emptyEntry()) }
+
             if (explicit !== "" && isValidPromptId(explicit)) entry.promptId = explicit.toLowerCase()
             else if (isNewPromptTurn || entry.promptId === "") entry.promptId = randomUUID()
+
             if (entry.pinnedDate === "") entry.pinnedDate = date
             next = entry
+
             const unchanged =
               stored !== undefined && stored.promptId === entry.promptId && stored.pinnedDate === entry.pinnedDate
+
             return unchanged ? keepValue : putValue(JSON.stringify(entry))
           }
         )
+
         return stateOf(key, next, outcome.generation)
       })
     )
   },
   commit: (state, messageId, requestId, promptId) => {
     const id = messageId.trim()
+
     if (id === "") return Effect.void
+
     return bestEffort(
       "claude continuity commit",
       undefined,
       Effect.gen(function* () {
         const backendState = yield* backend
+
         const known: Entry = {
           previousMessageId: state.previousMessageId,
           previousRequestId: state.previousRequestId,
           promptId: state.promptId,
           pinnedDate: state.pinnedDate
         }
+
         yield* updateEntry(
           backendState,
           addressOf(state.key),
@@ -172,10 +191,13 @@ export const makeSessionStateContinuityStore = (backend: BackendResolver = resol
           (current) => {
             // An expired or never stored session is not resurrected by a commit.
             const stored = parseEntry(current)
+
             if (stored === undefined) return keepValue
             stored.previousMessageId = id
             stored.previousRequestId = REQUEST_ID.test(requestId.trim()) ? requestId.trim() : ""
+
             if (isValidPromptId(promptId)) stored.promptId = promptId.toLowerCase()
+
             return putValue(JSON.stringify(stored))
           }
         )

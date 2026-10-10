@@ -24,6 +24,7 @@ const GEMINI_RESPONSE = {
 }
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
@@ -31,6 +32,7 @@ beforeAll(async () => {
 const cred = credential("gemini", "gemini:apikey:1", {
   attributes: { api_key: "AIza-test", base_url: "https://gl.test/", "header:X-Custom": "fixed" }
 })
+
 const models = { "gemini-2.5-pro": ["gemini"], "gemini-2.5-flash": ["gemini"] }
 
 const harness = (respond: UpstreamResponder, overrides: { config?: Config } = {}) =>
@@ -40,6 +42,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
   it("forwards to the Gemini API with the API key, custom headers and the shaped body", async () => {
     const h = harness(() => jsonResponse(GEMINI_RESPONSE))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-pro:generateContent",
       postJson({
@@ -48,6 +51,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
         session_id: "client-session"
       })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual(GEMINI_RESPONSE)
     const call = h.calls[0]
@@ -108,10 +112,12 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
   it("answers upstream errors with the upstream status and classifies 401 as credential scoped", async () => {
     const h = harness(() => jsonResponse({ error: { code: 401, message: "API key not valid" } }, { status: 401 }))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-flash:generateContent",
       postJson({ contents: [{ role: "user", parts: [{ text: "hi" }] }] })
     )
+
     expect(response.status).toBe(401)
     expect(await response.text()).toContain("API key not valid")
     expect(h.reports[0]).toMatchObject({ success: false, httpStatus: 401, credentialScoped: true })
@@ -154,18 +160,23 @@ describe("POST /v1beta/models/{model}:streamGenerateContent", () => {
         })
       ])
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-flash:streamGenerateContent",
       postJson({ contents: [{ role: "user", parts: [{ text: "hi" }] }] })
     )
+
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toContain("text/event-stream")
     const text = await response.text()
+
     const chunks = text
       .split("\n\n")
       .filter((frame) => frame.startsWith("data: "))
       .map((frame) => JSON.parse(frame.slice(6)))
+
     expect(chunks).toHaveLength(2)
     // Gemini -> Gemini is a passthrough of the filtered line: the non-terminal chunk lost its usageMetadata.
     expect(chunks[0].usageMetadata).toBeUndefined()
@@ -179,10 +190,12 @@ describe("POST /v1beta/models/{model}:streamGenerateContent", () => {
   it("uses raw chunks and $alt for other alt values", async () => {
     const h = harness(() => sseResponse([line(GEMINI_RESPONSE)]))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json",
       postJson({ contents: [{ role: "user", parts: [{ text: "hi" }] }] })
     )
+
     expect(h.calls[0]?.url).toBe("https://gl.test/v1beta/models/gemini-2.5-flash:streamGenerateContent?$alt=json")
     expect(JSON.parse(await response.text())).toEqual(GEMINI_RESPONSE)
   })
@@ -190,10 +203,12 @@ describe("POST /v1beta/models/{model}:streamGenerateContent", () => {
   it("turns a pre-stream upstream failure into an HTTP error", async () => {
     const h = harness(() => jsonResponse({ error: { message: "quota" } }, { status: 429 }))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-flash:streamGenerateContent",
       postJson({ contents: [{ role: "user", parts: [{ text: "hi" }] }] })
     )
+
     expect(response.status).toBe(429)
   })
 })
@@ -203,7 +218,9 @@ describe("POST /v1beta/models/{model}:countTokens", () => {
     const h = harness(() =>
       jsonResponse({ totalTokens: 11, promptTokensDetails: [{ modality: "TEXT", tokenCount: 11 }] })
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1beta/models/gemini-2.5-flash:countTokens",
       postJson({
@@ -212,6 +229,7 @@ describe("POST /v1beta/models/{model}:countTokens", () => {
         generationConfig: { temperature: 1 }
       })
     )
+
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       totalTokens: 11,
@@ -229,15 +247,19 @@ describe("OpenAI client -> Gemini credential", () => {
   it("translates the chat completion both ways", async () => {
     const h = harness(() => jsonResponse(GEMINI_RESPONSE))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-flash", messages: [{ role: "user", content: "hi" }], max_tokens: 50 })
     )
+
     expect(response.status).toBe(200)
+
     const body = (await response.json()) as {
       choices: Array<{ message: { content: string }; finish_reason: string }>
       usage: { prompt_tokens: number }
     }
+
     expect(body.choices[0]?.message.content).toBe("Hello")
     expect(body.choices[0]?.finish_reason).toBe("stop")
     expect(body.usage.prompt_tokens).toBe(4)
@@ -253,11 +275,14 @@ describe("OpenAI client -> Gemini credential", () => {
         `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "!" }] }, finishReason: "STOP", index: 0 }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 2, totalTokenCount: 3 }, responseId: "r" })}\n\n`
       ])
     )
+
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/chat/completions",
       postJson({ model: "gemini-2.5-pro", stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     const text = await response.text()
     expect(text).toContain('"content":"Hi"')
     expect(text).toContain('"finish_reason":"stop"')
@@ -269,11 +294,14 @@ describe("OpenAI Responses client -> Gemini credential", () => {
   it("translates a non-stream response and echoes the request fields", async () => {
     const h = harness(() => jsonResponse(GEMINI_RESPONSE))
     afterAll(h.dispose)
+
     const response = await h.call(
       "/v1/responses",
       postJson({ model: "gemini-2.5-flash", input: "hi", instructions: "be brief", max_output_tokens: 50 })
     )
+
     expect(response.status).toBe(200)
+
     const body = (await response.json()) as {
       id: string
       status: string
@@ -281,6 +309,7 @@ describe("OpenAI Responses client -> Gemini credential", () => {
       output: Array<{ type: string; content: Array<{ text: string }> }>
       usage: { input_tokens: number; output_tokens: number }
     }
+
     expect(body.id).toBe("resp_r1")
     expect(body.status).toBe("completed")
     expect(body.instructions).toBe("be brief")
@@ -299,6 +328,7 @@ describe("OpenAI Responses client -> Gemini credential", () => {
         `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "!" }] }, finishReason: "STOP", index: 0 }], usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 2, totalTokenCount: 3 }, responseId: "r" })}\n\n`
       ])
     )
+
     afterAll(h.dispose)
     const response = await h.call("/v1/responses", postJson({ model: "gemini-2.5-pro", stream: true, input: "hi" }))
     expect(response.status).toBe(200)

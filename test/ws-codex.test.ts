@@ -11,6 +11,7 @@ import { Effect } from "effect"
 import { codexSessionStore } from "../src/executor/websocket/session.ts"
 
 const created = { type: "response.created", response: { id: "resp_1", model: "gpt-5.4", status: "in_progress" } }
+
 const done = (id = "resp_1", output: unknown[] = []) => ({
   type: "response.done",
   response: {
@@ -21,9 +22,11 @@ const done = (id = "resp_1", output: unknown[] = []) => ({
     usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 }
   }
 })
+
 const MESSAGE_ITEM = { id: "msg_1", type: "message", role: "assistant", content: [{ type: "output_text", text: "Hi" }] }
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig("requests: {}")
 })
@@ -39,6 +42,7 @@ const setup = (
 ) => {
   const log: XaiPickerLog = { picks: [], reports: [] }
   const mock = mockUpstream(upstream)
+
   const p = makePipeline({
     config: configOverride,
     respond,
@@ -46,9 +50,12 @@ const setup = (
     modelProviders: codexModels,
     websocketConnector: mock.layer
   })
+
   afterAll(p.dispose)
+
   const connect = async (headers: Record<string, string> = {}, path = "/v1/responses") =>
     connectClient(await p.call(path, { headers: { upgrade: "websocket", ...headers } }))
+
   return { ...p, log, mock, connect }
 }
 
@@ -66,6 +73,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect({ "x-codex-turn-state": "turn-1" })
     client.send({
       type: "response.create",
@@ -102,6 +110,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -139,6 +148,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -177,14 +187,18 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     await client.until("response.completed")
+
     // The socket vanishes without the downstream noticing (no idle-drop notification).
     for (const id of codexSessionStore.ids()) {
       const session = codexSessionStore.peek(id)
+
       if (session?.socket !== undefined) await Effect.runPromise(codexSessionStore.invalidate(session))
     }
+
     client.send({ type: "response.create", previous_response_id: "resp_1", input: [] })
     const closed = await client.closed
     expect(closed).toEqual({ code: 1012, reason: "upstream requires HTTP replay" })
@@ -226,6 +240,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     await client.until("response.created")
@@ -250,6 +265,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     await client.until("response.created")
@@ -270,6 +286,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     await client.until("response.completed")
@@ -293,6 +310,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await bad.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     const error = await client.nextJson()
@@ -314,6 +332,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const quotaClient = await quota.connect()
     quotaClient.send({ type: "response.create", model: "gpt-5.4", input: [] })
     // Credential/quota failures are not exposed: the client just sees the socket close and reconnects.
@@ -330,6 +349,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         body: JSON.stringify({ error: { type: "usage_limit_reached", message: "limit", resets_in_seconds: 30 } })
       })
     })
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     await client.closed
@@ -354,6 +374,7 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
         })()
       }
     })
+
     const client = await s.connect({}, "/backend-api/codex/responses")
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     expect((await client.nextJson())["type"]).toBe("response.completed")
@@ -367,9 +388,11 @@ describe("Responses WebSocket over HTTP (credential without websockets)", () => 
 
   it("runs each turn over HTTP and rebuilds the transcript locally", async () => {
     const bodies: Array<Record<string, unknown>> = []
+
     const s = setup([oauthCredential()], {}, (call) => {
       bodies.push(JSON.parse(call.body) as Record<string, unknown>)
       const id = `resp_${bodies.length}`
+
       return sse([
         { type: "response.created", response: { id, model: "gpt-5.4", status: "in_progress" } },
         { type: "response.output_item.done", output_index: 0, item: MESSAGE_ITEM },
@@ -385,6 +408,7 @@ describe("Responses WebSocket over HTTP (credential without websockets)", () => 
         }
       ])
     })
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -400,11 +424,13 @@ describe("Responses WebSocket over HTTP (credential without websockets)", () => 
     expect(s.mock.dials).toHaveLength(0)
     expect(s.calls).toHaveLength(2)
     expect(s.calls[0]?.url).toBe("https://chatgpt.com/backend-api/codex/responses")
+
     const second = bodies[1] as {
       input: Array<Record<string, unknown>>
       instructions?: string
       previous_response_id?: string
     }
+
     expect(second.previous_response_id).toBeUndefined()
     expect(second.instructions).toBe("sys")
     expect(second.input.map((item) => item["type"])).toEqual(["message", "message", "message"])
@@ -422,6 +448,7 @@ describe("Responses WebSocket over HTTP (credential without websockets)", () => 
       {},
       () => new Response(JSON.stringify({ error: { message: "bad", type: "invalid_request_error" } }), { status: 400 })
     )
+
     const client = await s.connect()
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
     expect(await client.nextJson()).toMatchObject({ type: "error", status: 400 })
@@ -443,6 +470,7 @@ requests:
       - models: [{ name: "gpt-5.4", protocol: codex }]
         params: ["previous_response_id"]
 `)
+
     const mock = mockUpstream({
       onConnection: (connection) => {
         void (async () => {
@@ -453,6 +481,7 @@ requests:
         })()
       }
     })
+
     const p = makePipeline({
       config: ruled,
       respond: () => sseResponse([]),
@@ -460,6 +489,7 @@ requests:
       modelProviders: codexModels,
       websocketConnector: mock.layer
     })
+
     afterAll(p.dispose)
     const client = connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }))
     client.send({ type: "response.create", model: "gpt-5.4", input: [] })
@@ -468,6 +498,7 @@ requests:
     await client.until("response.completed")
     const frames = mock.connections[0]?.received.map((text) => JSON.parse(text) as Record<string, unknown>) ?? []
     expect(frames).toHaveLength(2)
+
     for (const frame of frames) {
       expect(frame["metadata"]).toEqual({ via: "payload-rule" })
       // The rule tried to set `type`; the transport framing is the only thing allowed to run after the rules.
@@ -475,6 +506,7 @@ requests:
       // The filtered field stays filtered: nothing restores it after the rules ran.
       expect("previous_response_id" in frame).toBe(false)
     }
+
     client.close()
   })
 })
@@ -484,25 +516,31 @@ describe("stream bootstrap buffering on the upstream WebSocket", () => {
   beforeAll(async () => {
     buffering = await loadConfig("upstream:\n  codex:\n    stream-bootstrap-buffering: true\n")
   })
+
   const second = wsCredential({
     id: "codex-oauth-2",
     metadata: { access_token: "access-token-2", account_id: "acct_2" }
   })
+
   const reply = (connection: Parameters<NonNullable<MockUpstreamOptions["onConnection"]>>[0], frames: unknown[]) => {
     void (async () => {
       await connection.next()
+
       for (const frame of frames) connection.server.send(JSON.stringify(frame))
     })()
   }
+
   const delta = { type: "response.output_text.delta", item_id: "m", output_index: 0, content_index: 0, delta: "Hi" }
 
   it("fails an overload rejection over to the next credential before the client sees any frame", async () => {
     let connections = 0
+
     const s = setup(
       [wsCredential(), second],
       {
         onConnection: (connection) => {
           connections += 1
+
           if (connections === 1) {
             reply(connection, [
               created,
@@ -517,6 +555,7 @@ describe("stream bootstrap buffering on the upstream WebSocket", () => {
       () => sseResponse([]),
       buffering
     )
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -537,11 +576,13 @@ describe("stream bootstrap buffering on the upstream WebSocket", () => {
 
   it("also fails an upstream error frame over, but only while buffering", async () => {
     let connections = 0
+
     const s = setup(
       [wsCredential(), second],
       {
         onConnection: (connection) => {
           connections += 1
+
           if (connections === 1) {
             reply(connection, [
               created,
@@ -553,6 +594,7 @@ describe("stream bootstrap buffering on the upstream WebSocket", () => {
       () => sseResponse([]),
       buffering
     )
+
     const client = await s.connect()
     client.send({
       type: "response.create",
@@ -568,6 +610,7 @@ describe("stream bootstrap buffering on the upstream WebSocket", () => {
     const s = setup([wsCredential()], {
       onConnection: (connection) => reply(connection, [created, done()])
     })
+
     const client = await s.connect()
     client.send({
       type: "response.create",

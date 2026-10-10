@@ -54,6 +54,7 @@ export const normalizeThinkingSupport = (
   raw: ConfigThinking | ThinkingSupport | undefined
 ): ThinkingSupport | undefined => {
   if (raw === undefined) return undefined
+
   const source = raw as {
     min?: number
     max?: number
@@ -63,22 +64,33 @@ export const normalizeThinkingSupport = (
     dynamicAllowed?: boolean
     levels?: readonly string[]
   }
+
   const out: Mutable<ThinkingSupport> = {}
+
   if (source.min !== undefined) out.min = source.min
+
   if (source.max !== undefined) out.max = source.max
   let zeroAllowed = source["zero-allowed"] ?? source.zeroAllowed
   let dynamicAllowed = source["dynamic-allowed"] ?? source.dynamicAllowed
   const levels: string[] = []
+
   for (const value of source.levels ?? []) {
     const level = value.trim().toLowerCase()
+
     if (level === "") continue
+
     if (level === "none") zeroAllowed = true
     else if (level === "auto") dynamicAllowed = true
+
     if (!levels.includes(level)) levels.push(level)
   }
+
   if (zeroAllowed !== undefined) out.zeroAllowed = zeroAllowed
+
   if (dynamicAllowed !== undefined) out.dynamicAllowed = dynamicAllowed
+
   if (levels.length > 0) out.levels = levels
+
   return out
 }
 
@@ -93,8 +105,10 @@ const buildConfiguredModelInfo = (
 ): Mutable<ModelInfo> | undefined => {
   const name = entry.name.trim()
   const alias = (entry.alias ?? "").trim() || name
+
   if (alias === "") return undefined
   const displayName = (entry["display-name"] ?? "").trim() || fallbackDisplayName || alias
+
   const info: Mutable<ModelInfo> = {
     id: alias,
     metadataModelId: name || alias,
@@ -105,12 +119,16 @@ const buildConfiguredModelInfo = (
     displayName,
     userDefined
   }
+
   const maxContextLength = entry["max-context-length"] ?? 0
+
   if (maxContextLength > 0) {
     info.contextLength = maxContextLength
     info.maxContextLength = maxContextLength
   }
+
   if (entry["is-compat"] === true) info.isCompat = true
+
   return info
 }
 
@@ -122,7 +140,9 @@ const resolveThinking = (
 ): ThinkingSupport | undefined => {
   const base = parseModelSuffix(name.trim()).modelName.trim()
   const configured = normalizeThinkingSupport(support)
+
   if (configured !== undefined) return configured
+
   return lookupStaticModelInfo(catalogs, base)?.thinking
 }
 
@@ -136,52 +156,71 @@ const buildConfigModels = (
 ): ModelInfo[] => {
   const out: ModelInfo[] = []
   const seen = new Set<string>()
+
   for (const entry of entries) {
     const name = entry.name.trim()
     const info = buildConfiguredModelInfo(entry, ownedBy, type, options.nowSeconds, name, true)
+
     if (info === undefined) continue
     const key = info.id.toLowerCase()
+
     if (seen.has(key)) continue
     seen.add(key)
+
     if (entry.thinking !== undefined) info.explicitThinking = true
     const thinking = resolveThinking(options.catalogs, name, entry.thinking)
+
     if (thinking !== undefined) info.thinking = thinking
     const native = lookupStaticModelInfoByChannel(options.catalogs, name, channel)?.nativeCapabilities
+
     if (native !== undefined) info.nativeCapabilities = structuredClone(native)
     out.push(info)
   }
+
   return out
 }
 
 const normalizeModalities = (raw: ReadonlyArray<string> | undefined): string[] | undefined => {
   const out: string[] = []
+
   for (const item of raw ?? []) {
     const modality = item.trim().toLowerCase()
+
     if (modality !== "" && !out.includes(modality)) out.push(modality)
   }
+
   return out.length === 0 ? undefined : out
 }
 
 /** `buildOpenAICompatibilityConfigModels`: aliases may repeat (an internal model pool), nothing is de-duplicated. */
 const buildCompatModels = (entries: ReadonlyArray<ModelEntry>, groupName: string, nowSeconds: number): ModelInfo[] => {
   const out: ModelInfo[] = []
+
   for (const entry of entries) {
     const image = entry.image === true
     const type = image ? "openai-image" : "openai-compatibility"
     const info = buildConfiguredModelInfo(entry, groupName, type, nowSeconds, (entry.alias ?? "").trim(), false)
+
     if (info === undefined) continue
     let support: ConfigThinking | undefined = entry.thinking
+
     if (support === undefined && !image) support = { levels: ["low", "medium", "high"] }
+
     if (entry.thinking !== undefined) info.explicitThinking = true
+
     if ((entry["input-modalities"] ?? []).length > 0) info.explicitInputModalities = true
     const thinking = normalizeThinkingSupport(support)
+
     if (thinking !== undefined) info.thinking = thinking
     const input = normalizeModalities(entry["input-modalities"])
+
     if (input !== undefined) info.supportedInputModalities = input
     const output = normalizeModalities(entry["output-modalities"])
+
     if (output !== undefined) info.supportedOutputModalities = output
     out.push(info)
   }
+
   return out
 }
 
@@ -193,26 +232,34 @@ const buildCodexConfigModels = (entries: ReadonlyArray<ModelEntry>, options: Ass
       supportConfigurationUpdate: false
     }))
   }
+
   const models = buildConfigModels(entries, "openai", "openai", "codex", options) as Mutable<ModelInfo>[]
   const displayNames = new Map<string, string>()
   const configurationUpdates = new Map<string, boolean>()
   const seen = new Set<string>()
+
   for (const entry of entries) {
     const alias = (entry.alias ?? "").trim() || entry.name.trim()
+
     if (alias === "") continue
     const key = alias.toLowerCase()
+
     if (seen.has(key)) continue
     seen.add(key)
     configurationUpdates.set(key, entry["support-configuration-update"] === true)
     const displayName = (entry["display-name"] ?? "").trim()
+
     if (displayName !== "") displayNames.set(key, displayName)
   }
+
   for (const model of models) {
     const key = model.id.toLowerCase()
     const displayName = displayNames.get(key)
+
     if (displayName !== undefined) model.displayName = displayName
     model.supportConfigurationUpdate = configurationUpdates.get(key) ?? false
   }
+
   return models
 }
 
@@ -221,9 +268,12 @@ const buildCodexConfigModels = (entries: ReadonlyArray<ModelEntry>, options: Ass
 /** `applyExcludedModels`: case-insensitive wildcard patterns against the lower-cased id. */
 export const applyExcludedModels = (models: ReadonlyArray<ModelInfo>, excluded: ReadonlyArray<string>): ModelInfo[] => {
   const patterns = excluded.map((item) => item.trim().toLowerCase()).filter((pattern) => pattern !== "")
+
   if (models.length === 0 || patterns.length === 0) return [...models]
+
   return models.filter((model) => {
     const id = model.id.trim().toLowerCase()
+
     return !patterns.some((pattern) => matchWildcard(pattern, id))
   })
 }
@@ -235,32 +285,42 @@ export const applyModelPrefixes = (
   forceModelPrefix: boolean
 ): ModelInfo[] => {
   const trimmed = (prefix ?? "").trim()
+
   if (trimmed === "" || models.length === 0) return [...models]
   const out: ModelInfo[] = []
   const seen = new Set<string>()
+
   const add = (model: ModelInfo): void => {
     const id = model.id.trim()
+
     if (id === "" || seen.has(id)) return
     seen.add(id)
     out.push(model)
   }
+
   for (const model of models) {
     const baseId = model.id.trim()
+
     if (baseId === "") continue
+
     if (!forceModelPrefix || trimmed === baseId) add(model)
     const clone = cloneModelInfo(model) as Mutable<ModelInfo>
     clone.id = `${trimmed}/${baseId}`
+
     if (clone.metadataModelId === undefined || clone.metadataModelId === "") clone.metadataModelId = baseId
     add(clone)
   }
+
   return out
 }
 
 /** `OAuthModelAliasChannel`: the `oauth.model-alias` / `oauth.settings` key; empty = not applicable. */
 export const oauthModelAliasChannel = (provider: string, authKind: string | undefined): string => {
   const kind = (authKind ?? "").trim().toLowerCase()
+
   if (kind === "apikey" || kind === "api_key" || kind === "api-key") return ""
   const key = provider.trim().toLowerCase()
+
   return key === "gemini" ? "" : key
 }
 
@@ -269,10 +329,15 @@ const rewriteName = (name: string, oldId: string, newId: string): string => {
   const trimmed = name.trim()
   const from = oldId.trim()
   const to = newId.trim()
+
   if (trimmed === "" || from === "" || to === "" || from.toLowerCase() === to.toLowerCase()) return name
+
   if (trimmed.toLowerCase() === from.toLowerCase()) return to
+
   if (trimmed.endsWith(`/${from}`)) return trimmed.slice(0, trimmed.length - from.length) + to
+
   if (trimmed === `models/${from}`) return `models/${to}`
+
   return name
 }
 
@@ -283,16 +348,21 @@ const aliasesForSource = (
   perCredential: ReadonlyArray<OAuthModelAlias>
 ): ReadonlyArray<OAuthModelAlias> => {
   const global = config.oauth["model-alias"][channel] ?? []
+
   if (global.length === 0) return perCredential
+
   if (perCredential.length === 0) return global
   const out: OAuthModelAlias[] = []
   const seen = new Set<string>()
+
   for (const entry of [...perCredential, ...global]) {
     const alias = entry.alias.trim()
+
     if (alias === "" || seen.has(alias.toLowerCase())) continue
     seen.add(alias.toLowerCase())
     out.push(entry)
   }
+
   return out
 }
 
@@ -306,58 +376,75 @@ export const applyOAuthModelAliasEntries = (
     readonly displayName: string
     readonly fork: boolean
   }
+
   const forward = new Map<string, Forward[]>()
+
   for (const entry of aliases) {
     const name = entry.name.trim()
     const alias = entry.alias.trim()
+
     if (name === "" || alias === "" || name.toLowerCase() === alias.toLowerCase()) continue
     const key = name.toLowerCase()
     const list = forward.get(key) ?? []
     list.push({ alias, displayName: (entry["display-name"] ?? "").trim(), fork: entry.fork === true })
     forward.set(key, list)
   }
+
   if (forward.size === 0) return [...models]
 
   const out: ModelInfo[] = []
   const seen = new Set<string>()
+
   for (const model of models) {
     const id = model.id.trim()
+
     if (id === "") continue
     const key = id.toLowerCase()
     const entries = forward.get(key)
+
     if (entries === undefined || entries.length === 0) {
       if (seen.has(key)) continue
       seen.add(key)
       out.push(model)
       continue
     }
+
     const keepOriginal = entries.some((entry) => entry.fork)
+
     if (keepOriginal && !seen.has(key)) {
       seen.add(key)
       out.push(model)
     }
+
     let addedAlias = false
+
     for (const entry of entries) {
       const mappedId = entry.alias.trim()
+
       if (mappedId === "" || mappedId.toLowerCase() === key) continue
       const aliasKey = mappedId.toLowerCase()
+
       if (seen.has(aliasKey)) continue
       seen.add(aliasKey)
       const clone = cloneModelInfo(model) as Mutable<ModelInfo>
       clone.id = mappedId
       clone.metadataModelId =
         model.metadataModelId !== undefined && model.metadataModelId !== "" ? model.metadataModelId : id
+
       if (entry.displayName !== "") clone.displayName = entry.displayName
+
       if (clone.name !== undefined && clone.name !== "") clone.name = rewriteName(clone.name, id, mappedId)
       out.push(clone)
       addedAlias = true
     }
+
     if (!keepOriginal && !addedAlias) {
       if (seen.has(key)) continue
       seen.add(key)
       out.push(model)
     }
   }
+
   return out
 }
 
@@ -371,10 +458,13 @@ const resolveSetting = (
   const name = (model.name ?? "").trim().toLowerCase()
   let aliasMatch: OAuthModelSetting | undefined
   let nameMatch: OAuthModelSetting | undefined
+
   for (const entry of settings) {
     const entryName = entry.name.trim().toLowerCase()
+
     if (entryName === "") continue
     const entryAlias = (entry.alias ?? "").trim().toLowerCase()
+
     if (entryAlias !== "" && id !== "" && id === entryAlias) aliasMatch = entry
     else if (
       (entryAlias === "" || entryAlias === id) &&
@@ -383,6 +473,7 @@ const resolveSetting = (
       nameMatch = entry
     }
   }
+
   return aliasMatch ?? nameMatch
 }
 
@@ -393,6 +484,7 @@ const applyOAuthSettings = (
 ): ModelInfo[] =>
   models.map((model) => {
     const length = resolveSetting(settings, model)?.["max-context-length"] ?? 0
+
     return length > 0 ? { ...model, contextLength: length, maxContextLength: length } : model
   })
 
@@ -413,6 +505,7 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
   const provider = source.provider.trim().toLowerCase()
   const configured = source.models ?? []
   const excluded = source.excludedModels
+
   switch (provider) {
     case "gemini":
     case "gemini-interactions":
@@ -447,8 +540,10 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
       if (source.authKind === "apikey")
         return applyExcludedModels(buildCodexConfigModels(configured, options), excluded)
       const tier = CODEX_TIERS[(source.planType ?? "").toLowerCase()] ?? "codex-pro"
+
       return applyExcludedModels(sectionModels(catalogs, tier), excluded)
     }
+
     case "kimi":
     case "kimi-ai":
     case "kimi.ai":
@@ -479,8 +574,10 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
 const finalize = (provider: string, models: ReadonlyArray<ModelInfo>): AssembledModels | undefined => {
   const normalized = models.flatMap((model) => {
     const id = model.id.trim()
+
     return id === "" ? [] : [id === model.id ? model : { ...model, id }]
   })
+
   return normalized.length === 0 ? undefined : { provider, models: normalized }
 }
 
@@ -497,21 +594,29 @@ export const assembleCredentialModels = (
 
   if (source.compat) {
     const models = buildCompatModels(source.models ?? [], source.label, options.nowSeconds)
+
     return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix))
   }
 
   const base = baseModels(source, options)
+
   if (base === undefined || base.length === 0) return undefined
   const channel = oauthModelAliasChannel(source.provider, source.authKind)
   let models = base
+
   if (channel !== "") {
     const aliases = aliasesForSource(options.config, channel, source.modelAliases)
+
     if (aliases.length > 0) models = applyOAuthModelAliasEntries(aliases, models)
   }
+
   if (models.length === 0) return undefined
+
   if (channel !== "") {
     const settings = options.config.oauth.settings[channel] ?? []
+
     if (settings.length > 0) models = applyOAuthSettings(settings, models)
   }
+
   return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix))
 }

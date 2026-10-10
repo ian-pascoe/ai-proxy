@@ -30,13 +30,17 @@ it.effect("web handler routes see per-request env/ctx services", () =>
       Effect.gen(function* () {
         const bindings = yield* WorkerEnv
         const ctx = yield* WorkerExecutionContext
+
         return HttpServerResponse.text(`${typeof bindings.CACHE.get}:${ctx === executionContext}`)
       })
     )
+
     const { handler, dispose } = HttpRouter.toWebHandler(Layer.mergeAll(Route, CorsLayer), { disableLogger: true })
+
     const response = yield* Effect.promise(() =>
       handler(new Request("https://proxy.test/binding"), requestContext(env, executionContext))
     )
+
     expect(yield* Effect.promise(() => response.text())).toBe("function:true")
     yield* Effect.promise(dispose)
   })
@@ -46,5 +50,6 @@ it("redactHeaders hides credentials", () => {
   const redacted = redactHeaders(
     new Headers({ authorization: "Bearer secret", "cf-access-jwt-assertion": "jwt", accept: "*/*" })
   )
+
   expect(redacted).toEqual({ authorization: "[redacted]", "cf-access-jwt-assertion": "[redacted]", accept: "*/*" })
 })

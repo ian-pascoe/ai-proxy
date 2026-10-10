@@ -9,7 +9,9 @@ import { SESSION_TTL_MS } from "../src/oauth/session-store.ts"
 import { begin, iso, jwt, makeOAuth, onlyFile, query, routes, s256, startClock, statusOf, T0 } from "./support/oauth.ts"
 
 const CLAUDE_TOKEN = "POST https://platform.claude.com/v1/oauth/token"
+
 const CLAUDE_PROFILE = "GET https://api.anthropic.com/api/oauth/profile"
+
 const CLAUDE_ROLES = "GET https://api.anthropic.com/api/oauth/claude_cli/roles"
 
 const claudeUpstream = (overrides: Record<string, unknown> = {}) =>
@@ -85,6 +87,7 @@ describe("claude login", () => {
       const result = yield* h.run(
         h.service.callback({ provider: "claude", state: started.state, code: "the-code#ignored-fragment", error: "" })
       )
+
       assert.deepStrictEqual(result, { ok: true, outcome: "completed" })
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
 
@@ -134,6 +137,7 @@ describe("claude login", () => {
   it.effect("merges the previous file of a re-login and migrates the legacy email-named credential", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const legacy: JsonObject = {
         type: "claude",
         email: "me@x.com",
@@ -146,11 +150,14 @@ describe("claude login", () => {
         prefix: "team",
         note: "keep me"
       }
+
       const sameName: JsonObject = { type: "claude", access_token: "older", disabled: true, weight: 3 }
+
       const h = makeOAuth(claudeUpstream(), {
         "claude-me@x.com.json": legacy,
         "claude-4a1c555d-me@x.com.json": sameName
       })
+
       const started = yield* begin(h, "claude")
       yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" }))
 
@@ -182,6 +189,7 @@ describe("claude login", () => {
       const other = makeOAuth(claudeUpstream(), {
         "claude-me@x.com.json": { ...base, organization_uuid: "another-org" }
       })
+
       const second = yield* begin(other, "claude")
       yield* other.run(other.service.callback({ state: second.state, code: "c", error: "" }))
       expect(other.removed).toEqual([])
@@ -192,6 +200,7 @@ describe("claude login", () => {
   it.effect("keeps the token-response identity when the profile call fails", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [CLAUDE_TOKEN]: {
@@ -206,6 +215,7 @@ describe("claude login", () => {
           [CLAUDE_ROLES]: { transportError: true }
         })
       )
+
       const started = yield* begin(h, "claude")
       yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" }))
       const { name, file } = onlyFile(h)
@@ -218,9 +228,11 @@ describe("claude login", () => {
   it.effect("reports token endpoint errors without saving or leaking details", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({ [CLAUDE_TOKEN]: { status: 400, body: { error: "invalid_grant", secret: "s3cr3t-body" } } })
       )
+
       const started = yield* begin(h, "claude")
       const result = yield* h.run(h.service.callback({ state: started.state, code: "bad-code", error: "" }))
       // Like Go: the callback is accepted, the failure shows in the status.
@@ -243,6 +255,7 @@ describe("claude login", () => {
       yield* startClock
       const h = makeOAuth(claudeUpstream())
       const started = yield* begin(h, "claude")
+
       const call = (input: { provider?: string; state: string; code: string; error?: string }) =>
         h.run(h.service.callback({ error: "", ...input }))
 
@@ -357,10 +370,13 @@ describe("claude login", () => {
     Effect.gen(function* () {
       yield* startClock
       let cancelNow: (() => void) | undefined
+
       const h = makeOAuth((request) => {
         if (request.url.includes("/oauth/token")) cancelNow?.()
+
         return claudeUpstream()(request)
       })
+
       const started = yield* begin(h, "claude")
       cancelNow = () => void h.table.delete(started.state)
       const result = yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" }))
@@ -376,6 +392,7 @@ describe("claude login", () => {
       const started = yield* begin(h, "claude")
       // Another request holds the lease (an exchange in flight).
       const session = h.table.get(started.state)
+
       if (session === undefined) throw new Error("missing session")
       h.table.put({ ...session, busyUntil: T0 + 60_000 })
       assert.deepStrictEqual(yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" })), {
@@ -390,10 +407,12 @@ describe("claude login", () => {
 
 describe("codex login", () => {
   const TOKEN = "POST https://auth.openai.com/oauth/token"
+
   const idToken = jwt({
     email: "dev@x.com",
     "https://api.openai.com/auth": { chatgpt_account_id: "acct-123", chatgpt_plan_type: "Plus Pro" }
   })
+
   const upstream = (extra: Record<string, unknown> = {}) =>
     routes({
       [TOKEN]: {
@@ -466,10 +485,12 @@ describe("codex login", () => {
       const failing = makeOAuth(
         routes({ [TOKEN]: { status: 400, body: { error: "invalid_grant for the-pasted-code" } } })
       )
+
       const started = yield* begin(failing, "codex")
       yield* failing.run(failing.service.callback({ state: started.state, code: "the-pasted-code", error: "" }))
       const status = yield* statusOf(failing, started.state)
       assert.strictEqual(status.status, "error")
+
       if (status.status !== "error") return
       expect(status.error).toContain(
         "Failed to exchange authorization code for tokens: token exchange failed with status 400"
@@ -490,6 +511,7 @@ describe("antigravity login", () => {
   it.effect("builds the Google URL and stores the file with the discovered project", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [TOKEN]: tokens,
@@ -497,6 +519,7 @@ describe("antigravity login", () => {
           [LOAD]: { body: { cloudaicompanionProject: { id: "proj-1" } } }
         })
       )
+
       const started = yield* begin(h, "antigravity")
       const parts = query(started.url)
       expect(Object.keys(parts)).toEqual([
@@ -547,6 +570,7 @@ describe("antigravity login", () => {
   it.effect("keeps the login when project discovery fails", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [TOKEN]: tokens,
@@ -554,6 +578,7 @@ describe("antigravity login", () => {
           [LOAD]: { status: 500, body: "boom" }
         })
       )
+
       const started = yield* begin(h, "antigravity")
       yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" }))
       expect(onlyFile(h).file).not.toHaveProperty("project_id")
@@ -565,6 +590,7 @@ describe("antigravity login", () => {
     Effect.gen(function* () {
       yield* startClock
       let onboardCalls = 0
+
       const h = makeOAuth(
         routes({
           [TOKEN]: tokens,
@@ -572,12 +598,14 @@ describe("antigravity login", () => {
           [LOAD]: { body: { allowedTiers: [{ id: "standard-tier", isDefault: true }, { id: "free-tier" }] } },
           [ONBOARD]: () => {
             onboardCalls++
+
             return onboardCalls === 1
               ? { body: { done: false } }
               : { body: { done: true, response: { cloudaicompanionProject: "proj-2" } } }
           }
         })
       )
+
       const started = yield* begin(h, "antigravity")
       const fiber = yield* Effect.forkChild(h.run(h.service.callback({ state: started.state, code: "c", error: "" })))
       yield* TestClock.adjust("2 seconds")
@@ -596,14 +624,17 @@ describe("antigravity login", () => {
   it.effect("fails on token, userinfo and provider errors with the Go messages", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const run = (table: Parameters<typeof routes>[0], input: { code: string; error: string }) =>
         Effect.gen(function* () {
           const h = makeOAuth(routes(table))
           const started = yield* begin(h, "antigravity")
           yield* h.run(h.service.callback({ state: started.state, ...input }))
           expect(h.files.size).toBe(0)
+
           return yield* statusOf(h, started.state)
         })
+
       assert.deepStrictEqual(
         yield* run({ [TOKEN]: { status: 400, body: { error: "invalid_grant" } } }, { code: "c", error: "" }),
         {
@@ -635,6 +666,7 @@ describe("devin login", () => {
   it.effect("builds the authorization URL with the 127.0.0.1 redirect and stores the session token", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [TOKEN]: { body: { token: "eyJhbGciOi.payload.sig" } },
@@ -642,6 +674,7 @@ describe("devin login", () => {
           [STATUS]: { status: 500 }
         })
       )
+
       const started = yield* begin(h, "devin")
       expect(
         started.url.startsWith(

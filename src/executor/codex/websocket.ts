@@ -83,13 +83,19 @@ export const codexWebsocketsEnabled = (credential: {
   readonly metadata: Readonly<Record<string, unknown>>
 }): boolean => {
   const attribute = (credential.attributes["websockets"] ?? "").trim()
+
   if (attribute !== "") {
     const parsed = parseBool(attribute)
+
     if (parsed !== undefined) return parsed
   }
+
   const raw = credential.metadata["websockets"]
+
   if (typeof raw === "boolean") return raw
+
   if (typeof raw === "string") return parseBool(raw) ?? false
+
   return false
 }
 
@@ -110,33 +116,46 @@ const CONNECTION_LIMIT_PATHS = [
 const websocketErrorBody = (event: Json | undefined, status: number): JsonObject => {
   const out: JsonObject = { status }
   const body = get(event, "body")
+
   if (body !== undefined) {
     out["body"] = body
     const bodyError = get(body, "error")
+
     if (bodyError !== undefined) {
       out["error"] = bodyError
+
       return out
     }
   }
+
   const error = get(event, "error")
+
   if (error !== undefined) {
     out["error"] = error
+
     return out
   }
+
   out["error"] = { type: "server_error", message: statusText(status) }
+
   return out
 }
 
 const websocketErrorHeaders = (event: Json | undefined): Record<string, string> | undefined => {
   const headers = get(event, "headers")
+
   if (!isJsonObject(headers)) return undefined
   const out: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(headers)) {
     const name = key.trim()
+
     if (name === "") continue
+
     if (typeof value === "string" && value.trim() !== "") out[name.toLowerCase()] = value.trim()
     else if (typeof value === "number" || typeof value === "boolean") out[name.toLowerCase()] = String(value)
   }
+
   return Object.keys(out).length === 0 ? undefined : out
 }
 
@@ -150,18 +169,23 @@ export const parseCodexWebsocketError = (
 ): { readonly error: ExecutionError; readonly body: string } | undefined => {
   if (asString(get(event, "type")).trim() !== "error") return undefined
   let status = asInt(get(event, "status"))
+
   if (status === 0) status = asInt(get(event, "status_code"))
+
   if (status <= 0) return undefined
   const body = JSON.stringify(websocketErrorBody(event, status))
   const usageLimit = isCodexUsageLimitError(body)
   let retryAfterMs = parseCodexRetryAfterMs(status, body, options.nowMs)
+
   if (
     retryAfterMs === undefined &&
     CONNECTION_LIMIT_PATHS.some((path) => asString(get(event, path)).trim() === "websocket_connection_limit_reached")
   ) {
     retryAfterMs = 0
   }
+
   const headers = websocketErrorHeaders(event)
+
   return {
     body,
     error: new ExecutionError({
@@ -206,6 +230,7 @@ const turnInputOf = (
   const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
   const url = websocketUrl(`${codexBaseUrl(context.credential)}/responses`)
   const overrides = deps.modelHeaderOverrides?.(request, prepared.baseModel)
+
   const headers = buildCodexWebsocketHeaders({
     credential: context.credential,
     config: context.config,
@@ -217,7 +242,9 @@ const turnInputOf = (
     ...(options.metadata.sessionId !== undefined ? { sessionId: options.metadata.sessionId } : {}),
     ...(overrides !== undefined ? { modelHeaderOverrides: overrides } : {})
   })
+
   const frame = frameCodexWebsocketBody(prepared.body)
+
   return (dialedAt: number): OpenTurnInput => ({
     store: deps.store ?? codexSessionStore,
     sessionId: websocket?.sessionId,
@@ -250,6 +277,7 @@ export const makeCodexWebsocketStream =
         Effect.gen(function* () {
           const turn = yield* openTurn(turnInput(yield* Clock.currentTimeMillis))
           context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
+
           // `upstream.codex.response-steering`: the executor owns the socket until the downstream one goes away.
           if (websocket?.duplex !== undefined && context.config.upstream.codex["response-steering"]) {
             return yield* startCodexDuplex({
@@ -274,6 +302,7 @@ export const makeCodexWebsocketStream =
               )
             )
           }
+
           const collector = new OutputItemCollector()
           let sawOutputDelta = false
 
@@ -284,6 +313,7 @@ export const makeCodexWebsocketStream =
               ),
               Effect.andThen(Effect.fail(error))
             )
+
           const clearReplay = deps.replayStore.clear(prepared.replayScope.modelName, prepared.replayScope.sessionKey)
 
           type Outcome =
@@ -309,9 +339,11 @@ export const makeCodexWebsocketStream =
               const nowMs = yield* Clock.currentTimeMillis
               const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
               context.usage.observeResponseModel(responseModelOf(event))
+
               if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
 
               const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs })
+
               if (wsError !== undefined) {
                 return {
                   _tag: "failure",
@@ -321,7 +353,9 @@ export const makeCodexWebsocketStream =
                   overload: false
                 } as Outcome
               }
+
               const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs })
+
               if (failure !== undefined) {
                 return {
                   _tag: "failure",
@@ -333,6 +367,7 @@ export const makeCodexWebsocketStream =
               }
 
               if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
+
               if (isTerminalEmptyIncomplete(event, collector.count, sawOutputDelta)) {
                 return {
                   _tag: "failure",
@@ -342,19 +377,26 @@ export const makeCodexWebsocketStream =
                   overload: false
                 } as Outcome
               }
+
               const type = asString(get(event, "type"))
+
               if (type === "response.output_item.done") collector.collect(event)
+
               if (
                 (type === "response.completed" || type === "response.done" || type === "response.incomplete") &&
                 isJsonObject(event)
               ) {
                 const completed = normalizeCodexCompletion(event)
+
                 if (!prepared.nativeOutput) patchCodexCompletedOutput(completed, collector)
+
                 if (type !== "response.incomplete")
                   yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, completed)
                 const detail = parseCodexUsage(completed)
+
                 if (detail !== undefined) context.usage.publish(detail)
                 const out = ensureResponsesUsageDetails(JSON.stringify(completed))
+
                 return {
                   _tag: "frame",
                   chunks: [out],
@@ -363,7 +405,9 @@ export const makeCodexWebsocketStream =
                   bytes: text.length + out.length
                 } as Outcome
               }
+
               const out = text.includes('"usage"') ? ensureResponsesUsageDetails(text) : text
+
               return {
                 _tag: "frame",
                 chunks: [out],
@@ -375,22 +419,28 @@ export const makeCodexWebsocketStream =
 
           const page = Effect.gen(function* () {
             const outcome = yield* classify(yield* turn.read)
+
             if (outcome._tag === "failure") return yield* fail(outcome.error)
+
             if (outcome.terminal) turn.complete()
+
             return [outcome.chunks, outcome.terminal ? Option.none<void>() : Option.some<void>(undefined)] as const
           })
+
           const streaming = Stream.paginate(undefined as void, () => page)
 
           // `stream-bootstrap-buffering`: hold handshake frames until the first real event so an overload rejection
           // can fail the attempt over to another credential before anything reaches the client.
           const bootstrap = context.config.upstream.codex["stream-bootstrap-buffering"]
           const timeoutMs = bootstrapTimeoutMs(context.config.upstream.codex["stream-bootstrap-timeout"])
+
           const buffered = bootstrap
             ? Effect.gen(function* () {
                 const startedAt = yield* Clock.currentTimeMillis
                 const held: string[] = []
                 let frames = 0
                 let bytes = 0
+
                 while (true) {
                   const text = yield* turn.read
                   // Every message read spends the frame budget, including the ones that are skipped.
@@ -398,21 +448,28 @@ export const makeCodexWebsocketStream =
                   const elapsed = (yield* Clock.currentTimeMillis) - startedAt
                   const timeoutReached = timeoutMs > 0 && elapsed >= timeoutMs
                   const windowOpen = frames <= BOOTSTRAP_MAX_BUFFERED_FRAMES && !timeoutReached
+
                   if (text.trim() === "") {
                     if (!windowOpen) return { held, rest: streaming }
                     continue
                   }
+
                   const outcome = yield* classify(text)
+
                   if (outcome._tag === "failure") {
                     if (outcome.overload && !timeoutReached) {
                       return yield* fail(bootstrapOverloadError(outcome.body, yield* Clock.currentTimeMillis))
                     }
+
                     if (outcome.kind === "ws" && !timeoutReached) return yield* fail(outcome.error)
                     // Delivered in-stream after the held handshake.
                     yield* turn.invalidate
+
                     if (isThinkingSignatureInvalid(outcome.error.status, outcome.error.message)) yield* clearReplay
+
                     return { held, rest: Stream.fail(outcome.error) }
                   }
+
                   if (
                     windowOpen &&
                     outcome.bufferable &&
@@ -423,7 +480,9 @@ export const makeCodexWebsocketStream =
                     held.push(...outcome.chunks)
                     continue
                   }
+
                   if (outcome.terminal) turn.complete()
+
                   return {
                     held: [...held, ...outcome.chunks],
                     rest: outcome.terminal ? Stream.empty : streaming
@@ -431,12 +490,15 @@ export const makeCodexWebsocketStream =
                 }
               })
             : Effect.succeed({ held: [] as string[], rest: streaming })
+
           const { held, rest } = yield* buffered
+
           return Stream.concat(Stream.fromIterable(held), rest).pipe(
             Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
           )
         })
       )
+
       return { headers: new Headers(), chunks } satisfies StreamResult
     })
 
@@ -454,55 +516,74 @@ export const makeCodexWebsocketExecute =
           compact: false,
           websocket: true
         })
+
         const modelLevelCooling = context.config.upstream.codex["model-level-cooling"]
+
         const turn = yield* openTurn(
           turnInputOf(deps, context, request, options, prepared)(yield* Clock.currentTimeMillis)
         )
+
         context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
         const clearReplay = deps.replayStore.clear(prepared.replayScope.modelName, prepared.replayScope.sessionKey)
+
         const fail = (error: ExecutionError) =>
           turn.invalidate.pipe(
             Effect.andThen(() => (isThinkingSignatureInvalid(error.status, error.message) ? clearReplay : Effect.void)),
             Effect.andThen(Effect.fail(error))
           )
+
         const collector = new OutputItemCollector()
         let sawOutputDelta = false
+
         while (true) {
           const text = yield* turn.read
           const nowMs = yield* Clock.currentTimeMillis
           const event = tryParseJson(restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2))
           context.usage.observeResponseModel(responseModelOf(event))
+
           if (!context.usage.ttftObserved) context.usage.observeTokenEvent(nowMs, isResponsesTokenEvent(text))
 
           const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs })
+
           if (wsError !== undefined) return yield* fail(wsError.error)
           const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs })
+
           if (failure !== undefined) return yield* fail(failure.error)
 
           if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true
           const type = asString(get(event, "type"))
+
           if (type === "response.output_item.done") collector.collect(event)
+
           if (
             (type !== "response.completed" && type !== "response.done" && type !== "response.incomplete") ||
             !isJsonObject(event)
           ) {
             continue
           }
+
           const completed = normalizeCodexCompletion(event)
+
           if (isTerminalEmptyIncomplete(completed, collector.count, sawOutputDelta)) {
             return yield* fail(codexEmptyIncompleteStreamError())
           }
+
           patchCodexCompletedOutput(completed, collector)
+
           if (type !== "response.incomplete")
             yield* cacheReplayFromCompleted(deps.replayStore, prepared.replayScope, completed)
           const detail = parseCodexUsage(completed)
+
           if (detail !== undefined) context.usage.publish(detail)
           const translated = deps.translateNonStream?.(prepared, request, completed) ?? JSON.stringify(completed)
+
           if (translated === "")
             return yield* fail(new ExecutionError({ status: 502, message: "response translation failed" }))
           turn.complete()
+
           const payload =
             prepared.responseFormat === "openai-response" ? ensureResponsesUsageDetails(translated) : translated
+
           return { payload, headers: turn.headers } satisfies ExecutorResponse
         }
       })

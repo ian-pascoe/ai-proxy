@@ -13,8 +13,11 @@ import type { ExecutionContext } from "../types.ts"
 import type { GoogleTarget, GoogleVariant } from "./google.ts"
 
 export const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com"
+
 export const GEMINI_API_VERSION = "v1beta"
+
 export const VERTEX_API_VERSION = "v1"
+
 export const VERTEX_DEFAULT_BASE_URL = "https://aiplatform.googleapis.com"
 
 const trimSlash = (value: string): string => value.replace(/\/+$/, "")
@@ -32,6 +35,7 @@ const NATIVE_INTERACTIONS_SOURCES: ReadonlySet<string> = new Set([
 /** `resolveGeminiBaseURL`. */
 export const geminiBaseUrl = (context: ExecutionContext): string => {
   const custom = (context.credential.attributes["base_url"] ?? "").trim()
+
   return custom === "" ? GEMINI_ENDPOINT : trimSlash(custom)
 }
 
@@ -42,6 +46,7 @@ export const geminiVariant = (identifier: "gemini" | "gemini-interactions"): Goo
     Effect.sync((): GoogleTarget => {
       const base = geminiBaseUrl(context)
       const apiKey = context.credential.attributes["api_key"] ?? ""
+
       return {
         url: (action, model) => `${base}/${GEMINI_API_VERSION}/models/${model}:${action}`,
         interactionsUrl: () => `${base}/${GEMINI_API_VERSION}/interactions`,
@@ -58,7 +63,9 @@ export const geminiVariant = (identifier: "gemini" | "gemini-interactions"): Goo
 /** `vertexBaseURL`: `global` uses the bare host, other locations a regional host. */
 export const vertexBaseUrl = (location: string): string => {
   const loc = location.trim()
+
   if (loc === "global") return VERTEX_DEFAULT_BASE_URL
+
   return `https://${loc === "" ? "us-central1" : loc}-aiplatform.googleapis.com`
 }
 
@@ -66,18 +73,22 @@ export const vertexBaseUrl = (location: string): string => {
 export const vertexInteractionsUrl = (baseUrl: string, projectId: string, stream: boolean): string => {
   const base = trimSlash(baseUrl.trim() === "" ? VERTEX_DEFAULT_BASE_URL : baseUrl.trim())
   const project = projectId.trim()
+
   const url =
     project === ""
       ? `${base}/v1beta1/interactions`
       : `${base}/v1beta1/projects/${project}/locations/global/interactions`
+
   return stream ? `${url}?alt=sse` : url
 }
 
 /** `isNativeVertexInteractionsAuth`. */
 export const isNativeVertexInteractions = (context: ExecutionContext): boolean => {
   const flag = (context.credential.attributes["interactions"] ?? "").trim().toLowerCase()
+
   if (flag === "true" || flag === "1") return true
   const { metadata } = context.credential
+
   return metadata["interactions"] === true || metadata["native_interactions"] === true
 }
 
@@ -85,6 +96,7 @@ const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => m
 
 const metadataString = (metadata: Readonly<Record<string, unknown>>, key: string): string => {
   const value = metadata[key]
+
   return typeof value === "string" ? value.trim() : ""
 }
 
@@ -92,14 +104,17 @@ const metadataString = (metadata: Readonly<Record<string, unknown>>, key: string
 const vertexApiKey = (context: ExecutionContext): { readonly apiKey: string; readonly baseUrl: string } => {
   const { attributes, metadata } = context.credential
   let apiKey = attributes["api_key"] ?? ""
+
   // Service-account credentials carry a minted `access_token` too; that is a bearer token, not an API key.
   if (apiKey === "" && metadata["service_account"] === undefined) apiKey = accessTokenOf(metadata)
+
   return { apiKey, baseUrl: attributes["base_url"] ?? "" }
 }
 
 /** Service-account access token: minted by the ControlPlane before the attempt (`withCredentialRefresh`). */
 const serviceAccountToken = (context: ExecutionContext) => {
   const token = accessTokenOf(context.credential.metadata)
+
   return token === ""
     ? Effect.fail(new ExecutionError({ status: 401, message: "missing access token", credentialScoped: true }))
     : Effect.succeed(token)
@@ -112,30 +127,38 @@ export const vertexVariant: GoogleVariant = {
     Effect.gen(function* () {
       const { apiKey, baseUrl } = vertexApiKey(context)
       const { metadata } = context.credential
+
       if (apiKey !== "") {
         const base = trimSlash(baseUrl.trim() === "" ? VERTEX_DEFAULT_BASE_URL : baseUrl.trim())
         const project = metadataString(metadata, "project_id")
+
         return {
           url: (action, model) => `${base}/${VERTEX_API_VERSION}/publishers/google/models/${model}:${action}`,
           interactionsUrl: (stream) => vertexInteractionsUrl(baseUrl, project, stream),
           authHeaders: { "x-goog-api-key": apiKey }
         } satisfies GoogleTarget
       }
+
       // Service account.
       let projectId = metadataString(metadata, "project_id")
+
       if (projectId === "") projectId = metadataString(metadata, "project")
+
       if (projectId === "") {
         return yield* new ExecutionError({ status: 500, message: "vertex executor: missing project_id in credentials" })
       }
+
       if (metadata["service_account"] === undefined || metadata["service_account"] === null) {
         return yield* new ExecutionError({
           status: 500,
           message: "vertex executor: missing service_account in credentials"
         })
       }
+
       const location = metadataString(metadata, "location") || "us-central1"
       const token = yield* serviceAccountToken(context)
       const base = vertexBaseUrl(location)
+
       return {
         url: (action, model) =>
           `${base}/${VERTEX_API_VERSION}/projects/${projectId}/locations/${location}/publishers/google/models/${model}:${action}`,

@@ -16,7 +16,9 @@ import { authIndexOf } from "./auth-index.ts"
 /** `/a/b/c` (percent-decoded segments) -> `["a","b","c"]`; `undefined` for an empty segment in the middle. */
 export const parseConfigPath = (rest: string): ReadonlyArray<string> | undefined => {
   const trimmed = rest.replace(/^\/+|\/+$/g, "")
+
   if (trimmed === "") return []
+
   const parts = trimmed.split("/").map((part) => {
     try {
       return decodeURIComponent(part)
@@ -24,16 +26,19 @@ export const parseConfigPath = (rest: string): ReadonlyArray<string> | undefined
       return part
     }
   })
+
   return parts.some((part) => part === "") ? undefined : parts
 }
 
 /** Value at `parts`, or `undefined` when a key is missing or a non-object is traversed. */
 export const getAtPath = (root: Json, parts: ReadonlyArray<string>): Json | undefined => {
   let current: Json | undefined = root
+
   for (const part of parts) {
     if (!isJsonObject(current) || !Object.hasOwn(current, part)) return undefined
     current = current[part]
   }
+
   return current
 }
 
@@ -41,9 +46,11 @@ export const getAtPath = (root: Json, parts: ReadonlyArray<string>): Json | unde
 export const mergePatch = (target: Json | undefined, patch: Json): Json => {
   if (!isJsonObject(target) || !isJsonObject(patch)) return structuredClone(patch)
   const out: JsonObject = { ...target }
+
   for (const [key, value] of Object.entries(patch)) {
     out[key] = Object.hasOwn(out, key) ? mergePatch(out[key], value) : structuredClone(value)
   }
+
   return out
 }
 
@@ -62,8 +69,10 @@ export const writeAtPath = (
   if (parts.length === 0) return (mode === "patch" ? mergePatch(document, value) : structuredClone(value)) as JsonObject
   const root = structuredClone(document)
   let parent: JsonObject = root
+
   for (const part of parts.slice(0, -1)) {
     const next = parent[part]
+
     if (next === undefined) {
       const created: JsonObject = {}
       parent[part] = created
@@ -74,20 +83,28 @@ export const writeAtPath = (
       return "invalid_path"
     }
   }
+
   const leaf = parts[parts.length - 1] as string
   parent[leaf] = mode === "patch" ? mergePatch(parent[leaf], value) : structuredClone(value)
+
   return root
 }
 
 const removeAt = (node: JsonObject, rest: ReadonlyArray<string>): boolean => {
   const [head, ...tail] = rest as [string, ...string[]]
+
   if (!Object.hasOwn(node, head)) return false
+
   if (tail.length > 0) {
     const child = node[head]
+
     if (!isJsonObject(child) || !removeAt(child, tail)) return false
+
     if (Object.keys(child).length > 0) return true
   }
+
   delete node[head]
+
   return true
 }
 
@@ -95,6 +112,7 @@ const removeAt = (node: JsonObject, rest: ReadonlyArray<string>): boolean => {
 export const deleteAtPath = (document: JsonObject, parts: ReadonlyArray<string>): JsonObject | undefined => {
   if (parts.length === 0) return undefined
   const root = structuredClone(document)
+
   return removeAt(root, parts) ? root : undefined
 }
 
@@ -120,9 +138,12 @@ export const injectAuthIndexes = (document: JsonObject, config: Pick<Config, "ap
   const credentials = synthesizeConfigCredentials(config, 0)
   const byPosition = new Map<string, string>()
   const compat = new Map<string, string[]>()
+
   for (const credential of credentials) {
     const index = credential.attributes.config_index
+
     if (index === undefined) continue
+
     if (credential.attributes.compat_name !== undefined) {
       const list = compat.get(index) ?? []
       list.push(credential.id)
@@ -134,19 +155,24 @@ export const injectAuthIndexes = (document: JsonObject, config: Pick<Config, "ap
 
   const out = structuredClone(document)
   const apiKeys = out["api-keys"]
+
   if (!isJsonObject(apiKeys)) return out
 
   for (const family of API_KEY_FAMILIES) {
     const groups = apiKeys[family]
+
     if (!Array.isArray(groups)) continue
+
     if (family === "openai-compatibility") {
       groups.forEach((group, groupIndex) => {
         if (!isJsonObject(group)) return
         const ids = compat.get(String(groupIndex)) ?? []
         const keys = group.keys
+
         if (Array.isArray(keys) && keys.length > 0) {
           keys.forEach((key, keyIndex) => {
             const id = ids[keyIndex]
+
             if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id)
           })
         } else if (ids[0] !== undefined) {
@@ -155,18 +181,24 @@ export const injectAuthIndexes = (document: JsonObject, config: Pick<Config, "ap
       })
       continue
     }
+
     const provider = FAMILY_PROVIDERS[family]
     let position = 0
+
     for (const group of groups) {
       const keys = isJsonObject(group) ? group.keys : undefined
+
       if (!Array.isArray(keys)) continue
+
       for (const key of keys) {
         const id = byPosition.get(`${provider}:${position}`)
         position += 1
+
         if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id)
       }
     }
   }
+
   return out
 }
 
@@ -180,14 +212,19 @@ const stripNode = (node: Json | undefined): void => {
 export const stripAuthIndexes = (document: JsonObject): JsonObject => {
   const out = structuredClone(document)
   const apiKeys = out["api-keys"]
+
   if (!isJsonObject(apiKeys)) return out
+
   for (const groups of Object.values(apiKeys)) {
     if (!Array.isArray(groups)) continue
+
     for (const group of groups) {
       stripNode(group)
       const keys = isJsonObject(group) ? group.keys : undefined
+
       if (Array.isArray(keys)) keys.forEach(stripNode)
     }
   }
+
   return out
 }

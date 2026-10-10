@@ -26,6 +26,7 @@ describe("parseInteractionsPayload", () => {
       conversation_id: "conv-1",
       input: []
     })
+
     expect(parsed).toMatchObject({
       systemPrompt: "be brief",
       temperature: 0.2,
@@ -57,6 +58,7 @@ describe("parseInteractionsPayload", () => {
         { type: "function_result", call_id: "c2" }
       ]
     })
+
     expect(prompts.map((prompt) => prompt.source)).toEqual([1, 2, 4, 4, 1, 1])
     const assistant = prompts[1]
     expect(assistant?.thinking).toBe("hmm")
@@ -88,6 +90,7 @@ describe("parseInteractionsPayload", () => {
         }
       ]
     })
+
     expect(prompts[0]?.images).toEqual([
       { base64Data: "AAAA", mimeType: "image/webp" },
       { base64Data: "BBBB", mimeType: "image/gif" },
@@ -133,6 +136,7 @@ describe("parseInteractionsPayload", () => {
         ]
       }
     )
+
     expect(prompts[0]?.images).toEqual([{ base64Data: "IMG", mimeType: "image/png" }])
     expect(prompts[1]).toMatchObject({ thinking: "orig thought", signatureType: "openai" })
     expect(text(prompts[1]?.signature ?? new Uint8Array())).toBe("abc")
@@ -162,6 +166,7 @@ describe("parseInteractionsPayload", () => {
         { type: "function_result", call_id: "c", result: [{ n: 1 }, "str"] }
       ]
     })
+
     expect(prompts.filter((prompt) => prompt.source === 4).map((prompt) => prompt.content)).toEqual([
       "line 1\nline 2",
       "wrapped",
@@ -180,6 +185,7 @@ describe("parseInteractionsPayload", () => {
         { description: "no name" }
       ]
     })
+
     expect(tools.map((tool) => tool.name)).toEqual(["plain", "camel", "fd1", "fd2", "kept"])
     expect(tools[0]?.parameters).toBe('{"type":"object"}')
     expect(tools[1]?.parameters).toBe('{"type":"object","properties":{}}')
@@ -194,6 +200,7 @@ describe("parseInteractionsPayload", () => {
         { role: "tool", tool_call_id: "x", content: "res" }
       ]
     })
+
     expect(parsed.systemPrompt).toBe("sys")
     expect(parsed.prompts.map((prompt) => prompt.source)).toEqual([1, 2, 4])
     expect(parsed.prompts[1]?.toolCalls).toEqual([{ id: "x", name: "f", arguments: '{"a":1}' }])
@@ -224,7 +231,9 @@ describe("checkDevinUserTurns", () => {
     const refused = checkDevinUserTurns(
       parse({ input: [{ type: "user_input", content: [{ type: "audio", uri: "x" }] }] }).prompts
     )
+
     expect(refused.error?.message).toContain("unsupported content part: audio")
+
     const mixed = checkDevinUserTurns(
       parse({
         input: [
@@ -233,6 +242,7 @@ describe("checkDevinUserTurns", () => {
         ]
       }).prompts
     )
+
     expect(mixed.error).toBeUndefined()
     expect(mixed.prompts.map((prompt) => prompt.content)).toEqual(["still here"])
   })

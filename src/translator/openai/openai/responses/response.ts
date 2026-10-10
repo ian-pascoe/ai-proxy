@@ -128,49 +128,71 @@ const incompleteByFinishReason = (reason: string): JsonObject | undefined => {
 const echoRequestFields = (target: JsonObject, req: Json | undefined, nonStream: boolean): void => {
   const v = (path: string): Json | undefined => get(req, path)
   const instructions = v("instructions")
+
   if (instructions !== undefined) target.instructions = str(instructions)
   const maxOutputTokens = v("max_output_tokens")
+
   if (maxOutputTokens !== undefined) target.max_output_tokens = asInt(maxOutputTokens)
   else if (nonStream) {
     // Also support max_tokens from chat completion style.
     const maxTokens = v("max_tokens")
+
     if (maxTokens !== undefined) target.max_output_tokens = asInt(maxTokens)
   }
+
   const maxToolCalls = v("max_tool_calls")
+
   if (maxToolCalls !== undefined) target.max_tool_calls = asInt(maxToolCalls)
   const model = v("model")
+
   if (model !== undefined) target.model = str(model)
   const parallel = v("parallel_tool_calls")
+
   if (parallel !== undefined) target.parallel_tool_calls = asBool(parallel)
   const previous = v("previous_response_id")
+
   if (previous !== undefined) target.previous_response_id = str(previous)
   const cacheKey = v("prompt_cache_key")
+
   if (cacheKey !== undefined) target.prompt_cache_key = str(cacheKey)
   const reasoning = v("reasoning")
+
   if (reasoning !== undefined) target.reasoning = sortKeysDeep(reasoning)
   const safety = v("safety_identifier")
+
   if (safety !== undefined) target.safety_identifier = str(safety)
   const tier = v("service_tier")
+
   if (tier !== undefined) target.service_tier = str(tier)
   const store = v("store")
+
   if (store !== undefined) target.store = asBool(store)
   const temperature = v("temperature")
+
   if (temperature !== undefined) target.temperature = asFloat(temperature)
   const text = v("text")
+
   if (text !== undefined) target.text = sortKeysDeep(text)
   const toolChoice = v("tool_choice")
+
   if (toolChoice !== undefined) target.tool_choice = sortKeysDeep(toolChoice)
   const tools = v("tools")
+
   if (tools !== undefined) target.tools = sortKeysDeep(tools)
   const topLogprobs = v("top_logprobs")
+
   if (topLogprobs !== undefined) target.top_logprobs = asInt(topLogprobs)
   const topP = v("top_p")
+
   if (topP !== undefined) target.top_p = asFloat(topP)
   const truncation = v("truncation")
+
   if (truncation !== undefined) target.truncation = str(truncation)
   const user = v("user")
+
   if (user !== undefined) target.user = sortKeysDeep(user)
   const metadata = v("metadata")
+
   if (metadata !== undefined) target.metadata = sortKeysDeep(metadata)
 }
 
@@ -179,10 +201,12 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
   let eventType = "response.completed"
   let status = "completed"
   const incompleteDetails = incompleteByFinishReason(st.finishReason)
+
   if (incompleteDetails !== undefined) {
     eventType = "response.incomplete"
     status = "incomplete"
   }
+
   const response: JsonObject = {
     id: st.responseId,
     object: "response",
@@ -191,17 +215,22 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
     background: false,
     error: null
   }
+
   const completed: JsonObject = { type: eventType, sequence_number: nextSeq(), response }
+
   if (incompleteDetails !== undefined) response.incomplete_details = incompleteDetails
+
   if (st.requestJson !== undefined) echoRequestFields(response, st.requestJson, false)
 
   const outputItems: Array<{ index: number; item: Json }> = []
+
   for (const r of st.reasonings) {
     outputItems.push({
       index: r.outputIndex,
       item: { id: r.reasoningId, type: "reasoning", summary: [{ type: "summary_text", text: r.reasoningData }] }
     })
   }
+
   for (const i of st.msgItemAdded.keys()) {
     const msgStatus = incompleteByFinishReason(st.finishReason) !== undefined ? "incomplete" : "completed"
     outputItems.push({
@@ -215,6 +244,7 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
       }
     })
   }
+
   for (const key of st.funcArgsBuf.keys()) {
     if (st.funcItemDone.get(key) !== true) continue
     const args = st.funcArgsBuf.get(key) ?? ""
@@ -222,14 +252,18 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
     const name = st.funcNames.get(key) ?? ""
     const toolStatus = incompleteByFinishReason(st.finishReason) !== undefined ? "incomplete" : "completed"
     const index = st.funcOutputIx.get(key) ?? 0
+
     if (st.toolIndex.isShell(name)) {
       const shell = shellCallItem(callId, args, toolStatus)
+
       if ("item" in shell) outputItems.push({ index, item: shell.item })
       continue
     }
+
     if (st.funcItemCustom.get(key) === true) {
       const patchCall = st.applyPatchCalls.get(key)
       const input = patchCall !== undefined ? patchCall.decoder.input() : unwrapCustomToolInput(args)
+
       const item: JsonObject = {
         id: `ctc_${callId}`,
         type: "custom_tool_call",
@@ -238,10 +272,12 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
         call_id: callId,
         name: ""
       }
+
       st.toolIndex.applyIdentity(item, name, "")
       outputItems.push({ index, item })
       continue
     }
+
     const item: JsonObject = {
       id: `fc_${callId}`,
       type: "function_call",
@@ -250,21 +286,27 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
       call_id: callId,
       name: ""
     }
+
     st.toolIndex.applyIdentity(item, name, "")
     outputItems.push({ index, item })
   }
+
   outputItems.sort((a, b) => a.index - b.index)
+
   if (outputItems.length > 0) response.output = outputItems.map((o) => o.item)
+
   if (st.usageSeen) {
     const usage: JsonObject = {
       input_tokens: st.promptTokens,
       input_tokens_details: { cached_tokens: st.cachedTokens },
       output_tokens: st.completionTokens
     }
+
     if (st.reasoningTokens > 0) usage.output_tokens_details = { reasoning_tokens: st.reasoningTokens }
     usage.total_tokens = st.totalTokens === 0 ? st.promptTokens + st.completionTokens : st.totalTokens
     response.usage = usage
   }
+
   return emit(eventType, completed)
 }
 
@@ -276,8 +318,11 @@ const canFinalizeResponse = (st: ChatToResponsesState): boolean => {
   ) {
     return false
   }
+
   for (const idx of st.msgItemAdded.keys()) if (st.msgItemDone.get(idx) !== true) return false
+
   for (const key of st.funcItemAdded.keys()) if (st.funcItemDone.get(key) !== true) return false
+
   return st.reasoningId === ""
 }
 
@@ -304,6 +349,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponses = (
   if (context.state.value === undefined) context.state.value = newState()
   const st = context.state.value as ChatToResponsesState
   const out: string[] = []
+
   try {
     return processChunk(context, st, line, out)
   } finally {
@@ -320,38 +366,51 @@ const processChunk = (
   if (st.toolInputError !== undefined || st.completedEmitted) return []
 
   let rawText = line
+
   if (rawText.startsWith("data:")) rawText = rawText.slice(5).trim()
   rawText = rawText.trim()
+
   if (!st.requestInitialized) {
     st.requestJson = pickRequestJson(context.originalRequest, context.translatedRequest)
     st.toolIndex = new ResponsesToolIndex(st.requestJson)
     st.requestInitialized = true
   }
+
   if (rawText === "") return []
   const isDone = rawText === "[DONE]"
+
   if (isDone && (!st.started || st.completedEmitted)) return []
 
   const root: Json = isDone ? {} : (parseJson(rawText) ?? {})
+
   if (!isDone) {
     const obj = get(root, "object")
+
     if (obj !== undefined && str(obj) !== "" && str(obj) !== "chat.completion.chunk") return []
+
     if (!isArr(get(root, "choices"))) return []
   }
 
   const usage = get(root, "usage")
+
   if (usage !== undefined) {
     const prompt = get(usage, "prompt_tokens")
+
     if (prompt !== undefined) {
       st.promptTokens = asInt(prompt)
       st.usageSeen = true
     }
+
     const cached = get(usage, "prompt_tokens_details.cached_tokens")
+
     if (cached !== undefined) {
       st.cachedTokens = asInt(cached)
       st.usageSeen = true
     }
+
     const completion = get(usage, "completion_tokens")
     const outputTokens = get(usage, "output_tokens")
+
     if (completion !== undefined) {
       st.completionTokens = asInt(completion)
       st.usageSeen = true
@@ -359,8 +418,10 @@ const processChunk = (
       st.completionTokens = asInt(outputTokens)
       st.usageSeen = true
     }
+
     const reasoningA = get(usage, "output_tokens_details.reasoning_tokens")
     const reasoningB = get(usage, "completion_tokens_details.reasoning_tokens")
+
     if (reasoningA !== undefined) {
       st.reasoningTokens = asInt(reasoningA)
       st.usageSeen = true
@@ -368,7 +429,9 @@ const processChunk = (
       st.reasoningTokens = asInt(reasoningB)
       st.usageSeen = true
     }
+
     const total = get(usage, "total_tokens")
+
     if (total !== undefined) {
       st.totalTokens = asInt(total)
       st.usageSeen = true
@@ -377,14 +440,19 @@ const processChunk = (
 
   const nextSeq = (): number => {
     st.seq++
+
     return st.seq
   }
+
   const allocOutputIndex = (): number => {
     const ix = st.nextOutputIx
     st.nextOutputIx++
+
     return ix
   }
+
   const toolStateKey = (outputIndex: number, toolIndex: number): string => `${outputIndex}:${toolIndex}`
+
   const failToolInput = (error: string): void => {
     if (st.toolInputError === undefined) {
       st.toolInputError = error
@@ -397,25 +465,33 @@ const processChunk = (
     let callId = st.funcCallIds.get(key) ?? ""
     let name = st.toolIndex.canonicalName(st.funcNames.get(key) ?? "")
     st.funcNames.set(key, name)
+
     if (!force && (callId === "" || name === "")) return
+
     if (name === "") {
       const single = st.toolIndex.singleCustomName()
+
       if (single?.only === true) {
         name = single.name
         st.funcNames.set(key, single.name)
       }
     }
+
     if (st.toolIndex.isApplyPatch(name) && st.funcIdentityConflicts.get(key) === true) {
       failToolInput("conflicting apply_patch call identity")
+
       return
     }
+
     if (callId === "") {
       callId = `call_${st.responseId}_${key.replaceAll(":", "_")}`
       st.funcCallIds.set(key, callId)
     }
+
     const outputIndex = st.funcOutputIx.get(key) ?? 0
     const isCustomTool = st.customToolNames.has(name)
     st.funcItemCustom.set(key, isCustomTool)
+
     if (st.toolIndex.isShell(name)) {
       out.push(
         emit("response.output_item.added", {
@@ -433,6 +509,7 @@ const processChunk = (
           new ApplyPatchCallState(`ctc_${callId}`, callId, d?.localName ?? "", d?.namespace ?? "", outputIndex)
         )
       }
+
       const o: JsonObject = {
         type: "response.output_item.added",
         sequence_number: nextSeq(),
@@ -446,6 +523,7 @@ const processChunk = (
           name: ""
         }
       }
+
       st.toolIndex.applyIdentity(o, name, "item")
       out.push(emit("response.output_item.added", o))
     } else {
@@ -462,9 +540,11 @@ const processChunk = (
           name: ""
         }
       }
+
       st.toolIndex.applyIdentity(o, name, "item")
       out.push(emit("response.output_item.added", o))
     }
+
     st.funcItemAdded.set(key, true)
   }
 
@@ -476,24 +556,32 @@ const processChunk = (
     ) {
       return
     }
+
     const args = st.funcArgsBuf.get(key)
     const sent = st.funcArgsSent.get(key) ?? 0
+
     if (args === undefined || args.length <= sent) return
     const delta = args.slice(sent)
+
     if (st.funcItemCustom.get(key) === true) {
       const patchCall = st.applyPatchCalls.get(key)
+
       if (patchCall !== undefined) {
         const pushed = patchCall.pushArguments(delta)
+
         if ("error" in pushed) failToolInput(pushed.error)
         else if (pushed.text !== "") {
           out.push(
             emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, pushed.text, nextSeq()))
           )
         }
+
         st.funcArgsSent.set(key, args.length)
       }
+
       return
     }
+
     const callId = st.funcCallIds.get(key) ?? ""
     out.push(
       emit("response.function_call_arguments.delta", {
@@ -555,8 +643,11 @@ const processChunk = (
         output: []
       }
     }
+
     let modelName = requestModelNameOf(context.originalRequest, context.translatedRequest)
+
     if (modelName === "") modelName = context.model
+
     if (modelName !== "") (created.response as JsonObject).model = modelName
     out.push(emit("response.created", created))
 
@@ -565,6 +656,7 @@ const processChunk = (
       sequence_number: nextSeq(),
       response: { id: st.responseId, object: "response", created_at: st.created, status: "in_progress", output: [] }
     }
+
     if (modelName !== "") (inprog.response as JsonObject).model = modelName
     out.push(emit("response.in_progress", inprog))
     st.started = true
@@ -654,22 +746,29 @@ const processChunk = (
 
   const finalizeOpenItems = (): void => {
     if (st.toolInputError !== undefined) return
+
     if (st.msgItemAdded.size > 0) {
       const idxs = [...st.msgItemAdded.keys()].sort(
         (a, b) => (st.msgOutputIx.get(a) ?? 0) - (st.msgOutputIx.get(b) ?? 0)
       )
+
       for (const idx of idxs) emitMessageItemDone(idx)
     }
+
     if (st.reasoningId !== "") {
       stopReasoning(st.reasoningBuf)
       st.reasoningBuf = ""
     }
+
     if (st.funcArgsBuf.size === 0) return
+
     const keys = [...st.funcArgsBuf.keys()].sort((a, b) => {
       const left = st.funcOutputIx.get(a) ?? 0
       const right = st.funcOutputIx.get(b) ?? 0
+
       return left < right || (left === right && a < b) ? -1 : left === right && a === b ? 0 : 1
     })
+
     for (const key of keys) {
       if (st.funcItemDone.get(key) === true) continue
       const buffered = st.funcArgsBuf.get(key)
@@ -680,7 +779,9 @@ const processChunk = (
       // A stream that ended without finish_reason and without complete JSON arguments must not synthesize empty
       // arguments or complete the in-flight tool call as successful.
       let name = st.toolIndex.canonicalName(st.funcNames.get(key) ?? "")
+
       if (name === "") name = st.toolIndex.singleCustomName()?.name ?? ""
+
       if (
         !st.toolIndex.isApplyPatch(name) &&
         st.finishReason === "" &&
@@ -691,23 +792,30 @@ const processChunk = (
 
       emitToolItem(key, true)
       emitPendingFunctionArgs(key)
+
       if (st.toolInputError !== undefined) return
       const callId = st.funcCallIds.get(key) ?? ""
+
       if (callId === "" || st.funcItemDone.get(key) === true) continue
 
       const outputIndex = st.funcOutputIx.get(key) ?? 0
       let toolStatus = "completed"
       let args = "{}"
+
       if (hasArgs) args = buffered as string
       else if (isIncomplete || !isExplicitToolFinish) args = ""
+
       if (isIncomplete) toolStatus = "incomplete"
 
       if (st.toolIndex.isShell(name)) {
         const shell = shellCallItem(callId, args, toolStatus)
+
         if ("error" in shell) {
           failToolInput(shell.error)
+
           return
         }
+
         out.push(
           emit("response.output_item.done", {
             type: "response.output_item.done",
@@ -724,18 +832,24 @@ const processChunk = (
       if (st.funcItemCustom.get(key) === true) {
         let input: string
         const patchCall = st.applyPatchCalls.get(key)
+
         if (patchCall !== undefined) {
           const finished = patchCall.finishArguments(args)
+
           if ("error" in finished) {
             failToolInput(finished.error)
+
             return
           }
+
           input = finished.input
+
           if (finished.tail !== "") {
             out.push(
               emit("response.custom_tool_call_input.delta", applyPatchInputDelta(patchCall, finished.tail, nextSeq()))
             )
           }
+
           out.push(emit("response.custom_tool_call_input.done", applyPatchInputDone(patchCall, input, nextSeq())))
         } else {
           input = unwrapCustomToolInput(args)
@@ -749,12 +863,14 @@ const processChunk = (
             })
           )
         }
+
         const itemDone: JsonObject = {
           type: "response.output_item.done",
           sequence_number: nextSeq(),
           output_index: outputIndex,
           item: { id: `ctc_${callId}`, type: "custom_tool_call", status: toolStatus, input, call_id: callId, name: "" }
         }
+
         st.toolIndex.applyIdentity(itemDone, st.funcNames.get(key) ?? "", "item")
         out.push(emit("response.output_item.done", itemDone))
         st.funcItemDone.set(key, true)
@@ -771,6 +887,7 @@ const processChunk = (
           arguments: args
         })
       )
+
       const itemDone: JsonObject = {
         type: "response.output_item.done",
         sequence_number: nextSeq(),
@@ -784,6 +901,7 @@ const processChunk = (
           name: ""
         }
       }
+
       st.toolIndex.applyIdentity(itemDone, st.funcNames.get(key) ?? "", "item")
       out.push(emit("response.output_item.done", itemDone))
       st.funcItemDone.set(key, true)
@@ -793,24 +911,33 @@ const processChunk = (
 
   if (isDone) {
     finalizeOpenItems()
+
     if (st.toolInputError !== undefined) return out
+
     for (const key of st.funcItemAdded.keys()) if (st.funcItemDone.get(key) !== true) return out
+
     if (st.msgItemAdded.size === 0 && st.funcItemAdded.size === 0) return out
     st.completedEmitted = true
     out.push(buildResponsesCompletedEvent(st, nextSeq))
+
     return out
   }
 
   const choices = get(root, "choices")
+
   if (isArr(choices)) {
     for (const choice of choices) {
       const idx = asInt(get(choice, "index"))
       const delta = get(choice, "delta")
+
       if (delta !== undefined) {
         let rc = get(delta, "reasoning_content")
+
         if (rc === undefined || str(rc) === "") rc = get(delta, "reasoning")
+
         if (rc !== undefined && str(rc) !== "") {
           const rcText = str(rc)
+
           if (st.reasoningId === "") {
             st.reasoningId = `rs_${st.responseId}_${idx}`
             st.reasoningIndex = allocOutputIndex()
@@ -833,6 +960,7 @@ const processChunk = (
               })
             )
           }
+
           st.reasoningBuf += rcText
           out.push(
             emit("response.reasoning_summary_text.delta", {
@@ -847,16 +975,20 @@ const processChunk = (
         }
 
         const c = get(delta, "content")
+
         if (c !== undefined && str(c) !== "") {
           const text = str(c)
+
           // Announce the message item and its first content part before any text deltas.
           if (st.reasoningId !== "") {
             stopReasoning(st.reasoningBuf)
             st.reasoningBuf = ""
           }
+
           if (!st.msgOutputIx.has(idx)) st.msgOutputIx.set(idx, allocOutputIndex())
           const msgOutputIndex = st.msgOutputIx.get(idx) as number
           const itemId = `msg_${st.responseId}_${idx}`
+
           if (st.msgItemAdded.get(idx) !== true) {
             out.push(
               emit("response.output_item.added", {
@@ -868,6 +1000,7 @@ const processChunk = (
             )
             st.msgItemAdded.set(idx, true)
           }
+
           if (st.msgContentAdded.get(idx) !== true) {
             out.push(
               emit("response.content_part.added", {
@@ -881,6 +1014,7 @@ const processChunk = (
             )
             st.msgContentAdded.set(idx, true)
           }
+
           out.push(
             emit("response.output_text.delta", {
               type: "response.output_text.delta",
@@ -896,27 +1030,33 @@ const processChunk = (
         }
 
         const tcs = get(delta, "tool_calls")
+
         if (isArr(tcs) && tcs.length > 0) {
           if (st.reasoningId !== "") {
             stopReasoning(st.reasoningBuf)
             st.reasoningBuf = ""
           }
+
           // Close an open message before any function events to match the Codex expected ordering.
           emitMessageItemDone(idx)
 
           for (const tc of tcs) {
             const toolIndex = asInt(get(tc, "index"))
             const key = toolStateKey(idx, toolIndex)
+
             if (!st.funcArgsBuf.has(key)) {
               st.funcArgsBuf.set(key, "")
               st.funcOutputIx.set(key, allocOutputIndex())
             }
+
             const newId = getStr(tc, "id")
             const newName = st.toolIndex.canonicalName(getStr(tc, "function.name"))
             const oldId = st.funcCallIds.get(key) ?? ""
             const oldName = st.toolIndex.canonicalName(st.funcNames.get(key) ?? "")
+
             // Retain conflicting non-empty ids until the winning tool is known.
             if (newId !== "" && oldId !== "" && newId !== oldId) st.funcIdentityConflicts.set(key, true)
+
             if (st.toolIndex.isApplyPatch(oldName) || st.toolIndex.isApplyPatch(newName)) {
               if (
                 st.funcIdentityConflicts.get(key) === true ||
@@ -926,15 +1066,19 @@ const processChunk = (
                 break
               }
             }
+
             if (newId !== "" && (st.funcCallIds.get(key) ?? "") === "") st.funcCallIds.set(key, newId)
             const nameChunk = getStr(tc, "function.name")
+
             if (nameChunk !== "" && st.funcItemAdded.get(key) !== true) st.funcNames.set(key, nameChunk)
 
             const args = get(tc, "function.arguments")
+
             if (args !== undefined && str(args) !== "")
               st.funcArgsBuf.set(key, (st.funcArgsBuf.get(key) ?? "") + str(args))
             emitToolItem(key, false)
             emitPendingFunctionArgs(key)
+
             if (st.toolInputError !== undefined) break
           }
         }
@@ -945,14 +1089,17 @@ const processChunk = (
       // finish_reason finalises the items; the terminal event waits for [DONE] (or transport finalisation) so late
       // usage-only chunks can still populate response.usage.
       const fr = get(choice, "finish_reason")
+
       if (fr !== undefined && str(fr) !== "") {
         st.finishReason = str(fr)
         finalizeOpenItems()
         st.completionPending = canFinalizeResponse(st)
       }
+
       if (st.toolInputError !== undefined) break
     }
   }
+
   return out
 }
 
@@ -982,20 +1129,25 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
   }
 
   let id = getStr(root, "id")
+
   if (id === "") {
     responseIdCounter += 1
     id = `resp_${Date.now().toString(16)}000000_${responseIdCounter}`
   }
+
   resp.id = id
 
   let created = asInt(get(root, "created"))
+
   if (created === 0) created = Math.floor(Date.now() / 1000)
   resp.created_at = created
 
   // Echo request fields when available (aligns with the streaming path).
   const req = context.translatedRequest
+
   if (req !== undefined) {
     echoRequestFields(resp, req, true)
+
     if (resp.model === undefined && get(root, "model") !== undefined && get(req, "model") === undefined) {
       resp.model = getStr(root, "model")
     }
@@ -1005,24 +1157,32 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
 
   const outputItems: Json[] = []
   let rc = get(root, "choices.0.message.reasoning_content")
+
   if (rc === undefined || str(rc) === "") rc = get(root, "choices.0.message.reasoning")
   const rcText = str(rc)
   let includeReasoning = rcText !== ""
+
   if (!includeReasoning && req !== undefined) includeReasoning = get(req, "reasoning") !== undefined
+
   if (includeReasoning) {
     let rid = id
+
     if (rid.startsWith("resp_")) rid = rid.slice("resp_".length)
     const reasoningItem: JsonObject = { id: `rs_${rid}`, type: "reasoning", encrypted_content: "", summary: [] }
+
     if (rcText !== "") reasoningItem.summary = [{ type: "summary_text", text: rcText }]
     outputItems.push(reasoningItem)
   }
 
   const choices = get(root, "choices")
+
   if (isArr(choices)) {
     for (const choice of choices) {
       const msg = get(choice, "message")
+
       if (msg !== undefined) {
         const c = get(msg, "content")
+
         if (c !== undefined && str(c) !== "") {
           outputItems.push({
             id: `msg_${id}_${asInt(get(choice, "index"))}`,
@@ -1032,39 +1192,51 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
             role: "assistant"
           })
         }
+
         const tcs = get(msg, "tool_calls")
+
         if (isArr(tcs)) {
           for (let tcIndex = 0; tcIndex < tcs.length; tcIndex++) {
             const tc = tcs[tcIndex] as Json
             let callId = getStr(tc, "id")
+
             if (callId === "") {
               // Providers may omit tool_call ids; synthesize one so the item stays usable for Codex round-trips.
               callId = `call_${id}_${asInt(get(choice, "index"))}_${tcIndex}`
             }
+
             const name = toolIndex.canonicalName(getStr(tc, "function.name"))
             const args = getStr(tc, "function.arguments")
             const toolStatus = isIncomplete ? "incomplete" : "completed"
+
             if (toolIndex.isShell(name)) {
               const shell = shellCallItem(callId, args, toolStatus)
+
               if ("error" in shell) {
                 st.toolInputError = shell.error
                 break
               }
+
               outputItems.push(shell.item)
               continue
             }
+
             if (toolIndex.custom.has(name)) {
               let input: string
+
               if (toolIndex.isApplyPatch(name)) {
                 const finished = new ApplyPatchCallState("", "", "", "", 0).finishArguments(args)
+
                 if ("error" in finished) {
                   st.toolInputError = finished.error
                   break
                 }
+
                 input = finished.input
               } else {
                 input = unwrapCustomToolInput(args)
               }
+
               const item: JsonObject = {
                 id: `ctc_${callId}`,
                 type: "custom_tool_call",
@@ -1073,10 +1245,12 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
                 call_id: callId,
                 name: ""
               }
+
               toolIndex.applyIdentity(item, name, "")
               outputItems.push(item)
               continue
             }
+
             const item: JsonObject = {
               id: `fc_${callId}`,
               type: "function_call",
@@ -1085,21 +1259,27 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
               call_id: callId,
               name: ""
             }
+
             toolIndex.applyIdentity(item, name, "")
             outputItems.push(item)
           }
         }
       }
+
       if (st.toolInputError !== undefined) break
     }
   }
+
   if (st.toolInputError !== undefined) {
     context.state.toolInputError = st.toolInputError
+
     return JSON.stringify(get(responsesToolInputFailure(id, 0, st.toolInputError), "response"))
   }
+
   if (outputItems.length > 0) resp.output = outputItems
 
   const usage = get(root, "usage")
+
   if (usage !== undefined) {
     if (
       get(usage, "prompt_tokens") !== undefined ||
@@ -1108,9 +1288,11 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
     ) {
       const u: JsonObject = { input_tokens: asInt(get(usage, "prompt_tokens")) }
       const cached = get(usage, "prompt_tokens_details.cached_tokens")
+
       if (cached !== undefined) u.input_tokens_details = { cached_tokens: asInt(cached) }
       u.output_tokens = asInt(get(usage, "completion_tokens"))
       const reasoning = get(usage, "output_tokens_details.reasoning_tokens")
+
       if (reasoning !== undefined) u.output_tokens_details = { reasoning_tokens: asInt(reasoning) }
       u.total_tokens = asInt(get(usage, "total_tokens"))
       resp.usage = u
@@ -1118,6 +1300,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
       resp.usage = sortKeysDeep(usage)
     }
   }
+
   return JSON.stringify(resp)
 }
 

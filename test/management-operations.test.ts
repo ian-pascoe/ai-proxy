@@ -9,7 +9,9 @@ let release: () => { status?: number; body?: unknown; transportError?: boolean }
 })
 
 const PANEL_HTML = "<!doctype html><html><head><title>panel</title></head><body></body></html>"
+
 const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`)
+
 const panelAssets = (found: boolean) =>
   ({
     fetch: async (request: Request) =>
@@ -21,7 +23,9 @@ const panelAssets = (found: boolean) =>
 const harness = makeHarness(
   (request) => {
     if (request.url.startsWith("https://api.github.com/")) return release()
+
     if (request.url === "https://offline.example/x") return { transportError: true }
+
     return {
       status: 201,
       headers: { "x-upstream": "yes" },
@@ -30,12 +34,15 @@ const harness = makeHarness(
   },
   { ASSETS: panelAssets(true) }
 )
+
 afterAll(harness.dispose)
+
 beforeEach(async () => {
   release = () => ({ body: { tag_name: "v8.1.0" } })
   harness.requests.length = 0
   await resetControlPlane()
 })
+
 const { call, json } = harness
 
 const apiCall = (body: unknown) => json("/v8/management/requests/api-call", jsonInit("POST", body))
@@ -71,16 +78,19 @@ describe("api-call", () => {
       data: '{"a":1}',
       proxy_url: "direct"
     })
+
     expect(result.status).toBe(200)
     const body = result.body as { status_code: number; header: Record<string, string[]>; body: string }
     expect(body.status_code).toBe(201)
     expect(body.header["x-upstream"]).toEqual(["yes"])
+
     const echoed = JSON.parse(body.body) as {
       method: string
       url: string
       headers: Record<string, string>
       body: string
     }
+
     // The mock transport records the URL without its query (the HTTP client keeps parameters separately).
     expect(echoed).toMatchObject({ method: "POST", url: "https://api.example.com/v1/ping", body: '{"a":1}' })
     expect(echoed.headers["x-test"]).toBe("1")
@@ -90,6 +100,7 @@ describe("api-call", () => {
   it("replaces $TOKEN$ with the credential token in headers and (JSON-escaped) data", async () => {
     await controlPlane().importAuthFile("x.json", claudeFile({ access_token: 'tok"en\\1' }))
     const authIndex = authIndexOf("x.json")
+
     const result = await apiCall({
       auth_index: authIndex,
       method: "POST",
@@ -97,10 +108,12 @@ describe("api-call", () => {
       header: { Authorization: "Bearer $TOKEN$" },
       data: '{"t":"$TOKEN$"}'
     })
+
     const echoed = JSON.parse((result.body as { body: string }).body) as {
       headers: Record<string, string>
       body: string
     }
+
     expect(echoed.headers.authorization).toBe('Bearer tok"en\\1')
     expect(JSON.parse(echoed.body)).toEqual({ t: 'tok"en\\1' })
 
@@ -110,33 +123,39 @@ describe("api-call", () => {
       url: "https://api.example.com/q",
       data: "raw $TOKEN$ text"
     })
+
     expect(JSON.parse((plain.body as { body: string }).body).body).toBe('raw tok"en\\1 text')
   })
 
   it("never substitutes $TOKEN$ into plain-http requests", async () => {
     await controlPlane().importAuthFile("x.json", claudeFile())
     const before = harness.requests.length
+
     const result = await apiCall({
       auth_index: authIndexOf("x.json"),
       method: "GET",
       url: "http://api.example.com/q",
       header: { Authorization: "Bearer $TOKEN$" }
     })
+
     expect(result).toMatchObject({ status: 400, body: { error: "auth token requires an https url" } })
     expect(harness.requests).toHaveLength(before)
   })
 
   it("uses the API key of config credentials and reports token problems", async () => {
     await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-config }]\n")
+
     const config = (await json("/v8/management/config/api-keys/claude")).body as Array<{
       keys: Array<{ auth_index: string }>
     }>
+
     const result = await apiCall({
       auth_index: config[0]!.keys[0]!.auth_index,
       method: "GET",
       url: "https://api.example.com/q",
       header: { "x-api-key": "$TOKEN$" }
     })
+
     expect(JSON.parse((result.body as { body: string }).body).headers["x-api-key"]).toBe("sk-ant-config")
 
     const base = { method: "GET", url: "https://api.example.com/q", header: { Authorization: "Bearer $TOKEN$" } }
@@ -189,10 +208,12 @@ describe("server information", () => {
   it("serves static model definitions per channel", async () => {
     const claude = await json("/v8/management/routing/model-definitions/Claude")
     expect(claude.status).toBe(200)
+
     const body = claude.body as {
       channel: string
       models: Array<{ id: string; object: string; owned_by: string; type: string; created: number }>
     }
+
     expect(body.channel).toBe("claude")
     expect(body.models.length).toBeGreaterThan(0)
     expect(body.models[0]).toMatchObject({
@@ -209,6 +230,7 @@ describe("server information", () => {
       expect(result.status, channel).toBe(200)
       expect((result.body as { models: unknown[] }).models.length, channel).toBeGreaterThan(0)
     }
+
     expect(await json("/v8/management/routing/model-definitions/nope")).toMatchObject({
       status: 400,
       body: { error: "unknown channel", channel: "nope" }
@@ -235,6 +257,7 @@ describe("server information", () => {
     for (const path of ["/v8/management/plugins"]) {
       expect((await call(path)).status, path).toBe(404)
     }
+
     // Unknown management paths still need the admin gate.
     expect((await call("/v8/management/plugins", { auth: false })).status).toBe(401)
   })
@@ -257,6 +280,7 @@ describe("control panel page", () => {
 
   it("explains how to install the panel when the asset is missing", async () => {
     const missing = makeHarness(undefined, { ASSETS: panelAssets(false) })
+
     try {
       expect(await missing.json("/management.html")).toMatchObject({ status: 404, body: { error: NOT_INSTALLED } })
     } finally {
@@ -269,11 +293,14 @@ describe("control panel auto-login", () => {
   // Runs the injected script against a fake localStorage, as the browser does before the panel boots.
   const run = (initial: Record<string, string>) => {
     const store = new Map(Object.entries(initial))
+
     const localStorage = {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => void store.set(key, value)
     }
+
     new Function("localStorage", AUTO_LOGIN_SCRIPT)(localStorage)
+
     return Object.fromEntries(store)
   }
 

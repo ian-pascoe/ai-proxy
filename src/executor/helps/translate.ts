@@ -49,16 +49,20 @@ export const translateRequestForExecutor = (
   // Go: compat applies unless the target is Codex for a non-Claude client.
   const compat = context.isCompat === true && !(to === Formats.Codex && from !== Formats.Claude)
   let body = envelope.body
+
   if (from === Formats.OpenAIResponse) {
     const rewriteInput =
       to !== Formats.Codex &&
       to !== Formats.OpenAIResponse &&
       (compat || codexMultiAgentV2Enabled(context.headers, context.config))
+
     if (context.config.upstream.codex["orphan-delegation-compatibility"] || rewriteInput) {
       body = cloneJson(body)
       rewriteCodexOrphanDelegationInputForConfig(context.headers, body, context.config)
+
       if (rewriteInput) rewriteCodexMultiAgentV2Input(context.headers, body, context.config, compat)
     }
   }
+
   return registry.translateRequest(from, to, { ...envelope, body }, hooks, { compat })
 }

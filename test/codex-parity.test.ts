@@ -71,6 +71,7 @@ describe("models.json override_header", () => {
   it("copies the entry's headers with trimmed names and drops empty ones", () => {
     const lookup = (id: string): ThinkingModelInfo | undefined =>
       id === "m" ? { id, config: { overrideHeader: { " X-A ": "1", " ": "2" } } } : { id }
+
     expect(modelOverrideHeaders(lookup, "m")).toEqual({ "X-A": "1" })
     expect(modelOverrideHeaders(lookup, "other")).toBeUndefined()
     expect(modelOverrideHeaders(undefined, "m")).toBeUndefined()
@@ -81,6 +82,7 @@ describe("models.json override_header", () => {
       id === "gpt-5.4"
         ? { id, config: { overrideHeader: { "X-Forced": "yes", "User-Agent": "custom-agent" } } }
         : undefined
+
     const h = await harness(
       apiKeyCredential(),
       () =>
@@ -89,6 +91,7 @@ describe("models.json override_header", () => {
           { status: 200, headers: { "content-type": "text/event-stream" } }
         )
     )
+
     await execute(
       makeCodexExecutor(),
       h,
@@ -112,6 +115,7 @@ describe("image tool usage (PublishAdditionalModel)", () => {
         ...(toolUsage === undefined ? {} : { tool_usage: { image_gen: toolUsage } })
       }
     })}\n\n`
+
   const run = async (toolUsage: unknown, tools: unknown[]) => {
     const h = await harness(apiKeyCredential(), () => new Response(completed(toolUsage), { status: 200 }))
     await execute(
@@ -120,6 +124,7 @@ describe("image tool usage (PublishAdditionalModel)", () => {
       { model: "gpt-5.4", payload: json({ model: "gpt-5.4", input: "draw", tools }) },
       options({ sourceFormat: "openai-response", metadata: { ...options().metadata, requestPath: "/v1/responses" } })
     )
+
     return h.usage.additionalRecords(1)
   }
 
@@ -127,6 +132,7 @@ describe("image tool usage (PublishAdditionalModel)", () => {
     const [record, ...rest] = await run({ input_tokens: 7, output_tokens: 3, total_tokens: 10 }, [
       { type: "image_generation", model: "gpt-image-1.5" }
     ])
+
     expect(rest).toEqual([])
     expect(record).toMatchObject({ model: "gpt-image-1.5", failed: false, provider: "codex" })
     expect(record?.detail).toMatchObject({ inputTokens: 7, outputTokens: 3, totalTokens: 10 })

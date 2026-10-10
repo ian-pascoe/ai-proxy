@@ -43,17 +43,20 @@ export class ModelCapabilities extends Context.Service<
     ModelCapabilities,
     Effect.gen(function* () {
       const registry = yield* ModelRegistry
+
       return ModelCapabilities.of({
         thinking: (model, credential) =>
           registry.snapshot.pipe(
             Effect.map((snapshot): ThinkingResolution => {
               const wanted = model.trim().toLowerCase()
+
               const own = snapshot
                 .modelsForCredential(credential.id)
                 .find(
                   (info) =>
                     info.id.toLowerCase() === wanted || (info.metadataModelId ?? "").trim().toLowerCase() === wanted
                 )
+
               return {
                 modelInfo: own ?? snapshot.lookupModelInfo(model, credential.provider),
                 lookup: snapshot.lookupModelInfo
@@ -70,11 +73,13 @@ export class ModelCapabilities extends Context.Service<
     ModelCapabilities,
     Effect.gen(function* () {
       const reader = yield* ConfigReader
+
       return ModelCapabilities.of({
         thinking: (model, credential) =>
           reader.get.pipe(
             Effect.map(({ config }): ThinkingResolution => {
               const group = resolveCompatConfig(config, credential)
+
               return {
                 modelInfo: group === undefined ? undefined : compatModelInfo(group.models ?? [], model),
                 lookup: undefined
@@ -98,13 +103,19 @@ const normalizeSupport = (raw: NonNullable<ModelEntry["thinking"]>): ModelThinki
   let zeroAllowed = raw["zero-allowed"]
   let dynamicAllowed = raw["dynamic-allowed"]
   const levels: string[] = []
+
   for (const value of raw.levels ?? []) {
     const level = value.trim().toLowerCase()
+
     if (level === "") continue
+
     if (level === "none") zeroAllowed = true
+
     if (level === "auto") dynamicAllowed = true
+
     if (!levels.includes(level)) levels.push(level)
   }
+
   return {
     ...(raw.min === undefined ? {} : { min: raw.min }),
     ...(raw.max === undefined ? {} : { max: raw.max }),
@@ -117,13 +128,17 @@ const normalizeSupport = (raw: NonNullable<ModelEntry["thinking"]>): ModelThinki
 /** The configured entry whose alias (or name when it has none) equals `model`, as `ModelInfo`. */
 export const compatModelInfo = (models: ReadonlyArray<ModelEntry>, model: string): ThinkingModelInfo | undefined => {
   const wanted = parseSuffix(model.trim()).modelName.toLowerCase()
+
   if (wanted === "") return undefined
+
   for (const entry of models) {
     const name = entry.name.trim()
     const alias = (entry.alias ?? "").trim()
     const id = alias === "" ? name : alias
+
     if (id === "" || (id.toLowerCase() !== wanted && name.toLowerCase() !== wanted)) continue
     const image = entry.image === true
+
     // Models without explicit thinking support default to the three OpenAI effort levels (images: none).
     const thinking =
       entry.thinking === undefined
@@ -131,6 +146,7 @@ export const compatModelInfo = (models: ReadonlyArray<ModelEntry>, model: string
           ? undefined
           : { levels: ["low", "medium", "high"] }
         : normalizeSupport(entry.thinking)
+
     return {
       id,
       type: image ? "openai-image" : "openai-compatibility",
@@ -138,5 +154,6 @@ export const compatModelInfo = (models: ReadonlyArray<ModelEntry>, model: string
       ...(thinking === undefined ? {} : { thinking })
     }
   }
+
   return undefined
 }

@@ -65,6 +65,7 @@ export const cloneModelInfo = (model: ModelInfo): ModelInfo => structuredClone(m
 // --- wire format (catalog JSON, snake_case like the Go JSON tags) ---------------------------------------------------
 
 const optionalNull = <S extends Schema.Top>(schema: S) => Schema.optionalKey(Schema.NullOr(schema))
+
 const Strings = Schema.Array(Schema.String)
 
 const WireThinking = Schema.Struct({
@@ -100,6 +101,7 @@ export const WireModel = Schema.Struct({
   thinking: optionalNull(WireThinking),
   config: optionalNull(Schema.Struct({ override_header: optionalNull(Schema.Record(Schema.String, Schema.String)) }))
 })
+
 export type WireModel = typeof WireModel.Type
 
 /** Assigns only defined, non-null values (keeps `exactOptionalPropertyTypes` happy and drops Go zero values). */
@@ -115,6 +117,7 @@ export const fromWire = (wire: WireModel): ModelInfo => {
     ownedBy: wire.owned_by ?? "",
     type: wire.type ?? ""
   }
+
   put(info, "displayName", wire.display_name)
   put(info, "name", wire.name)
   put(info, "version", wire.version)
@@ -129,10 +132,12 @@ export const fromWire = (wire: WireModel): ModelInfo => {
   put(info, "supportedOutputModalities", wire.supportedOutputModalities)
   put(info, "supportsWebSearch", wire.supports_web_search)
   put(info, "supportConfigurationUpdate", wire.support_configuration_update)
+
   if (wire.native_capabilities !== undefined && wire.native_capabilities !== null) {
     info.nativeCapabilities =
       wire.native_capabilities.web_search === undefined ? {} : { webSearch: wire.native_capabilities.web_search }
   }
+
   if (wire.thinking !== undefined && wire.thinking !== null) {
     const thinking: { -readonly [K in keyof ThinkingSupport]: ThinkingSupport[K] } = {}
     put(thinking, "min", wire.thinking.min)
@@ -142,8 +147,11 @@ export const fromWire = (wire: WireModel): ModelInfo => {
     put(thinking, "levels", wire.thinking.levels)
     info.thinking = thinking
   }
+
   const overrideHeader = wire.config?.override_header
+
   if (overrideHeader !== undefined && overrideHeader !== null) info.config = { overrideHeader }
+
   return info
 }
 

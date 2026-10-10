@@ -68,7 +68,9 @@ export class ConfigStore {
     const row = this.#read()
     const version = row?.version ?? 0
     const updatedAt = row?.updated_at ?? 0
+
     if (sinceVersion !== undefined && sinceVersion === version) return { version, unchanged: true, updatedAt }
+
     return { version, unchanged: false, document: row?.document ?? this.#defaultDocument(), updatedAt }
   }
 
@@ -78,6 +80,7 @@ export class ConfigStore {
    */
   put(text: string, expectedVersion?: number): PutConfigResult {
     const current = this.#read()?.version ?? 0
+
     if (expectedVersion !== undefined && expectedVersion !== current) {
       return {
         ok: false,
@@ -86,7 +89,9 @@ export class ConfigStore {
         currentVersion: current
       }
     }
+
     const parsed = Effect.runSync(Effect.result(parseConfigYaml(text)))
+
     if (parsed._tag === "Failure") return { ok: false, error: "invalid", message: parsed.failure.message }
     // Round-trip through the schema so the stored document is exactly what readers will decode.
     const document = JSON.stringify(encodeConfig(parsed.success))
@@ -99,6 +104,7 @@ export class ConfigStore {
       document,
       updatedAt
     )
+
     return { ok: true, version, document, updatedAt, notApplied: notAppliedSettings(parsed.success) }
   }
 }

@@ -62,12 +62,14 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
   const picks: Array<PickRequest> = []
   const reports: Array<AttemptResult> = []
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
+
   const picker = Layer.succeed(
     CredentialPicker,
     CredentialPicker.of({
       pick: (request) => {
         picks.push(request)
         const leaseId = `lease-${picks.length}`
+
         return Effect.succeed({
           credential: options.credential,
           leaseId,
@@ -94,6 +96,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
       planRetry: () => Effect.succeed({ retry: false })
     })
   )
+
   const models = Layer.succeed(
     ModelProviders,
     ModelProviders.of({
@@ -102,6 +105,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
       firstAvailableModel: Effect.succeed(undefined)
     })
   )
+
   const routes = makeProxyRoutes({
     configReader: staticConfigReader(options.config),
     httpClient: mockHttpClient(calls, options.respond),
@@ -110,10 +114,12 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     modelProviders: models,
     ...(options.thinking !== undefined ? { thinking: options.thinking } : {})
   })
+
   const { handler, dispose } = HttpRouter.toWebHandler(
     Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(routes)),
     { disableLogger: true }
   )
+
   const workerEnv = {
     ...env,
     ACCESS_TEAM_DOMAIN: "team",
@@ -123,14 +129,17 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     ACCESS_DEV_BYPASS: "",
     ...options.env
   } as unknown as Env
+
   const call = async (path: string, init: RequestInit = {}) => {
     const token = await signToken({ key, now: Math.floor(Date.now() / 1000), claims: userClaims("dev@example.com") })
     const headers = new Headers(init.headers)
     headers.set("Cf-Access-Jwt-Assertion", token)
+
     return handler(
       new Request(`https://proxy.test${path}`, { ...init, headers }),
       requestContext(workerEnv, {} as unknown as ExecutionContext)
     )
   }
+
   return { calls, records, picks, reports, call, dispose }
 }

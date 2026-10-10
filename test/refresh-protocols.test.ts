@@ -19,6 +19,7 @@ const run = async (
   overrides: Partial<RefreshContext> = {}
 ) => {
   const http = mockHttp(handler)
+
   const outcome = await Effect.runPromise(
     protocol({
       provider: "test",
@@ -33,17 +34,22 @@ const run = async (
       Effect.catch((error: RefreshError) => Effect.succeed({ ok: false as const, error }))
     )
   )
+
   return { outcome, requests: http.requests }
 }
 
 const success = <T>(outcome: { ok: true; value: T } | { ok: false; error: RefreshError }): T => {
   if (!outcome.ok) throw new Error(`refresh failed: ${outcome.error.message}`)
+
   return outcome.value
 }
+
 const failure = (outcome: { ok: boolean; error?: RefreshError }): RefreshError => {
   if (outcome.ok || outcome.error === undefined) throw new Error("refresh unexpectedly succeeded")
+
   return outcome.error
 }
+
 const rfc = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z")
 
 describe("claude", () => {
@@ -62,6 +68,7 @@ describe("claude", () => {
         }
       })
     )
+
     expect(requests).toHaveLength(2)
     expect(requests[0]?.json()).toEqual({
       client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
@@ -95,6 +102,7 @@ describe("claude", () => {
       metadata,
       routes({ [TOKEN]: { body: { access_token: "new-at", expires_in: 60 } }, [PROFILE]: { status: 403, body: "no" } })
     )
+
     expect(success(outcome)).toMatchObject({ refresh_token: "rt-1", email: "old@x.com", access_token: "new-at" })
   })
 
@@ -108,11 +116,13 @@ describe("claude", () => {
     const server = await run(refreshClaude, metadata, routes({ [TOKEN]: { status: 503, body: "busy" } }))
     expect(server.requests).toHaveLength(3)
     expect(failure(server.outcome)).toMatchObject({ status: 503 })
+
     const client = await run(
       refreshClaude,
       metadata,
       routes({ [TOKEN]: { status: 400, body: '{"error":"invalid_grant"}' } })
     )
+
     expect(client.requests).toHaveLength(1)
     expect(failure(client.outcome).message).toContain("status 400")
     expect(failure(client.outcome).message).toContain("invalid_grant")
@@ -127,6 +137,7 @@ describe("claude", () => {
   it("429 blocks the refresh token for Retry-After, clamped to 5 s .. 5 min", async () => {
     const block = async (headers: Record<string, string>) =>
       failure((await run(refreshClaude, metadata, routes({ [TOKEN]: { status: 429, body: "slow", headers } }))).outcome)
+
     expect(await block({ "retry-after": "30" })).toMatchObject({ status: 429, blockMs: 30_000 })
     expect((await block({ "retry-after": "1" })).blockMs).toBe(5_000)
     expect((await block({ "retry-after": "99999" })).blockMs).toBe(300_000)
@@ -139,10 +150,12 @@ describe("claude", () => {
 
 describe("codex", () => {
   const TOKEN = "POST https://auth.openai.com/oauth/token"
+
   const idToken = jwt({
     email: "me@x.com",
     "https://api.openai.com/auth": { chatgpt_account_id: "acct-1", chatgpt_plan_type: "plus" }
   })
+
   const metadata = { type: "codex", refresh_token: "rt-1", access_token: "old", email: "old@x.com", plan_type: "team" }
 
   it("posts the urlencoded refresh form and stores the id_token identity", async () => {
@@ -153,6 +166,7 @@ describe("codex", () => {
         [TOKEN]: { body: { access_token: "at-2", refresh_token: "rt-2", id_token: idToken, expires_in: 3600 } }
       })
     )
+
     expect(requests[0]?.form()).toEqual({
       client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
       grant_type: "refresh_token",
@@ -182,6 +196,7 @@ describe("codex", () => {
       metadata,
       routes({ [TOKEN]: { body: { access_token: "at-2", expires_in: 10 } } })
     )
+
     expect(success(outcome)).toMatchObject({
       refresh_token: "rt-1",
       email: "old@x.com",
@@ -193,11 +208,13 @@ describe("codex", () => {
   it("retries three times, except for refresh_token_reused", async () => {
     const flaky = await run(refreshCodex, metadata, routes({ [TOKEN]: { status: 400, body: "nope" } }))
     expect(flaky.requests).toHaveLength(3)
+
     const reused = await run(
       refreshCodex,
       metadata,
       routes({ [TOKEN]: { status: 400, body: '{"error":{"code":"refresh_token_reused"}}' } })
     )
+
     expect(reused.requests).toHaveLength(1)
     expect(failure(reused.outcome).message).toContain("refresh_token_reused")
   })
@@ -213,6 +230,7 @@ describe("antigravity", () => {
       metadata,
       routes({ [TOKEN]: { body: { access_token: "at-2", expires_in: 3599, token_type: "Bearer" } } })
     )
+
     expect(requests[0]?.form()).toEqual({
       client_id: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
       client_secret: "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",
@@ -237,12 +255,15 @@ describe("antigravity", () => {
       metadata,
       routes({ [TOKEN]: { body: { access_token: "at-2", refresh_token: "rt-2", expires_in: 60 } } })
     )
+
     expect(success(rotated.outcome)).toMatchObject({ refresh_token: "rt-2" })
+
     const denied = await run(
       refreshAntigravity,
       metadata,
       routes({ [TOKEN]: { status: 400, body: '{"error":"invalid_grant"}' } })
     )
+
     expect(failure(denied.outcome)).toMatchObject({ status: 400 })
     const missing = await run(refreshAntigravity, { type: "antigravity" }, routes({}))
     expect(failure(missing.outcome)).toMatchObject({ status: 401, message: "missing refresh token" })
@@ -252,6 +273,7 @@ describe("antigravity", () => {
 describe("xai", () => {
   const DISCOVERY = "GET https://auth.x.ai/.well-known/openid-configuration"
   const idToken = jwt({ email: "me@x.ai", sub: "sub-1" })
+
   const reply = {
     body: { access_token: "at-2", refresh_token: "rt-2", id_token: idToken, token_type: "Bearer", expires_in: 7200 }
   }
@@ -265,6 +287,7 @@ describe("xai", () => {
         "POST https://auth.x.ai/oauth2/token": reply
       })
     )
+
     expect(requests.map((request) => request.url)).toEqual([
       "https://auth.x.ai/.well-known/openid-configuration",
       "https://auth.x.ai/oauth2/token"
@@ -297,8 +320,10 @@ describe("xai", () => {
       { refresh_token: "rt-1", token_endpoint: "https://login.x.ai/token", base_url: "https://custom/v1" },
       routes({ "POST https://login.x.ai/token": reply })
     )
+
     expect(cached.requests).toHaveLength(1)
     expect(success(cached.outcome)).toMatchObject({ base_url: "https://custom/v1" })
+
     const evil = await run(
       refreshXai,
       { refresh_token: "rt-1", token_endpoint: "https://evil.example/token" },
@@ -307,6 +332,7 @@ describe("xai", () => {
         "POST https://auth.x.ai/oauth2/token": reply
       })
     )
+
     expect(evil.requests.map((request) => request.url)).not.toContain("https://evil.example/token")
   })
 
@@ -316,12 +342,15 @@ describe("xai", () => {
       { refresh_token: "rt-1", token_endpoint: "https://auth.x.ai/t" },
       routes({ "POST https://auth.x.ai/t": { status: 400, body: '{"error":"invalid_grant"}' } })
     )
+
     expect(failure(denied.outcome).message).toContain("status 400")
+
     const bad = await run(
       refreshXai,
       { refresh_token: "rt-1" },
       routes({ [DISCOVERY]: { body: { token_endpoint: "https://evil.example/token" } } })
     )
+
     expect(failure(bad.outcome).message).toContain("x.ai")
   })
 })
@@ -340,6 +369,7 @@ describe("kimi", () => {
       }),
       { attributes: { domain: "kimi.com", base_url: "https://api.kimi.com/coding" } }
     )
+
     expect(requests[0]?.form()).toEqual({
       client_id: "17e5f671-d194-4dfb-9706-5516cb48c098",
       grant_type: "refresh_token",
@@ -367,6 +397,7 @@ describe("kimi", () => {
       routes({ [AI]: { body: { access_token: "at-2" } } }),
       { attributes: { domain: "kimi.ai" } }
     )
+
     expect(requests[0]?.url).toBe("https://auth.kimi.ai/api/oauth/token")
     const written = success(outcome)
     expect(written).toMatchObject({ type: "kimi-ai", refresh_token: "rt-1", base_url: "https://api.kimi.ai/coding" })
@@ -390,9 +421,11 @@ describe("meta", () => {
   it("META_MINT_URL overrides the mint endpoint; a blank override keeps the default", async () => {
     const metadata = { type: "meta", dca_token: "dca:abc", access_token: "dca:abc" }
     const minted = { body: { api_key: "meta-key" } }
+
     const overridden = await run(refreshMeta, metadata, routes({ "POST https://mint.example.test/key": minted }), {
       metaMintUrl: " https://mint.example.test/key "
     })
+
     expect(success(overridden.outcome)).toMatchObject({ api_key: "meta-key" })
     expect(overridden.requests.map((request) => request.url)).toEqual(["https://mint.example.test/key"])
     const blank = await run(refreshMeta, metadata, routes({ [MINT]: minted }), { metaMintUrl: "  " })
@@ -423,6 +456,7 @@ describe("meta", () => {
         }
       })
     )
+
     expect(requests[0]?.json()).toEqual({ dca_token: "dca:abc" })
     expect(requests[0]?.headers).toMatchObject({
       authorization: "Bearer dca:abc",
@@ -450,11 +484,13 @@ describe("meta", () => {
   it("reports mint failures and handles missing credentials like Go", async () => {
     const empty = await run(refreshMeta, { dca_token: "dca:abc" }, routes({ [MINT]: { body: { api_key: "" } } }))
     expect(failure(empty.outcome).message).toContain("empty key")
+
     const denied = await run(
       refreshMeta,
       { dca_token: "dca:abc" },
       routes({ [MINT]: { status: 401, body: "bad dca" } })
     )
+
     expect(failure(denied.outcome)).toMatchObject({ status: 401 })
     const keyOnly = await run(refreshMeta, { api_key: "k", access_token: "k" }, routes({}))
     expect(success(keyOnly.outcome)).toEqual({ api_key: "k", access_token: "k" })

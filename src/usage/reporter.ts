@@ -69,6 +69,7 @@ export class UsageReporter {
   observeTokenEvent(now: number, isToken: boolean): void {
     if (this.#ttftAt !== undefined) return
     this.#firstPacketAt ??= now
+
     if (isToken) this.#ttftAt = now
   }
 
@@ -84,6 +85,7 @@ export class UsageReporter {
   publish(detail: UsageDetail): void {
     const previous = this.#detail
     const tier = detail.responseServiceTier?.trim() ?? ""
+
     if (tier === "" || hasNonZeroTokenUsage(detail)) {
       const preserved = previous?.responseServiceTier
       this.#detail =
@@ -101,8 +103,10 @@ export class UsageReporter {
    */
   publishAdditionalModel(model: string, detail: UsageDetail): void {
     const name = model.trim()
+
     if (name === "") return
     const normalized = ensureTokenBreakdown(detail, this.init.provider, this.init.executorType)
+
     if (hasNonZeroTokenUsage(normalized)) this.#additional.push({ model: name, detail: normalized })
   }
 
@@ -110,6 +114,7 @@ export class UsageReporter {
   additionalRecords(now: number): UsageRecord[] {
     const { init } = this
     const ttftAt = this.#ttftAt ?? this.#firstPacketAt
+
     return this.#additional.splice(0).map(({ model, detail }) => ({
       requestId: crypto.randomUUID(),
       ...(init.traceId !== undefined ? { traceId: init.traceId } : {}),
@@ -165,6 +170,7 @@ export class UsageReporter {
     // Go `normalizeUsageDetailTotal`: every record leaves with a valid v2 breakdown for its provider's semantics.
     const detail = ensureTokenBreakdown(this.#detail ?? emptyUsageDetail, init.provider, init.executorType)
     const ttftAt = this.#ttftAt ?? this.#firstPacketAt
+
     return {
       requestId: init.requestId,
       ...(init.traceId !== undefined ? { traceId: init.traceId } : {}),

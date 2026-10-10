@@ -23,6 +23,7 @@ const startLogin = Effect.gen(function* () {
   const params = yield* queryParams
   const domain = params.get("domain")?.trim() || params.get("channel")?.trim() || undefined
   const flow = params.get("flow")?.trim() || undefined
+
   const result = yield* controlPlane("oauthStart", (stub) =>
     stub.oauthStart({
       provider: params.get("provider") ?? "",
@@ -30,7 +31,9 @@ const startLogin = Effect.gen(function* () {
       ...(flow === undefined ? {} : { flow })
     })
   )
+
   if (!result.ok) return jsonReply(result.status, { error: result.error })
+
   return jsonReply(200, {
     status: "ok",
     url: result.url,
@@ -43,17 +46,23 @@ const startLogin = Effect.gen(function* () {
 
 const loginStatus = Effect.gen(function* () {
   const state = ((yield* queryParams).get("state") ?? "").trim()
+
   if (state === "") return jsonReply(200, { status: "ok" })
+
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" })
   const result = yield* controlPlane("oauthStatus", (stub) => stub.oauthStatus(state))
+
   return jsonReply(200, result)
 })
 
 const cancelLogin = Effect.gen(function* () {
   const state = ((yield* queryParams).get("state") ?? "").trim()
+
   if (state === "") return jsonReply(400, { status: "error", error: "missing state" })
+
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" })
   const { cancelled } = yield* controlPlane("oauthCancel", (stub) => stub.oauthCancel(state))
+
   return jsonReply(200, { status: "ok", cancelled })
 })
 
@@ -68,19 +77,25 @@ interface CallbackParts {
 const completeLogin = (parts: CallbackParts & { readonly redirectUrl?: string }) =>
   Effect.gen(function* () {
     let { state, code, error } = parts
+
     if (parts.redirectUrl !== undefined && parts.redirectUrl !== "") {
       const url = yield* Effect.try({
         try: () => new URL(parts.redirectUrl ?? "", "http://localhost"),
         catch: () => replyError(400, "invalid redirect_url", { status: "error" })
       })
+
       if (state === "") state = url.searchParams.get("state")?.trim() ?? ""
+
       if (code === "") code = url.searchParams.get("code")?.trim() ?? ""
+
       if (error === "")
         error = url.searchParams.get("error")?.trim() || url.searchParams.get("error_description")?.trim() || ""
     }
+
     const result = yield* controlPlane("oauthCallback", (stub) =>
       stub.oauthCallback({ ...(parts.provider === "" ? {} : { provider: parts.provider }), state, code, error })
     )
+
     return result.ok
       ? jsonReply(200, { status: "ok" })
       : jsonReply(result.status, { status: "error", error: result.error })
@@ -88,7 +103,9 @@ const completeLogin = (parts: CallbackParts & { readonly redirectUrl?: string })
 
 const postCallback = Effect.gen(function* () {
   const body = yield* bodyJson.pipe(Effect.mapError(() => replyError(400, "invalid body", { status: "error" })))
+
   if (!isJsonObject(body)) return yield* replyError(400, "invalid body", { status: "error" })
+
   return yield* completeLogin({
     provider: trimmed(body.provider),
     state: trimmed(body.state),
@@ -100,6 +117,7 @@ const postCallback = Effect.gen(function* () {
 
 const getCallback = Effect.gen(function* () {
   const params = yield* queryParams
+
   return yield* completeLogin({
     provider: params.get("provider")?.trim() ?? "",
     state: params.get("state")?.trim() ?? "",

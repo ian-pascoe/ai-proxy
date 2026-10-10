@@ -72,7 +72,9 @@ export interface PayloadRulesResult {
 
 const isImagesEndpointRequestPath = (rawPath: string): boolean => {
   const path = rawPath.trim()
+
   if (path === "") return false
+
   return (
     path === "/v1/images/generations" ||
     path === "/v1/images/edits" ||
@@ -83,7 +85,9 @@ const isImagesEndpointRequestPath = (rawPath: string): boolean => {
 
 const shouldStripImageGeneration = (mode: DisableImageGenerationMode, requestPath: string): boolean => {
   if (mode === true) return true
+
   if (mode === "chat") return !isImagesEndpointRequestPath(requestPath)
+
   return false
 }
 
@@ -92,9 +96,12 @@ const equalFold = (a: string, b: string): boolean => a.toLowerCase() === b.toLow
 const removeToolTypeFromPayload = (payload: Json, root: string, toolType: string): Json => {
   const toolsPath = buildPayloadPath(root, "tools")
   const tools = get(payload, toolsPath)
+
   if (!isJsonArray(tools)) return payload
   const isTool = (tool: Json): boolean => asString(get(tool, "type")) === toolType
+
   if (!tools.some(isTool)) return payload
+
   return (
     setQuietly(
       payload,
@@ -107,8 +114,10 @@ const removeToolTypeFromPayload = (payload: Json, root: string, toolType: string
 const removeToolChoiceFromPayload = (payload: Json, root: string, toolType: string): Json => {
   const path = buildPayloadPath(root, "tool_choice")
   const choice = get(payload, path)
+
   if (choice === undefined) return payload
   let remove = false
+
   if (typeof choice === "string") {
     remove = equalFold(choice.trim(), toolType)
   } else if (isJsonObject(choice) || isJsonArray(choice)) {
@@ -117,6 +126,7 @@ const removeToolChoiceFromPayload = (payload: Json, root: string, toolType: stri
       equalFold(choiceType, toolType) ||
       (equalFold(choiceType, "tool") && equalFold(asString(get(choice, "name")).trim(), toolType))
   }
+
   return remove ? (delQuietly(payload, path) ?? payload) : payload
 }
 
@@ -140,7 +150,9 @@ const delQuietly = (payload: Json, path: string): Json | undefined => {
 /** `*-raw` values: strings are raw JSON text, other values are used as JSON; `null` is skipped. */
 const payloadRawValue = (value: Json): Json | undefined => {
   if (value === null) return undefined
+
   if (typeof value === "string") return tryParseJson(value)
+
   return value
 }
 
@@ -154,11 +166,13 @@ export const applyPayloadRules = (
   payload: Json
 ): PayloadRulesResult => {
   const touched = new Set<string>()
+
   if (config === undefined) return { payload, touched }
 
   const root = request.root ?? ""
   const trackedPaths = (request.trackedPaths ?? []).map((path) => path.trim()).filter((path) => path !== "")
   const rules = config.requests.payload
+
   const hasPayloadRules =
     rules.default.length +
       rules["default-raw"].length +
@@ -176,6 +190,7 @@ export const applyPayloadRules = (
         : payload
 
   let out = payload
+
   const markTouched = (resolvedPath: string): void => {
     for (const tracked of trackedPaths) {
       if (payloadRuleTargetsPath(resolvedPath, tracked)) touched.add(tracked)
@@ -190,6 +205,7 @@ export const applyPayloadRules = (
 
   const model = request.model.trim()
   const requestedModel = (request.requestedModel ?? "").trim()
+
   if (!hasPayloadRules || (model === "" && requestedModel === "")) return { payload: out, touched }
 
   const context: PayloadMatchContext = {
@@ -199,21 +215,28 @@ export const applyPayloadRules = (
     root,
     candidates: payloadModelCandidates(model, requestedModel)
   }
+
   const matches = (rule: PayloadRule | { readonly models?: PayloadRule["models"] }): boolean =>
     payloadModelRulesMatch(rule.models, context, out)
 
   const appliedDefaults = new Set<string>()
+
   const applyDefaults = (list: readonly PayloadRule[], raw: boolean): void => {
     for (const rule of list) {
       if (!matches(rule)) continue
+
       for (const [path, param] of Object.entries(rule.params ?? {})) {
         const fullPath = buildPayloadPath(root, path)
+
         if (fullPath === "") continue
+
         for (const resolvedPath of resolvePayloadRulePaths(out, fullPath)) {
           if (exists(source, resolvedPath) || appliedDefaults.has(resolvedPath)) continue
           const value = raw ? payloadRawValue(param) : param
+
           if (value === undefined) continue
           const updated = setQuietly(out, resolvedPath, cloneJson(value))
+
           if (updated === undefined) continue
           out = updated
           appliedDefaults.add(resolvedPath)
@@ -222,21 +245,28 @@ export const applyPayloadRules = (
       }
     }
   }
+
   const applyOverrides = (list: readonly PayloadRule[], raw: boolean): void => {
     for (const rule of list) {
       if (!matches(rule)) continue
+
       for (const [path, param] of Object.entries(rule.params ?? {})) {
         const fullPath = buildPayloadPath(root, path)
+
         if (fullPath === "") continue
         const value = raw ? payloadRawValue(param) : param
+
         if (value === undefined) continue
+
         for (const resolvedPath of resolvePayloadRulePaths(out, fullPath)) {
           // An identical value counts as applied without rewriting it.
           if (jsonEquals(get(out, resolvedPath), value)) {
             markTouched(resolvedPath)
             continue
           }
+
           const updated = setQuietly(out, resolvedPath, cloneJson(value))
+
           if (updated === undefined) continue
           out = updated
           markTouched(resolvedPath)
@@ -252,18 +282,23 @@ export const applyPayloadRules = (
 
   for (const rule of rules.filter) {
     if (!matches(rule)) continue
+
     for (const path of rule.params ?? []) {
       const fullPath = buildPayloadPath(root, path)
+
       if (fullPath === "") continue
       const resolvedPaths = resolvePayloadRulePaths(out, fullPath)
+
       for (let i = resolvedPaths.length - 1; i >= 0; i--) {
         const resolvedPath = resolvedPaths[i] as string
         const updated = delQuietly(out, resolvedPath)
+
         if (updated === undefined) continue
         out = updated
         markTouched(resolvedPath)
       }
     }
   }
+
   return { payload: out, touched }
 }

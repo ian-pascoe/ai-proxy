@@ -19,6 +19,7 @@ describe("Gemini usage breakdown (usage.ts v2)", () => {
         thoughtsTokenCount: 10
       }
     })
+
     expect(detail.inputTokens).toBe(120)
     expect(detail.totalTokens).toBe(170)
     expect(detail.tokenBreakdown).toMatchObject({
@@ -34,6 +35,7 @@ describe("Gemini usage breakdown (usage.ts v2)", () => {
     const detail = parseGeminiUsageBody({
       usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 99 }
     })
+
     expect(detail.tokenBreakdown).toMatchObject({ quality: "inconsistent", totalTokens: 99, unclassifiedTokens: 99 })
   })
 
@@ -49,9 +51,11 @@ describe("Gemini usage breakdown (usage.ts v2)", () => {
 
   it("stream chunks keep the breakdown and skip zero placeholders", () => {
     expect(parseGeminiStreamUsage('data: {"usageMetadata":{}}')).toBeUndefined()
+
     const detail = parseGeminiStreamUsage(
       'data: {"usageMetadata":{"promptTokenCount":4,"candidatesTokenCount":6,"totalTokenCount":10}}'
     )
+
     expect(detail?.tokenBreakdown).toMatchObject({ quality: "complete", totalTokens: 10 })
   })
 
@@ -59,6 +63,7 @@ describe("Gemini usage breakdown (usage.ts v2)", () => {
     const detail = parseInteractionsUsageBody({
       usage: { input_tokens: 10, output_tokens: 5, reasoning_tokens: 2, cached_tokens: 4 }
     })
+
     expect(detail.cacheReadTokens).toBe(4)
     expect(detail.tokenBreakdown).toMatchObject({
       quality: "complete",

@@ -84,10 +84,12 @@ export class UpstreamSessionStore {
 
   get(id: string): UpstreamSession {
     let session = this.sessions.get(id)
+
     if (session === undefined) {
       session = newSession(id)
       this.sessions.set(id, session)
     }
+
     return session
   }
 
@@ -108,6 +110,7 @@ export class UpstreamSessionStore {
   onDisconnect(id: string, listener: (error: ExecutionError) => void): () => void {
     const session = this.get(id)
     session.disconnectListeners.add(listener)
+
     return () => void session.disconnectListeners.delete(listener)
   }
 
@@ -115,11 +118,13 @@ export class UpstreamSessionStore {
   invalidate(session: UpstreamSession, socket: UpstreamSocket | undefined = session.socket): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (socket === undefined) return Effect.void
+
       if (session.socket === socket) {
         session.unwatch?.()
         session.unwatch = undefined
         session.socket = undefined
       }
+
       return socket.close(1000, "invalidated")
     })
   }
@@ -128,6 +133,7 @@ export class UpstreamSessionStore {
   close(id: string, reason = "session_closed"): Effect.Effect<void> {
     return Effect.suspend(() => {
       const session = this.sessions.get(id)
+
       if (session === undefined) return Effect.void
       this.sessions.delete(id)
       session.closed = true
@@ -136,6 +142,7 @@ export class UpstreamSessionStore {
       session.unwatch?.()
       session.unwatch = undefined
       session.socket = undefined
+
       return socket === undefined ? Effect.void : socket.close(1000, reason)
     })
   }
@@ -145,9 +152,11 @@ export class UpstreamSessionStore {
     return Effect.suspend(() => {
       const session = this.sessions.get(id)
       const socket = session?.socket
+
       if (session === undefined || socket === undefined || !session.active || !socket.isOpen()) {
         return Effect.succeed(false)
       }
+
       return socket.send(payload).pipe(
         Effect.as(true),
         Effect.orElseSucceed(() => false)
@@ -157,6 +166,7 @@ export class UpstreamSessionStore {
 }
 
 export const codexSessionStore = new UpstreamSessionStore()
+
 export const xaiSessionStore = new UpstreamSessionStore()
 
 export interface OpenTurnInput {
@@ -193,6 +203,7 @@ export interface Turn {
 
 const handshakeToError = (input: OpenTurnInput, error: HandshakeError): ExecutionError => {
   if (error.status > 0) return input.classifyHandshake(error.status, error.body, { ...error.headers })
+
   return transient(`${input.label} websocket dial failed: ${error.message}`)
 }
 
@@ -217,6 +228,7 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
     yield* Effect.addFinalizer(() =>
       Effect.suspend(() => {
         session.active = false
+
         // A turn that did not reach its terminal event leaves frames in flight: never reuse that socket.
         return ephemeral || !completed ? store.invalidate(session) : Effect.void
       })
@@ -227,8 +239,10 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
         if (session.socket !== socket) return
         session.socket = undefined
         session.unwatch = undefined
+
         if (session.active || session.closed) return
         const error = transient(`${input.label} upstream websocket disconnected (${message._tag})`)
+
         for (const listener of session.disconnectListeners) listener(error)
       })
     }
@@ -241,24 +255,31 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
       ) {
         yield* store.invalidate(session)
       }
+
       if (session.socket !== undefined) return { socket: session.socket, headers: new Headers() }
+
       const socket = yield* connector
         .connect({ url: input.url, headers: input.headers })
         .pipe(Effect.mapError((error) => handshakeToError(input, error)))
+
       session.socket = socket
       session.authId = input.authId
       session.url = input.url
       watch(socket)
+
       return { socket, headers: socket.headers }
     })
 
     let current: UpstreamSocket
     let headers: Headers
+
     if (input.requireUpstream) {
       const existing = session.socket
+
       if (existing === undefined || !existing.isOpen() || !targetMatches(session, input.authId, input.url)) {
         return yield* replayRequiredError()
       }
+
       current = existing
       headers = new Headers()
     } else {
@@ -266,21 +287,27 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
       current = opened.socket
       headers = opened.headers
     }
+
     // Frames that arrived while the session was idle belong to no request.
     yield* Queue.clear(current.messages)
 
     const sent = yield* Effect.result(current.send(input.frame()))
+
     if (sent._tag === "Failure") {
       yield* store.invalidate(session, current)
+
       // Retry once on a fresh socket (the upstream may close between sequential requests); a continuation cannot.
       if (input.requireUpstream) return yield* replayRequiredError()
+
       if (ephemeral) return yield* transient(`${input.label} websocket send failed`)
       const reopened = yield* ensure
       current = reopened.socket
       headers = reopened.headers
       const retry = yield* Effect.result(current.send(input.frame()))
+
       if (retry._tag === "Failure") {
         yield* store.invalidate(session, current)
+
         return yield* transient(`${input.label} websocket send failed`)
       }
     }
@@ -288,6 +315,7 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
     const socket = current
     const idle = input.idle ?? IDLE_TIMEOUT
     const invalidate = store.invalidate(session, socket)
+
     const read: Effect.Effect<string, ExecutionError> = Effect.gen(function* () {
       while (true) {
         const message = yield* Queue.take(socket.messages).pipe(
@@ -296,12 +324,16 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
             orElse: () => Effect.fail(transient(`${input.label} websocket idle timeout`))
           })
         )
+
         switch (message._tag) {
           case "text": {
             const text = message.data.trim()
+
             if (text === "") continue
+
             return text
           }
+
           case "binary":
             return yield* transient(`${input.label} websockets executor: unexpected binary message`)
           case "close":
@@ -316,5 +348,6 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
 
     const send = (text: string): Effect.Effect<void, ExecutionError> =>
       socket.send(text).pipe(Effect.mapError(() => transient(`${input.label} websocket send failed`)))
+
     return { headers, read, send, invalidate, complete: () => void (completed = true) } satisfies Turn
   })

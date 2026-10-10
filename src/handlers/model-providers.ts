@@ -40,9 +40,11 @@ export class ModelProviders extends Context.Service<
     ModelProviders,
     Effect.gen(function* () {
       const registry = yield* ModelRegistry
+
       const snapshot = registry.snapshot.pipe(
         Effect.mapError((cause) => new ExecutionError({ status: 503, message: "model registry unavailable", cause }))
       )
+
       return ModelProviders.of({
         providersFor: (model) => Effect.map(snapshot, (current) => current.providersForModel(model)),
         firstAvailableModel: Effect.map(snapshot, (current) => current.firstAvailableModel()),
@@ -65,13 +67,16 @@ export class ModelProviders extends Context.Service<
     ModelProviders,
     Effect.gen(function* () {
       const reader = yield* ConfigReader
+
       const imageModels = reader.get.pipe(
         Effect.mapError((cause) => new ExecutionError({ status: 503, message: "config unavailable", cause })),
         Effect.map(({ config }) => {
           const ids = new Set<string>()
+
           for (const group of config["api-keys"]["openai-compatibility"]) {
             if (group.disabled === true) continue
             const images = new Set((group.models ?? []).filter((entry) => entry.image === true))
+
             for (const id of openAICompatModelIds(
               { ...group, models: [...images] },
               config.routing["force-model-prefix"]
@@ -79,23 +84,29 @@ export class ModelProviders extends Context.Service<
               ids.add(id)
             }
           }
+
           return ids
         })
       )
+
       const index = reader.get.pipe(
         Effect.mapError((cause) => new ExecutionError({ status: 503, message: "config unavailable", cause })),
         Effect.map(({ config }) => {
           const byModel = new Map<string, string[]>()
+
           for (const entry of configCredentials(config)) {
             for (const model of entry.models) {
               const providers = byModel.get(model) ?? []
+
               if (!providers.includes(entry.credential.provider)) providers.push(entry.credential.provider)
               byModel.set(model, providers)
             }
           }
+
           return byModel
         })
       )
+
       return ModelProviders.of({
         providersFor: (model) => Effect.map(index, (byModel) => byModel.get(model) ?? []),
         firstAvailableModel: Effect.map(index, (byModel) => byModel.keys().next().value),

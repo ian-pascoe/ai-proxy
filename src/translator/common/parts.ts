@@ -63,7 +63,9 @@ export class UserRun {
 /** `IsInteractionsInstructionStep`. */
 export const isInteractionsInstructionStep = (step: Json | undefined, inherited: boolean): boolean => {
   let name = asString(get(step, "role")).trim().toLowerCase()
+
   if (name === "") name = asString(get(step, "type")).trim().toLowerCase()
+
   switch (name) {
     case "developer":
     case "system":
@@ -83,16 +85,22 @@ export const isInteractionsInstructionStep = (step: Json | undefined, inherited:
 export const interactionsAttachmentType = (part: Json | undefined): string => {
   if (!isJsonObject(part)) return ""
   const partType = asString(get(part, "type")).trim().toLowerCase()
+
   if (partType !== "") return partType === "text" ? "" : partType
+
   if (get(part, "inlineData") !== undefined || get(part, "inline_data") !== undefined) return "inlineData"
+
   if (get(part, "fileData") !== undefined || get(part, "file_data") !== undefined) return "fileData"
+
   return ""
 }
 
 /** `GeminiPartIsSendable`: a text part that is empty/whitespace is not, other payload keys are. */
 export const geminiPartIsSendable = (part: Json | undefined): boolean => {
   const text = get(part, "text")
+
   if (text === undefined || asString(text).trim() !== "") return true
+
   return ["functionCall", "functionResponse", "inlineData", "inline_data", "fileData", "file_data"].some(
     (key) => get(part, key) !== undefined
   )
@@ -106,6 +114,7 @@ export const countSendableGeminiParts = (parts: ReadonlyArray<Json>): number =>
 export const isHttpUrl = (value: string): boolean => {
   try {
     const url = new URL(value.trim())
+
     return url.host !== "" && (url.protocol === "http:" || url.protocol === "https:")
   } catch {
     return false

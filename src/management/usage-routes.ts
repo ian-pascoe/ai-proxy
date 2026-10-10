@@ -32,7 +32,9 @@ const BASE = "/v8/management/observability/usage"
 const usageDb = Effect.gen(function* () {
   const env = yield* WorkerEnv
   const db: D1Database | undefined = env.USAGE
+
   if (db === undefined) return yield* replyError(503, "usage store unavailable")
+
   return db
 })
 
@@ -63,6 +65,7 @@ interface ApiKeyUsageEntry {
 const providerKey = (summary: CredentialSummary): string => {
   const compat = (summary.attributes["compat_name"] ?? "").trim().toLowerCase()
   const provider = compat !== "" ? compat : summary.provider.trim().toLowerCase()
+
   return provider === "" ? "unknown" : provider
 }
 
@@ -72,9 +75,11 @@ const isApiKey = (summary: CredentialSummary): boolean =>
 /** `mergeRecentRequestBuckets` for buckets of the same window. */
 const mergeBuckets = (into: RecentBucketJson[], from: ReadonlyArray<RecentBucketJson>): void => {
   const count = Math.min(into.length, from.length)
+
   for (let index = 0; index < count; index += 1) {
     const target = into[index]
     const source = from[index]
+
     if (target === undefined || source === undefined) continue
     target.success += source.success
     target.failed += source.failed
@@ -86,6 +91,7 @@ const apiKeyUsage = Effect.gen(function* () {
   const summaries = yield* controlPlane("listCredentials", (stub) => stub.listCredentials())
   const now = yield* Clock.currentTimeMillis
   const out: Record<string, Record<string, ApiKeyUsageEntry>> = {}
+
   for (const summary of summaries) {
     if (!isApiKey(summary)) continue
     const baseUrl = (summary.attributes["base_url"] ?? summary.attributes["base-url"] ?? "").trim()
@@ -93,14 +99,17 @@ const apiKeyUsage = Effect.gen(function* () {
     const recent = recentRequestBuckets(summary.recentRequests, now)
     const bucket = (out[providerKey(summary)] ??= {})
     const existing = bucket[key]
+
     if (existing === undefined) {
       bucket[key] = { success: summary.success, failed: summary.failed, recent_requests: recent }
       continue
     }
+
     existing.success += summary.success
     existing.failed += summary.failed
     mergeBuckets(existing.recent_requests, recent)
   }
+
   return jsonReply(200, out)
 })
 
@@ -109,9 +118,12 @@ const apiKeyUsage = Effect.gen(function* () {
 /** `parseUsageQueueCount`: empty means 1; anything but a positive integer is a 400. */
 const parseCount = (raw: string | null): number | undefined => {
   const value = (raw ?? "").trim()
+
   if (value === "") return 1
+
   if (!/^[+-]?\d+$/.test(value)) return undefined
   const count = Number(value)
+
   return Number.isSafeInteger(count) && count > 0 ? count : undefined
 }
 
@@ -119,10 +131,12 @@ const parseCount = (raw: string | null): number | undefined => {
 const usageQueue = Effect.gen(function* () {
   const params = yield* queryParams
   const count = parseCount(params.get("count"))
+
   if (count === undefined) return yield* replyError(400, "count must be a positive integer")
   const db = yield* usageDb
   const now = yield* Clock.currentTimeMillis
   const rows = yield* query("queue", () => popUsageQueue(db, Math.min(count, MAX_QUEUE_COUNT), now))
+
   return jsonReply(200, rows.map(rowToPayload))
 })
 
@@ -131,53 +145,71 @@ const usageQueue = Effect.gen(function* () {
 /** Epoch milliseconds or an ISO 8601 date/time. */
 const parseTime = (raw: string): number | undefined => {
   const value = raw.trim()
+
   if (/^\d+$/.test(value)) {
     const ms = Number(value)
+
     return Number.isSafeInteger(ms) ? ms : undefined
   }
+
   const parsed = Date.parse(value)
+
   return Number.isNaN(parsed) ? undefined : parsed
 }
 
 const optional = (params: URLSearchParams, name: string): string | undefined => {
   const value = params.get(name)?.trim() ?? ""
+
   return value === "" ? undefined : value
 }
 
 const parseFilter = (params: URLSearchParams) =>
   Effect.gen(function* () {
     const filter: { -readonly [K in keyof UsageFilter]: UsageFilter[K] } = {}
+
     for (const name of ["since", "until"] as const) {
       const raw = optional(params, name)
+
       if (raw === undefined) continue
       const time = parseTime(raw)
+
       if (time === undefined) return yield* replyError(400, `${name} must be epoch milliseconds or an ISO 8601 time`)
       filter[name] = time
     }
+
     const provider = optional(params, "provider")
     const model = optional(params, "model")
     const principal = optional(params, "principal")
     const authId = optional(params, "auth_id")
+
     if (provider !== undefined) filter.provider = provider.toLowerCase()
+
     if (model !== undefined) filter.model = model
+
     if (principal !== undefined) filter.principal = principal
+
     if (authId !== undefined) filter.authId = authId
     const failed = optional(params, "failed")
+
     if (failed !== undefined) {
       if (failed !== "true" && failed !== "false") return yield* replyError(400, "failed must be true or false")
       filter.failed = failed === "true"
     }
+
     return filter as UsageFilter
   })
 
 const parseLimit = (params: URLSearchParams) =>
   Effect.gen(function* () {
     const raw = optional(params, "limit")
+
     if (raw === undefined) return undefined
     const limit = Number(raw)
+
     if (!/^\d+$/.test(raw) || !Number.isSafeInteger(limit) || limit <= 0) {
       return yield* replyError(400, "limit must be a positive integer")
     }
+
     return limit
   })
 
@@ -188,6 +220,7 @@ const usageRecords = Effect.gen(function* () {
   const limit = yield* parseLimit(params)
   const before = optional(params, "before")
   const db = yield* usageDb
+
   const page = yield* query("records", () =>
     listUsageRecords(db, {
       ...filter,
@@ -195,6 +228,7 @@ const usageRecords = Effect.gen(function* () {
       ...(before === undefined ? {} : { before })
     })
   )
+
   return jsonReply(200, {
     records: page.rows.map(rowToPayload),
     ...(page.nextBefore === undefined ? {} : { next_before: page.nextBefore })
@@ -207,13 +241,17 @@ const usageSummary = Effect.gen(function* () {
   const filter = yield* parseFilter(params)
   const limit = yield* parseLimit(params)
   const groupBy = optional(params, "group_by") ?? "model"
+
   if (!(GROUP_BY as ReadonlyArray<string>).includes(groupBy)) {
     return yield* replyError(400, `group_by must be one of ${GROUP_BY.join(", ")}`)
   }
+
   const db = yield* usageDb
+
   const summary = yield* query("summary", () =>
     summarizeUsage(db, { ...filter, groupBy: groupBy as GroupBy, ...(limit === undefined ? {} : { limit }) })
   )
+
   return jsonReply(200, { group_by: groupBy, totals: summary.totals, groups: summary.groups })
 })
 

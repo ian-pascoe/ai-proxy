@@ -28,7 +28,9 @@ export const canonicalMetadataKey = (key: string): string => KEY_ALIASES[key] ??
 export const normalizeCredentialMetadata = (metadata: JsonObject): void => {
   for (const key of Object.keys(metadata)) {
     const canonical = canonicalMetadataKey(key)
+
     if (canonical === key) continue
+
     if (!Object.hasOwn(metadata, canonical)) metadata[canonical] = metadata[key] as Json
     delete metadata[key]
   }
@@ -55,12 +57,16 @@ const MAX_ID_LENGTH = 256
 /** Credential ids for files are relative paths: no traversal, no empty segments. */
 export const normalizeCredentialId = (name: string): string | undefined => {
   const cleaned = name.trim().replace(/\\/g, "/").replace(/^\/+/, "")
+
   if (cleaned === "" || cleaned.length > MAX_ID_LENGTH) return undefined
   const segments = cleaned.split("/")
+
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) return undefined
+
   // Control characters would corrupt logs and management output.
   // oxlint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(cleaned)) return undefined
+
   return cleaned
 }
 
@@ -71,30 +77,40 @@ export const normalizeCredentialId = (name: string): string | undefined => {
  */
 export const parseAuthFile = (name: string, content: string | JsonObject): ParsedAuthFile => {
   const id = normalizeCredentialId(name)
+
   if (id === undefined) return { ok: false, reason: "invalid_name", message: "invalid credential file name" }
 
   let parsed: unknown = content
+
   if (typeof content === "string") {
     if (content.trim() === "") return { ok: false, reason: "empty", message: "auth file is empty" }
+
     try {
       parsed = JSON.parse(content)
     } catch {
       return { ok: false, reason: "invalid_json", message: "auth file is not valid JSON" }
     }
   }
+
   if (!isJsonObject(parsed)) return { ok: false, reason: "not_object", message: "auth file must be a JSON object" }
   const metadata = structuredClone(parsed)
+
   if (Object.keys(metadata).length === 0) return { ok: false, reason: "empty", message: "auth file is empty" }
   normalizeCredentialMetadata(metadata)
 
   if (Object.hasOwn(metadata, "weight")) {
     const weight = parseWeightValue(metadata.weight)
+
     if (!weight.ok) return { ok: false, reason: "invalid_weight", message: `invalid weight: ${weight.message}` }
   }
+
   const type = typeof metadata.type === "string" ? metadata.type.trim().toLowerCase() : ""
+
   if (type === "") return { ok: false, reason: "missing_type", message: 'auth file has no "type"' }
+
   if (IGNORED_TYPES.has(type)) {
     return { ok: false, reason: "unsupported_type", message: `auth type "${type}" is no longer supported` }
   }
+
   return { ok: true, id, provider: type, metadata }
 }

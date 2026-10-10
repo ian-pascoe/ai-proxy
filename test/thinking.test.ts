@@ -22,11 +22,16 @@ import { catalogLookup } from "./support/thinking.ts"
 
 const parse = (text: string): Json => {
   const value = tryParseJson(text)
+
   if (value === undefined) throw new Error(`invalid JSON in test: ${text}`)
+
   return value
 }
+
 const str = (body: Json | undefined, path: string): string => asString(get(body, path))
+
 const exists = (body: Json | undefined, path: string): boolean => get(body, path) !== undefined
+
 const raw = (body: Json | undefined, path: string): string => JSON.stringify(get(body, path))
 
 const summary = (mode: SummaryMode, detail = ""): SummaryConfig => ({ mode, detail })
@@ -242,6 +247,7 @@ describe("ExtractSummaryConfig", () => {
       "unspecified"
     ]
   ]
+
   for (const [name, format, body, mode, detail] of cases) {
     it(name, () => {
       expect(extractSummaryConfig(parse(body), format)).toEqual(summary(mode, detail ?? ""))
@@ -367,6 +373,7 @@ describe("ApplySummaryConfig", () => {
     ],
     ["responses concise", "openai-response", `{}`, summary("enabled", "concise"), "reasoning.summary", "concise"]
   ]
+
   for (const [name, format, body, config, path, want] of cases) {
     it(name, () => {
       expect(str(applySummaryConfig(parse(body), format, config), path)).toBe(want)
@@ -399,11 +406,14 @@ describe("ApplySummaryConfig", () => {
         ""
       ]
     ]
+
     for (const [name, provider, body, mode, wantExclude, wantExisting, wantEffort] of dialects) {
       it(name, () => {
         const out = applySummaryConfigForProvider(parse(body), "openai", "model", provider, undefined, summary(mode))
         expect(exists(out, "reasoning.exclude")).toBe(wantExisting)
+
         if (wantExisting) expect(str(out, "reasoning.exclude")).toBe(wantExclude)
+
         if (wantEffort === "") expect(exists(out, "reasoning_effort")).toBe(false)
         else expect(str(out, "reasoning_effort")).toBe(wantEffort)
       })
@@ -431,6 +441,7 @@ describe("ApplySummaryConfig", () => {
         "generation_config.thinkingSummaries"
       ]
     ]
+
     for (const [format, body, canonical, alias] of aliasCases) {
       const out = applySummaryConfig(parse(body), format, summary("enabled"))
       expect(exists(out, canonical), `${format} canonical`).toBe(true)
@@ -442,6 +453,7 @@ describe("ApplySummaryConfig", () => {
   // already-active thinking.
   it("never writes Claude display without active thinking", () => {
     const bodies = [`{}`, `{"messages":[{"role":"user","content":"hi"}]}`, `{"thinking":{"type":"disabled"}}`]
+
     for (const mode of ["enabled", "disabled"] as const) {
       for (const body of bodies) {
         const out = applySummaryConfig(parse(body), "claude", summary(mode))
@@ -468,11 +480,13 @@ describe("ApplySummaryConfig", () => {
         budget: 1024
       }
     ]
+
     for (const c of modelCases) {
       it(c.name, () => {
         const out = applySummaryConfigForModel(parse(c.body), "claude", c.model, summary("enabled"), catalogLookup)
         expect(str(out, "thinking.type")).toBe(c.type)
         expect(str(out, "thinking.display")).toBe("summarized")
+
         if (c.budget > 0) expect(asInt(get(out, "thinking.budget_tokens"))).toBe(c.budget)
       })
     }
@@ -493,6 +507,7 @@ describe("ApplySummaryConfig", () => {
       "openai-response",
       summary("enabled", "detailed")
     )
+
     expect(str(out, "reasoning.summary")).toBe("detailed")
     expect(exists(out, "reasoning.generate_summary")).toBe(false)
   })
@@ -503,6 +518,7 @@ describe("ApplySummaryConfig", () => {
       "openai-response",
       summary("disabled")
     )
+
     expect(exists(out, "reasoning.summary")).toBe(false)
     expect(str(out, "reasoning.effort")).toBe("high")
   })
@@ -513,6 +529,7 @@ describe("ApplySummaryConfig", () => {
       "openai-response",
       summary("disabled")
     )
+
     expect(exists(out, "reasoning")).toBe(false)
   })
 
@@ -524,6 +541,7 @@ describe("ApplySummaryConfig", () => {
 
 describe("Claude enabled with output_config.effort routed to OpenAI", () => {
   const model = `"model":"custom-openai","messages":[{"role":"user","content":"hi"}]`
+
   const cases: ReadonlyArray<readonly [string, string, string]> = [
     [
       "explicit output_config effort is preserved without budget",
@@ -552,6 +570,7 @@ describe("Claude enabled with output_config.effort routed to OpenAI", () => {
       "auto"
     ]
   ]
+
   for (const [name, body, want] of cases) {
     it(name, () => {
       const result = applyPlain(parse(body), "custom-openai", "claude", "openai", "openai")
@@ -564,6 +583,7 @@ describe("Claude enabled with output_config.effort routed to OpenAI", () => {
     // Go chains openaiclaude.ConvertClaudeRequestToOpenAI first; its output carries reasoning_effort "high".
     const source = parse(`{${model},"thinking":{"type":"enabled"},"output_config":{"effort":"high"}}`)
     const translated = parse(`{${model},"reasoning_effort":"high"}`)
+
     const result = applyThinking(translated, {
       model: "custom-openai",
       fromFormat: "claude",
@@ -573,6 +593,7 @@ describe("Claude enabled with output_config.effort routed to OpenAI", () => {
       summaryConfig: UNSPECIFIED_SUMMARY,
       lookupModelInfo: catalogLookup
     })
+
     expect(result.error).toBeUndefined()
     expect(str(result.body, "reasoning_effort")).toBe("high")
   })
@@ -600,6 +621,7 @@ describe("Kimi through the Claude protocol", () => {
 
 describe("Codex reasoning effort and configuration_update", () => {
   const astra = `{"model":"gpt-6-astra","reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}}]}`
+
   const cases: ReadonlyArray<readonly [string, string, string, string, string, string]> = [
     ["codex extracts configuration_update effort over top-level", "codex", "gpt-6-astra", astra, "low", "low"],
     [
@@ -675,6 +697,7 @@ describe("Codex reasoning effort and configuration_update", () => {
       "xhigh"
     ]
   ]
+
   for (const [name, provider, model, body, wantRequest, wantTranslated] of cases) {
     it(name, () => {
       expect(extractReasoningEffort(parse(body), provider, model)).toBe(wantRequest)
@@ -689,6 +712,7 @@ describe("Codex reasoning effort and configuration_update", () => {
 
   describe("target routing", () => {
     const source = `{"reasoning":{"effort":"xhigh"},"input":[{"type":"configuration_update","reasoning":{"effort":"medium"}},{"type":"configuration_update","reasoning":{"effort":"low"}},{"type":"configuration_update","reasoning":{"effort":null}},{"role":"user","content":"ok"}]}`
+
     for (const supported of [true, false]) {
       it(supported ? "supported" : "unsupported", () => {
         const info: ThinkingModelInfo = {
@@ -697,6 +721,7 @@ describe("Codex reasoning effort and configuration_update", () => {
           supportConfigurationUpdate: supported,
           thinking: { levels: ["low", "high", "xhigh"] }
         }
+
         const result = applyWithModelInfo(
           parse(source),
           parse(source),
@@ -709,6 +734,7 @@ describe("Codex reasoning effort and configuration_update", () => {
             summaryConfig: UNSPECIFIED_SUMMARY
           }
         )
+
         expect(result.error).toBeUndefined()
         expect(extractReasoningEffort(parse(source), "openai-response", "opaque-route(high)")).toBe("low")
         expect(extractTranslatedReasoningEffort(result.body, "codex")).toBe(supported ? "low" : "high")
@@ -722,6 +748,7 @@ describe("Codex reasoning effort and configuration_update", () => {
 describe("configuration_update routing", () => {
   const update = `{"type":"configuration_update","reasoning":{"effort":"low"}}`
   const user = `{"role":"user","content":"ok"}`
+
   const cases: ReadonlyArray<{
     name: string
     body: string
@@ -847,15 +874,18 @@ describe("configuration_update routing", () => {
       wantSame: true
     }
   ]
+
   for (const c of cases) {
     it(c.name, () => {
       const format = c.format ?? "codex"
+
       const info: ThinkingModelInfo = {
         id: "configured-responses",
         type: "codex",
         supportConfigurationUpdate: c.supported === true,
         thinking: c.noThinking === true ? undefined : { levels: ["low", "medium", "high", "xhigh"] }
       }
+
       const body = parse(c.body)
       const original = cloneJson(body)
       const suffix = c.suffix === undefined ? "" : `(${c.suffix})`
@@ -863,11 +893,16 @@ describe("configuration_update routing", () => {
       const result = applyWithModelInfo(body, body, `configured-responses${suffix}`, format, format, "codex", info)
       expect(result.error).toBeUndefined()
       const applied = result.body
+
       if (c.wantSame === true) expect(applied).toEqual(original)
       expect(str(applied, "reasoning.effort")).toBe(c.wantEffort ?? "")
+
       if (c.wantInput !== undefined) expect(raw(applied, "input")).toBe(c.wantInput)
+
       if (exists(original, "reasoning.summary")) expect(str(applied, "reasoning.summary")).toBe("auto")
+
       if (exists(original, "reasoning.other")) expect(asInt(get(applied, "reasoning.other"))).toBe(7)
+
       if (c.supported === true && c.suffix !== undefined && c.suffix !== "invalid" && c.noThinking !== true) {
         expect(extractTranslatedReasoningEffort(applied, format)).toBe("low")
       }
@@ -908,15 +943,18 @@ describe("configuration_update routing", () => {
         effort: "none"
       }
     ]
+
     for (const c of bodies) {
       for (const bound of [false, true]) {
         const body = parse(c.body)
         const original = cloneJson(body)
         const info = catalogLookup("gpt-6-sol", "codex")
         expect(info?.supportConfigurationUpdate, "gpt-6-sol must support configuration updates").toBe(true)
+
         const result = bound
           ? applyWithModelInfo(body, body, "gpt-6-sol", "codex", "codex", "codex", info ?? null)
           : applyPlain(body, "gpt-6-sol", "codex", "codex", "codex")
+
         expect(result.error).toBeUndefined()
         expect(result.body).toEqual(original)
         expect(extractTranslatedReasoningEffort(result.body, "codex")).toBe(c.effort)
@@ -928,6 +966,7 @@ describe("configuration_update routing", () => {
     const body = parse(
       `{"model":"gpt-6-astra","reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}}]}`
     )
+
     const result = applyPlain(body, "gpt-6-astra", "codex", "codex", "codex")
     expect(result.error).toBeUndefined()
     expect(str(result.body, "reasoning.effort")).toBe("xhigh")
@@ -947,8 +986,10 @@ describe("configured API-key model definitions", () => {
       ["max prefers xhigh", "max", ["high", "xhigh"], "xhigh"],
       ["max falls back to high", "max", ["high"], "high"]
     ]
+
     for (const [name, source, levels, want] of cases) {
       const info: ThinkingModelInfo = { id: "claude-upstream", type: "claude", thinking: { levels } }
+
       const result = applyWithModelInfo(
         parse(`{"thinking":{"type":"adaptive"},"output_config":{"effort":"low"}}`),
         parse(`{"reasoning_effort":"${source}"}`),
@@ -958,6 +999,7 @@ describe("configured API-key model definitions", () => {
         "claude",
         info
       )
+
       expect(result.error, name).toBeUndefined()
       expect(str(result.body, "output_config.effort"), name).toBe(want)
     }
@@ -969,6 +1011,7 @@ describe("configured API-key model definitions", () => {
       type: "openai-compatibility",
       thinking: { levels: ["high", "max"] }
     }
+
     const result = applyWithModelInfo(
       parse(`{"reasoning_effort":"high"}`),
       parse(`{"reasoning_effort":"xhigh"}`),
@@ -978,11 +1021,13 @@ describe("configured API-key model definitions", () => {
       "compat-provider",
       info
     )
+
     expect(str(result.body, "reasoning_effort")).toBe("max")
   })
 
   it("maps Responses to Codex high intent", () => {
     const info: ThinkingModelInfo = { id: "codex-upstream", type: "codex", thinking: { levels: ["high", "xhigh"] } }
+
     const result = applyWithModelInfo(
       parse(`{"reasoning":{"effort":"high"}}`),
       parse(`{"reasoning":{"effort":"max"}}`),
@@ -992,6 +1037,7 @@ describe("configured API-key model definitions", () => {
       "codex",
       info
     )
+
     expect(str(result.body, "reasoning.effort")).toBe("xhigh")
   })
 
@@ -1001,6 +1047,7 @@ describe("configured API-key model definitions", () => {
       type: "openai",
       thinking: { levels: ["low", "medium", "high"] }
     }
+
     const body = parse(`{"reasoning_effort":"xhigh"}`)
     const result = applyWithModelInfo(body, cloneJson(body), "openai-upstream", "openai", "openai", "openai", info)
     expect(result.error?.code).toBe("LEVEL_NOT_SUPPORTED")
@@ -1010,6 +1057,7 @@ describe("configured API-key model definitions", () => {
 
   it("applies enabled summary-only Claude visibility", () => {
     const info: ThinkingModelInfo = { id: "private-claude", type: "claude", thinking: { levels: ["high"] } }
+
     const result = applyWithModelInfo(
       parse(`{"model":"private-claude","max_tokens":32000}`),
       parse(`{"reasoning":{"summary":"auto"}}`),
@@ -1019,12 +1067,14 @@ describe("configured API-key model definitions", () => {
       "claude",
       info
     )
+
     expect(str(result.body, "thinking.type")).toBe("adaptive")
     expect(str(result.body, "thinking.display")).toBe("summarized")
   })
 
   it("drops an inferred Claude mode when the summary was removed", () => {
     const info: ThinkingModelInfo = { id: "private-manual-claude", type: "claude", thinking: { min: 1024, max: 16000 } }
+
     const result = applyWithModelInfo(
       parse(`{"model":"private-manual-claude","max_tokens":32000,"thinking":{"type":"adaptive"}}`),
       parse(`{"reasoning":{"summary":"auto"}}`),
@@ -1035,11 +1085,13 @@ describe("configured API-key model definitions", () => {
       info,
       { summaryConfig: UNSPECIFIED_SUMMARY }
     )
+
     expect(exists(result.body, "thinking")).toBe(false)
   })
 
   it("does not activate Claude for a disabled summary", () => {
     const info: ThinkingModelInfo = { id: "private-claude", type: "claude", thinking: { levels: ["high"] } }
+
     const result = applyWithModelInfo(
       parse(`{"model":"private-claude","max_tokens":32000}`),
       parse(`{"reasoning":{"summary":null}}`),
@@ -1049,11 +1101,13 @@ describe("configured API-key model definitions", () => {
       "claude",
       info
     )
+
     expect(exists(result.body, "thinking")).toBe(false)
   })
 
   it("summary-only requests do not invent OpenAI effort", () => {
     const info: ThinkingModelInfo = { id: "private-openai", type: "openai", thinking: { levels: ["high", "max"] } }
+
     const result = applyWithModelInfo(
       parse(`{"model":"private-openai","messages":[{"role":"user","content":"hi"}]}`),
       parse(`{"model":"private-openai","reasoning":{"summary":"auto"},"input":"hi"}`),
@@ -1063,6 +1117,7 @@ describe("configured API-key model definitions", () => {
       "openai",
       info
     )
+
     expect(result.error).toBeUndefined()
     expect(exists(result.body, "reasoning_effort")).toBe(false)
   })
@@ -1076,6 +1131,7 @@ describe("configured API-key model definitions", () => {
       summaryConfig: summary("enabled", "auto"),
       lookupModelInfo: catalogLookup
     })
+
     expect(result.error).toBeUndefined()
     expect(str(result.body, "reasoning_effort")).toBe("none")
   })
@@ -1086,6 +1142,7 @@ describe("configured API-key model definitions", () => {
       type: "openai-compatibility",
       thinking: { levels: ["high", "max"] }
     }
+
     const result = applyWithModelInfo(
       parse(`{"model":"openrouter-model","messages":[{"role":"user","content":"hi"}]}`),
       parse(`{"model":"openrouter-model","reasoning":{"summary":"auto"},"input":"hi"}`),
@@ -1095,12 +1152,14 @@ describe("configured API-key model definitions", () => {
       "openrouter",
       info
     )
+
     expect(get(result.body, "reasoning.exclude")).toBe(false)
     expect(exists(result.body, "reasoning_effort")).toBe(false)
   })
 
   it("uses the original Responses effort for Claude targets", () => {
     const info: ThinkingModelInfo = { id: "claude-upstream", type: "claude", thinking: { levels: ["high", "max"] } }
+
     const result = applyWithModelInfo(
       parse(`{"thinking":{"type":"adaptive"},"output_config":{"effort":"low"}}`),
       parse(`{"reasoning":{"effort":"xhigh"}}`),
@@ -1110,11 +1169,13 @@ describe("configured API-key model definitions", () => {
       "claude",
       info
     )
+
     expect(str(result.body, "output_config.effort")).toBe("max")
   })
 
   describe("configuration_update across protocols", () => {
     const source = `{"reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}},{"role":"user","content":"ok"},{"type":"configuration_update","reasoning":{"effort":"high"}}]}`
+
     const cases = [
       {
         name: "unsupported Responses source becomes OpenAI Chat effort",
@@ -1157,6 +1218,7 @@ describe("configured API-key model definitions", () => {
         want: "low"
       }
     ]
+
     for (const c of cases) {
       it(c.name, () => {
         const info: ThinkingModelInfo = {
@@ -1165,6 +1227,7 @@ describe("configured API-key model definitions", () => {
           supportConfigurationUpdate: c.supported,
           thinking: { levels: ["low", "medium", "high", "xhigh"] }
         }
+
         const result = applyWithModelInfo(
           parse(c.body),
           parse(source),
@@ -1174,6 +1237,7 @@ describe("configured API-key model definitions", () => {
           c.format,
           info
         )
+
         expect(result.error).toBeUndefined()
         expect(str(result.body, c.path)).toBe(c.want)
         expect(get(result.body, "other")).toBe(true)
@@ -1184,6 +1248,7 @@ describe("configured API-key model definitions", () => {
   describe("registry-resolved source entry", () => {
     const source = `{"reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}},{"role":"user","content":"ok"}]}`
     const target = `{"reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"medium"}},{"role":"user","content":"ok"}]}`
+
     const cases = [
       {
         name: "registry capability preserves native Responses without suffix",
@@ -1231,9 +1296,11 @@ describe("configured API-key model definitions", () => {
         same: false
       }
     ]
+
     for (const c of cases) {
       it(c.name, () => {
         const body = parse(c.body)
+
         const result = applyThinking(body, {
           model: c.model,
           fromFormat: "openai-response",
@@ -1243,9 +1310,12 @@ describe("configured API-key model definitions", () => {
           summaryConfig: extractSummaryConfig(parse(source), "openai-response"),
           lookupModelInfo: catalogLookup
         })
+
         expect(result.error).toBeUndefined()
         expect(str(result.body, c.format === "openai" ? "reasoning_effort" : "reasoning.effort")).toBe(c.want)
+
         if (c.wantInput !== undefined) expect(raw(result.body, "input")).toBe(c.wantInput)
+
         if (c.same) expect(result.body).toEqual(parse(c.body))
       })
     }
@@ -1255,11 +1325,13 @@ describe("configured API-key model definitions", () => {
     const updateSource = parse(
       `{"reasoning":{"effort":"medium"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}},{"role":"user","content":"ok"}]}`
     )
+
     const info: ThinkingModelInfo = {
       id: "private-codex",
       type: "codex",
       thinking: { levels: ["low", "medium", "high", "xhigh"] }
     }
+
     const cases = [
       {
         name: "bound model does not rebuild invalid target from source update",
@@ -1302,6 +1374,7 @@ describe("configured API-key model definitions", () => {
         want: `{"reasoning":{"effort":"high"}}`
       }
     ]
+
     for (const c of cases) {
       it(c.name, () => {
         const result = applyThinking(undefined, {
@@ -1315,6 +1388,7 @@ describe("configured API-key model definitions", () => {
           lookupModelInfo: catalogLookup,
           ...(c.bound ? { modelInfo: info } : {})
         })
+
         expect(result.error).toBeUndefined()
         expect(c.want === undefined ? result.body : JSON.stringify(result.body)).toBe(c.want)
       })
@@ -1323,6 +1397,7 @@ describe("configured API-key model definitions", () => {
 
   it("a bound model without info uses no static support; user-defined models keep the source effort", () => {
     const body = `{"reasoning":{"effort":"xhigh","summary":"auto"},"input":[{"type":"configuration_update","reasoning":{"effort":"low"}},{"role":"user","content":"ok"}]}`
+
     const run = (info: ThinkingModelInfo | null, model: string) =>
       applyWithModelInfo(parse(body), parse(body), model, "codex", "codex", "codex", info, {
         summaryConfig: extractSummaryConfig(parse(body), "codex")

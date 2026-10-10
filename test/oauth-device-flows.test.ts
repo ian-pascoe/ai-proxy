@@ -6,6 +6,7 @@ import { expect } from "vitest"
 import { begin, iso, jwt, makeOAuth, onlyFile, routes, startClock, statusOf, T0 } from "./support/oauth.ts"
 
 const pending = { status: 200, body: { error: "authorization_pending" } }
+
 /** Meta (RFC 8628) answers pending with a 4xx; a 200 is a token response. */
 const metaPending = { status: 400, body: { error: "authorization_pending" } }
 
@@ -13,12 +14,14 @@ describe("xai login", () => {
   const DISCOVERY = "GET https://auth.x.ai/.well-known/openid-configuration"
   const DEVICE = "POST https://auth.x.ai/oauth2/device/code"
   const TOKEN = "POST https://auth.x.ai/oauth2/token"
+
   const discovery = {
     body: {
       device_authorization_endpoint: "https://auth.x.ai/oauth2/device/code",
       token_endpoint: "https://auth.x.ai/oauth2/token"
     }
   }
+
   const device = (body: Record<string, unknown> = {}) => ({
     body: {
       device_code: "dev-code-xyz",
@@ -30,15 +33,18 @@ describe("xai login", () => {
       ...body
     }
   })
+
   const idToken = jwt({ email: "grok@x.com", sub: "sub-9" })
 
   it.effect("starts through discovery and polls once immediately, then at most every interval", () =>
     Effect.gen(function* () {
       yield* startClock
       const replies = [pending, { status: 200, body: { error: "slow_down" } }, pending]
+
       const h = makeOAuth(
         routes({ [DISCOVERY]: discovery, [DEVICE]: device(), [TOKEN]: () => replies.shift() ?? pending })
       )
+
       const started = yield* begin(h, "xai")
       assert.deepStrictEqual(
         { flow: started.flow, userCode: started.userCode, expiresIn: started.expiresIn, url: started.url },
@@ -83,6 +89,7 @@ describe("xai login", () => {
   it.effect("stores the Go credential once the user approved", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [DISCOVERY]: discovery,
@@ -98,6 +105,7 @@ describe("xai login", () => {
           }
         })
       )
+
       const started = yield* begin(h, "xai")
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
       const { name, file } = onlyFile(h)
@@ -128,6 +136,7 @@ describe("xai login", () => {
   it.effect("names the file after the subject, or the time, when the id token has no e-mail", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const make = (claims: Record<string, unknown>) =>
         makeOAuth(
           routes({
@@ -136,6 +145,7 @@ describe("xai login", () => {
             [TOKEN]: { body: { access_token: "a", id_token: jwt(claims) } }
           })
         )
+
       const bySub = make({ sub: "user/1" })
       yield* statusOf(bySub, (yield* begin(bySub, "xai")).state)
       expect(onlyFile(bySub).name).toBe("xai-user-1.json")
@@ -148,6 +158,7 @@ describe("xai login", () => {
   it.effect("reports denial, expiry and provider errors and never saves", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const failure = (reply: { status?: number; body?: unknown }) =>
         Effect.gen(function* () {
           const h = makeOAuth(routes({ [DISCOVERY]: discovery, [DEVICE]: device(), [TOKEN]: reply }))
@@ -156,8 +167,10 @@ describe("xai login", () => {
           expect(h.files.size).toBe(0)
           // The failure sticks.
           assert.deepStrictEqual(yield* statusOf(h, started.state), status)
+
           return status
         })
+
       assert.deepStrictEqual(yield* failure({ body: { error: "access_denied" } }), {
         status: "error",
         error: "Authentication failed: xai device authorization denied"
@@ -184,6 +197,7 @@ describe("xai login", () => {
     Effect.gen(function* () {
       yield* startClock
       let transient = true
+
       const h = makeOAuth(
         routes({
           [DISCOVERY]: discovery,
@@ -191,6 +205,7 @@ describe("xai login", () => {
           [TOKEN]: () => (transient ? { transportError: true } : pending)
         })
       )
+
       const started = yield* begin(h, "xai")
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" })
       transient = false
@@ -228,6 +243,7 @@ describe("xai login", () => {
           }
         })
       )
+
       assert.deepStrictEqual(yield* evil.run(evil.service.start({ provider: "xai" })), {
         ok: false,
         status: 500,
@@ -242,6 +258,7 @@ describe("meta login", () => {
   const DEVICE = "POST https://auth.meta.com/oidc/device/authorization/"
   const TOKEN = "POST https://auth.meta.com/oidc/device/token/"
   const MINT = "POST https://api.meta.ai/muse-code/key"
+
   const deviceReply = {
     body: {
       device_code: "meta-dev",
@@ -250,6 +267,7 @@ describe("meta login", () => {
       expires_in: 1200
     }
   }
+
   const minted = {
     body: {
       api_key: "meta-api-key",
@@ -266,6 +284,7 @@ describe("meta login", () => {
   it.effect("mints through META_MINT_URL when it is set", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [DEVICE]: deviceReply,
@@ -275,6 +294,7 @@ describe("meta login", () => {
         {},
         { metaMintUrl: "https://mint.example.test/key" }
       )
+
       const started = yield* begin(h, "meta")
       yield* TestClock.adjust(5_000)
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
@@ -286,6 +306,7 @@ describe("meta login", () => {
   it.effect("waits one interval before the first poll, mints the key and writes the Go file", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [DEVICE]: deviceReply,
@@ -293,6 +314,7 @@ describe("meta login", () => {
           [MINT]: minted
         })
       )
+
       const started = yield* begin(h, "meta")
       expect(started).toMatchObject({
         flow: "device",
@@ -346,6 +368,7 @@ describe("meta login", () => {
   it.effect("stores the DCA token alone when minting fails and names the file after the token", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const h = makeOAuth(
         routes({
           [DEVICE]: deviceReply,
@@ -353,6 +376,7 @@ describe("meta login", () => {
           [MINT]: { status: 500 }
         })
       )
+
       const started = yield* begin(h, "meta")
       yield* TestClock.adjust(5_000)
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
@@ -372,11 +396,13 @@ describe("meta login", () => {
   it.effect("handles pending, slow_down, denial and expiry", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const replies = [
         metaPending,
         { status: 400, body: { error: "slow_down" } },
         { status: 400, body: { error: "access_denied" } }
       ]
+
       const h = makeOAuth(routes({ [DEVICE]: deviceReply, [TOKEN]: () => replies.shift() ?? metaPending }))
       const started = yield* begin(h, "meta")
       yield* TestClock.adjust(5_000)
@@ -422,6 +448,7 @@ describe("kimi login", () => {
   const COM_TOKEN = "POST https://auth.kimi.com/api/oauth/token"
   const AI_DEVICE = "POST https://auth.kimi.ai/api/oauth/device_authorization"
   const AI_TOKEN = "POST https://auth.kimi.ai/api/oauth/token"
+
   const deviceReply = {
     body: {
       device_code: "kimi-dev",
@@ -431,6 +458,7 @@ describe("kimi login", () => {
       interval: 1
     }
   }
+
   const tokens = {
     body: {
       access_token: "kimi-at",
@@ -487,6 +515,7 @@ describe("kimi login", () => {
   it.effect("kimi-ai (and ?domain=kimi.ai) use the .ai hosts and the kimi-ai type", () =>
     Effect.gen(function* () {
       yield* startClock
+
       for (const input of [{ provider: "kimi-ai" }, { provider: "kimi", domain: "kimi.ai" }]) {
         const h = makeOAuth(routes({ [AI_DEVICE]: deviceReply, [AI_TOKEN]: tokens }))
         const started = yield* begin(h, input.provider, input.domain === undefined ? {} : { domain: input.domain })
@@ -503,17 +532,21 @@ describe("kimi login", () => {
   it.effect("keeps polling through pending/slow_down and reports terminal errors", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const replies = [
         { body: { error: "authorization_pending" } },
         { body: { error: "slow_down" } },
         { body: { error: "access_denied" } }
       ]
+
       const h = makeOAuth(routes({ [COM_DEVICE]: deviceReply, [COM_TOKEN]: () => replies.shift() ?? pending }))
       const started = yield* begin(h, "kimi")
+
       for (const _ of [1, 2]) {
         yield* TestClock.adjust(5_000)
         assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" })
       }
+
       // slow_down does not increase Kimi's interval.
       yield* TestClock.adjust(5_000)
       assert.deepStrictEqual(yield* statusOf(h, started.state), {
@@ -524,6 +557,7 @@ describe("kimi login", () => {
       const other = makeOAuth(
         routes({ [COM_DEVICE]: deviceReply, [COM_TOKEN]: { body: { error: "weird", error_description: "why" } } })
       )
+
       const second = yield* begin(other, "kimi")
       yield* TestClock.adjust(5_000)
       assert.deepStrictEqual(yield* statusOf(other, second.state), {
@@ -573,11 +607,13 @@ describe("codex device login", () => {
   it.effect("polls until approved, then exchanges with the device redirect and the returned verifier", () =>
     Effect.gen(function* () {
       yield* startClock
+
       const replies = [
         { status: 403 },
         { status: 404 },
         { body: { authorization_code: "ac", code_verifier: "cv", code_challenge: "cc" } }
       ]
+
       const h = makeOAuth(
         routes({
           [USERCODE]: { body: { device_auth_id: "dai-1", usercode: "UC-9", interval: "3" } },
@@ -585,6 +621,7 @@ describe("codex device login", () => {
           [TOKEN]: { body: { access_token: "at", refresh_token: "rt", id_token: idToken, expires_in: 100 } }
         })
       )
+
       const started = yield* begin(h, "codex", { flow: "device" })
       expect(started).toMatchObject({
         flow: "device",
@@ -596,10 +633,12 @@ describe("codex device login", () => {
 
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" })
       expect(h.requests).toHaveLength(1)
+
       for (const _ of [1, 2]) {
         yield* TestClock.adjust(3_000)
         assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" })
       }
+
       yield* TestClock.adjust(3_000)
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" })
       expect(h.requests[1]?.json()).toEqual({ device_auth_id: "dai-1", user_code: "UC-9" })
@@ -635,6 +674,7 @@ describe("codex device login", () => {
           [TOKEN]: { body: { access_token: "at", id_token: jwt({}) } }
         })
       )
+
       const second = yield* begin(anonymous, "codex", { flow: "device" })
       yield* TestClock.adjust(5_000)
       assert.deepStrictEqual(yield* statusOf(anonymous, second.state), {

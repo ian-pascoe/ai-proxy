@@ -38,8 +38,10 @@ export interface RequestReplayCache extends ReplayCache {
 
 const parseItems = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined
+
   try {
     const parsed: unknown = JSON.parse(text)
+
     return Array.isArray(parsed) ? (parsed as Json[]) : undefined
   } catch {
     return undefined
@@ -54,25 +56,31 @@ export const makeRequestReplayCache = (
   /** `undefined` = loaded and absent. */
   const loaded = new Map<string, readonly Json[] | undefined>()
   const pending = new Map<string, readonly Json[]>()
+
   return {
     set: (model, key, items) => {
       const id = replayCacheKey(model, key)
+
       if (id === "" || !replayItemsAcceptable(items)) return false
       const copy = structuredClone([...items])
       loaded.set(id, copy)
       pending.set(id, copy)
+
       return true
     },
     get: (model, key) => {
       const id = replayCacheKey(model, key)
       const items = id === "" ? undefined : loaded.get(id)
+
       return items === undefined ? undefined : structuredClone([...items])
     },
     prefetch: (model, keys) => {
       const ids = [
         ...new Set(keys.map((key) => replayCacheKey(model, key)).filter((id) => id !== "" && !loaded.has(id)))
       ]
+
       if (ids.length === 0) return Effect.void
+
       return bestEffort(
         "gemini replay prefetch",
         undefined,
@@ -82,6 +90,7 @@ export const makeRequestReplayCache = (
           const results = yield* state.run(address, ops)
           ids.forEach((id, index) => {
             const result = results[index]
+
             if (result?.status === "ok") loaded.set(id, parseItems(result.value))
           })
         })
@@ -91,11 +100,13 @@ export const makeRequestReplayCache = (
       if (pending.size === 0) return Effect.void
       const entries = [...pending.entries()]
       pending.clear()
+
       return bestEffort(
         "gemini replay flush",
         undefined,
         Effect.gen(function* () {
           const state = yield* backend
+
           const ops: StateOp[] = entries.map(([id, items]) => ({
             op: "put",
             key: id,
@@ -103,6 +114,7 @@ export const makeRequestReplayCache = (
             ttlMs: REPLAY_CACHE_TTL_MS,
             maxEntries: REPLAY_CACHE_MAX_ENTRIES
           }))
+
           yield* state.run(address, ops)
         })
       )

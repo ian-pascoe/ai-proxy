@@ -8,10 +8,13 @@
  *  - numbers are IEEE doubles (integers beyond 2^53 lose precision) and raw number text such as `1.0` is not kept.
  */
 export type JsonPrimitive = null | boolean | number | string
+
 export type JsonArray = Json[]
+
 export interface JsonObject {
   [key: string]: Json
 }
+
 export type Json = JsonPrimitive | JsonArray | JsonObject
 
 export const isJsonObject = (value: unknown): value is JsonObject =>
@@ -28,17 +31,24 @@ export const cloneJson = <T extends Json>(value: T): T => structuredClone(value)
 /** Structural equality with JSON semantics (key order is irrelevant, numbers compare by value). */
 export const jsonEquals = (a: Json | undefined, b: Json | undefined): boolean => {
   if (a === b) return true
+
   if (a === undefined || b === undefined) return false
+
   if (Array.isArray(a)) {
     if (!Array.isArray(b) || a.length !== b.length) return false
+
     return a.every((item, index) => jsonEquals(item, b[index]))
   }
+
   if (isJsonObject(a)) {
     if (!isJsonObject(b)) return false
     const keys = Object.keys(a)
+
     if (keys.length !== Object.keys(b).length) return false
+
     return keys.every((key) => Object.hasOwn(b, key) && jsonEquals(a[key], b[key]))
   }
+
   return false
 }
 

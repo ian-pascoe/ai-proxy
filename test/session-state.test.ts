@@ -10,15 +10,19 @@ type Run = (ops: StateOp[], now: number) => Promise<StateResult[]>
 
 const memory = (): Run => {
   const engine = new StateEngine(new MemoryStateTable())
+
   return async (ops, now) => engine.run(ops, now)
 }
+
 const durable = (): Run => {
   const stub = env.SESSION_STATE.getByName(`contract-${crypto.randomUUID()}`)
+
   return async (ops, now) => await stub.run(ops, now)
 }
 
 // A base time near the real clock: the Durable Object arms an alarm at the earliest expiry and must not fire it.
 const T0 = Date.now()
+
 const HOUR = 3_600_000
 
 describe.each([
@@ -37,6 +41,7 @@ describe.each([
 
   it("executes a batch in order with positional results", async () => {
     const run = makeRun()
+
     const results = await run(
       [
         { op: "put", key: "a", value: "1", ttlMs: HOUR },
@@ -48,6 +53,7 @@ describe.each([
       ],
       T0
     )
+
     expect(results.map((result) => (result.status === "ok" ? (result.value ?? null) : result.status))).toEqual([
       null,
       null,
@@ -118,9 +124,11 @@ describe.each([
 
   it("bounds the entries: expired ones go first, then the oldest writes; the newest write survives", async () => {
     const run = makeRun()
+
     for (let index = 0; index < 3; index++) {
       await run([{ op: "put", key: `k${index}`, value: String(index), ttlMs: HOUR, maxEntries: 3 }], T0 + index)
     }
+
     await run([{ op: "put", key: "k3", value: "3", ttlMs: HOUR, maxEntries: 3 }], T0 + 3)
     const read = async (key: string) => (await run([{ op: "get", key }], T0 + 4))[0]
     expect(await read("k0")).toEqual({ status: "ok", generation: 0 })
@@ -138,10 +146,12 @@ describe.each([
 
   it("counts atomically with incr and restarts after expiry", async () => {
     const run = makeRun()
+
     const values = async (now: number) =>
       (await run([{ op: "incr", key: "c", ttlMs: 10_000 }], now)).map((result) =>
         result.status === "ok" ? result.value : result.status
       )
+
     expect(await values(T0)).toEqual(["1"])
     expect(await values(T0 + 1)).toEqual(["2"])
     expect(

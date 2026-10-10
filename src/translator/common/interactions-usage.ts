@@ -14,7 +14,9 @@ const PATHS = [
 export const interactionsUsage = (root: Json | undefined): Json | undefined => {
   for (const path of PATHS) {
     const value = get(root, path)
+
     if (value !== undefined) return value
   }
+
   return undefined
 }

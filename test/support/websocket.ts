@@ -32,6 +32,7 @@ export interface MockUpstream {
 export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream => {
   const connections: UpstreamConnection[] = []
   const dials: MockUpstream["dials"] = []
+
   const layer = Layer.succeed(
     UpstreamWebSocketConnector,
     UpstreamWebSocketConnector.of({
@@ -39,6 +40,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
         Effect.suspend(() => {
           dials.push({ url: request.url, headers: { ...request.headers } })
           const rejection = options.reject?.(request.url)
+
           if (rejection !== undefined) {
             return Effect.fail(
               new HandshakeError({
@@ -49,6 +51,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
               })
             )
           }
+
           const pair = new WebSocketPair()
           const proxySide = pair[0]
           const server = pair[1]
@@ -57,6 +60,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           const received: string[] = []
           const queue: string[] = []
           const waiting: Array<(frame: string) => void> = []
+
           const connection: UpstreamConnection = {
             url: request.url,
             headers: { ...request.headers },
@@ -68,10 +72,12 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
                 ? Promise.resolve(queue.shift() as string)
                 : new Promise<string>((resolve) => waiting.push(resolve))
           }
+
           server.addEventListener("message", (event) => {
             const text = String((event as MessageEvent).data)
             received.push(text)
             const waiter = waiting.shift()
+
             if (waiter !== undefined) waiter(text)
             else queue.push(text)
           })
@@ -80,10 +86,12 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           })
           connections.push(connection)
           options.onConnection?.(connection)
+
           return Effect.succeed(wrapWebSocket(proxySide, new Headers({ "x-upstream": "mock" })))
         })
     })
   )
+
   return { connections, dials, layer }
 }
 
@@ -101,6 +109,7 @@ export interface TestClient {
 
 export const connectClient = (response: Response): TestClient => {
   const ws = response.webSocket
+
   if (ws === null || ws === undefined) throw new Error(`no websocket in response (status ${response.status})`)
   ws.accept()
   const messages: string[] = []
@@ -112,17 +121,21 @@ export const connectClient = (response: Response): TestClient => {
     const text = String((event as MessageEvent).data)
     messages.push(text)
     const waiter = waiting.shift()
+
     if (waiter !== undefined) waiter(text)
     else queue.push(text)
   })
   ws.addEventListener("close", (event) =>
     resolveClosed({ code: (event as CloseEvent).code, reason: (event as CloseEvent).reason })
   )
+
   const next = () =>
     queue.length > 0
       ? Promise.resolve(queue.shift() as string)
       : new Promise<string>((resolve) => waiting.push(resolve))
+
   const nextJson = async () => JSON.parse(await next()) as Record<string, unknown>
+
   return {
     send: (value) => ws.send(typeof value === "string" ? value : JSON.stringify(value)),
     next,
@@ -130,6 +143,7 @@ export const connectClient = (response: Response): TestClient => {
     until: async (type) => {
       while (true) {
         const frame = await nextJson()
+
         if (frame["type"] === type) return frame
       }
     },

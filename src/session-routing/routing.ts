@@ -49,21 +49,26 @@ export const usageIdentity = (
 ): { readonly id: string; readonly parentId?: string } => {
   const bounded = boundSessionIdentity(id)
   const parent = parentId === undefined || parentId === "" ? "" : boundSessionIdentity(parentId)
+
   return { id: bounded, ...(parent === "" || parent === bounded ? {} : { parentId: parent }) }
 }
 
 export const prepareSessionRouting = (input: SessionRoutingInput): SessionRouting => {
   const { explicit } = input
+
   if (explicit !== undefined) return { usageSession: usageIdentity(explicit.sessionId, explicit.parentSessionId) }
 
   const derived = hasExplicitSession(input.headers, input.body)
     ? ""
     : deriveId(input.format, input.body, input.callerScope)
+
   let usageSession = derived === "" ? undefined : usageIdentity(`derived:${derived}`, undefined)
   const derivedId = derived === "" ? {} : { derivedId: derived }
+
   if (!input.affinity) return usageSession === undefined ? {} : { ...derivedId, usageSession }
 
   const prepared = prepareFingerprints(extractCanonicalTurns(input.format, input.body))
+
   const lcp =
     prepared.fingerprints.length > 0 &&
     prepared.minPrefixLength > 0 &&
@@ -72,15 +77,18 @@ export const prepareSessionRouting = (input: SessionRoutingInput): SessionRoutin
       : undefined
 
   let fallbackSession: RoutingSession | undefined
+
   if (derived !== "") {
     fallbackSession = { id: `derived:${derived}` }
   } else {
     const hashes = messageHashIds(input.body)
+
     if (hashes.primary !== "") {
       fallbackSession = { id: hashes.primary, ...(hashes.fallback === "" ? {} : { parentId: hashes.fallback }) }
       usageSession = usageIdentity(hashes.primary, undefined)
     }
   }
+
   return {
     ...derivedId,
     ...(lcp === undefined ? {} : { lcp }),

@@ -23,7 +23,9 @@ export const findCredential = (
 ): RefreshTarget | undefined => {
   const name = ref.name?.trim() ?? ""
   const authIndex = ref.authIndex?.trim() ?? ""
+
   if (name === "" && authIndex === "") return undefined
+
   return entries.find(
     (entry) =>
       (name === "" || entry.credential.id === name) &&
@@ -56,12 +58,16 @@ const text = (value: unknown): string => (typeof value === "string" ? value.trim
 export const apiCallToken = (credential: Pick<Credential, "metadata" | "attributes">): string => {
   const { metadata } = credential
   const direct = text(metadata.accessToken) || text(metadata.access_token)
+
   if (direct !== "") return direct
   const nested = metadata.token
+
   if (typeof nested === "object" && nested !== null && !Array.isArray(nested)) {
     const value = text(nested.access_token) || text(nested.accessToken)
+
     if (value !== "") return value
   }
+
   return (
     text(metadata.token) ||
     text(metadata.id_token) ||

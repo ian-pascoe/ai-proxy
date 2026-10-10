@@ -22,9 +22,12 @@ const textBlock = (text: string): JsonObject => ({ type: "text", text })
 /** `claudeSystemTextParts`: the text blocks of a system/message content value (blank text is dropped). */
 const systemTextParts = (content: Json | undefined): Json[] => {
   if (content === undefined) return []
+
   if (typeof content === "string") return content.trim() === "" ? [] : [textBlock(content)]
+
   if (!isArr(content)) return []
   const parts: Json[] = []
+
   for (const item of content) {
     if (typeof item === "string") {
       if (item.trim() !== "") parts.push(textBlock(item))
@@ -32,6 +35,7 @@ const systemTextParts = (content: Json | undefined): Json[] => {
       parts.push(item)
     }
   }
+
   return parts
 }
 
@@ -41,9 +45,11 @@ const systemTextParts = (content: Json | undefined): Json[] => {
  */
 export const rebuildMidSystemMessagesToTopLevel = (body: JsonObject): void => {
   const messages = body.messages
+
   if (!isArr(messages)) return
   const moved: Json[] = []
   const kept: Json[] = []
+
   for (const message of messages) {
     if (
       str(isObj(message) ? message.role : undefined)
@@ -55,6 +61,7 @@ export const rebuildMidSystemMessagesToTopLevel = (body: JsonObject): void => {
       kept.push(message)
     }
   }
+
   if (moved.length === 0) return
   const system = [...systemTextParts(body.system), ...moved]
   body.system = system

@@ -16,6 +16,7 @@ export class MemoryPoolStore implements PoolStore {
   get = (id: string) => this.credentials.get(id)
   upsert = (id: string, provider: string, metadata: StoredCredential["metadata"]) => {
     const existing = this.credentials.get(id)
+
     const record: StoredCredential = {
       id,
       provider,
@@ -24,14 +25,18 @@ export class MemoryPoolStore implements PoolStore {
       createdAt: 0,
       updatedAt: 0
     }
+
     this.credentials.set(id, record)
+
     return { record, created: existing === undefined, credentialsChanged: true }
   }
   setDisabled = (id: string, disabled: boolean) => {
     const existing = this.credentials.get(id)
+
     if (existing === undefined) return undefined
     const record = { ...existing, metadata: { ...existing.metadata, disabled } }
     this.credentials.set(id, record)
+
     return record
   }
   remove = (id: string) => this.credentials.delete(id)
@@ -70,6 +75,7 @@ export const makePool = async (
   const store = options.store ?? new MemoryPoolStore()
   const clock = options.clock ?? new TestNow()
   const pool = new CredentialPool({ store, config: () => ({ version: 1, config }), now: clock.now })
+
   return { pool, store, clock, config }
 }
 

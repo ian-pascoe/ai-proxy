@@ -43,17 +43,22 @@ describe("countTokens parity with the Go executors", () => {
       const { executor, credential: cred } = executors[provider] as (typeof executors)[string]
       const h = await harness(cred, noUpstream)
       const mismatches: unknown[] = []
+
       for (const c of cases) {
         const opts = options({
           sourceFormat: c.source,
           headers: new Headers({ "user-agent": "codex_cli_rs/0.1" }),
           metadata: { ...options().metadata, requestPath: "/v1/messages/count_tokens" }
         })
+
         const request = { model: c.model, payload: JSON.parse(c.payload) }
+
         const result = await Effect.runPromise(
           Effect.result(executor.countTokens(h.context, request, opts).pipe(Effect.provide(h.layers)))
         )
+
         const label = `${c.source} ${c.model} ${c.payload.slice(0, 70)}`
+
         if (c.error !== undefined && c.error !== "") {
           if (result._tag === "Success" || !result.failure.message.includes(c.error)) {
             mismatches.push({
@@ -68,6 +73,7 @@ describe("countTokens parity with the Go executors", () => {
           mismatches.push({ label, want: c.out, got: result.success.payload })
         }
       }
+
       expect(mismatches).toEqual([])
       expect(h.calls).toHaveLength(0)
     })
@@ -75,6 +81,7 @@ describe("countTokens parity with the Go executors", () => {
 
   it("Meta rejects a missing token like Go ensureAuth (401)", async () => {
     const h = await harness(credential("meta", { kind: "apikey" }), noUpstream)
+
     const error = await runFail(
       makeMetaExecutor().countTokens(
         h.context,
@@ -83,6 +90,7 @@ describe("countTokens parity with the Go executors", () => {
       ),
       h.layers
     )
+
     expect(error.status).toBe(401)
   })
 })

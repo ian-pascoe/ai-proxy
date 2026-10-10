@@ -36,8 +36,11 @@ export interface ModelsRequestInfo {
 /** The order of `unifiedModelsHandler`: Grok shell, Codex client catalog, Anthropic, OpenAI. */
 export const modelsFormat = (request: ModelsRequestInfo): ModelsFormat => {
   if (request.userAgent.toLowerCase().includes("grok-shell")) return "grok"
+
   if (request.clientVersion !== undefined) return "codex-client"
+
   if (request.anthropicVersion !== "" || request.userAgent.startsWith("claude-cli")) return "claude"
+
   return "openai"
 }
 
@@ -52,7 +55,9 @@ const GEMINI_NOT_FOUND = '{"error":{"message":"Not Found","type":"not_found"}}'
 const entryId = (entry: Json): string => {
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return ""
   const id = entry.id
+
   if (typeof id === "string" && id !== "") return id
+
   return typeof entry.slug === "string" ? entry.slug : ""
 }
 
@@ -60,6 +65,7 @@ const entryId = (entry: Json): string => {
 const selectDetail = (payload: JsonObject, id: string, render: (value: Json) => string): ModelsReply => {
   const entries = [...((payload.data as Json[] | undefined) ?? []), ...((payload.models as Json[] | undefined) ?? [])]
   const found = entries.find((entry) => entryId(entry) !== "" && entryId(entry) === id)
+
   return found === undefined ? { status: 404, body: MODEL_NOT_FOUND } : ok(render(found))
 }
 
@@ -83,6 +89,7 @@ export const respondModels = (
   const format = modelsFormat(request)
   let payload: JsonObject
   let render = goJson
+
   switch (format) {
     case "grok":
       payload = grokList(models)
@@ -98,6 +105,7 @@ export const respondModels = (
     default:
       payload = openaiList(models)
   }
+
   // A selected element keeps the serialisation of its list (struct order for Grok entries).
   return detailId === undefined ? ok(render(payload)) : selectDetail(payload, detailId, render)
 }
@@ -108,5 +116,6 @@ export const respondGeminiList = (models: ReadonlyArray<ModelInfo>): ModelsReply
 /** `GET /v1beta/models/{model}`; `action` is the path remainder without the leading slash. */
 export const respondGeminiDetail = (models: ReadonlyArray<ModelInfo>, action: string): ModelsReply => {
   const entry = geminiDetail(models, action)
+
   return entry === undefined ? { status: 404, body: GEMINI_NOT_FOUND } : ok(goJson(entry))
 }

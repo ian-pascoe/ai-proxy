@@ -64,13 +64,16 @@ const maskIds = (text: string): string =>
 
 const normalize = (text: string): string => {
   const canonical = canonicalJson(text)
+
   if (canonical !== undefined) return maskIds(canonical)
+
   return maskIds(
     text
       .split("\n")
       .map((line) => {
         if (!line.startsWith("data:")) return line
         const json = canonicalJson(line.slice(5).trim())
+
         return json === undefined ? line : `data: ${json}`
       })
       .join("\n")
@@ -82,6 +85,7 @@ describe("translator golden fixtures with generated ids", () => {
     const cases = module.default.filter(
       (c) => (c.needs ?? []).length > 0 && (c.needs ?? []).every((need) => SUPPORTED.has(need))
     )
+
     if (cases.length === 0) continue
     describe(file.replace("./fixtures/translator/", ""), () => {
       for (const c of cases) {
@@ -92,8 +96,10 @@ describe("translator golden fixtures with generated ids", () => {
             { format: c.from, model: c.model, stream: c.stream, body: structuredClone(c.request) },
             hooks
           )
+
           expect(envelope.error?.message).toBe(c.requestError)
           expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest))
+
           const context = () => ({
             model: c.model,
             originalRequest: c.request,
@@ -101,13 +107,17 @@ describe("translator golden fixtures with generated ids", () => {
             // The Go corpus runs the raw translators; the Claude input token estimate has its own fixtures.
             state: { ...makeTranslationState(), claudeInputTokensHandled: true }
           })
+
           if (c.responseLines !== undefined) {
             const state = context()
+
             const outputs = c.responseLines.map((line) =>
               builtinTranslators.translateStream(c.from, c.to, state, line).map(normalize)
             )
+
             expect(outputs).toEqual((c.streamOutputs ?? []).map((chunks) => chunks.map(normalize)))
           }
+
           if (c.responseBodyText !== undefined) {
             const out = builtinTranslators.translateNonStream(c.from, c.to, context(), c.responseBodyText)
             expect(out === undefined ? undefined : normalize(out)).toEqual(

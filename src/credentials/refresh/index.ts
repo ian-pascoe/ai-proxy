@@ -1,4 +1,5 @@
 export { ANOMALY_REARM_MS, RefreshManager } from "./manager.ts"
+
 export type {
   AlarmScheduler,
   RefreshFailureCode,
@@ -8,4 +9,5 @@ export type {
   RefreshResult,
   RunSummary
 } from "./manager.ts"
+
 export { refreshLeadMs, nextRefreshCheckAt, shouldRefresh } from "./schedule.ts"

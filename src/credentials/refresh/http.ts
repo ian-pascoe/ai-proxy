@@ -20,6 +20,7 @@ const MAX_BODY = 2048
 
 export const clipBody = (body: string): string => {
   const trimmed = body.trim()
+
   return trimmed.length > MAX_BODY ? `${trimmed.slice(0, MAX_BODY)}...` : trimmed
 }
 
@@ -34,6 +35,7 @@ export const send = (
     const client = yield* HttpClient.HttpClient
     const response = yield* client.execute(request)
     const text = yield* response.text
+
     return {
       status: response.status,
       text,
@@ -52,6 +54,7 @@ export const send = (
 export const parseJsonObject = (text: string): JsonObject | undefined => {
   try {
     const parsed: unknown = JSON.parse(text)
+
     return isJsonObject(parsed) ? parsed : undefined
   } catch {
     return undefined
@@ -63,6 +66,7 @@ export const str = (value: unknown): string => (typeof value === "string" ? valu
 /** Seconds field of a token response (number or numeric string); `0` when absent or invalid. */
 export const seconds = (value: unknown): number => {
   const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : Number.NaN
+
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 

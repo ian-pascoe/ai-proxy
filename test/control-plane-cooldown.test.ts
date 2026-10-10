@@ -20,6 +20,7 @@ const claudeFile = (extra: Record<string, unknown> = {}) => ({
 
 const picked = (result: PickResult) => {
   if (!result.ok) throw new Error(`pick failed: ${result.failure.code}`)
+
   return result
 }
 
@@ -40,6 +41,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
 
     const blocked = await stub.pick(request)
     expect(blocked).toMatchObject({ ok: false, failure: { code: "model_cooldown", httpStatus: 429 } })
+
     if (blocked.ok) return
     expect(blocked.failure.retryAfterSeconds).toBeGreaterThan(80)
     expect(JSON.parse(blocked.failure.body ?? "{}")).toMatchObject({ error: { code: "model_cooldown" } })
@@ -68,6 +70,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
     await stub.importAuthFile("claude-a.json", claudeFile())
     const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }))
     await stub.report(first.lease, fail(429, { retryAfterMs: 20_000 }))
+
     const query = {
       providers: ["claude"],
       model: "claude-sonnet-4-5",
@@ -77,6 +80,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
       attempted: ["claude-a.json"],
       maxWaitMs: 60_000
     }
+
     const plan = await stub.planRetry(query)
     expect(plan.retry).toBe(true)
     expect(plan.retry && plan.waitMs).toBeGreaterThan(10_000)
@@ -87,6 +91,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
   it("keeps cooldowns across Durable Object evictions only with save-cooldown-status", async () => {
     const withSave = crypto.randomUUID()
     const without = crypto.randomUUID()
+
     for (const [name, yaml] of [
       [withSave, "routing: { cooldown: { save-cooldown-status: true } }"],
       [without, "routing: {}"]
@@ -98,6 +103,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
       await stub.report(first.lease, fail(500))
       await evictDurableObject(stub)
     }
+
     expect(await plane(withSave).pick({ providers: ["claude"], model: "claude-sonnet-4-5" })).toMatchObject({
       ok: false,
       failure: { code: "auth_unavailable", httpStatus: 503 }
@@ -120,6 +126,7 @@ api-keys:
       keys: [{ api-key: key-oc }]
 `)
     const picker = makeControlPlanePicker((workerEnv) => workerEnv.CONTROL_PLANE.getByName(name))
+
     const run = <A, E>(effect: Effect.Effect<A, E, WorkerEnv>) =>
       Effect.runPromise(effect.pipe(Effect.provideService(WorkerEnv, env)))
 
@@ -152,11 +159,14 @@ api-keys:
         model: "up-2"
       })
     )
+
     const error = await run(
       Effect.flip(picker.pick({ providers: ["openai-compatible-oc"], model: "shared", callerScope: "s" }))
     )
+
     expect(error).toMatchObject({ status: 429, code: "model_cooldown" })
     expect(error.safeHeaders?.["retry-after"]).toBeDefined()
+
     const plan = await run(
       picker.planRetry({
         providers: ["openai-compatible-oc"],
@@ -167,6 +177,7 @@ api-keys:
         maxWaitMs: 0
       })
     )
+
     expect(plan.retry).toBe(false)
   })
 })

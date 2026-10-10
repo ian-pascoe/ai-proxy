@@ -75,6 +75,7 @@ const STREAM = [
 const at = (value: unknown, path: string): unknown => get(value as Json, path)
 
 let config: Config
+
 beforeAll(async () => {
   config = await loadConfig(YAML)
 })
@@ -85,6 +86,7 @@ describe("Claude Messages client -> OpenAI-compatible upstream", () => {
   it("translates the request and the non-stream answer", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages",
       postJson({
@@ -95,6 +97,7 @@ describe("Claude Messages client -> OpenAI-compatible upstream", () => {
         tools: [{ name: "lookup", description: "d", input_schema: { type: "object" } }]
       })
     )
+
     expect(response.status).toBe(200)
     const upstream: unknown = JSON.parse(p.calls[0]!.body)
     expect(p.calls[0]!.url).toBe("https://upstream.test/v1/chat/completions")
@@ -112,10 +115,12 @@ describe("Claude Messages client -> OpenAI-compatible upstream", () => {
   it("translates the stream to Messages events", async () => {
     const p = pipeline(() => sseResponse(STREAM))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/messages",
       postJson({ model: "alias-model", max_tokens: 20, stream: true, messages: [{ role: "user", content: "hi" }] })
     )
+
     const text = await response.text()
     const events = [...text.matchAll(/^event: (.+)$/gm)].map((m) => m[1])
     expect(events).toEqual([
@@ -136,10 +141,12 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
   it("translates /v1/responses non-stream", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "alias-model", instructions: "sys", input: "hi", max_output_tokens: 9 })
     )
+
     expect(response.status).toBe(200)
     const upstream: unknown = JSON.parse(p.calls[0]!.body)
     expect(at(upstream, "messages")).toEqual([
@@ -168,8 +175,10 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
       output: [{ type: "compaction", id: "cmp_1", encrypted_content: "opaque" }],
       usage: { input_tokens: 4, output_tokens: 1, total_tokens: 5 }
     }
+
     const p = pipeline(() => jsonResponse(compaction))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/responses/compact",
       postJson({
@@ -182,6 +191,7 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
         max_output_tokens: 9
       })
     )
+
     expect(response.status).toBe(200)
     expect(p.calls[0]?.url).toBe("https://upstream.test/v1/responses/compact")
     const upstream: unknown = JSON.parse(p.calls[0]!.body)
@@ -202,10 +212,12 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
   it("converts Responses-shaped payloads sent to /v1/chat/completions", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", input: "hi", instructions: "sys" })
     )
+
     expect(response.status).toBe(200)
     const upstream: unknown = JSON.parse(p.calls[0]!.body)
     expect(at(upstream, "messages")).toEqual([
@@ -238,6 +250,7 @@ describe("Gemini and Interactions clients through the executor", () => {
 
   const run = async (sourceFormat: string, payload: Json, stream: boolean, upstream: () => Response) => {
     const bodies: unknown[] = []
+
     const client = Layer.succeed(
       HttpClient.HttpClient,
       HttpClient.make((request) =>
@@ -245,10 +258,12 @@ describe("Gemini and Interactions clients through the executor", () => {
           if (request.body._tag === "Uint8Array") {
             bodies.push(JSON.parse(new TextDecoder().decode(request.body.body)))
           }
+
           return HttpClientResponse.fromWeb(request, upstream())
         })
       )
     )
+
     const usage = new UsageReporter({
       requestId: "r",
       provider: credential.provider,
@@ -264,7 +279,9 @@ describe("Gemini and Interactions clients through the executor", () => {
       serviceTier: "auto",
       requestedAt: 0
     })
+
     const context: ExecutionContext = { credential, config, usage }
+
     const options: ExecutorOptions = {
       stream,
       alt: "",
@@ -280,9 +297,11 @@ describe("Gemini and Interactions clients through the executor", () => {
         callerScope: "scope"
       }
     }
+
     const executor = makeOpenAICompatExecutor(credential.provider)
     const layers = Layer.mergeAll(client, Thinking.live)
     const request = { model: "upstream-model", payload }
+
     const output = stream
       ? await Effect.runPromise(
           executor.executeStream(context, request, options).pipe(
@@ -291,6 +310,7 @@ describe("Gemini and Interactions clients through the executor", () => {
           )
         )
       : await Effect.runPromise(executor.execute(context, request, options).pipe(Effect.provide(layers)))
+
     return { bodies, output }
   }
 
@@ -305,6 +325,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       false,
       () => new Response(JSON.stringify(COMPLETION))
     )
+
     expect(at(bodies[0], "model")).toBe("upstream-model")
     expect(at(bodies[0], "messages.0")).toEqual({ role: "system", content: [{ type: "text", text: "sys" }] })
     const body: unknown = JSON.parse((output as { payload: string }).payload)
@@ -319,6 +340,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       true,
       () => new Response(STREAM.join(""), { headers: { "content-type": "text/event-stream" } })
     )
+
     const chunks = [...(output as Iterable<string>)]
     expect(chunks.length).toBeGreaterThan(0)
     expect(chunks.join("")).toContain('"text":"Hel"')
@@ -331,6 +353,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       false,
       () => new Response(JSON.stringify(COMPLETION))
     )
+
     expect(at(bodies[0], "messages.#.role")).toEqual(["system", "user"])
     const body: unknown = JSON.parse((output as { payload: string }).payload)
     expect(at(body, "object")).toBe("interaction")
@@ -344,6 +367,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       true,
       () => new Response(STREAM.join(""), { headers: { "content-type": "text/event-stream" } })
     )
+
     const text = [...(output as Iterable<string>)].join("")
     expect(text).toContain("event: interaction.created")
     expect(text).toContain("event: step.delta")
@@ -373,10 +397,12 @@ describe("Images API against an OpenAI-compatible image model", () => {
   it("forwards generations with payload rules and converts the answer to response_format", async () => {
     const p = pipeline(() => jsonResponse(IMAGE_RESPONSE))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ model: "image-model", prompt: "cat", response_format: "url", stream: false })
     )
+
     expect(response.status).toBe(200)
     expect(p.calls[0]!.url).toBe("https://upstream.test/v1/images/generations")
     expect(p.calls[0]!.headers["authorization"]).toBe("Bearer sk-test-1")
@@ -398,12 +424,15 @@ describe("Images API against an OpenAI-compatible image model", () => {
       'event: image_generation.partial_image\ndata: {"b64_json":"AA"}\n\n',
       'event: image_generation.completed\ndata: {"b64_json":"BB"}\n\n'
     ]
+
     const p = pipeline(() => sseResponse(frames))
     afterAll(p.dispose)
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ model: "image-model", prompt: "cat", stream: true })
     )
+
     expect(response.headers.get("content-type")).toContain("text/event-stream")
     expect(await response.text()).toBe(frames.join(""))
     expect(at(JSON.parse(p.calls[0]!.body), "stream")).toBe(true)

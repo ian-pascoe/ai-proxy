@@ -34,6 +34,7 @@ type Stub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>
 export const controlPlane = <R>(label: string, call: (stub: Stub) => R): Effect.Effect<Awaited<R>, Reply, WorkerEnv> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv
+
     return yield* Effect.tryPromise({
       // RPC results are promise-pipelining stubs; `await` yields the plain data.
       try: async (): Promise<Awaited<R>> => await call(env.CONTROL_PLANE.getByName("global")),
@@ -52,12 +53,14 @@ export const bodyText = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   // `arrayBuffer` instead of `text`: workerd warns when `.text()` reads a non-text type such as application/yaml.
   const buffer = yield* request.arrayBuffer.pipe(Effect.mapError(() => replyError(400, "invalid body")))
+
   return new TextDecoder().decode(buffer)
 })
 
 /** Request body parsed as JSON (any value); 400 `invalid body` otherwise. */
 export const bodyJson = Effect.gen(function* () {
   const text = yield* bodyText
+
   return yield* Effect.try({
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(400, "invalid body")
@@ -74,6 +77,7 @@ export const bodyObject = bodyJson.pipe(
 /** Query parameters of the current request (first value wins). */
 export const queryParams = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
+
   return new URL(request.originalUrl, "http://localhost").searchParams
 })
 

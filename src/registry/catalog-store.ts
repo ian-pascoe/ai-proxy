@@ -45,13 +45,16 @@ const tryParse = (
 /** Validates `text` as catalog `name` (the same checks the refresh applies before publishing). */
 export const validateCatalogText = (name: CatalogName, text: string): string | undefined => {
   const parsed = tryParse(text)
+
   if (!parsed.ok) return parsed.error
+
   const result =
     name === "models"
       ? parseModelsCatalog(parsed.value)
       : name === "devin"
         ? parseDevinCatalog(parsed.value)
         : validateCodexClientModels(parsed.value)
+
   return result.ok ? undefined : result.error
 }
 
@@ -65,31 +68,43 @@ export const catalogsFromTexts = (
 
   const usable = (name: CatalogName): unknown => {
     const text = texts[name]
+
     if (text === undefined || text === null) return undefined
     const parsed = tryParse(text)
+
     if (parsed.ok) return parsed.value
     warnings.push(`stored ${name} catalog is not valid JSON, using the embedded one: ${parsed.error}`)
+
     return undefined
   }
 
   const modelsJson = usable("models")
+
   if (modelsJson !== undefined) {
     const parsed = parseModelsCatalog(modelsJson)
+
     if (parsed.ok) models = parsed.value
     else warnings.push(`stored models catalog rejected, using the embedded one: ${parsed.error}`)
   }
+
   const devinJson = usable("devin")
+
   if (devinJson !== undefined) {
     const parsed = parseDevinCatalog(devinJson)
+
     if (parsed.ok) devin = withDevinBuiltins(parsed.value)
     else warnings.push(`stored devin catalog rejected, using the embedded one: ${parsed.error}`)
   }
+
   const codexJson = usable("codexClient")
+
   if (codexJson !== undefined) {
     const parsed = validateCodexClientModels(codexJson)
+
     if (parsed.ok) codexClient = parsed.value
     else warnings.push(`stored codex client catalog rejected, using the embedded one: ${parsed.error}`)
   }
+
   return { catalogs: { models, devin, codexClient }, warnings }
 }
 
@@ -99,6 +114,7 @@ export const readCatalogTexts = async (kv: KVNamespace): Promise<CatalogTexts> =
     kv.get(CATALOG_KEYS.codexClient),
     kv.get(CATALOG_KEYS.devin)
   ])
+
   return { models, codexClient, devin }
 }
 
@@ -129,6 +145,7 @@ export class CatalogStore extends Context.Service<
 
       const stored = Effect.gen(function* () {
         const env = yield* WorkerEnv
+
         return yield* Effect.tryPromise({
           try: () => readCatalogTexts(env.CACHE),
           catch: (cause) => (cause instanceof Error ? cause : new Error("failed to read catalogs from KV"))
@@ -138,21 +155,29 @@ export class CatalogStore extends Context.Service<
       const load = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis
         const cached = yield* Ref.get(cache)
+
         if (cached !== undefined && now - cached.loadedAt < CATALOG_CACHE_TTL_MS) return cached.catalogs
         const texts = yield* stored.pipe(Effect.result)
+
         if (texts._tag === "Failure") {
           yield* Effect.logWarning(`catalog KV read failed, keeping the previous catalogs: ${texts.failure.message}`)
           const fallback = cached?.catalogs ?? embeddedCatalogs()
           yield* Ref.set(cache, { loadedAt: now, texts: cached?.texts ?? {}, catalogs: fallback })
+
           return fallback
         }
+
         if (cached !== undefined && sameTexts(cached.texts, texts.success)) {
           yield* Ref.set(cache, { ...cached, loadedAt: now })
+
           return cached.catalogs
         }
+
         const built = catalogsFromTexts(texts.success)
+
         for (const warning of built.warnings) yield* Effect.logWarning(warning)
         yield* Ref.set(cache, { loadedAt: now, texts: texts.success, catalogs: built.catalogs })
+
         return built.catalogs
       })
 

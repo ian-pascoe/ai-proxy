@@ -20,8 +20,10 @@ api-keys:
 `
 
 const providers = (names: string[]) => names.map((name) => `openai-compatible-${name}`)
+
 const ok = (result: PickResult) => {
   if (!result.ok) throw new Error(`pick failed: ${result.failure.code}`)
+
   return result
 }
 
@@ -29,8 +31,10 @@ const ok = (result: PickResult) => {
 const round = (pool: CredentialPool, names: string[], roundNumber: number, requestRetry = 0, model = "m"): string[] => {
   const tried: string[] = []
   const executors: string[] = []
+
   for (;;) {
     const result = pool.pick({ providers: providers(names), model, tried, retryRound: roundNumber, requestRetry })
+
     if (!result.ok) return executors
     tried.push(result.credential.id)
     executors.push(result.credential.executor)
@@ -46,6 +50,7 @@ describe("retry rounds (TestExecuteRetryRoundCredentialWindows)", () => {
           group("c", "request-retry: 2\n      disable-cooling: true")
       )
     )
+
     const names = ["a", "b", "c"]
     const ids = (r: number) => round(pool, names, r)
     expect(ids(0).toSorted()).toEqual(names.map((n) => `openai-compatible-${n}`))
@@ -173,6 +178,7 @@ describe("cooldown-aware selection", () => {
       httpStatus: 500,
       error: { message: "x", retryable: true, httpStatus: 500 }
     })
+
     for (let index = 0; index < 4; index += 1) {
       expect(ok(pool.pick({ providers: providers(["a", "b"]), model: "m" })).credential.id).not.toBe(
         first.credential.id
@@ -200,11 +206,14 @@ describe("alias pools (TestManager alias cooldown, openai_compat_pool_test.go)",
 
   it("rotates the starting upstream model per pick and marks the route pooled", async () => {
     const { pool } = await makePool(pooled)
+
     const orders = Array.from({ length: 4 }, () => {
       const picked = ok(pool.pick({ providers: providers(["p"]), model: "shared" }))
       expect(picked.route.pooled).toBe(true)
+
       return picked.route.upstreamModels.join(",")
     })
+
     expect(new Set(orders)).toEqual(new Set(["up-1,up-2", "up-2,up-1"]))
   })
 
@@ -218,11 +227,13 @@ describe("alias pools (TestManager alias cooldown, openai_compat_pool_test.go)",
       retryAfterMs: 60_000,
       model: "up-1"
     })
+
     for (let index = 0; index < 3; index += 1) {
       const next = ok(pool.pick({ providers: providers(["p"]), model: "shared" }))
       expect(next.route.upstreamModels).toEqual(["up-2"])
       expect(next.route.pooled).toBe(true)
     }
+
     // Both cooling: the credential has no usable upstream model -> model_cooldown.
     pool.report(picked.lease, {
       success: false,

@@ -18,18 +18,23 @@ export const mergeRefreshedMetadata = (
   updated: Readonly<JsonObject>
 ): JsonObject => {
   const merged: JsonObject = structuredClone(current) as JsonObject
+
   for (const [key, value] of Object.entries(updated)) {
     if (key.trim().toLowerCase() === SKIPPED_KEY) continue
     const hadInBase = Object.hasOwn(base, key)
     const hadInCurrent = Object.hasOwn(current, key)
     const changedByExecutor = !hadInBase || !jsonEquals(base[key], value)
     const changedByUser = hadInBase !== hadInCurrent || (hadInBase && !jsonEquals(base[key], current[key]))
+
     if (changedByExecutor && (!changedByUser || isTokenPayloadKey(key))) merged[key] = structuredClone(value)
   }
+
   // Deletions by the executor apply only when the user did not touch the key.
   for (const [key, baseValue] of Object.entries(base)) {
     if (key.trim().toLowerCase() === SKIPPED_KEY || Object.hasOwn(updated, key)) continue
+
     if (Object.hasOwn(current, key) && jsonEquals(baseValue, current[key])) delete merged[key]
   }
+
   return merged
 }

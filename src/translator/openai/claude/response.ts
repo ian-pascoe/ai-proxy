@@ -91,24 +91,33 @@ const ev = (event: string, payload: Json): string => sseEvent(event, JSON.string
 /** `collectOpenAIReasoningTexts`. */
 const collectOpenAIReasoningTexts = (node: Json | undefined): string[] => {
   if (node === undefined) return []
+
   if (isArr(node)) return node.flatMap(collectOpenAIReasoningTexts)
+
   if (typeof node === "string") return node !== "" ? [node] : []
+
   if (isObj(node)) {
     const text = node.text
+
     if (text !== undefined) {
       const textStr = str(text)
+
       if (textStr !== "") return [textStr]
     }
   }
+
   return []
 }
 
 const collectOpenAIObjectReasoningTexts = (obj: Json | undefined): string[] => {
   if (obj === undefined) return []
+
   for (const path of ["reasoning_content", "reasoning", "reasoning_details"]) {
     const texts = collectOpenAIReasoningTexts(get(obj, path))
+
     if (texts.length > 0) return texts
   }
+
   return []
 }
 
@@ -144,35 +153,49 @@ const extractOpenAIUsage = (usage: Json | undefined): OpenAIUsage => {
   const outputTokens = asInt(get(usage, "completion_tokens"))
   const cachedTokens = asInt(get(usage, "prompt_tokens_details.cached_tokens"))
   let cacheWriteTokens = asInt(get(usage, "prompt_tokens_details.cache_write_tokens"))
+
   if (cacheWriteTokens <= 0) cacheWriteTokens = asInt(get(usage, "prompt_tokens_details.cache_creation_tokens"))
   let deduct = 0
+
   if (cachedTokens > 0) deduct += cachedTokens
+
   if (cacheWriteTokens > 0) deduct += cacheWriteTokens
+
   if (deduct > 0) inputTokens = inputTokens >= deduct ? inputTokens - deduct : 0
+
   if (inputTokens < 0) inputTokens = 0
+
   return { inputTokens, outputTokens, cachedTokens, cacheWriteTokens }
 }
 
 const hasValidToolCallArguments = (param: ClaudeStreamParams): boolean => {
   if (param.toolCallsAccumulator === undefined || param.toolCallsAccumulator.size === 0) return true
+
   for (const acc of param.toolCallsAccumulator.values()) {
     if (!acc.startEmitted && acc.name === "" && acc.id === "" && acc.arguments.length === 0) continue
+
     if (acc.arguments.length === 0) continue
     const argsStr = acc.arguments.trim()
+
     if (argsStr === "") return false
+
     if (argsStr === "{}") continue
+
     try {
       if (!isObj(JSON.parse(fixJson(argsStr)))) return false
     } catch {
       return false
     }
   }
+
   return true
 }
 
 const effectiveOpenAIFinishReason = (param: ClaudeStreamParams): string => {
   if (param.finishReason === "length" || param.finishReason === "content_filter") return param.finishReason
+
   if (param.sawToolCall) return hasValidToolCallArguments(param) ? "tool_calls" : "length"
+
   return param.finishReason
 }
 
@@ -180,10 +203,12 @@ const terminalOpenAIFinishReason = (param: ClaudeStreamParams): string => effect
 
 const toolContentBlockIndex = (param: ClaudeStreamParams, openAIToolIndex: number): number => {
   const existing = param.toolCallBlockIndexes.get(openAIToolIndex)
+
   if (existing !== undefined) return existing
   const idx = param.nextContentBlockIndex
   param.nextContentBlockIndex++
   param.toolCallBlockIndexes.set(openAIToolIndex, idx)
+
   return idx
 }
 
@@ -239,18 +264,25 @@ const emitBelatedToolUseStart = (
   results: string[]
 ): boolean => {
   if (accumulator === undefined) return false
+
   if (accumulator.startEmitted) return true
+
   if (accumulator.name === "" && accumulator.id === "" && accumulator.arguments.length === 0) return false
+
   if (accumulator.name === "") accumulator.name = `tool_${openAIToolIndex}`
   emitToolUseStart(param, openAIToolIndex, accumulator, results)
+
   return true
 }
 
 const finalizeSingleToolCall = (param: ClaudeStreamParams, openAIToolIndex: number, results: string[]): void => {
   const accumulator = param.toolCallsAccumulator?.get(openAIToolIndex)
+
   if (accumulator === undefined) return
+
   if (!accumulator.startEmitted && !emitBelatedToolUseStart(param, openAIToolIndex, accumulator, results)) return
   const blockIndex = toolContentBlockIndex(param, openAIToolIndex)
+
   if (accumulator.arguments.length > 0) {
     results.push(
       ev("content_block_delta", {
@@ -260,6 +292,7 @@ const finalizeSingleToolCall = (param: ClaudeStreamParams, openAIToolIndex: numb
       })
     )
   }
+
   results.push(ev("content_block_stop", { type: "content_block_stop", index: blockIndex }))
   param.toolCallBlockIndexes.delete(openAIToolIndex)
   param.openToolCallIndex = -1
@@ -267,10 +300,12 @@ const finalizeSingleToolCall = (param: ClaudeStreamParams, openAIToolIndex: numb
 
 const emitBufferedInterleavedContent = (param: ClaudeStreamParams, results: string[]): void => {
   if (param.interleavedContentChunks.length === 0) return
+
   for (const chunk of param.interleavedContentChunks) {
     if (chunk.text === "") continue
     const idx = param.nextContentBlockIndex
     param.nextContentBlockIndex++
+
     if (chunk.type === "thinking") {
       results.push(
         ev("content_block_start", {
@@ -301,20 +336,26 @@ const emitBufferedInterleavedContent = (param: ClaudeStreamParams, results: stri
       )
     }
   }
+
   param.interleavedContentChunks = []
 }
 
 const finalizeOpenAIAnthropicContentBlocks = (param: ClaudeStreamParams, results: string[]): void => {
   stopThinkingContentBlock(param, results)
   stopTextContentBlock(param, results)
+
   if (param.contentBlocksStopped) return
+
   if (param.openToolCallIndex !== -1) finalizeSingleToolCall(param, param.openToolCallIndex, results)
   const indexes = [...(param.toolCallsAccumulator?.keys() ?? [])].sort((a, b) => a - b)
+
   for (const index of indexes) {
     const accumulator = param.toolCallsAccumulator?.get(index)
+
     if (accumulator === undefined || accumulator.startEmitted) continue
     finalizeSingleToolCall(param, index, results)
   }
+
   param.contentBlocksStopped = true
   emitBufferedInterleavedContent(param, results)
 }
@@ -322,7 +363,9 @@ const finalizeOpenAIAnthropicContentBlocks = (param: ClaudeStreamParams, results
 const emitAnthropicMessageDelta = (param: ClaudeStreamParams, results: string[], usage: OpenAIUsage): void => {
   if (param.messageDeltaSent) return
   const usageOut: JsonObject = { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens }
+
   if (usage.cachedTokens > 0) usageOut.cache_read_input_tokens = usage.cachedTokens
+
   if (usage.cacheWriteTokens > 0) usageOut.cache_creation_input_tokens = usage.cacheWriteTokens
   results.push(
     ev("message_delta", {
@@ -347,10 +390,13 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
   const results: string[] = []
 
   if (param.messageId === "") param.messageId = getStr(root, "id")
+
   if (param.model === "") param.model = getStr(root, "model")
+
   if (param.createdAt === 0) param.createdAt = asInt(get(root, "created"))
 
   const delta = get(root, "choices.0.delta")
+
   if (delta !== undefined) {
     if (!param.messageStarted) {
       results.push(
@@ -373,17 +419,21 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
 
     for (const reasoningText of collectOpenAIObjectReasoningTexts(delta)) {
       if (reasoningText === "") continue
+
       if (param.openToolCallIndex !== -1) {
         const last = param.interleavedContentChunks[param.interleavedContentChunks.length - 1]
+
         if (last !== undefined && last.type === "thinking") last.text += reasoningText
         else param.interleavedContentChunks.push({ type: "thinking", text: reasoningText })
       } else {
         stopTextContentBlock(param, results)
+
         if (!param.thinkingContentBlockStarted) {
           if (param.thinkingContentBlockIndex === -1) {
             param.thinkingContentBlockIndex = param.nextContentBlockIndex
             param.nextContentBlockIndex++
           }
+
           results.push(
             ev("content_block_start", {
               type: "content_block_start",
@@ -393,6 +443,7 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
           )
           param.thinkingContentBlockStarted = true
         }
+
         results.push(
           ev("content_block_delta", {
             type: "content_block_delta",
@@ -404,21 +455,26 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
     }
 
     const content = get(delta, "content")
+
     if (content !== undefined && str(content) !== "") {
       const text = str(content)
+
       if (param.openToolCallIndex !== -1) {
         // A tool call block is open on the wire: buffer the text so content blocks stay strictly sequential.
         const last = param.interleavedContentChunks[param.interleavedContentChunks.length - 1]
+
         if (last !== undefined && last.type === "text") last.text += text
         else param.interleavedContentChunks.push({ type: "text", text })
         param.contentAccumulatorLength += text.length
       } else {
         if (!param.textContentBlockStarted) {
           stopThinkingContentBlock(param, results)
+
           if (param.textContentBlockIndex === -1) {
             param.textContentBlockIndex = param.nextContentBlockIndex
             param.nextContentBlockIndex++
           }
+
           results.push(
             ev("content_block_start", {
               type: "content_block_start",
@@ -428,6 +484,7 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
           )
           param.textContentBlockStarted = true
         }
+
         results.push(
           ev("content_block_delta", {
             type: "content_block_delta",
@@ -440,30 +497,39 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
     }
 
     const toolCalls = get(delta, "tool_calls")
+
     if (isArr(toolCalls)) {
       if (param.toolCallsAccumulator === undefined) param.toolCallsAccumulator = new Map()
       toolCalls.forEach((toolCall, arrayIndex) => {
         const indexValue = get(toolCall, "index")
         const index = indexValue !== undefined ? asInt(indexValue) : arrayIndex
         let accumulator = param.toolCallsAccumulator?.get(index)
+
         if (accumulator === undefined) {
           accumulator = { id: "", name: "", arguments: "", startEmitted: false }
           param.toolCallsAccumulator?.set(index, accumulator)
         }
+
         // Only accept JSON-string, non-empty ids so malformed upstream fields cannot overwrite a valid id.
         const id = get(toolCall, "id")
+
         if (typeof id === "string" && id !== "") accumulator.id = id
 
         const fn = get(toolCall, "function")
+
         if (fn !== undefined) {
           // The name is only recorded until content_block_start has been emitted (it must not drift afterwards).
           if (!accumulator.startEmitted) {
             const name = get(fn, "name")
+
             if (typeof name === "string" && name !== "") accumulator.name = mapToolName(param.toolNameMap, name)
           }
+
           const args = get(fn, "arguments")
+
           if (args !== undefined) {
             const argsText = str(args)
+
             if (argsText !== "") accumulator.arguments += argsText
           }
         }
@@ -482,8 +548,10 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
   }
 
   const finishReason = get(root, "choices.0.finish_reason")
+
   if (finishReason !== undefined && str(finishReason) !== "") {
     const reason = str(finishReason)
+
     if (reason === "length") param.finishReason = "length"
     else if (reason === "content_filter") param.finishReason = "content_filter"
     else if (param.sawToolCall) param.finishReason = hasValidToolCallArguments(param) ? "tool_calls" : "length"
@@ -494,6 +562,7 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
 
   const usage = get(root, "usage")
   const hasUsage = present(usage)
+
   if (hasUsage) {
     const extracted = extractOpenAIUsage(usage)
     param.usageInputTokens = extracted.inputTokens
@@ -517,6 +586,7 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
     emitAnthropicMessageDelta(param, results, cachedUsage(param))
     emitMessageStopIfNeeded(param, results)
   }
+
   return results
 }
 
@@ -524,28 +594,36 @@ const convertOpenAIStreamingChunkToAnthropic = (rootJson: Json, param: ClaudeStr
 const convertOpenAIDoneToAnthropic = (param: ClaudeStreamParams): string[] => {
   const results: string[] = []
   finalizeOpenAIAnthropicContentBlocks(param, results)
+
   if (!param.messageDeltaSent) emitAnthropicMessageDelta(param, results, cachedUsage(param))
   emitMessageStopIfNeeded(param, results)
+
   return results
 }
 
 const toolUseInput = (argumentsText: string): Json => {
   const argsStr = fixJson(argumentsText)
+
   if (argsStr !== "") {
     try {
       const parsed = JSON.parse(argsStr) as Json
+
       if (isObj(parsed)) return parsed
     } catch {
       // Invalid arguments become an empty input object.
     }
   }
+
   return {}
 }
 
 const usageOut = (usage: OpenAIUsage): JsonObject => {
   const out: JsonObject = { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens }
+
   if (usage.cachedTokens > 0) out.cache_read_input_tokens = usage.cachedTokens
+
   if (usage.cacheWriteTokens > 0) out.cache_creation_input_tokens = usage.cacheWriteTokens
+
   return out
 }
 
@@ -561,17 +639,23 @@ const convertOpenAINonStreamingToAnthropic = (root: Json): string[] => {
     stop_sequence: null,
     usage: { input_tokens: 0, output_tokens: 0 }
   }
+
   const choices = get(root, "choices")
+
   if (isArr(choices) && choices.length > 0) {
     const choice = choices[0] as Json
     const contentBlocks: Json[] = []
+
     for (const reasoningText of collectOpenAIObjectReasoningTexts(get(choice, "message"))) {
       if (reasoningText === "") continue
       contentBlocks.push({ type: "thinking", thinking: reasoningText })
     }
+
     const content = get(choice, "message.content")
+
     if (content !== undefined && str(content) !== "") contentBlocks.push({ type: "text", text: str(content) })
     const toolCalls = get(choice, "message.tool_calls")
+
     if (isArr(toolCalls)) {
       for (const toolCall of toolCalls) {
         contentBlocks.push({
@@ -582,12 +666,17 @@ const convertOpenAINonStreamingToAnthropic = (root: Json): string[] => {
         })
       }
     }
+
     if (contentBlocks.length > 0) out.content = contentBlocks
     const finishReason = get(choice, "finish_reason")
+
     if (finishReason !== undefined) out.stop_reason = mapOpenAIFinishReasonToAnthropic(str(finishReason))
   }
+
   const usage = get(root, "usage")
+
   if (usage !== undefined) out.usage = usageOut(extractOpenAIUsage(usage))
+
   return [JSON.stringify(out)]
 }
 
@@ -596,6 +685,7 @@ const isFalseOrMissing = (value: Json | undefined): boolean => value === undefin
 /** `ConvertOpenAIResponseToClaude`: one upstream SSE line -> Claude SSE events. */
 export const convertOpenAIResponseToClaude = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   const state = context.state
+
   if (state.value === undefined) state.value = newParams()
   const param = state.value as ClaudeStreamParams
 
@@ -606,28 +696,35 @@ export const convertOpenAIResponseToClaude = (context: ResponseContext, line: st
     param.toolNameMap = toolNameMapFromClaudeRequest(context.originalRequest)
     param.toolNameMapResolved = true
   }
+
   if (payload === "[DONE]") return convertOpenAIDoneToAnthropic(param)
 
   let root: Json
+
   try {
     root = JSON.parse(payload) as Json
   } catch {
     // gjson tolerates invalid JSON by returning empty results; nothing is emitted for an unusable chunk.
     root = {}
   }
+
   if (isFalseOrMissing(get(context.originalRequest, "stream"))) return convertOpenAINonStreamingToAnthropic(root)
+
   return convertOpenAIStreamingChunkToAnthropic(root, param)
 }
 
 /** `ConvertOpenAIResponseToClaudeNonStream`. */
 export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext, body: string): string => {
   let root: Json
+
   try {
     root = JSON.parse(body) as Json
   } catch {
     root = {}
   }
+
   const toolNameMap = toolNameMapFromClaudeRequest(context.originalRequest)
+
   const out: JsonObject = {
     id: getStr(root, "id"),
     type: "message",
@@ -642,6 +739,7 @@ export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext,
   let hasToolCall = false
   let stopReasonSet = false
   const blocks: Json[] = []
+
   const toolUseBlock = (toolCall: Json): Json => ({
     type: "tool_use",
     id: sanitizeClaudeToolId(getStr(toolCall, "id")),
@@ -650,31 +748,38 @@ export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext,
   })
 
   const choices = get(root, "choices")
+
   if (isArr(choices) && choices.length > 0) {
     const choice = choices[0] as Json
     const finishReason = get(choice, "finish_reason")
+
     if (finishReason !== undefined) {
       out.stop_reason = mapOpenAIFinishReasonToAnthropic(str(finishReason))
       stopReasonSet = true
     }
 
     const message = get(choice, "message")
+
     if (message !== undefined) {
       const contentResult = get(message, "content")
+
       if (contentResult !== undefined) {
         if (isArr(contentResult)) {
           let text = ""
           let thinking = ""
+
           const flushText = (): void => {
             if (text.length === 0) return
             blocks.push({ type: "text", text })
             text = ""
           }
+
           const flushThinking = (): void => {
             if (thinking.length === 0) return
             blocks.push({ type: "thinking", thinking })
             thinking = ""
           }
+
           for (const item of contentResult) {
             switch (getStr(item, "type")) {
               case "text":
@@ -685,25 +790,31 @@ export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext,
                 flushThinking()
                 flushText()
                 const toolCalls = get(item, "tool_calls")
+
                 if (isArr(toolCalls)) {
                   for (const tc of toolCalls) {
                     hasToolCall = true
                     blocks.push(toolUseBlock(tc))
                   }
                 }
+
                 break
               }
+
               case "reasoning": {
                 flushText()
                 const t = get(item, "text")
+
                 if (t !== undefined) thinking += str(t)
                 break
               }
+
               default:
                 flushThinking()
                 flushText()
             }
           }
+
           flushThinking()
           flushText()
         } else if (typeof contentResult === "string") {
@@ -717,6 +828,7 @@ export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext,
       }
 
       const toolCalls = get(message, "tool_calls")
+
       if (isArr(toolCalls)) {
         for (const toolCall of toolCalls) {
           hasToolCall = true
@@ -728,8 +840,11 @@ export const convertOpenAIResponseToClaudeNonStream = (context: ResponseContext,
 
   if (blocks.length > 0) out.content = blocks
   const respUsage = get(root, "usage")
+
   if (respUsage !== undefined) out.usage = usageOut(extractOpenAIUsage(respUsage))
+
   if (!stopReasonSet) out.stop_reason = hasToolCall ? "tool_use" : "end_turn"
+
   return JSON.stringify(out)
 }
 

@@ -19,10 +19,12 @@ type Headers = Readonly<Record<string, string | undefined>>
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
 const CROSS_SITE_REJECTED: CrossSiteRejection = { status: 403, message: "Cross-site request rejected" }
+
 const CROSS_ORIGIN_WEBSOCKET_REJECTED: CrossSiteRejection = {
   status: 403,
   message: "Cross-origin WebSocket rejected"
 }
+
 const UNSUPPORTED_CONTENT_TYPE: CrossSiteRejection = { status: 415, message: "Unsupported Content-Type" }
 
 const hostOf = (url: string): string | undefined => {
@@ -36,14 +38,17 @@ const hostOf = (url: string): string | undefined => {
 /** `Origin` is present and is not the Worker's own host (`null` and unparsable origins count as foreign). */
 export const hasForeignOrigin = (headers: Headers, requestUrl: string): boolean => {
   const origin = (headers["origin"] ?? "").trim()
+
   if (origin === "") return false
   const host = hostOf(origin)
+
   return host === undefined || host === "" || host !== hostOf(requestUrl)
 }
 
 /** `Sec-Fetch-Site` says the request was initiated by another origin (`same-site` = a sibling subdomain). */
 const fetchedCrossSite = (headers: Headers): boolean => {
   const site = (headers["sec-fetch-site"] ?? "").trim().toLowerCase()
+
   return site === "cross-site" || site === "same-site"
 }
 
@@ -71,20 +76,25 @@ const YAML_TYPES = new Set(["application/yaml", "application/x-yaml", "text/yaml
  */
 const managementTypeAllowed = (method: string, path: string, type: string): boolean => {
   if (isJsonType(type)) return true
+
   if (
     method === "POST" &&
     (path === `${MANAGEMENT_PREFIX}/credentials` || path === `${MANAGEMENT_PREFIX}/oauth/import`)
   ) {
     return type === "multipart/form-data"
   }
+
   if (method === "PUT" && path === `${MANAGEMENT_PREFIX}/config.yaml`) return YAML_TYPES.has(type)
+
   return false
 }
 
 /** A write without `Content-Type` is only accepted when it has no body (`DELETE ?name=`, a bare `POST .../refresh`). */
 const hasBody = (headers: Headers): boolean => {
   const length = (headers["content-length"] ?? "").trim()
+
   if (length !== "" && length !== "0") return true
+
   return (headers["transfer-encoding"] ?? "").trim() !== ""
 }
 
@@ -105,13 +115,20 @@ export const crossSiteRejection = (
 ): CrossSiteRejection | undefined => {
   const verb = method.toUpperCase()
   const foreignOrigin = hasForeignOrigin(headers, requestUrl)
+
   if (isWebSocketUpgrade(headers) && foreignOrigin) return CROSS_ORIGIN_WEBSOCKET_REJECTED
   const unsafe = !SAFE_METHODS.has(verb)
+
   if (unsafe && (foreignOrigin || fetchedCrossSite(headers))) return CROSS_SITE_REJECTED
+
   if (zone !== "management") return undefined
+
   if (foreignOrigin || (fetchedCrossSite(headers) && !isNavigation(verb, headers))) return CROSS_SITE_REJECTED
+
   if (!unsafe) return undefined
   const type = mediaType(headers)
+
   if (type === "") return hasBody(headers) ? UNSUPPORTED_CONTENT_TYPE : undefined
+
   return managementTypeAllowed(verb, normalizedPath(requestUrl) ?? "", type) ? undefined : UNSUPPORTED_CONTENT_TYPE
 }

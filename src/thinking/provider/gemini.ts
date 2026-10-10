@@ -15,15 +15,20 @@ export const geminiApplier: ProviderApplier = {
   apply(body, config, modelInfo) {
     if (isUserDefinedModel(modelInfo) || modelInfo === undefined) {
       const root = ensureBody(body)
+
       if (config.mode === "auto") return applyBudgetFormat(root, config, PREFIX)
+
       if (config.mode === "level" || (config.mode === "none" && config.level !== "")) {
         return applyLevelFormat(root, config, PREFIX)
       }
+
       return applyBudgetFormat(root, config, PREFIX)
     }
+
     if (modelInfo.thinking === undefined) return body
 
     const root = ensureBody(body)
+
     switch (config.mode) {
       case "level":
         return applyLevelFormat(root, config, PREFIX)

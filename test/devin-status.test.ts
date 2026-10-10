@@ -13,6 +13,7 @@ import fixtures from "./fixtures/devin-status.json"
 
 const fromHex = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16))
+
 const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 
 const credential = (seed: string, extra: Partial<Credential> = {}): Credential =>
@@ -35,18 +36,22 @@ interface Commit {
 const refresh = async (entries: Credential[], status: number, body: Uint8Array) => {
   const calls: RecordedCall[] = []
   const commits: Commit[] = []
+
   const pool = {
     entries: () => entries.map((c) => ({ credential: c, state: emptyState() })),
     commitRefresh: (id: string, change: Omit<Commit, "id">) => {
       commits.push({ id, ...change })
+
       return undefined
     }
   }
+
   const summary = await Effect.runPromise(
     refreshDevinStatuses(pool as never, () => 1_700_000_000_000).pipe(
       Effect.provide(recordingClient(calls, () => new Response(body as BodyInit, { status })))
     )
   )
+
   return { summary, calls, commits }
 }
 
@@ -58,16 +63,20 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
         scenario.httpStatus,
         fromHex(scenario.response)
       )
+
       expect(calls).toHaveLength(1)
       expect(calls[0]?.url).toBe("https://stub.test/exa.seat_management_pb.SeatManagementService/GetUserStatus")
       expect(calls[0]?.headers["authorization"]).toBe("Basic devin-session-token$abc-devin-session-token$abc")
       expect(calls[0]?.headers["connect-protocol-version"]).toBe("1")
       expect(calls[0]?.headers["content-type"]).toContain("application/proto")
+
       if (scenario.error) {
         expect(summary).toEqual({ refreshed: 0, failed: 1, skipped: 0 })
         expect(commits).toEqual([])
+
         return
       }
+
       expect(summary).toEqual({ refreshed: 1, failed: 0, skipped: 0 })
       const [commit] = commits
       const { last_refresh: stamped, ...metadata } = commit?.metadata ?? {}
@@ -106,6 +115,7 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
       200,
       fromHex(fixtures.scenarios[0]?.response ?? "")
     )
+
     expect(summary).toEqual({ refreshed: 0, failed: 0, skipped: 1 })
     expect(calls).toHaveLength(0)
   })
@@ -115,6 +125,7 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
       ...emptyState(),
       quota: { ...emptyState().quota, signals: { stale: "x", plan: "Old" } }
     }
+
     const next = applyDevinStatus({}, state, parseUserStatus(fromHex(fixtures.scenarios[1]?.response ?? ""))!, 5)
     expect(next.state.quota.signals).toMatchObject({ stale: "x", plan: "Free", daily_quota_remaining_percent: "100%" })
   })

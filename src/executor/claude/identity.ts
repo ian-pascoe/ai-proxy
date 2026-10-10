@@ -13,6 +13,7 @@ import { isObj, str } from "../../translator/common/gjson.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 
 const OID_NAMESPACE = "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** RFC 4122 version 5 UUID. */
@@ -22,6 +23,7 @@ export const uuidV5 = (namespace: string, name: string): string => {
   digest[6] = ((digest[6] as number) & 0x0f) | 0x50
   digest[8] = ((digest[8] as number) & 0x3f) | 0x80
   const hex = digest.subarray(0, 16).toString("hex")
+
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
@@ -41,34 +43,44 @@ export const agentSessionUuid = (input: {
 }): string => {
   if (input.confirmedClaudeCode) {
     const header = (input.headers.get("x-claude-code-session-id") ?? "").trim()
+
     if (UUID.test(header)) return header.toLowerCase()
     const userId = str(get(input.payload, "metadata.user_id"))
+
     if (userId !== "") {
       try {
         const session = str(get(JSON.parse(userId) as Json, "session_id"))
+
         if (UUID.test(session)) return session.toLowerCase()
       } catch {
         // Not a JSON user id; fall through to the protocol session id.
       }
     }
   }
+
   const identity = (input.sessionId ?? "").trim()
+
   if (identity === "") return randomUUID()
   const bare = identity.startsWith("claude:") ? identity.slice("claude:".length) : identity
+
   if (UUID.test(bare)) return bare.toLowerCase()
+
   return uuidV5(OID_NAMESPACE, `cli-proxy-api\u0000claude\u0000agent-conversation\u0000${identity}`)
 }
 
 const metadataString = (credential: CredentialSnapshot, ...keys: string[]): string => {
   for (const key of keys) {
     const value = credential.metadata[key]
+
     if (typeof value === "string" && value.trim() !== "") return value.trim()
   }
+
   return ""
 }
 
 const devicePool = (credential: CredentialSnapshot): string[] => {
   const pool = credential.metadata["claude_device_ids"]
+
   return Array.isArray(pool)
     ? pool.filter((id): id is string => typeof id === "string" && /^[0-9a-f]{64}$/.test(id))
     : []
@@ -86,8 +98,10 @@ export const rebuildMetadataUserId = (
   sessionId: string
 ): string => {
   const extras: Array<[string, Json]> = []
+
   try {
     const parsed = JSON.parse(existing.trim()) as Json
+
     if (isObj(parsed)) {
       for (const [key, value] of Object.entries(parsed)) {
         if (key !== "device_id" && key !== "account_uuid" && key !== "session_id") extras.push([key, value])
@@ -96,8 +110,11 @@ export const rebuildMetadataUserId = (
   } catch {
     // Not JSON: nothing to preserve.
   }
+
   const out: JsonObject = { device_id: deviceId, account_uuid: accountUuid, session_id: sessionId }
+
   for (const [key, value] of extras) out[key] = value
+
   return JSON.stringify(out)
 }
 
@@ -116,6 +133,7 @@ export const applyCLIIdentity = (
   const metadata = body.metadata
   const existing = isObj(metadata) ? str(metadata.user_id) : ""
   const userId = rebuildMetadataUserId(existing, deviceId, accountUuid, sessionId)
+
   if (isObj(metadata)) metadata.user_id = userId
   else body.metadata = { user_id: userId }
 }

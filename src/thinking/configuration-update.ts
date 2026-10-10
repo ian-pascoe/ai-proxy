@@ -13,17 +13,22 @@ export const isResponsesFormat = (format: string): boolean => format === "codex"
 /** The last nonempty `reasoning.effort` among `configuration_update` items of `input`. */
 export const extractConfigurationUpdateConfig = (body: Json | undefined): ThinkingConfig => {
   const input = get(body, "input")
+
   if (!isJsonArray(input)) return EMPTY_CONFIG
 
   let effort = ""
+
   for (const item of input) {
     if (getString(item, "type") !== "configuration_update") continue
     const value = get(item, "reasoning.effort")
+
     if (typeof value === "string") {
       const normalized = normalize(value)
+
       if (normalized !== "") effort = normalized
     }
   }
+
   switch (effort) {
     case "":
       return EMPTY_CONFIG
@@ -40,9 +45,12 @@ export const extractConfigurationUpdateConfig = (body: Json | undefined): Thinki
 export const stripConfigurationUpdates = (body: Json | undefined): Json | undefined => {
   if (!isJsonObject(body)) return body
   const input = body["input"]
+
   if (!isJsonArray(input)) return body
   const kept = input.filter((item) => getString(item, "type") !== "configuration_update")
+
   if (kept.length !== input.length) body["input"] = kept
+
   return body
 }
 
@@ -50,5 +58,6 @@ export const stripConfigurationUpdates = (body: Json | undefined): Json | undefi
 export const stripResponsesEffort = (body: Json | undefined): Json | undefined => {
   if (body === undefined || get(body, "reasoning.effort") === undefined) return body
   const result = delPath(body, "reasoning.effort")
+
   return isEmptyObject(get(result, "reasoning")) ? delPath(result, "reasoning") : result
 }

@@ -23,12 +23,16 @@ const COMPLEX_UNION_BRANCH_THRESHOLD = 8
 
 const headerValue = (headers: HeaderInput | undefined, name: string): string => {
   if (headers === undefined) return ""
+
   if (headers instanceof Headers) return (headers.get(name) ?? "").trim()
+
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() !== name.toLowerCase() || value === undefined) continue
     const values = typeof value === "string" ? [value] : value
+
     for (const entry of values) if (entry.trim() !== "") return entry.trim()
   }
+
   return ""
 }
 
@@ -43,17 +47,23 @@ export const isCodexUserAgent = (headers: HeaderInput | undefined): boolean =>
 /** `stripIncompatiblePatterns`: schema-aware removal of unsupported `pattern`s; true when something was removed. */
 const stripIncompatiblePatterns = (value: Json | undefined): boolean => {
   let changed = false
+
   if (isJsonArray(value)) {
     for (const item of value) if (stripIncompatiblePatterns(item)) changed = true
+
     return changed
   }
+
   if (!isJsonObject(value)) return false
   const pattern = value["pattern"]
+
   if (typeof pattern === "string" && hasUnsupportedUnicodePropertyEscape(pattern)) {
     delete value["pattern"]
     changed = true
   }
+
   const patternProperties = value["patternProperties"]
+
   if (isJsonObject(patternProperties)) {
     for (const key of Object.keys(patternProperties)) {
       if (hasUnsupportedUnicodePropertyEscape(key)) {
@@ -64,15 +74,20 @@ const stripIncompatiblePatterns = (value: Json | undefined): boolean => {
       }
     }
   }
+
   for (const mapKey of SCHEMA_MAP_KEYWORDS) {
     if (mapKey === "patternProperties") continue
     const sub = value[mapKey]
+
     if (isJsonObject(sub)) for (const child of Object.values(sub)) if (stripIncompatiblePatterns(child)) changed = true
   }
+
   for (const valueKey of SCHEMA_VALUE_KEYWORDS) {
     const sub = value[valueKey]
+
     if ((isJsonObject(sub) || isJsonArray(sub)) && stripIncompatiblePatterns(sub)) changed = true
   }
+
   return changed
 }
 
@@ -94,16 +109,20 @@ const canonicalValueKey = (value: Json | undefined): string | undefined => {
 const pureConstBranch = (branch: Json): { readonly key: string; readonly value: Json } | undefined => {
   if (!isJsonObject(branch)) return undefined
   const constant = branch["const"]
+
   if (constant === undefined) return undefined
+
   for (const key of Object.keys(branch))
     if (key !== "const" && key !== "description" && key !== "title") return undefined
   const key = canonicalValueKey(constant)
+
   return key === undefined ? undefined : { key, value: constant }
 }
 
 const equalCanonicalSets = (a: readonly string[], b: readonly string[]): boolean => {
   if (a.length !== b.length) return false
   const setA = new Set(a)
+
   return setA.size === a.length && b.every((value) => setA.has(value))
 }
 
@@ -112,82 +131,105 @@ const normalizePropertySchema = (prop: Json): boolean => {
   if (!isJsonObject(prop)) return false
   const hasOneOf = prop["oneOf"] !== undefined
   const hasAnyOf = prop["anyOf"] !== undefined
+
   // Both present: leave untouched to preserve compound constraints.
   if (hasOneOf === hasAnyOf) return false
   const unionName = hasOneOf ? "oneOf" : "anyOf"
   const union = prop[unionName]
+
   if (!isJsonArray(union) || union.length < COMPLEX_UNION_BRANCH_THRESHOLD) return false
 
   const keys: string[] = []
   const values: Json[] = []
   const seen = new Set<string>()
+
   for (const branch of union) {
     const pure = pureConstBranch(branch)
+
     // A duplicate value would violate oneOf exclusivity: keep the original schema.
     if (pure === undefined || seen.has(pure.key)) return false
     seen.add(pure.key)
     keys.push(pure.key)
     values.push(pure.value)
   }
+
   if (values.length === 0) return false
 
   const existingEnum = prop["enum"]
+
   if (isJsonArray(existingEnum)) {
     const existingKeys: string[] = []
+
     for (const value of existingEnum) {
       const key = canonicalValueKey(value)
+
       if (key === undefined) return false
       existingKeys.push(key)
     }
+
     if (!equalCanonicalSets(existingKeys, keys)) return false
     delete prop[unionName]
+
     return true
   }
+
   prop["enum"] = values
   delete prop[unionName]
+
   return true
 }
 
 /** `normalizeCodexParameters`: true when `params` changed. */
 const normalizeParameters = (params: Json, owner: { parameters: Json }): boolean => {
   let changed = false
+
   if (stripIncompatiblePatterns(params)) {
     // Go re-encodes the schema through a map: keys come out sorted.
     owner.parameters = sortKeys(params) as Json
     params = owner.parameters
     changed = true
   }
+
   const properties = get(params, "properties")
+
   if (isJsonObject(properties)) {
     for (const name of Object.keys(properties)) {
       if (normalizePropertySchema(properties[name] as Json)) changed = true
     }
   }
+
   return changed
 }
 
 const normalizeToolList = (tools: Json | undefined): boolean => {
   if (!isJsonArray(tools)) return false
   let changed = false
+
   for (const tool of tools) {
     if (!isJsonObject(tool)) continue
     const toolType = asString(tool["type"])
+
     if (toolType === "namespace") {
       if (normalizeToolList(tool["tools"])) changed = true
       continue
     }
+
     if (toolType !== "function" && toolType !== "custom") continue
     const params = tool["parameters"]
+
     if (!isJsonObject(params)) continue
     const owner = tool as { parameters: Json }
+
     if (normalizeParameters(params, owner)) changed = true
   }
+
   return changed
 }
 
 /** `NormalizeCodexToolSchemas`; mutates and returns `body`. */
 export const normalizeCodexToolSchemas = <T extends Json>(body: T): T => {
   normalizeToolList(get(body, "tools"))
+
   return body
 }
 
@@ -242,8 +284,10 @@ const CODEX_CLIENT_TOOL_INTEGER_FIELDS: Readonly<Record<string, readonly string[
 
 const matchCodexTargetTool = (toolName: string): readonly string[] => {
   let base = toolName.trim()
+
   if (base.startsWith("functions__")) base = base.slice("functions__".length)
   else if (base.startsWith("collab__")) base = base.slice("collab__".length)
+
   switch (base) {
     case "multi_agent_v1__wait_agent":
     case "collaboration__wait_agent":
@@ -257,18 +301,23 @@ const matchCodexTargetTool = (toolName: string): readonly string[] => {
       base = base.slice("collaboration__".length)
       break
   }
+
   return CODEX_CLIENT_TOOL_INTEGER_FIELDS[base] ?? []
 }
 
 const normalizeFieldTypes = (params: Json, fields: readonly string[]): boolean => {
   if (fields.length === 0 || !isJsonObject(get(params, "properties"))) return false
   let changed = false
+
   for (const field of fields) {
     const prop = get(params, `properties.${field}`)
+
     if (prop === undefined) continue
     const type = get(prop, "type")
+
     if (type === undefined) continue
     const typePath = `properties.${field}.type`
+
     if (type === "number") {
       set(params, typePath, "integer")
       changed = true
@@ -276,43 +325,56 @@ const normalizeFieldTypes = (params: Json, fields: readonly string[]): boolean =
       let hasNumber = false
       const seen = new Set<string>()
       const next: string[] = []
+
       for (const item of type) {
         let text = asString(item)
+
         if (text === "number") {
           hasNumber = true
           text = "integer"
         }
+
         if (!seen.has(text)) {
           seen.add(text)
           next.push(text)
         }
       }
+
       if (hasNumber) {
         set(params, typePath, next)
         changed = true
       }
     }
   }
+
   return changed
 }
 
 const normalizeIntegerTypesInTool = (tool: Json, namespace: string): boolean => {
   if (!isJsonObject(tool)) return false
+
   if (asString(tool["type"]) === "namespace") {
     if (namespace !== "") return false
     const name = asString(tool["name"])
+
     return name === "" ? false : normalizeIntegerTypesInArray(tool["tools"], name)
   }
+
   for (const key of ["function_declarations", "functionDeclarations"]) {
     const declarations = tool[key]
+
     if (isJsonArray(declarations)) return normalizeIntegerTypesInArray(declarations, namespace)
   }
+
   let toolName = asString(tool["name"])
   let params = tool["parameters"]
+
   if (!isJsonObject(params)) {
     const fnParams = get(tool, "function.parameters")
+
     if (isJsonObject(fnParams)) {
       params = fnParams
+
       if (toolName === "") toolName = asString(get(tool, "function.name"))
     } else if (isJsonObject(tool["input_schema"])) {
       params = tool["input_schema"]
@@ -322,14 +384,18 @@ const normalizeIntegerTypesInTool = (tool: Json, namespace: string): boolean => 
       return false
     }
   }
+
   if (namespace !== "") toolName = `${namespace}__${toolName}`
+
   return normalizeFieldTypes(params, matchCodexTargetTool(toolName))
 }
 
 const normalizeIntegerTypesInArray = (tools: Json | undefined, namespace: string): boolean => {
   if (!isJsonArray(tools)) return false
   let changed = false
+
   for (const tool of tools) if (normalizeIntegerTypesInTool(tool, namespace)) changed = true
+
   return changed
 }
 
@@ -338,10 +404,12 @@ export const normalizeCodexToolIntegerTypes = <T extends Json>(body: T, headers:
   if (!isCodexUserAgent(headers)) return body
   normalizeIntegerTypesInArray(get(body, "tools"), "")
   const input = get(body, "input")
+
   if (isJsonArray(input)) {
     for (const item of input) {
       if (asString(get(item, "type")) === "additional_tools") normalizeIntegerTypesInArray(get(item, "tools"), "")
     }
   }
+
   return body
 }

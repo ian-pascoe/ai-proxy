@@ -15,11 +15,15 @@ export const modelOverrideHeaders = (
   model: string
 ): Readonly<Record<string, string>> | undefined => {
   const source = lookup?.(model, "")?.config?.overrideHeader
+
   if (source === undefined) return undefined
   const out: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(source)) {
     const name = key.trim()
+
     if (name !== "") out[name] = value
   }
+
   return Object.keys(out).length === 0 ? undefined : out
 }

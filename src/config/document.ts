@@ -113,8 +113,10 @@ const ROUTING_STRATEGY_ALIASES: Readonly<Record<string, string>> = {
 /** Moves `from` to `to`; an existing target wins, object values merge key by key. */
 const moveMerge = (doc: JsonObject, from: string, to: string): void => {
   const value = get(doc, from)
+
   if (value === undefined) return
   const target = get(doc, to)
+
   if (target === undefined) {
     set(doc, to, value)
   } else if (isJsonObject(value) && isJsonObject(target)) {
@@ -123,6 +125,7 @@ const moveMerge = (doc: JsonObject, from: string, to: string): void => {
       moveMerge(doc, `${from}.${escaped}`, `${to}.${escaped}`)
     }
   }
+
   del(doc, from)
 }
 
@@ -130,45 +133,59 @@ const moveMerge = (doc: JsonObject, from: string, to: string): void => {
 const groupLegacyKeys = (entries: readonly Json[], family: string): Json[] =>
   entries.map((entry, index) => {
     if (!isJsonObject(entry)) return entry
+
     if (family === "openai-compatibility") {
       const { "api-key-entries": keys, ...group } = entry
+
       return { ...group, keys: keys ?? [] }
     }
+
     const group: JsonObject = { name: `${family}-${index + 1}` }
     const key: JsonObject = {}
+
     for (const [field, value] of Object.entries(entry)) {
       if (field === "base-url" || (SHARED_KEY_FIELDS as readonly string[]).includes(field)) group[field] = value
       else key[field] = value
     }
+
     group.keys = [key]
+
     return group
   })
 
 /** Removes `null` values (YAML `key:` without value) except inside `requests.payload`. */
 const stripNulls = (value: Json, path: string): Json | undefined => {
   if (value === null) return path === "requests.payload" || path.startsWith("requests.payload.") ? null : undefined
+
   if (isJsonArray(value)) {
     // Null items are only kept inside payload rules (handled by the null check above).
     return value.flatMap((item) => {
       const stripped = stripNulls(item, `${path}[]`)
+
       return stripped === undefined ? [] : [stripped]
     })
   }
+
   if (isJsonObject(value)) {
     const out: JsonObject = {}
+
     for (const [key, child] of Object.entries(value)) {
       const stripped = stripNulls(child, path === "" ? key : `${path}.${key}`)
+
       if (stripped !== undefined)
         Object.defineProperty(out, key, { value: stripped, enumerable: true, writable: true, configurable: true })
     }
+
     return out
   }
+
   return value
 }
 
 /** Lenient parsing of `disable-image-generation` strings (`on`, `yes`, `Chat`, ...). */
 const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefined => {
   if (typeof value !== "string") return value
+
   switch (value.trim().toLowerCase()) {
     case "":
     case "false":
@@ -194,30 +211,42 @@ const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefi
 
 const validateApiKeys = (apiKeys: Json | undefined): void => {
   if (apiKeys === undefined) return
+
   if (!isJsonObject(apiKeys))
     throw new ConfigValidationError({ message: "api-keys must be a mapping of provider groups" })
   const allowed = new Set<string>(API_KEY_FAMILIES)
+
   for (const [family, groups] of Object.entries(apiKeys)) {
     if (!allowed.has(family)) throw new ConfigValidationError({ message: `api-keys.${family}: unknown provider` })
+
     if (!isJsonArray(groups)) throw new ConfigValidationError({ message: `api-keys.${family} must be a list` })
+
     for (const [index, group] of groups.entries()) {
       const where = `api-keys.${family}[${index}]`
+
       if (!isJsonObject(group)) throw new ConfigValidationError({ message: `${where} must be a mapping` })
+
       if (!isJsonArray(group.keys)) throw new ConfigValidationError({ message: `${where}.keys must be a list` })
+
       for (const key of group.keys) {
         if (!isJsonObject(key)) throw new ConfigValidationError({ message: `${where}: key must be a mapping` })
         delete key.auth_index
         delete key["auth-index"]
+
         // Go accepts credential-less entries (e.g. a gemini entry with only a base URL).
         if (family !== "openai-compatibility" && key["api-key"] === undefined) key["api-key"] = ""
+
         if (family !== "openai-compatibility" && key["base-url"] !== undefined) {
           throw new ConfigValidationError({ message: `api-keys.${family}: base-url belongs to the group` })
         }
       }
+
       delete group.auth_index
       delete group["auth-index"]
+
       if (family !== "openai-compatibility") {
         const groupFields = new Set<string>(["name", "base-url", "keys", ...SHARED_KEY_FIELDS])
+
         for (const field of Object.keys(group)) {
           if (!groupFields.has(field)) {
             throw new ConfigValidationError({ message: `api-keys.${family}: unsupported group field ${field}` })
@@ -237,6 +266,7 @@ export const prepareDocument = (raw: unknown): JsonObject => {
   const doc = structuredClone(raw)
 
   const version = doc["config-version"]
+
   if (version !== undefined && version !== null && version !== 8) {
     throw new ConfigValidationError({ message: "unsupported config-version (expected 8)" })
   }
@@ -245,6 +275,7 @@ export const prepareDocument = (raw: unknown): JsonObject => {
   if (isJsonArray(doc["api-keys"])) {
     const clientKeys = doc["api-keys"]
     delete doc["api-keys"]
+
     if (get(doc, "access.api-keys") === undefined) set(doc, "access.api-keys", clientKeys)
   }
 
@@ -252,24 +283,31 @@ export const prepareDocument = (raw: unknown): JsonObject => {
 
   for (const [legacy, family] of LEGACY_FAMILIES) {
     const entries = doc[legacy]
+
     if (!isJsonArray(entries)) continue
     delete doc[legacy]
     const apiKeys = isJsonObject(doc["api-keys"]) ? doc["api-keys"] : {}
     doc["api-keys"] = apiKeys
+
     if (apiKeys[family] === undefined) apiKeys[family] = groupLegacyKeys(entries, family)
   }
+
   validateApiKeys(doc["api-keys"])
 
   const stripped = stripNulls(doc, "")
   const out = isJsonObject(stripped) ? stripped : {}
 
   const strategy = get(out, "routing.strategy")
+
   if (typeof strategy === "string") {
     const canonical = ROUTING_STRATEGY_ALIASES[strategy.trim().toLowerCase()]
     // Like Go, an unrecognised strategy falls back to round-robin.
     set(out, "routing.strategy", canonical ?? "round-robin")
   }
+
   const disable = normalizeDisableImageGeneration(get(out, "multimedia.disable-image-generation"))
+
   if (disable !== undefined) set(out, "multimedia.disable-image-generation", disable)
+
   return out
 }

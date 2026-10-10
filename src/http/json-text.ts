@@ -9,6 +9,7 @@
 export const isValidJson = (text: string): boolean => {
   try {
     JSON.parse(text)
+
     return true
   } catch {
     return false
@@ -35,8 +36,10 @@ export const goMarshal = (value: unknown): string => htmlEscapeJson(JSON.stringi
 
 export const sortKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(sortKeys)
+
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {}
+
     for (const key of Object.keys(value).toSorted()) {
       Object.defineProperty(out, key, {
         value: sortKeys((value as Record<string, unknown>)[key]),
@@ -45,8 +48,10 @@ export const sortKeys = (value: unknown): unknown => {
         configurable: true
       })
     }
+
     return out
   }
+
   return value
 }
 
@@ -57,18 +62,23 @@ export const goMarshalSorted = (value: unknown): string => goMarshal(sortKeys(va
 export const compactJson = (text: string): string => {
   let out = ""
   let inString = false
+
   for (let i = 0; i < text.length; i++) {
     const ch = text[i] as string
+
     if (inString) {
       out += ch
+
       if (ch === "\\") {
         out += text[i + 1] ?? ""
         i++
       } else if (ch === '"') {
         inString = false
       }
+
       continue
     }
+
     if (ch === '"') {
       inString = true
       out += ch
@@ -76,5 +86,6 @@ export const compactJson = (text: string): string => {
       out += ch
     }
   }
+
   return out
 }

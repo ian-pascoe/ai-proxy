@@ -15,6 +15,7 @@ import fixtures from "./fixtures/devin.json"
 
 const fromHex = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/../g) ?? [], (byte) => Number.parseInt(byte, 16))
+
 const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 
 const envelope = (flag: number, payload: Uint8Array): Uint8Array => {
@@ -22,6 +23,7 @@ const envelope = (flag: number, payload: Uint8Array): Uint8Array => {
   out[0] = flag
   new DataView(out.buffer).setUint32(1, payload.length, false)
   out.set(payload, 5)
+
   return out
 }
 
@@ -49,6 +51,7 @@ const interactionsOptions = (stream: boolean) =>
 const normalizeChunks = (chunks: ReadonlyArray<string>): Json[] =>
   chunks.map((chunk) => {
     const data = chunk.replace(/^data: /, "").trim()
+
     return data === "[DONE]"
       ? "[DONE]"
       : (tryParseJson(data.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID")) as Json)
@@ -56,18 +59,23 @@ const normalizeChunks = (chunks: ReadonlyArray<string>): Json[] =>
 
 const normalizeWire = (wire: Uint8Array): string => {
   const out = new ProtoWriter()
+
   for (const field of readFields(wire)) {
     if (field.num !== 3) {
       out.raw(field.encoded)
       continue
     }
+
     const prompt = new ProtoWriter()
+
     for (const inner of readFields(field.bytes)) {
       if (inner.num === 1) prompt.string(1, "ID")
       else prompt.raw(inner.encoded)
     }
+
     out.bytes(3, prompt.toBytes())
   }
+
   return toHex(out.toBytes())
 }
 
@@ -82,9 +90,11 @@ describe("Devin executor parity with the Go executor", () => {
       resetSessionTurnIndex(session)
       const h = await harness(devinCredential(), responder, scenario.configYaml, true)
       const opts = interactionsOptions(true)
+
       for (let turn = 0; turn < (scenario.turns ?? 1); turn++) {
         await collectStream(executor, h, request(scenario.model, scenario.payload), opts)
       }
+
       // The Go run also sent a non-stream request for single-turn scenarios; compare the streamed ones.
       expect(h.calls).toHaveLength(scenario.turns ?? 1)
       h.calls.forEach((call, index) => {
@@ -103,13 +113,16 @@ describe("Devin executor parity with the Go executor", () => {
     it(`${scenario.name}: streamed Interactions events`, async () => {
       resetSessionTurnIndex(session)
       const h = await harness(devinCredential(), responder, scenario.configYaml, true)
+
       const collected = await collectStream(
         executor,
         h,
         request(scenario.model, scenario.payload),
         interactionsOptions(true)
       )
+
       expect(normalizeChunks(collected.chunks)).toEqual(normalizeChunks(scenario.stream.chunks ?? []))
+
       if (scenario.stream.error === undefined) {
         expect(collected.error).toBeUndefined()
       } else {
@@ -117,6 +130,7 @@ describe("Devin executor parity with the Go executor", () => {
         expect(collected.error?.message).toContain(
           scenario.stream.error.replace(/^devin upstream stream/, "devin stream")
         )
+
         if (scenario.stream.status !== undefined) expect(collected.error?.status).toBe(scenario.stream.status)
       }
     })
@@ -125,6 +139,7 @@ describe("Devin executor parity with the Go executor", () => {
     it(`${scenario.name}: non-stream aggregate`, async () => {
       resetSessionTurnIndex(session)
       const h = await harness(devinCredential(), responder, scenario.configYaml)
+
       if (scenario.nonStream.error !== undefined) {
         const result = await Effect.runPromise(
           Effect.result(
@@ -133,13 +148,18 @@ describe("Devin executor parity with the Go executor", () => {
               .pipe(Effect.provide(h.layers))
           )
         )
+
         expect(result._tag).toBe("Failure")
+
         if (result._tag === "Failure") {
           expect(result.failure.message).toContain(scenario.nonStream.error)
+
           if (scenario.nonStream.status !== undefined) expect(result.failure.status).toBe(scenario.nonStream.status)
         }
+
         return
       }
+
       const response = await execute(executor, h, request(scenario.model, scenario.payload), interactionsOptions(false))
       expect(tryParseJson(response.payload.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID"))).toEqual(
         tryParseJson(scenario.nonStream.payload ?? "")
@@ -155,11 +175,13 @@ describe("Devin executor behaviour", () => {
     const yaml = `payload:\n  override:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        system_prompt: OVERRIDDEN\n        completion_config.temperature: 0.25\n  default:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        completion_config.top_k: 7\n`
     const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]), yaml)
     await execute(executor, h, request("swe-2", hi), interactionsOptions(false))
+
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
       system_prompt: string
       completion_config: { temperature: number; top_k: number; max_tokens: number }
       model: string
     }
+
     expect(view.system_prompt).toBe("OVERRIDDEN")
     expect(view.completion_config.temperature).toBe(0.25)
     expect(view.completion_config.top_k).toBe(7)
@@ -170,9 +192,11 @@ describe("Devin executor behaviour", () => {
     const payload = '{"generation_config":{"max_output_tokens":9999999},"input":[{"type":"user_input","content":"hi"}]}'
     const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]))
     await execute(executor, h, request("claude-opus-4-6", payload), interactionsOptions(false))
+
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
       completion_config: { max_tokens: number }
     }
+
     expect(view.completion_config.max_tokens).toBeGreaterThan(0)
     expect(view.completion_config.max_tokens).toBeLessThan(9_999_999)
     const unclamped = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]))
@@ -185,9 +209,11 @@ describe("Devin executor behaviour", () => {
       },
       interactionsOptions(false)
     )
+
     const registryView = devinPayloadView((unclamped.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
       completion_config: { max_tokens: number }
     }
+
     expect(registryView.completion_config.max_tokens).toBe(1234)
   })
 
@@ -196,11 +222,13 @@ describe("Devin executor behaviour", () => {
       devinCredential(),
       () => new Response("slow down", { status: 429, headers: { "retry-after": "7" } })
     )
+
     const error = await Effect.runPromise(
       Effect.flip(
         executor.execute(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
       )
     )
+
     expect(error.status).toBe(429)
     expect(error.message).toBe("slow down")
     expect(error.retryAfterMs).toBe(7000)
@@ -209,11 +237,13 @@ describe("Devin executor behaviour", () => {
 
   it("rejects credentials without a session token", async () => {
     const h = await harness(credential("devin"), () => new Response(""))
+
     const error = await Effect.runPromise(
       Effect.flip(
         executor.execute(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
       )
     )
+
     expect(error.status).toBe(401)
     expect(h.calls).toHaveLength(0)
   })
@@ -221,6 +251,7 @@ describe("Devin executor behaviour", () => {
   it("refuses a user turn that only carried media Devin cannot send", async () => {
     const payload = '{"input":[{"type":"user_input","content":[{"type":"image","uri":"https://example.test/a.png"}]}]}'
     const h = await harness(devinCredential(), () => new Response(""))
+
     const error = await Effect.runPromise(
       Effect.flip(
         executor
@@ -228,6 +259,7 @@ describe("Devin executor behaviour", () => {
           .pipe(Effect.provide(h.layers))
       )
     )
+
     expect(error.status).toBe(400)
     expect(error.requestScoped).toBe(true)
     expect(error.message).toContain("unsupported content part")
@@ -235,9 +267,11 @@ describe("Devin executor behaviour", () => {
 
   it("estimates token counts from the payload length", async () => {
     const h = await harness(devinCredential(), () => new Response(""))
+
     const response = await Effect.runPromise(
       executor.countTokens(h.context, request("swe-2", hi), interactionsOptions(false)).pipe(Effect.provide(h.layers))
     )
+
     const count = Math.floor(JSON.stringify(JSON.parse(hi)).length / 4)
     expect(JSON.parse(response.payload)).toEqual({ total_tokens: count, input_tokens: count })
   })

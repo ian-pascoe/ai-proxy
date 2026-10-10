@@ -54,6 +54,7 @@ describe("CORS", () => {
       method: "OPTIONS",
       headers: { origin: "https://x.test" }
     })
+
     expect(response.status).toBe(204)
     expect(response.headers.get("access-control-allow-origin")).toBe("*")
     expectCors(response)

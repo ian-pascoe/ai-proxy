@@ -15,18 +15,22 @@ export class LineSplitter {
     const lines: string[] = []
     let from = 0
     let index = data.indexOf("\n", from)
+
     while (index !== -1) {
       lines.push(dropCR(data.slice(from, index)))
       from = index + 1
       index = data.indexOf("\n", from)
     }
+
     this.#buffer = data.slice(from)
+
     return lines
   }
 
   end(): string[] {
     const rest = this.#buffer
     this.#buffer = ""
+
     return rest === "" ? [] : [dropCR(rest)]
   }
 }
@@ -56,5 +60,6 @@ export const SSE_KEEP_ALIVE = ": keep-alive\n\n"
 /** The `data:` payload of one SSE line (trimmed), or `undefined` when the line is not a data line. */
 export const sseLinePayload = (line: string): string | undefined => {
   const trimmed = line.trim()
+
   return trimmed.startsWith("data:") ? trimmed.slice(5).trim() : undefined
 }

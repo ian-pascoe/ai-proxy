@@ -34,19 +34,23 @@ export type MockHandler = (request: RecordedRequest) => MockReply | Promise<Mock
 
 const decode = (request: HttpClientRequest.HttpClientRequest): string => {
   const body = request.body
+
   if (body._tag === "Uint8Array") return new TextDecoder().decode(body.body)
+
   return ""
 }
 
 /** An `HttpClient` that answers from `handler` and records every request. */
 export const mockHttp = (handler: MockHandler) => {
   const requests: RecordedRequest[] = []
+
   const layer = Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) =>
       Effect.flatMap(
         Effect.promise(async () => {
           const body = decode(request)
+
           const recorded: RecordedRequest = {
             method: request.method,
             url: request.url,
@@ -55,7 +59,9 @@ export const mockHttp = (handler: MockHandler) => {
             json: () => JSON.parse(body) as Record<string, unknown>,
             form: () => Object.fromEntries(new URLSearchParams(body))
           }
+
           requests.push(recorded)
+
           return handler(recorded)
         }),
         (reply) => {
@@ -64,7 +70,9 @@ export const mockHttp = (handler: MockHandler) => {
               new HttpClientError.HttpClientError({ reason: new HttpClientError.TransportError({ request }) })
             )
           }
+
           const text = typeof reply.body === "string" ? reply.body : JSON.stringify(reply.body ?? {})
+
           return Effect.succeed(
             HttpClientResponse.fromWeb(
               request,
@@ -75,6 +83,7 @@ export const mockHttp = (handler: MockHandler) => {
       )
     )
   )
+
   return { layer, requests }
 }
 
@@ -83,7 +92,9 @@ export const routes =
   (table: Record<string, MockHandler | MockReply>): MockHandler =>
   (request) => {
     const entry = table[`${request.method} ${request.url}`]
+
     if (entry === undefined) throw new Error(`unexpected request ${request.method} ${request.url}`)
+
     return typeof entry === "function" ? entry(request) : entry
   }
 
@@ -102,11 +113,14 @@ export class MemoryStore implements PoolStore {
   }
   upsert(id: string, provider: string, incoming: JsonObject, options: UpsertOptions): UpsertOutcome {
     const existing = this.files.get(id)
+
     const metadata =
       existing !== undefined && options.mergeExisting
         ? mergeExistingMetadata(provider, incoming, existing.metadata)
         : structuredClone(incoming)
+
     const changed = existing === undefined ? true : credentialsChanged(existing.metadata, metadata)
+
     const record: StoredCredential = {
       id,
       provider,
@@ -115,15 +129,19 @@ export class MemoryStore implements PoolStore {
       createdAt: existing?.createdAt ?? this.now(),
       updatedAt: this.now()
     }
+
     this.files.set(id, record)
     this.writes += 1
+
     return { record, created: existing === undefined, credentialsChanged: changed }
   }
   setDisabled(id: string, disabled: boolean): StoredCredential | undefined {
     const existing = this.files.get(id)
+
     if (existing === undefined) return undefined
     const record = { ...existing, metadata: { ...existing.metadata, disabled } }
     this.files.set(id, record)
+
     return record
   }
   remove(id: string): boolean {
@@ -146,10 +164,12 @@ export class FakeAlarm implements AlarmScheduler {
   set(at: number): Promise<void> {
     this.at = at
     this.sets.push(at)
+
     return Promise.resolve()
   }
   clear(): Promise<void> {
     this.at = undefined
+
     return Promise.resolve()
   }
 }
@@ -178,12 +198,14 @@ export const makeFixture = (
   const http = mockHttp(handler)
   const alarm = new FakeAlarm()
   let manager: RefreshManager | undefined
+
   const pool = new CredentialPool({
     store,
     config: () => ({ version: 1, config: EMPTY_CONFIG }),
     now: () => clock.now,
     decorate: (credential) => manager?.decorate(credential) ?? credential
   })
+
   manager = new RefreshManager({
     host: pool,
     alarm,
@@ -193,6 +215,7 @@ export const makeFixture = (
     ...(options.workers === undefined ? {} : { workers: options.workers }),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })
   })
+
   return {
     clock,
     store,
@@ -202,6 +225,7 @@ export const makeFixture = (
     http,
     add: (name, metadata) => {
       const result = pool.upsert(name, metadata, { mergeExisting: false })
+
       if (!result.ok) throw new Error(`import failed: ${result.message}`)
     }
   }

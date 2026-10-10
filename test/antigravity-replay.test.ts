@@ -29,24 +29,32 @@ import { geminiClaudeToolUseID } from "../src/translator/common/claude-util.ts"
 import { options } from "./support/executor-run.ts"
 
 const MODEL = "gemini-3-flash"
+
 const SIG = "CiQBsignature0000000001"
+
 const SIG2 = "CiQBsignature0000000002"
+
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
+
 const clone = <T>(value: T): T => structuredClone(value)
 
 const user = (text: string) => ({ role: "user", parts: [{ text }] })
+
 const modelCall = (name: string, args: unknown, extra: Record<string, unknown> = {}, signature?: string) => ({
   role: "model",
   parts: [
     { functionCall: { name, args, ...extra }, ...(signature === undefined ? {} : { thoughtSignature: signature }) }
   ]
 })
+
 const toolResult = (name: string, id?: string) => ({
   role: "user",
   parts: [{ functionResponse: { name, response: { ok: true }, ...(id === undefined ? {} : { id }) } }]
 })
+
 const antigravityRequest = (contents: unknown[]): Json =>
   ({ model: MODEL, request: { contents, systemInstruction: { parts: [{ text: "sys" }] } } }) as unknown as Json
+
 const upstream = (parts: unknown[], finishReason = "STOP"): Json =>
   ({ response: { candidates: [{ content: { role: "model", parts }, finishReason }] } }) as unknown as Json
 
@@ -55,11 +63,13 @@ const scopeOf = (sessionKey: string, snapshot = UNLOADED_SNAPSHOT): ReplayScope 
   sessionKey,
   snapshot
 })
+
 const contentsOf = (payload: Json) =>
   (payload as unknown as { request: { contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> } })
     .request.contents
 
 const execRequest = (payload: Json): ExecutorRequest => ({ model: MODEL, payload })
+
 const execOptions = (headers: Record<string, string> = {}) =>
   options({ headers: new Headers(headers), sourceFormat: "openai" })
 
@@ -90,10 +100,12 @@ describe("replay ledger over SessionState", () => {
       { type: "function_call_part", call_id: "c1", name: "read", args: { a: 1 } }
     ])
     expect(normalizeReplayItems([])).toBeUndefined()
+
     const many = Array.from({ length: REPLAY_MAX_ITEMS_PER_ENTRY + 1 }, () => ({
       type: "thought_signature",
       thoughtSignature: SIG
     }))
+
     expect(normalizeReplayItems(many)).toBeUndefined()
   })
 
@@ -148,9 +160,11 @@ describe("accumulator -> ledger -> request restore", () => {
       modelCall("read", { p: "a" }, { id: "read-1" }),
       toolResult("read", "read-1")
     ])
+
     const prepared = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions({ "Session-Id": "sess" }), second)
     )
+
     // The explicit client session decides the key, so use the same key for the lookup.
     expect(contentsOf(prepared.payload)[1]?.parts[0]?.["thoughtSignature"]).toBeDefined()
   })
@@ -158,6 +172,7 @@ describe("accumulator -> ledger -> request restore", () => {
   it("matches by the session key of the request and records the ledger under it", async () => {
     const ledger = makeInMemoryReplayLedger(() => 5_000_000)
     const headers = { "Session-Id": "client-1" }
+
     const key = replaySessionKey(
       {
         modelName: MODEL,
@@ -169,6 +184,7 @@ describe("accumulator -> ledger -> request restore", () => {
       },
       {}
     )
+
     expect(key).toMatch(/^caller:[0-9a-f]{16}:responses:client-1$/)
 
     const first = antigravityRequest([user("read a")])
@@ -183,10 +199,12 @@ describe("accumulator -> ledger -> request restore", () => {
       modelCall("read", { p: "a" }, { id: "read-1" }),
       toolResult("read", "read-1")
     ])
+
     const prepared2 = await run(prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions(headers), second))
     expect(contentsOf(prepared2.payload)[1]?.parts[0]).toMatchObject({ thoughtSignature: SIG })
     // The input is never mutated.
     expect(contentsOf(second)[1]?.parts[0]?.["thoughtSignature"]).toBeUndefined()
+
     // Another caller does not see the ledger.
     const otherCaller = await run(
       prepareReplayPayload(
@@ -197,6 +215,7 @@ describe("accumulator -> ledger -> request restore", () => {
         second
       )
     )
+
     expect(contentsOf(otherCaller.payload)[1]?.parts[0]?.["thoughtSignature"]).toBe("skip_thought_signature_validator")
   })
 
@@ -268,11 +287,13 @@ describe("accumulator -> ledger -> request restore", () => {
     await run(accumulator.commit(ledger))
 
     const opaque = geminiClaudeToolUseID("native-1", "read", JSON.stringify({ p: "a" }))
+
     const second = antigravityRequest([
       user("read"),
       modelCall("read", { p: "a" }, { id: opaque }),
       toolResult("read", opaque)
     ])
+
     const prepared2 = await run(prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions(headers), second))
     const contents = contentsOf(prepared2.payload)
     expect(contents[1]?.parts[0]).toMatchObject({
@@ -309,9 +330,11 @@ describe("accumulator -> ledger -> request restore", () => {
       modelCall("read", { p: "z" }, { id: opaque }, "CiQBstale0000000000000"),
       toolResult("read", opaque)
     ])
+
     const degraded = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(lost), execOptions({ "Session-Id": "unknown" }), lost)
     )
+
     const parts = contentsOf(degraded.payload)
     const synthetic = syntheticToolCallId(opaque)
     expect(parts[1]?.parts[0]).toMatchObject({
@@ -345,9 +368,11 @@ describe("accumulator -> ledger -> request restore", () => {
   it("only touches Gemini-family models and clears the entry after an upstream signature error", async () => {
     const ledger = makeInMemoryReplayLedger(() => 5_000_000)
     const claude = antigravityRequest([user("x")])
+
     const result = await run(
       prepareReplayPayload(ledger, "claude-sonnet-4-5", execRequest(claude), execOptions(), claude)
     )
+
     expect(result.payload).toBe(claude)
     expect(result.scope.sessionKey).toBe("")
 
@@ -373,6 +398,7 @@ describe("provenance repairs", () => {
   it("degrades reserved ids: the first call keeps a bypass sentinel, siblings lose the stale signature", () => {
     const reserved = geminiClaudeToolUseID("a", "f", "{}")
     const reserved2 = geminiClaudeToolUseID("b", "g", "{}")
+
     const payload = antigravityRequest([
       {
         role: "model",
@@ -389,6 +415,7 @@ describe("provenance repairs", () => {
         ]
       }
     ])
+
     expect(degradeToolProvenanceIds(payload)).toBe(4)
     const [model, response] = contentsOf(payload)
     expect(model?.parts[0]).toMatchObject({
@@ -406,6 +433,7 @@ describe("provenance repairs", () => {
         parts: [{ functionCall: { name: "f", args: {} } }, { functionCall: { name: "g", args: {} } }]
       }
     ])
+
     repairUnsignedFirstFunctionCalls(payload)
     const parts = contentsOf(payload)[0]?.parts
     expect(parts?.[0]?.["thoughtSignature"]).toBe("skip_thought_signature_validator")
@@ -415,6 +443,7 @@ describe("provenance repairs", () => {
 
 describe("Interactions continuation sessions", () => {
   const MODEL_NAME = "antigravity-preview-05-2026"
+
   const credential = (overrides: Partial<CredentialSnapshot> = {}): CredentialSnapshot => ({
     id: "credential",
     provider: "gemini-interactions",
@@ -423,7 +452,9 @@ describe("Interactions continuation sessions", () => {
     metadata: {},
     ...overrides
   })
+
   const initial = () => ({ input: [{ type: "user_input", content: [{ type: "text", text: "hi" }] }] })
+
   const continued = () => ({
     input: [
       { content: [{ text: "hi", type: "text" }], type: "user_input" },
@@ -431,6 +462,7 @@ describe("Interactions continuation sessions", () => {
       { type: "function_result", call_id: "call_1", result: "ok" }
     ]
   })
+
   const prepare = (
     store: ReturnType<typeof makeInMemoryContinuationStore>,
     body: Record<string, unknown>,
@@ -446,6 +478,7 @@ describe("Interactions continuation sessions", () => {
         clone(body) as unknown as Json
       )
     )
+
   const response = (extra: Record<string, unknown> = {}) =>
     ({
       id: "interaction_1",
@@ -505,24 +538,29 @@ describe("Interactions continuation sessions", () => {
     },
     { name: "failed", want: "", response: response({ status: "failed" }) }
   ]
+
   it.each(cases)("$name", async (testCase) => {
     const store = makeInMemoryContinuationStore(() => 1_000)
     const first = await prepare(store, initial())
     await run(first.state.observe(testCase.response ?? response()))
     const body = (testCase.body ?? continued)()
+
     const prepared = await prepare(store, body, {
       ...(testCase.credential === undefined ? {} : { credential: testCase.credential }),
       ...(testCase.caller === undefined ? {} : { caller: testCase.caller }),
       ...(testCase.model === undefined ? {} : { model: testCase.model })
     })
+
     const rewritten = prepared.body as unknown as Record<string, unknown>
     expect(rewritten["previous_interaction_id"] ?? "").toBe(testCase.want)
+
     if (testCase.name === "match") {
       expect(rewritten["input"]).toEqual([{ type: "function_result", call_id: "call_1", result: "ok" }])
       expect(rewritten["environment_id"]).toBe("env_1")
     } else if (testCase.want === "" || testCase.name === "explicit") {
       expect(rewritten).toEqual(body)
     }
+
     if (testCase.name === "environment") expect(rewritten["environment_id"]).toBe("explicit-env")
   })
 
@@ -571,6 +609,7 @@ describe("Interactions continuation sessions", () => {
 
   it("rejects ambiguous call sets", () => {
     expect(interactionsCallKey(["b", "a"])).toBe(interactionsCallKey(["a", "b"]))
+
     for (const calls of [[], [""], ["a", "a"], ["a\u0000b"]]) expect(interactionsCallKey(calls)).toBe("")
   })
 })

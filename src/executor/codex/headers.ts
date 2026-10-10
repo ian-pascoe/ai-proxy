@@ -13,17 +13,23 @@ import { applyCustomHeaders, customHeaders } from "../helps/custom-headers.ts"
 import type { CredentialSnapshot } from "../picker.ts"
 
 export const CODEX_USER_AGENT = "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)"
+
 export const CODEX_ORIGINATOR = "codex-tui"
+
 export const CODEX_DEFAULT_BASE_URL = "https://chatgpt.com/backend-api/codex"
+
 const ROUTING_HINT_HEADER = "x-codex-routing-hint"
 
 /** `codexCreds`: API key (or OAuth access token) and the configured base URL. */
 export const codexCreds = (credential: CredentialSnapshot): { readonly apiKey: string; readonly baseURL: string } => {
   let apiKey = credential.attributes["api_key"] ?? ""
+
   if (apiKey === "") {
     const token = credential.metadata["access_token"]
+
     if (typeof token === "string") apiKey = token
   }
+
   return { apiKey, baseURL: credential.attributes["base_url"] ?? "" }
 }
 
@@ -34,6 +40,7 @@ export const codexUsesApiKey = (credential: CredentialSnapshot): boolean =>
 /** Base URL without a trailing slash, defaulting to the ChatGPT backend. */
 export const codexBaseUrl = (credential: CredentialSnapshot): string => {
   const { baseURL } = codexCreds(credential)
+
   return (baseURL === "" ? CODEX_DEFAULT_BASE_URL : baseURL).replace(/\/+$/, "")
 }
 
@@ -41,6 +48,7 @@ export const codexBaseUrl = (credential: CredentialSnapshot): string => {
 export const isCodexResponsesLiteRequest = (body: Json | undefined, headers: Headers): boolean => {
   if ((headers.get("x-openai-internal-codex-responses-lite") ?? "").trim().toLowerCase() === "true") return true
   const value = get(body, "client_metadata.ws_request_header_x_openai_internal_codex_responses_lite")
+
   return value === true || (typeof value === "string" && value.trim().toLowerCase() === "true")
 }
 
@@ -52,14 +60,18 @@ export const isNativeCodexRequest = (
   responseFormat: string
 ): boolean => {
   const native = (format: string) => ["codex", "openai-response"].includes(format.trim().toLowerCase())
+
   return native(sourceFormat) && native(responseFormat) && isCodexResponsesLiteRequest(body, headers)
 }
 
 /** `isCodexCloakingDisabled`. */
 export const isCodexCloakingDisabled = (config: Config, credential: CredentialSnapshot): boolean => {
   const attribute = (credential.attributes["disable_codex_cloaking"] ?? "").trim().toLowerCase()
+
   if (["1", "t", "true"].includes(attribute)) return true
+
   if (["0", "f", "false"].includes(attribute)) return false
+
   return config.upstream.codex["disable-codex-cloaking"]
 }
 
@@ -91,11 +103,15 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
   const { apiKey } = codexCreds(credential)
   const isApiKey = codexUsesApiKey(credential)
   const headers: Record<string, string> = { "content-type": "application/json" }
+
   if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`
+
   if (input.sessionHeader !== undefined && input.sessionHeader !== "") headers["session-id"] = input.sessionHeader
 
   const beta = clientHeader(clientHeaders, "x-codex-beta-features")
+
   if (beta !== "") headers["x-codex-beta-features"] = beta
+
   // misc.EnsureHeader: the client's value wins over what is already set.
   for (const name of [
     "version",
@@ -108,6 +124,7 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
     "x-openai-internal-codex-responses-lite"
   ]) {
     const value = clientHeader(clientHeaders, name)
+
     if (value !== "") headers[name] = value
   }
 
@@ -121,20 +138,27 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
   headers["connection"] = "Keep-Alive"
 
   const originator = clientHeader(clientHeaders, "originator")
+
   if (originator !== "") headers["originator"] = originator
   else if (!isApiKey) headers["originator"] = CODEX_ORIGINATOR
+
   if (!isApiKey) {
     const accountId = credential.metadata["account_id"]
+
     if (typeof accountId === "string") headers["chatgpt-account-id"] = accountId
   }
+
   applyCustomHeaders(headers, credential, clientHeaders, input.sessionId)
+
   if (!isCodexCloakingDisabled(config, credential)) {
     headers["user-agent"] = CODEX_USER_AGENT
     headers["originator"] = CODEX_ORIGINATOR
   }
 
   if (input.routingHint === true && !isApiKey) applyRoutingHint(headers, input, clientHeaders)
+
   for (const [name, value] of Object.entries(input.modelHeaderOverrides ?? {})) headers[name.toLowerCase()] = value
+
   if (
     input.modelHeaderOverrides !== undefined &&
     Object.keys(input.modelHeaderOverrides).length > 0 &&
@@ -143,9 +167,12 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
   ) {
     headers["session_id"] = crypto.randomUUID()
   }
+
   // Names are case-insensitive upstream; keep one entry per lower-case name (later writes win).
   const out: Record<string, string> = {}
+
   for (const [name, value] of Object.entries(headers)) out[name.toLowerCase()] = value
+
   return out
 }
 
@@ -155,18 +182,24 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
  */
 const applyRoutingHint = (headers: Record<string, string>, input: CodexHeaderInput, clientHeaders: Headers): void => {
   delete headers[ROUTING_HINT_HEADER]
+
   const operator = customHeaders(input.credential, clientHeaders, input.sessionId)
     .filter(([name]) => name.toLowerCase() === ROUTING_HINT_HEADER)
     .map(([, value]) => value.trim())
     .find((value) => value !== "")
+
   if (operator !== undefined) {
     headers[ROUTING_HINT_HEADER] = operator
+
     return
   }
+
   const model = input.baseModel.trim()
+
   if (model === "") return
   let hint = `model=${model}`
   const tier = get(input.body, "service_tier")
+
   if (typeof tier === "string" && tier.trim() !== "") hint += `;tier=${tier.trim()}`
   headers[ROUTING_HINT_HEADER] = hint
 }
@@ -199,18 +232,22 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Re
   const { apiKey } = codexCreds(credential)
   const isApiKey = codexUsesApiKey(credential)
   const headers: Record<string, string> = {}
+
   if (input.cacheId !== "") {
     headers["session_id"] = input.cacheId
     headers["conversation_id"] = input.cacheId
   }
+
   if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`
 
   // ensureHeaderWithPriority: what is set wins, then the client's value, then the configured default.
   const defaults = config.oauth.providers.codex["header-defaults"]
   const betaFeatures = clientHeader(clientHeaders, "x-codex-beta-features")
   const configBeta = isApiKey ? "" : defaults["beta-features"].trim()
+
   if (betaFeatures !== "") headers["x-codex-beta-features"] = betaFeatures
   else if (configBeta !== "") headers["x-codex-beta-features"] = configBeta
+
   const passthrough = [
     "x-codex-turn-state",
     "x-codex-turn-metadata",
@@ -218,15 +255,19 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Re
     "x-responsesapi-include-timing-metrics",
     "version"
   ]
+
   if (input.nativeRequest) passthrough.push("x-openai-internal-codex-responses-lite")
+
   for (const name of passthrough) {
     const value = clientHeader(clientHeaders, name)
+
     if (value !== "") headers[name] = value
   }
 
   // API keys only forward the client's User-Agent; OAuth credentials: configured default, client, fixed Codex value.
   const clientUserAgent = clientHeader(clientHeaders, "user-agent")
   const configUserAgent = isApiKey ? "" : defaults["user-agent"].trim()
+
   if (isApiKey) {
     if (clientUserAgent !== "") headers["user-agent"] = clientUserAgent
   } else {
@@ -239,16 +280,20 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Re
 
   // ensureCodexWebsocketSessionHeader: cache id, then the client's session header, then (Mac OS UA) a random id.
   let session = headers["session_id"] ?? ""
+
   for (const name of SESSION_HEADERS) {
     if (session === "") session = clientHeader(clientHeaders, name)
   }
+
   if (session === "" && (headers["user-agent"] ?? "").includes("Mac OS")) session = crypto.randomUUID()
+
   if (session !== "") headers["session_id"] = session
   delete headers["session-id"]
 
   if (input.nativeRequest && isCodexCloakingDisabled(config, credential)) {
     delete headers["session_id"]
     delete headers["conversation_id"]
+
     for (const name of [
       "session-id",
       "session_id",
@@ -258,18 +303,24 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Re
       "x-codex-window-id"
     ]) {
       const value = clientHeader(clientHeaders, name)
+
       if (value !== "") headers[name] = value
     }
   }
 
   const originator = clientHeader(clientHeaders, "originator")
+
   if (originator !== "") headers["originator"] = originator
   else if (!isApiKey) headers["originator"] = CODEX_ORIGINATOR
+
   if (!isApiKey) {
     const accountId = credential.metadata["account_id"]
+
     if (typeof accountId === "string" && accountId.trim() !== "") headers["chatgpt-account-id"] = accountId.trim()
   }
+
   applyCustomHeaders(headers, credential, clientHeaders, input.sessionId)
+
   if (!isCodexCloakingDisabled(config, credential)) {
     headers["user-agent"] = CODEX_USER_AGENT
     headers["originator"] = CODEX_ORIGINATOR
@@ -290,8 +341,11 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput): Re
       clientHeaders
     )
   }
+
   for (const [name, value] of Object.entries(input.modelHeaderOverrides ?? {})) headers[name.toLowerCase()] = value
   const out: Record<string, string> = {}
+
   for (const [name, value] of Object.entries(headers)) out[name.toLowerCase()] = value
+
   return out
 }

@@ -16,17 +16,24 @@ import { PayloadConfig } from "./payload/schema.ts"
 // --- field helpers -------------------------------------------------------------------------------------------------
 
 const flag = (value: boolean) => Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+
 const text = (value = "") => Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+
 const whole = (value: number) => Schema.Int.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)))
+
 const section = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
   // `{}` is valid because every field of a section carries a decoding default.
   Schema.Struct(fields).pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never)))
+
 const list = <S extends Schema.Constraint>(item: S) =>
   Schema.Array(item).pipe(Schema.withDecodingDefaultKey(Effect.succeed([] as never)))
+
 const optional = Schema.optionalKey
 
 const Strings = Schema.Array(Schema.String)
+
 const StringMap = Schema.Record(Schema.String, Schema.String)
+
 /** Credential weight (internal/credentialweight): any integer, but at most 1,000,000. */
 const Weight = Schema.Int.check(Schema.isLessThanOrEqualTo(1_000_000))
 
@@ -39,6 +46,7 @@ export const RequestScopedErrorRule = Schema.Struct({
   /** `stop`, `stop-and-cooldown`, `continue` or `continue-and-cooldown`. */
   action: optional(Schema.String)
 })
+
 export type RequestScopedErrorRule = typeof RequestScopedErrorRule.Type
 
 export const ThinkingSupport = Schema.Struct({
@@ -48,6 +56,7 @@ export const ThinkingSupport = Schema.Struct({
   "dynamic-allowed": optional(Schema.Boolean),
   levels: optional(Strings)
 })
+
 export type ThinkingSupport = typeof ThinkingSupport.Type
 
 /** Model entry of an API-key group (the union of the per-provider Go model structs). */
@@ -69,6 +78,7 @@ export const ModelEntry = Schema.Struct({
   "output-modalities": optional(Strings),
   "use-max-completion-tokens": optional(Schema.Boolean)
 })
+
 export type ModelEntry = typeof ModelEntry.Type
 
 export const CloakConfig = Schema.Struct({
@@ -77,6 +87,7 @@ export const CloakConfig = Schema.Struct({
   "sensitive-words": optional(Strings),
   "cache-user-id": optional(Schema.Boolean)
 })
+
 export type CloakConfig = typeof CloakConfig.Type
 
 /** Settings shared by a group and (as overrides) by its keys. A missing key inherits the group value. */
@@ -109,6 +120,7 @@ export const ApiKeyEntry = Schema.Struct({
   /** Vertex. */
   interactions: optional(Schema.Boolean)
 })
+
 export type ApiKeyEntry = typeof ApiKeyEntry.Type
 
 /** `api-keys.<provider>[]` group: one endpoint, shared settings and a list of keys. */
@@ -118,6 +130,7 @@ export const ApiKeyGroup = Schema.Struct({
   ...sharedKeyFields,
   keys: Schema.Array(ApiKeyEntry)
 })
+
 export type ApiKeyGroup = typeof ApiKeyGroup.Type
 
 export const OpenAICompatKey = Schema.Struct({
@@ -141,6 +154,7 @@ export const OpenAICompatGroup = Schema.Struct({
   "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule)),
   keys: Schema.Array(OpenAICompatKey)
 })
+
 export type OpenAICompatGroup = typeof OpenAICompatGroup.Type
 
 export const OAuthModelAlias = Schema.Struct({
@@ -150,6 +164,7 @@ export const OAuthModelAlias = Schema.Struct({
   "display-name": optional(Schema.String),
   "force-mapping": optional(Schema.Boolean)
 })
+
 export type OAuthModelAlias = typeof OAuthModelAlias.Type
 
 export const OAuthModelSetting = Schema.Struct({
@@ -157,12 +172,14 @@ export const OAuthModelSetting = Schema.Struct({
   alias: optional(Schema.String),
   "max-context-length": optional(Schema.Int)
 })
+
 export type OAuthModelSetting = typeof OAuthModelSetting.Type
 
 // --- sections ------------------------------------------------------------------------------------------------------
 
 /** `routing.strategy` (aliases `wrr`, `ff`, ... are normalised before decoding). */
 export const RoutingStrategy = Schema.Literals(["round-robin", "weighted-round-robin", "fill-first"])
+
 export type RoutingStrategy = typeof RoutingStrategy.Type
 
 const routing = section({
@@ -327,7 +344,9 @@ export const Config = Schema.Struct({
   multimedia,
   observability
 })
+
 export type Config = typeof Config.Type
+
 export type ConfigEncoded = typeof Config.Encoded
 
 /** The v8 provider family names that may appear under `api-keys`. */
@@ -341,4 +360,5 @@ export const API_KEY_FAMILIES = [
   "meta",
   "openai-compatibility"
 ] as const
+
 export type ApiKeyFamily = (typeof API_KEY_FAMILIES)[number]

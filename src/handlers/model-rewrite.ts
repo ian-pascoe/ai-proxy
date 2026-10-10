@@ -14,12 +14,14 @@ const MODEL_FIELD_PATHS = ["model", "modelVersion", "response.model", "response.
 /** Rewrites every present model field of one JSON document; `undefined` when nothing changed. */
 const rewriteDocument = (value: Json, target: string): Json | undefined => {
   let changed = false
+
   for (const path of MODEL_FIELD_PATHS) {
     if (exists(value, path)) {
       set(value, path, target)
       changed = true
     }
   }
+
   return changed ? value : undefined
 }
 
@@ -30,8 +32,10 @@ const isObject = (value: Json | undefined): value is Json & object =>
 export const rewriteResponseModel = (payload: string, target: string): string => {
   if (target === "" || payload === "") return payload
   const parsed = tryParseJson(payload)
+
   if (!isObject(parsed)) return payload
   const rewritten = rewriteDocument(parsed, target)
+
   return rewritten === undefined ? payload : JSON.stringify(rewritten)
 }
 
@@ -39,24 +43,33 @@ export const rewriteResponseModel = (payload: string, target: string): string =>
 export const rewriteStreamChunk = (chunk: string, target: string): string => {
   if (target === "" || chunk === "") return chunk
   const trimmed = chunk.trim()
+
   if (trimmed.startsWith("{")) {
     const parsed = tryParseJson(trimmed)
+
     if (isObject(parsed)) {
       const rewritten = rewriteDocument(parsed, target)
+
       return rewritten === undefined ? chunk : JSON.stringify(rewritten)
     }
   }
+
   if (!chunk.includes("data:")) return chunk
+
   return chunk
     .split("\n")
     .map((line) => {
       const prefix = line.startsWith("data: ") ? "data: " : line.startsWith("data:") ? "data:" : ""
+
       if (prefix === "") return line
       const data = line.slice(prefix.length)
+
       if (!data.startsWith("{")) return line
       const parsed = tryParseJson(data)
+
       if (!isObject(parsed)) return line
       const rewritten = rewriteDocument(parsed, target)
+
       return rewritten === undefined ? line : `${prefix}${JSON.stringify(rewritten)}`
     })
     .join("\n")

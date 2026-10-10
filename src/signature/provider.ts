@@ -22,12 +22,14 @@ import {
 } from "./claude.ts"
 
 export type SignatureProvider = "unknown" | "claude" | "gemini" | "gemini_bypass" | "gpt" | "kimi" | "grok" | "swe"
+
 export type SignatureBlockKind =
   | "unknown"
   | "claude_thinking"
   | "gemini_model_part"
   | "gemini_function_call"
   | "gpt_reasoning"
+
 export type SignatureAction =
   | "preserve"
   | "drop_block"
@@ -49,8 +51,11 @@ export interface SignatureCompatibilityDecision {
 /** `SignatureProviderFromModelName`. */
 export const signatureProviderFromModelName = (modelName: string): SignatureProvider => {
   const lower = modelName.trim().toLowerCase()
+
   if (lower.includes("claude")) return "claude"
+
   if (lower.includes("gemini")) return "gemini"
+
   if (
     lower.includes("gpt") ||
     lower.includes("openai") ||
@@ -61,11 +66,15 @@ export const signatureProviderFromModelName = (modelName: string): SignatureProv
   ) {
     return "gpt"
   }
+
   if (lower.includes("kimi") || lower.includes("moonshot") || lower.startsWith("k2") || lower.startsWith("k3")) {
     return "kimi"
   }
+
   if (lower.includes("grok")) return "grok"
+
   if (lower.includes("swe-")) return "swe"
+
   return "unknown"
 }
 
@@ -102,8 +111,10 @@ export const splitSignatureProviderPrefix = (
 ): { readonly provider: SignatureProvider; readonly unprefixed: string } | undefined => {
   const trimmed = raw.trim()
   const index = trimmed.indexOf("#")
+
   if (index < 0) return undefined
   const provider = providerFromCachePrefix(trimmed.slice(0, index))
+
   return provider === "unknown" ? undefined : { provider, unprefixed: trimmed.slice(index + 1).trim() }
 }
 
@@ -112,21 +123,31 @@ export const signaturePayloadWithoutProviderPrefix = (raw: string): string =>
   splitSignatureProviderPrefix(raw)?.unprefixed ?? raw.trim()
 
 const KIMI_LENGTHS = new Set([12946, 4340])
+
 const KIMI_MIN_ENTROPY_RATIO = 0.85
 
 /** `IsValidKimiThinkingSignature`: size, character class and entropy of an unpadded standard base64 blob. */
 export const isValidKimiThinkingSignature = (raw: string): boolean => {
   const sig = raw.trim()
+
   if (sig === "" || sig !== raw || !KIMI_LENGTHS.has(sig.length)) return false
+
   if (sig.includes("=") || !/^[A-Za-z0-9+/]+$/.test(sig)) return false
+
   if (splitSignatureProviderPrefix(sig) !== undefined) return false
+
   if (selfDescribingFirstChar(sig)) {
     if (sig.startsWith("gAAAA")) return false
+
     if (isValidClaudeCaisSignature(sig)) return false
+
     if (isValidClaudeThinkingSignature(sig, { strict: true })) return false
+
     if (isRecognizedGeminiSignature(sig)) return false
   }
+
   const decoded = decodeBase64Std(sig + "=".repeat((4 - (sig.length % 4)) % 4))
+
   return decoded !== undefined && entropyRatio(decoded) >= KIMI_MIN_ENTROPY_RATIO
 }
 
@@ -139,14 +160,18 @@ const isRecognizedGeminiSignature = (raw: string): boolean =>
 /** `DetectSignatureProviderForBlock`. */
 export const detectSignatureProvider = (raw: string, _blockKind: SignatureBlockKind = "unknown"): SignatureProvider => {
   const sig = raw.trim()
+
   if (sig === "") return "unknown"
   const prefixed = splitSignatureProviderPrefix(sig)
+
   if (prefixed !== undefined) {
     // Validators may strip cache prefixes themselves; a second prefix never lets detection disagree with replay.
     if (prefixed.unprefixed.includes("#")) return "unknown"
+
     switch (prefixed.provider) {
       case "gemini":
         if (isGeminiThoughtSignatureBypass(prefixed.unprefixed)) return "gemini_bypass"
+
         if (isRecognizedGeminiSignature(prefixed.unprefixed)) return "gemini"
         break
       case "claude":
@@ -156,6 +181,7 @@ export const detectSignatureProvider = (raw: string, _blockKind: SignatureBlockK
         ) {
           return "claude"
         }
+
         break
       case "gpt":
         if (isValidGptReasoningSignature(prefixed.unprefixed)) return "gpt"
@@ -164,18 +190,28 @@ export const detectSignatureProvider = (raw: string, _blockKind: SignatureBlockK
         if (prefixed.unprefixed.startsWith("sealed.v1.")) return "swe"
         break
     }
+
     return "unknown"
   }
+
   if (sig.includes("#")) return "unknown"
+
   if (isGeminiThoughtSignatureBypass(sig)) return "gemini_bypass"
+
   if (sig.startsWith("sealed.v1.")) return "swe"
+
   if (selfDescribingFirstChar(sig)) {
     if (isValidGptReasoningSignature(sig)) return "gpt"
+
     if (isValidClaudeCaisSignature(sig)) return "claude"
+
     if (isValidClaudeThinkingSignature(sig, { strict: true })) return "claude"
+
     if (isRecognizedGeminiSignature(sig)) return "gemini"
   }
+
   if (isValidKimiThinkingSignature(sig)) return "kimi"
+
   return "unknown"
 }
 
@@ -196,15 +232,18 @@ const providerMatchesTarget = (target: SignatureProvider, detected: SignaturePro
 /** `normalizeCompatibleSignatureForProvider`: the replayable payload for the target or `""`. */
 const normalizeForProvider = (target: SignatureProvider, raw: string): string => {
   const payload = signaturePayloadWithoutProviderPrefix(raw)
+
   switch (target === "gemini_bypass" ? "gemini" : target) {
     case "claude": {
       if (isValidClaudeCaisSignature(payload)) return payload
+
       try {
         return normalizeClaudeProviderNativeThinkingSignature(payload)
       } catch {
         return ""
       }
     }
+
     case "gemini":
       return isGeminiThoughtSignatureBypass(payload) || isRecognizedGeminiSignature(payload) ? payload : ""
     case "gpt":
@@ -221,14 +260,18 @@ const normalizeForProvider = (target: SignatureProvider, raw: string): string =>
 /** `claudeCompatibleSignatureReason`: why a matching signature is replayable (traceability only). */
 const matchReason = (target: SignatureProvider, raw: string, targetModel: string): string => {
   const generic = "signature provider matches target provider"
+
   if (target !== "claude") return generic
   let info
+
   try {
     info = inspectClaudeCaisSignature(signaturePayloadWithoutProviderPrefix(raw))
   } catch {
     return generic
   }
+
   let reason: string
+
   if (info.modelText !== "") {
     reason = `valid Claude CAIS signature with embedded model ${info.modelText} is compatible with any Claude target`
   } else if (info.envelopeVersion >= 4) {
@@ -236,7 +279,9 @@ const matchReason = (target: SignatureProvider, raw: string, targetModel: string
   } else {
     reason = "valid Claude CAIS signature is compatible with any Claude target"
   }
+
   const model = targetModel.trim()
+
   return model === "" ? reason : `${reason}, including target model ${model}`
 }
 
@@ -265,8 +310,10 @@ export const decideSignatureCompatibility = (
       reason: "Antigravity CAQS wrapper requires Antigravity replay"
     }
   }
+
   if (providerMatchesTarget(target, detected)) {
     const normalized = normalizeForProvider(target, raw)
+
     if (normalized !== "") {
       return {
         ...base,
@@ -278,7 +325,9 @@ export const decideSignatureCompatibility = (
       }
     }
   }
+
   const incompatible = { ...base, compatible: false }
+
   switch (target) {
     case "gemini":
       if (blockKind === "gemini_function_call" || blockKind === "gemini_model_part" || blockKind === "unknown") {
@@ -290,6 +339,7 @@ export const decideSignatureCompatibility = (
           reason: "missing or incompatible signature"
         }
       }
+
       return {
         ...incompatible,
         ...none,
@@ -344,5 +394,6 @@ export const compatibleSignatureForProvider = (
   blockKind: SignatureBlockKind = "unknown"
 ): string | undefined => {
   const decision = decideSignatureCompatibility(targetProvider, raw, blockKind)
+
   return decision.compatible && decision.normalizedSignature !== "" ? decision.normalizedSignature : undefined
 }

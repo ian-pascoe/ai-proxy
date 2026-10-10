@@ -30,18 +30,22 @@ export const D1UsageSink = Layer.succeed(
         // The bindings are per-request services of the invocation, resolved here and never captured by the layer.
         const env = Context.getOrUndefined(context, WorkerEnv)
         const db = env?.USAGE
+
         if (db === undefined) return Effect.void
         // Runs detached from the response (and possibly after it), keeping the invocation's context (loggers).
         const write = Effect.runPromiseWith(context)(writeUsageRecord(db, record))
         const ctx = Context.getOrUndefined(context, WorkerExecutionContext)
+
         if (ctx !== undefined) {
           try {
             ctx.waitUntil(write)
+
             return Effect.void
           } catch {
             // waitUntil is unavailable (invocation already finished): fall through and await the write.
           }
         }
+
         return Effect.promise(() => write)
       })
   })

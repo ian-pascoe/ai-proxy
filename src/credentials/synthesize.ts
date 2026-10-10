@@ -20,6 +20,7 @@ import { DEFAULT_WEIGHT } from "./weight.ts"
 /** Go `FormatSortedHeaders`: sorted `name\0value\0` pairs. */
 export const formatSortedHeaders = (headers: Readonly<Record<string, string>> | undefined): string => {
   const names = Object.keys(headers ?? {}).toSorted()
+
   return names.map((name) => `${name}\0${(headers as Record<string, string>)[name]}\0`).join("")
 }
 
@@ -30,15 +31,18 @@ export class StableIdGenerator {
   next(kind: string, ...parts: ReadonlyArray<string>): { readonly id: string; readonly token: string } {
     const hash = createHash("sha256")
     hash.update(kind)
+
     for (const part of parts) {
       hash.update("\0")
       hash.update(part.trim())
     }
+
     const short = hash.digest("hex").slice(0, 12)
     const key = `${kind}:${short}`
     const index = this.#counters.get(key) ?? 0
     this.#counters.set(key, index + 1)
     const token = index > 0 ? `${short}-${index}` : short
+
     return { id: `${kind}:${token}`, token }
   }
 }
@@ -75,6 +79,7 @@ type Flat = ApiKeyEntry & { readonly "base-url"?: string }
 
 const flatten = (group: ApiKeyGroup, key: ApiKeyEntry): Flat => {
   const merged: Record<string, unknown> = {}
+
   for (const field of [
     "priority",
     "prefix",
@@ -87,9 +92,12 @@ const flatten = (group: ApiKeyGroup, key: ApiKeyEntry): Flat => {
     "request-scoped-errors"
   ] as const) {
     const value = key[field] ?? group[field]
+
     if (value !== undefined) merged[field] = value
   }
+
   const base = group["base-url"]
+
   // Key fields beyond the shared ones (cloak, websockets, ...) come straight from the key.
   return { ...key, ...merged, ...(base === undefined ? {} : { "base-url": base }) } as Flat
 }
@@ -101,20 +109,29 @@ const behaviourMetadata = (fields: {
   readonly rules: ReadonlyArray<RequestScopedErrorRule> | undefined
 }): JsonObject => {
   const metadata: JsonObject = {}
+
   if (fields.disableCooling !== undefined) metadata.disable_cooling = fields.disableCooling
+
   if (fields.requestRetry !== undefined && fields.requestRetry >= 0) metadata.request_retry = fields.requestRetry
+
   if (fields.rules !== undefined && fields.rules.length > 0) {
     // Go omits empty lists (`omitempty`); the decoded config carries them as empty arrays.
     metadata.request_scoped_errors = fields.rules.map((rule) => {
       const out: JsonObject = {}
+
       if (rule.status !== undefined) out.status = rule.status
+
       if (rule.match !== undefined && rule.match.length > 0) out.match = [...rule.match]
+
       if (rule["match-regexr"] !== undefined && rule["match-regexr"].length > 0)
         out["match-regexr"] = [...rule["match-regexr"]]
+
       if (rule.action !== undefined) out.action = rule.action
+
       return out
     })
   }
+
   return metadata
 }
 
@@ -149,11 +166,13 @@ const synthesizeKey = (
   const spec = SPECS[family]
   const key = entry["api-key"].trim()
   const baseUrl = (entry["base-url"] ?? "").trim()
+
   // Vertex entries are kept even without a key (the base URL may carry the endpoint).
   if (family !== "vertex" && key === "" && baseUrl === "") return undefined
   const prefix = normalizeModelPrefix(entry.prefix)
   const proxyUrl = (entry["proxy-url"] ?? "").trim()
   const headers = normalizeHeaders(entry.headers) ?? {}
+
   const { id, token } =
     family === "vertex"
       ? ids.next(spec.idKind, key, baseUrl, proxyUrl)
@@ -163,30 +182,42 @@ const synthesizeKey = (
     source: `config:${spec.sourceName}[${token}]`,
     config_index: String(index)
   }
+
   if (key !== "") attributes.api_key = key
   const priority = entry.priority ?? 0
+
   if (priority !== 0) attributes.priority = String(priority)
   const weight = weightOf(entry.weight)
+
   if (weight.attribute !== undefined) attributes.weight = weight.attribute
+
   if (family === "vertex") attributes.provider_key = "vertex"
+
   if (baseUrl !== "" || family === "vertex") attributes.base_url = baseUrl
+
   if (family === "claude") {
     if (entry["rebuild-mid-system-message"] === true) attributes.rebuild_mid_system_message = "true"
     const profile = (entry["fingerprint-profile"] ?? "").trim().toLowerCase()
+
     if (profile !== "") attributes.fingerprint_profile = profile
   }
+
   if (family === "codex" || family === "xai" || family === "meta") {
     if (entry.websockets === true) attributes.websockets = "true"
   }
+
   if (family === "codex") {
     if (entry["alpha-search"] === true) attributes.codex_alpha_search = "true"
+
     if (entry["disable-codex-cloaking"] !== undefined) {
       attributes.codex_disable_cloaking = String(entry["disable-codex-cloaking"])
     }
   }
+
   if (family === "vertex" && entry.interactions === true) attributes.interactions = "true"
 
   const excludedModels = normalizeExclusions(entry["excluded-models"])
+
   if (excludedModels.length > 0) attributes.excluded_models = excludedModels.join(",")
   attributes.auth_kind = "apikey"
 
@@ -196,6 +227,7 @@ const synthesizeKey = (
     // Vertex entries carry no request-scoped-errors in Go.
     rules: family === "vertex" ? undefined : entry["request-scoped-errors"]
   })
+
   return finish(
     { id, provider: spec.provider, label: spec.label, attributes, metadata },
     {
@@ -227,6 +259,7 @@ const synthesizeCompat = (
   const headers = normalizeHeaders(group.headers) ?? {}
   const priority = group.priority ?? 0
   const models = group.models !== undefined && group.models.length > 0 ? group.models : undefined
+
   const metadata = (): JsonObject =>
     behaviourMetadata({
       disableCooling: group["disable-cooling"],
@@ -245,12 +278,16 @@ const synthesizeCompat = (
       provider_key: providerKey,
       config_index: String(index)
     }
+
     if (priority !== 0) attributes.priority = String(priority)
     const weight = weightOf(keyEntry?.weight)
+
     if (keyEntry !== undefined && weight.attribute !== undefined) attributes.weight = weight.attribute
     const key = keyEntry?.["api-key"].trim() ?? ""
+
     if (key !== "") attributes.api_key = key
     const proxyUrl = (keyEntry?.["proxy-url"] ?? "").trim()
+
     return finish(
       { id: generated.id, provider: providerKey, label: group.name, attributes, metadata: metadata() },
       {
@@ -268,6 +305,7 @@ const synthesizeCompat = (
   }
 
   if (group.keys.length === 0) return [build(undefined, ids.next(idKind, baseUrl))]
+
   return group.keys.map((keyEntry) =>
     build(keyEntry, ids.next(idKind, keyEntry["api-key"].trim(), baseUrl, (keyEntry["proxy-url"] ?? "").trim()))
   )
@@ -278,24 +316,31 @@ export const synthesizeConfigCredentials = (config: Pick<Config, "api-keys">, no
   const ids = new StableIdGenerator()
   const out: Credential[] = []
   const keys = config["api-keys"]
+
   for (const family of FAMILY_ORDER) {
     let index = 0
+
     for (const group of keys[family]) {
       for (const key of group.keys) {
         const credential = synthesizeKey(family, flatten(group, key), index, ids, now)
+
         if (credential !== undefined) out.push(credential)
         index += 1
       }
     }
   }
+
   keys["openai-compatibility"].forEach((group, index) => out.push(...synthesizeCompat(group, index, ids, now)))
   let vertexIndex = 0
+
   for (const group of keys.vertex) {
     for (const key of group.keys) {
       const credential = synthesizeKey("vertex", flatten(group, key), vertexIndex, ids, now)
+
       if (credential !== undefined) out.push(credential)
       vertexIndex += 1
     }
   }
+
   return out
 }

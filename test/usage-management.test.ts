@@ -5,11 +5,15 @@ import { controlPlane, makeHarness, resetControlPlane, token } from "./support/m
 import { resetUsageDb, sampleRecord } from "./support/usage.ts"
 
 const harness = makeHarness()
+
 afterAll(harness.dispose)
+
 const { json } = harness
+
 const BASE = "/v8/management/observability/usage"
 
 let db: D1Database
+
 beforeEach(async () => {
   db = await resetUsageDb()
   await resetControlPlane()
@@ -60,6 +64,7 @@ describe("GET /queue", () => {
 
   it("answers 503 without the D1 binding", async () => {
     const detached = makeHarness(undefined, { USAGE: undefined } as unknown as Partial<Env>)
+
     try {
       expect(await detached.json(`${BASE}/queue`)).toMatchObject({
         status: 503,
@@ -123,8 +128,10 @@ describe("GET /api-keys", () => {
     const stub = controlPlane()
     await stub.putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-secret-key-1234 }]\n")
     const request = { providers: ["claude"], model: "claude-sonnet-4-5" }
+
     for (const success of [true, true, false]) {
       const picked = await stub.pick(request)
+
       if (!picked.ok) throw new Error("pick failed")
       await stub.report(
         picked.lease,
@@ -133,12 +140,15 @@ describe("GET /api-keys", () => {
           : { success: false, httpStatus: 500, error: { message: "boom", retryable: true, httpStatus: 500 } }
       )
     }
+
     const response = await json(`${BASE}/api-keys`)
     expect(response.status).toBe(200)
+
     const body = response.body as Record<
       string,
       Record<string, { success: number; failed: number; recent_requests: unknown[] }>
     >
+
     expect(Object.keys(body)).toEqual(["claude"])
     const entries = Object.entries(body["claude"] ?? {})
     expect(entries).toHaveLength(1)

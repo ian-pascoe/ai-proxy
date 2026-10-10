@@ -18,13 +18,17 @@ export const XAI_FREE_USAGE_COOLDOWN_MS = 24 * 60 * 60 * 1000
 /** `isXAIBadCredentialsBody`. */
 export const isBadCredentialsBody = (body: string): boolean => {
   const parsed = tryParseJson(body)
+
   for (const path of ["code", "error.code", "body.error.code"]) {
     if (asString(get(parsed, path)).toLowerCase().includes("bad-credentials")) return true
   }
+
   for (const path of ["error", "error.message", "message", "body.error", "body.error.message"]) {
     if (asString(get(parsed, path)).toLowerCase().includes("access token could not be validated")) return true
   }
+
   const raw = body.toLowerCase()
+
   return raw.includes("bad-credentials") || raw.includes("access token could not be validated")
 }
 
@@ -35,17 +39,23 @@ export const xaiStatusError = (
   headers?: Readonly<Record<string, string>>
 ): ExecutionError => {
   const extra = headers === undefined ? {} : { headers: { ...headers } }
+
   if (body === "") return new ExecutionError({ status, message: body, ...extra })
+
   if (status === 403 && isBadCredentialsBody(body)) return new ExecutionError({ status: 401, message: body, ...extra })
+
   if (status !== 429) return new ExecutionError({ status, message: body, ...extra })
   const parsed = tryParseJson(body)
   const code = asString(get(parsed, "code")).toLowerCase()
   let message = asString(get(parsed, "error")).toLowerCase()
+
   if (message === "") message = body.toLowerCase()
+
   const exhausted =
     code.includes("free-usage-exhausted") ||
     message.includes("free-usage-exhausted") ||
     message.includes("included free usage")
+
   return new ExecutionError({
     status,
     message: body,
@@ -71,13 +81,16 @@ const SPEECH_MODEL_UNAVAILABLE = [
 
 const mentionsUnavailableModel = (text: string): boolean => {
   const lower = text.toLowerCase()
+
   return SPEECH_MODEL_UNAVAILABLE.some((pattern) => lower.includes(pattern))
 }
 
 /** `xaiSpeechModelUnavailable`: the body says the speech model itself is missing or unsupported. */
 export const speechModelUnavailable = (body: string): boolean => {
   const parsed: Json | undefined = tryParseJson(body)
+
   if (parsed === undefined) return mentionsUnavailableModel(body)
+
   return ["code", "error.code", "type", "error.type", "error", "error.message", "message", "detail"].some((path) =>
     mentionsUnavailableModel(asString(get(parsed, path)))
   )
@@ -90,6 +103,8 @@ export const xaiSpeechStatusError = (
   headers?: Readonly<Record<string, string>>
 ): ExecutionError => {
   const error = xaiStatusError(status, body, headers)
+
   if (error.status === 404 && !speechModelUnavailable(body)) return withErrorFields(error, { requestScoped: true })
+
   return error
 }

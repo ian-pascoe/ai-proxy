@@ -12,8 +12,11 @@ export const formatDurationSeconds = (seconds: number): string => {
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const rest = total % 60
+
   if (hours > 0) return `${hours}h${minutes}m${rest}s`
+
   if (minutes > 0) return `${minutes}m${rest}s`
+
   return `${rest}s`
 }
 
@@ -40,6 +43,7 @@ export const authUnavailable = (earliest: number, now: number): PickFailure => {
       retryAfterSeconds: Math.ceil((earliest - now) / 1000)
     }
   }
+
   return { code: "auth_unavailable", message: "no auth available", retryable: false }
 }
 
@@ -49,7 +53,9 @@ export const modelCooldown = (model: string, provider: string, resetInMs: number
   const resetSeconds = Math.ceil(resetMs / 1000)
   const display = resetMs > 0 && resetMs < 1000 ? 1 : Math.round(resetMs / 1000)
   let message = `All credentials for model ${model === "" ? "requested model" : model} are cooling down`
+
   if (provider !== "") message += ` via provider ${provider}`
+
   const error: Record<string, unknown> = {
     code: "model_cooldown",
     message,
@@ -57,7 +63,9 @@ export const modelCooldown = (model: string, provider: string, resetInMs: number
     reset_time: formatDurationSeconds(display),
     reset_seconds: resetSeconds
   }
+
   if (provider !== "") error.provider = provider
+
   return {
     code: "model_cooldown",
     message,

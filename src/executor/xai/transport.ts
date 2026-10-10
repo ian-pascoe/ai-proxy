@@ -33,19 +33,25 @@ export interface UpstreamRequest {
 export const sendUpstream = Effect.fnUntraced(function* (context: ExecutionContext, request: UpstreamRequest) {
   const client = yield* HttpClient.HttpClient
   const base = request.method === "GET" ? HttpClientRequest.get(request.url) : HttpClientRequest.post(request.url)
+
   const httpRequest = (
     request.body === undefined ? base : HttpClientRequest.bodyText(base, request.body, "application/json")
   ).pipe(HttpClientRequest.setHeaders(request.headers))
+
   const response: HttpClientResponse.HttpClientResponse = yield* client
     .execute(httpRequest)
     .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
   if (request.ttft === "token-event") context.usage.recordFirstPacket(yield* Clock.currentTimeMillis)
   else context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
   if (response.status < 200 || response.status >= 300) {
     const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
     const error = request.classify(response.status, text, headersRecord(new Headers(response.headers)))
     context.usage.fail(error.status, error.message)
+
     return yield* error
   }
+
   return response
 })

@@ -89,7 +89,9 @@ export const DEVIN_PAYLOAD_FIELDS: ReadonlyMap<number, PayloadField> = fields([
 
 const toBase64 = (data: Uint8Array): string => {
   let binary = ""
+
   for (const byte of data) binary += String.fromCharCode(byte)
+
   return btoa(binary)
 }
 
@@ -103,21 +105,27 @@ const fromBase64 = (text: string): Uint8Array => {
 
 const sortedObject = (entries: ReadonlyMap<string, Json>): JsonObject => {
   const out: JsonObject = {}
+
   for (const key of [...entries.keys()].toSorted()) out[key] = entries.get(key) as Json
+
   return out
 }
 
 const decode = (wire: Uint8Array, schema: ReadonlyMap<number, PayloadField>): JsonObject => {
   const values = new Map<string, Json>()
+
   for (const field of readFields(wire)) {
     const known = schema.get(field.num)
+
     if (known === undefined) continue
     let value: Json
+
     if (field.wire === WireType.Bytes) {
       if (known.children !== undefined) value = decode(field.bytes, known.children)
       else if (known.binary === true) value = toBase64(field.bytes)
       else {
         const text = fieldText(field)
+
         if (known.jsonValue === true) {
           try {
             value = JSON.parse(text) as Json
@@ -135,14 +143,17 @@ const decode = (wire: Uint8Array, schema: ReadonlyMap<number, PayloadField>): Js
     } else {
       continue
     }
+
     if (known.repeated === true) {
       const existing = values.get(known.name)
+
       if (isJsonArray(existing)) existing.push(value)
       else values.set(known.name, [value])
     } else {
       values.set(known.name, value)
     }
   }
+
   return sortedObject(values)
 }
 
@@ -151,10 +162,13 @@ const textOf = (item: Json): string => (typeof item === "string" ? item : item =
 const encode = (writer: ProtoWriter, body: Json | undefined, schema: ReadonlyMap<number, PayloadField>): void => {
   for (let num = 1; num <= 21; num++) {
     const field = schema.get(num)
+
     if (field === undefined) continue
     const value = get(body, field.name)
+
     if (value === undefined || value === null) continue
     const items = field.repeated === true ? (isJsonArray(value) ? value : []) : [value]
+
     for (const item of items) {
       switch (field.kind) {
         case WireType.Bytes: {
@@ -169,13 +183,16 @@ const encode = (writer: ProtoWriter, body: Json | undefined, schema: ReadonlyMap
           } else {
             writer.string(num, textOf(item))
           }
+
           break
         }
+
         case WireType.Varint: {
           const numeric = typeof item === "number" ? item : asBool(item) ? 1 : Number(item)
           writer.varint(num, Number.isFinite(numeric) && numeric >= 0 ? Math.trunc(numeric) : 0)
           break
         }
+
         case WireType.Fixed64:
           writer.double(num, Number(item))
       }
@@ -196,11 +213,14 @@ export const finalizeDevinPayload = (
 ): { readonly wire: Uint8Array; readonly view: Json } => {
   const view = devinPayloadView(wire)
   const configured = finalize(cloneJson(view) as JsonObject)
+
   if (jsonEquals(configured, view)) return { wire, view: configured }
   const writer = new ProtoWriter()
+
   // Credentials, device metadata, thread ordinals and protocol flags stay opaque.
   for (const field of readFields(wire)) if (!DEVIN_PAYLOAD_FIELDS.has(field.num)) writer.raw(field.encoded)
   encode(writer, isJsonObject(configured) ? configured : {}, DEVIN_PAYLOAD_FIELDS)
+
   return { wire: writer.toBytes(), view: configured }
 }
 
@@ -222,24 +242,33 @@ const DEFAULTS_SOURCES: ReadonlyArray<readonly [target: string, sources: Readonl
  */
 export const devinPayloadDefaultsSource = (native: Json, interactions: Json): JsonObject => {
   const out: JsonObject = {}
+
   for (const [target, sources] of DEFAULTS_SOURCES) {
     let value: Json | undefined
+
     for (const source of sources) {
       value = get(interactions, source)
+
       if (value !== undefined) break
     }
+
     if (value === undefined) continue
+
     if (target === "prompts" || target === "tools") value = get(native, target)
+
     if (value !== undefined) setPath(out, target, cloneJson(value))
   }
+
   return out
 }
 
 const setPath = (root: JsonObject, path: string, value: Json): void => {
   const parts = path.split(".")
   let node = root
+
   for (const part of parts.slice(0, -1)) {
     const next = node[part]
+
     if (isJsonObject(next)) node = next
     else {
       const created: JsonObject = {}
@@ -247,5 +276,6 @@ const setPath = (root: JsonObject, path: string, value: Json): void => {
       node = created
     }
   }
+
   node[parts[parts.length - 1] as string] = value
 }

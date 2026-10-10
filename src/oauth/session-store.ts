@@ -12,8 +12,10 @@ import type { OAuthProvider } from "./names.ts"
 
 /** `oauthSessionTTL`: must cover the 30 minute xAI device flow. */
 export const SESSION_TTL_MS = 30 * 60_000
+
 /** `oauthCompletedSessionTTL`. */
 export const COMPLETED_TTL_MS = 60_000
+
 /** A poll or exchange in flight blocks others for at most this long (guards against an interrupted request). */
 export const BUSY_LEASE_MS = 2 * 60_000
 
@@ -100,6 +102,7 @@ export class SqliteSessionTable implements SessionTable {
   get(state: string): OAuthSession | undefined {
     const rows = this.#sql.exec<SessionRow>("SELECT * FROM oauth_sessions WHERE state = ?", state).toArray()
     const row = rows[0]
+
     return row === undefined
       ? undefined
       : {
@@ -184,12 +187,14 @@ export class OAuthSessions {
   /** `Get`: expired sessions are gone. */
   get(state: string, now: number): OAuthSession | undefined {
     this.#table.purge(now)
+
     return this.#table.get(state)
   }
 
   /** `IsPending`: exists, not completed, no error; optionally for one provider. */
   isPending(state: string, now: number, provider?: OAuthProvider): boolean {
     const session = this.get(state, now)
+
     return (
       session !== undefined &&
       !session.completed &&
@@ -201,6 +206,7 @@ export class OAuthSessions {
   /** `SetError`: ignored for unknown or completed sessions; refreshes the TTL; drops the flow secrets. */
   setError(state: string, message: string, now: number): void {
     const session = this.get(state, now)
+
     if (session === undefined || session.completed) return
     this.#table.put({
       ...session,
@@ -214,6 +220,7 @@ export class OAuthSessions {
   /** `Complete`: ignored for unknown or already completed sessions. */
   complete(state: string, now: number): void {
     const session = this.get(state, now)
+
     if (session === undefined || session.completed) return
     this.#table.put({
       ...session,
@@ -228,22 +235,27 @@ export class OAuthSessions {
   /** `Cancel`: removes a pending session; completed and failed ones are left alone. */
   cancel(state: string, now: number): boolean {
     const session = this.get(state, now)
+
     if (session === undefined || session.completed || session.status !== "") return false
     this.#table.delete(state)
+
     return true
   }
 
   /** Takes the busy lease (one poll/exchange at a time); `false` when another one is in flight. */
   acquire(state: string, now: number): boolean {
     const session = this.get(state, now)
+
     if (session === undefined || session.busyUntil > now) return false
     this.#table.put({ ...session, busyUntil: now + BUSY_LEASE_MS })
+
     return true
   }
 
   /** Releases the lease and records the next allowed poll time / interval (no-op once the session ended). */
   release(state: string, now: number, poll?: { readonly nextPollAt: number; readonly intervalMs: number }): void {
     const session = this.get(state, now)
+
     if (session === undefined) return
     this.#table.put({ ...session, busyUntil: 0, ...(poll === undefined ? {} : poll) })
   }

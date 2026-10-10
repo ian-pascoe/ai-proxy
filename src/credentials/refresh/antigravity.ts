@@ -14,7 +14,9 @@ import { parseJsonObject, rfc3339, send, seconds, statusFailure, str } from "./h
 import type { RefreshContext, RefreshProtocolEffect } from "./types.ts"
 
 export const ANTIGRAVITY_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
 export const ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+
 /** Public installed-app secret (embedded in the Go source and in the upstream client). */
 export const ANTIGRAVITY_CLIENT_SECRET = "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"
 
@@ -22,6 +24,7 @@ export const refreshAntigravity = (context: RefreshContext): RefreshProtocolEffe
   Effect.gen(function* () {
     const metadata: JsonObject = { ...context.metadata }
     const refreshToken = str(metadata.refresh_token)
+
     if (refreshToken === "") return yield* Effect.fail(refreshError({ message: "missing refresh token", status: 401 }))
 
     const request = HttpClientRequest.post(ANTIGRAVITY_TOKEN_URL).pipe(
@@ -34,20 +37,26 @@ export const refreshAntigravity = (context: RefreshContext): RefreshProtocolEffe
         refresh_token: refreshToken
       })
     )
+
     const reply = yield* send(request)
+
     if (reply.status < 200 || reply.status >= 300) return yield* Effect.fail(statusFailure("token refresh", reply))
     const body = parseJsonObject(reply.text)
     const accessToken = str(body?.access_token)
+
     if (body === undefined || accessToken === "") {
       return yield* Effect.fail(refreshError({ message: "token refresh response has no access_token" }))
     }
+
     const expiresIn = Math.trunc(seconds(body.expires_in))
     metadata.access_token = accessToken
     const rotated = str(body.refresh_token)
+
     if (rotated !== "") metadata.refresh_token = rotated
     metadata.expires_in = expiresIn
     metadata.timestamp = context.now
     metadata.expired = rfc3339(context.now + expiresIn * 1000)
     metadata.type = "antigravity"
+
     return metadata
   })

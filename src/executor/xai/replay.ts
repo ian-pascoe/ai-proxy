@@ -27,7 +27,9 @@ import { alignToolCallIds, comparableCallIds, insertIndexFor, replaySessionKey, 
 import { parseSuffix } from "../suffix.ts"
 
 const CACHE_TTL_MS = 60 * 60 * 1000
+
 const CACHE_MAX_MODELS_PER_SESSION = 64
+
 const STORE_NAME = "xai-replay"
 
 export interface XaiReplayStore {
@@ -49,11 +51,14 @@ export interface XaiReplayStore {
 const normalizeMessage = (item: Json): Json | undefined => {
   if (asString(get(item, "role")).trim().toLowerCase() !== "assistant") return undefined
   const content = get(item, "content")
+
   if (!isJsonArray(content) || content.length === 0) return undefined
   const parts: Json[] = []
+
   for (const part of content) {
     const text = get(part, "text")
     const refusal = get(part, "refusal")
+
     switch (asString(get(part, "type")).trim()) {
       case "output_text":
         if (typeof text === "string") parts.push({ type: "output_text", text })
@@ -63,6 +68,7 @@ const normalizeMessage = (item: Json): Json | undefined => {
         break
     }
   }
+
   return parts.length === 0 ? undefined : { type: "message", role: "assistant", content: parts }
 }
 
@@ -71,28 +77,37 @@ const normalizeItem = (item: Json): Json | undefined => {
   switch (asString(get(item, "type")).trim()) {
     case "reasoning": {
       const encrypted = get(item, "encrypted_content")
+
       if (typeof encrypted !== "string" || encrypted !== encrypted.trim() || !isValidGrokEncryptedContent(encrypted)) {
         return undefined
       }
+
       return { type: "reasoning", summary: [], content: null, encrypted_content: encrypted }
     }
+
     case "message":
       return normalizeMessage(item)
     case "function_call": {
       const callId = asString(get(item, "call_id")).trim()
       const name = asString(get(item, "name")).trim()
       const args = get(item, "arguments")
+
       if (callId === "" || name === "" || typeof args !== "string") return undefined
+
       return { type: "function_call", call_id: callId, name, arguments: args }
     }
+
     case "custom_tool_call": {
       const callId = asString(get(item, "call_id")).trim()
       const name = asString(get(item, "name")).trim()
       const input = get(item, "input")
+
       if (callId === "" || name === "" || input === undefined) return undefined
       const status = asString(get(item, "status")).trim()
+
       return { type: "custom_tool_call", status: status !== "" ? status : "completed", call_id: callId, name, input }
     }
+
     default:
       return undefined
   }
@@ -101,9 +116,11 @@ const normalizeItem = (item: Json): Json | undefined => {
 /** `normalizeXAIReasoningReplayItems`: undefined when nothing anchors a replay (no reasoning or tool call). */
 export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undefined => {
   const normalized = items.map(normalizeItem).filter((item): item is Json => item !== undefined)
+
   const anchored = normalized.some((item) =>
     ["reasoning", "function_call", "custom_tool_call"].includes(asString(get(item, "type")))
   )
+
   return anchored ? normalized : undefined
 }
 
@@ -111,8 +128,10 @@ const addressOf = (sessionKey: string): SessionAddress => ({ store: STORE_NAME, 
 
 const parseItems = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined
+
   try {
     const parsed: unknown = JSON.parse(text)
+
     return Array.isArray(parsed) ? (parsed as Json[]) : undefined
   } catch {
     return undefined
@@ -127,20 +146,25 @@ export const makeSessionStateXaiReplayStore = (backend: BackendResolver = resolv
       undefined,
       Effect.gen(function* () {
         const state = yield* backend
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           { op: "get", key: modelName.trim(), extendTtlMs: CACHE_TTL_MS }
         ])
+
         return result?.status === "ok" ? parseItems(result.value) : undefined
       })
     ),
   store: (modelName, sessionKey, items) => {
     const normalized = normalizeReplayItems(items)
+
     if (normalized === undefined) return Effect.succeed("none" as const)
+
     return bestEffort(
       "xai replay store",
       "none" as const,
       Effect.gen(function* () {
         const state = yield* backend
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           {
             op: "put",
@@ -150,6 +174,7 @@ export const makeSessionStateXaiReplayStore = (backend: BackendResolver = resolv
             maxEntries: CACHE_MAX_MODELS_PER_SESSION
           }
         ])
+
         return result?.status === "ok" ? ("stored" as const) : ("none" as const)
       })
     )
@@ -192,10 +217,14 @@ export const replayScopeValid = (scope: XaiReplayScope): boolean =>
  */
 export const isolateSessionKey = (sessionKey: string, callerScope: string): string => {
   const key = sessionKey.trim()
+
   if (key === "") return ""
+
   if (key.startsWith("execution:")) return key
+
   if (callerScope.trim() === "") return ""
   const digest = createHash("sha256").update(callerScope.trim()).digest("hex").slice(0, 16)
+
   return `caller:${digest}:${key}`
 }
 
@@ -212,7 +241,9 @@ export interface XaiReplayScopeInput {
 /** `xaiReasoningReplayScopeFromRequest`: only Claude and Responses clients use the cache. */
 export const replayScopeFromRequest = (input: XaiReplayScopeInput): XaiReplayScope => {
   const from = input.from.trim().toLowerCase()
+
   if (from !== "claude" && from !== "openai-response") return NO_REPLAY_SCOPE
+
   const sessionKey = replaySessionKey({
     from: input.from,
     model: input.model,
@@ -221,6 +252,7 @@ export const replayScopeFromRequest = (input: XaiReplayScopeInput): XaiReplaySco
     callerScope: input.callerScope,
     body: input.body
   })
+
   return { modelName: parseSuffix(input.model).modelName, sessionKey: isolateSessionKey(sessionKey, input.callerScope) }
 }
 
@@ -236,28 +268,35 @@ interface MessagePart {
 /** `xaiAssistantMessageParts`. */
 const assistantMessageParts = (content: Json | undefined): MessagePart[] | undefined => {
   if (typeof content === "string") return [{ type: "output_text", value: content }]
+
   if (!isJsonArray(content)) return undefined
   const parts: MessagePart[] = []
+
   for (const part of content) {
     const type = asString(get(part, "type")).trim()
+
     if (type === "output_text") {
       const text = get(part, "text")
+
       if (typeof text !== "string") return undefined
       parts.push({ type, value: text })
     } else if (type === "refusal") {
       const refusal = get(part, "refusal")
+
       if (typeof refusal !== "string") return undefined
       parts.push({ type, value: refusal })
     } else {
       return undefined
     }
   }
+
   return parts.length > 0 ? parts : undefined
 }
 
 const assistantContentEqual = (left: Json | undefined, right: Json | undefined): boolean => {
   const a = assistantMessageParts(left)
   const b = assistantMessageParts(right)
+
   return (
     a !== undefined &&
     b !== undefined &&
@@ -270,78 +309,102 @@ const lastAssistantMessage = (inputItems: readonly Json[]): Json | undefined => 
   for (let index = inputItems.length - 1; index >= 0; index--) {
     const item = inputItems[index] as Json
     const type = asString(get(item, "type")).trim()
+
     if ((type !== "" && type !== "message") || asString(get(item, "role")).trim().toLowerCase() !== "assistant")
       continue
+
     return item
   }
+
   return undefined
 }
 
 /** `filterXAIReasoningReplayItemsForInput`. */
 export const filterReplayItemsForInput = (body: Json, items: ReadonlyArray<Json>): Json[] => {
   const input = get(body, "input")
+
   if (!isJsonArray(input)) return []
   const lastAssistant = lastAssistantMessage(input)
+
   const cachedAssistant = items.find(
     (item) =>
       asString(get(item, "type")).trim() === "message" &&
       asString(get(item, "role")).trim().toLowerCase() === "assistant"
   )
+
   const messageMatches =
     lastAssistant !== undefined &&
     cachedAssistant !== undefined &&
     assistantContentEqual(get(lastAssistant, "content"), get(cachedAssistant, "content"))
+
   // The client's last assistant message differs from the cached one: the history diverged, replay nothing.
   if (lastAssistant !== undefined && cachedAssistant !== undefined && !messageMatches) return []
   const existingCalls = new Set<string>()
   const existingOutputs = new Set<string>()
   const inputReasoning = new Set<string>()
+
   for (const item of input) {
     const type = asString(get(item, "type")).trim()
+
     if (type === "reasoning") {
       const encrypted = get(item, "encrypted_content")
+
       if (typeof encrypted === "string") inputReasoning.add(encrypted)
     }
+
     if (type === "function_call_output" || type === "custom_tool_call_output") {
       for (const id of comparableCallIds(asString(get(item, "call_id")))) existingOutputs.add(id)
     }
+
     for (const key of toolCallKeys(item)) existingCalls.add(key)
   }
+
   const filtered: Json[] = []
+
   for (const item of items) {
     switch (asString(get(item, "type")).trim()) {
       case "reasoning": {
         const encrypted = asString(get(item, "encrypted_content"))
+
         if (encrypted !== "" && inputReasoning.has(encrypted)) continue
         break
       }
+
       case "message":
         if (messageMatches) continue
         break
       case "function_call":
       case "custom_tool_call": {
         const keys = toolCallKeys(item)
+
         if (keys.length === 0 || keys.some((key) => existingCalls.has(key))) continue
+
         if (!comparableCallIds(asString(get(item, "call_id"))).some((id) => existingOutputs.has(id))) continue
+
         for (const key of keys) existingCalls.add(key)
         break
       }
+
       default:
         continue
     }
+
     filtered.push(item)
   }
+
   return filtered
 }
 
 /** `insertCodexReasoningReplayItems`: one block at the insertion point, tool call ids aligned with their outputs. */
 const insertReplayItems = (body: Json, replayItems: ReadonlyArray<Json>): boolean => {
   const input = get(body, "input")
+
   if (!isJsonArray(input) || replayItems.length === 0) return false
   const inputItems = [...input]
   const index = insertIndexFor(inputItems, replayItems)
   const aligned = alignToolCallIds(inputItems, [...replayItems])
   input.splice(index, 0, ...aligned)
+
   return true
 }
 
@@ -350,8 +413,10 @@ export const applyReplayCache = (store: XaiReplayStore, scope: XaiReplayScope, b
   Effect.gen(function* () {
     if (!replayScopeValid(scope)) return
     const items = yield* store.get(scope.modelName, scope.sessionKey)
+
     if (items === undefined) return
     const filtered = filterReplayItemsForInput(body, items)
+
     if (filtered.length > 0) insertReplayItems(body, filtered)
   })
 
@@ -360,11 +425,15 @@ export const cacheReplayFromCompleted = (store: XaiReplayStore, scope: XaiReplay
   Effect.gen(function* () {
     if (!replayScopeValid(scope)) return
     const output = get(completed, "response.output")
+
     if (!isJsonArray(output)) return
+
     const items = output.filter((item) =>
       ["reasoning", "message", "function_call", "custom_tool_call"].includes(asString(get(item, "type")).trim())
     )
+
     const result = yield* store.store(scope.modelName, scope.sessionKey, items)
+
     if (result === "none") yield* store.delete(scope.modelName, scope.sessionKey)
   })
 

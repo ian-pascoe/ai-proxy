@@ -13,6 +13,7 @@ import { prepareDocument } from "./document.ts"
 import { Config, type ConfigEncoded } from "./schema.ts"
 
 const decodeSchema = Schema.decodeUnknownEffect(Config)
+
 const encodeSchema = Schema.encodeSync(Config)
 
 /**
@@ -26,9 +27,11 @@ export const decodeConfig = (raw: unknown): Effect.Effect<Config, ConfigValidati
       catch: (error) =>
         error instanceof ConfigValidationError ? error : new ConfigValidationError({ message: String(error) })
     })
+
     const decoded = yield* decodeSchema(prepared).pipe(
       Effect.mapError((error) => new ConfigValidationError({ message: error.message }))
     )
+
     return normalizeConfig(decoded)
   })
 
@@ -42,6 +45,7 @@ export const parseConfigYaml = (text: string): Effect.Effect<Config, ConfigValid
           message: `invalid YAML: ${error instanceof Error ? error.message : String(error)}`
         })
     })
+
     return yield* decodeConfig(raw ?? {})
   })
 
@@ -49,20 +53,26 @@ export const parseConfigYaml = (text: string): Effect.Effect<Config, ConfigValid
 export const encodeConfig = (config: Config): ConfigEncoded => encodeSchema(config)
 
 let defaultsDocument: ConfigEncoded | undefined
+
 const defaults = (): ConfigEncoded => (defaultsDocument ??= encodeSchema(Schema.decodeUnknownSync(Config)({})))
 
 /** Recursively drops values that equal the corresponding default, so exported YAML only lists what was set. */
 const omitDefaults = (value: Json, base: Json | undefined): Json | undefined => {
   if (base !== undefined && jsonEquals(value, base)) return undefined
+
   if (isJsonObject(value)) {
     const out: Record<string, Json> = {}
     const baseObject = isJsonObject(base) ? base : {}
+
     for (const [key, child] of Object.entries(value)) {
       const kept = omitDefaults(child, baseObject[key])
+
       if (kept !== undefined) out[key] = kept
     }
+
     return out
   }
+
   return isJsonArray(value) && value.length === 0 && base === undefined ? undefined : value
 }
 
@@ -76,5 +86,6 @@ export const stringifyConfigYaml = (config: Config, options: YamlExportOptions =
   const encoded = encodeConfig(config) as unknown as Json
   const sparse = omitDefaults(encoded, defaults() as unknown as Json)
   const document = options.includeDefaults === true ? encoded : Object.assign({ "config-version": 8 }, sparse)
+
   return stringify(document, { lineWidth: 0 })
 }

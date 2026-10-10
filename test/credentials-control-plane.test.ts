@@ -17,6 +17,7 @@ const claudeFile = (extra: Record<string, unknown> = {}) => ({
 
 const picked = (result: PickResult) => {
   if (!result.ok) throw new Error(`pick failed: ${result.failure.code}`)
+
   return result
 }
 
@@ -34,10 +35,12 @@ describe("ControlPlane credentials (Workers pool)", () => {
   it("imports auth files, lists them redacted and returns the full snapshot from pick", async () => {
     const stub = plane()
     await stub.putConfig(CONFIG)
+
     const imported = await stub.importAuthFile(
       "claude-a.json",
       JSON.stringify(claudeFile({ prefix: "team", headers: { "X-Org": "o1" }, priority: 3, weight: 2 }))
     )
+
     expect(imported).toMatchObject({
       ok: true,
       id: "claude-a.json",
@@ -115,13 +118,17 @@ describe("ControlPlane credentials (Workers pool)", () => {
 
   it("serialises concurrent picks: no duplicate leases and a perfectly even rotation", async () => {
     const stub = plane()
+
     for (const id of ["a", "b", "c"])
       await stub.importAuthFile(`claude-${id}.json`, claudeFile({ email: `${id}@x.com` }))
+
     const results = await Promise.all(
       Array.from({ length: 30 }, () => stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }))
     )
+
     const ok = results.map(picked)
     const counts: Record<string, number> = {}
+
     for (const item of ok) counts[item.credential.id] = (counts[item.credential.id] ?? 0) + 1
     expect(counts).toEqual({ "claude-a.json": 10, "claude-b.json": 10, "claude-c.json": 10 })
     expect(new Set(ok.map((item) => item.lease.id)).size).toBe(30)
@@ -186,11 +193,13 @@ api-keys:
       keys: [{ api-key: k }]
 `)
     const firsts = []
+
     for (let index = 0; index < 4; index += 1) {
       const result = picked(await stub.pick({ providers: ["openai-compatible-pool"], model: "shared" }))
       expect(result.route.upstreamModels.toSorted()).toEqual(["m-a", "m-b"])
       firsts.push(result.route.upstreamModel)
     }
+
     expect(firsts).toEqual(["m-a", "m-b", "m-a", "m-b"])
   })
 
@@ -205,6 +214,7 @@ api-keys:
       access_token: "new-token",
       refresh_token: "new-r"
     })
+
     expect(relogin).toMatchObject({ ok: true, created: false, credentialVersion: 2, credentialsChanged: true })
     const after = picked(await stub.pick({ providers: ["claude"], model: "team/m" }))
     expect(after.credential.metadata).toMatchObject({ access_token: "new-token", note: "keep", prefix: "team" })
@@ -216,6 +226,7 @@ api-keys:
       refresh_token: "new-r",
       priority: 4
     })
+
     expect(same).toMatchObject({ credentialVersion: 2, credentialsChanged: false })
 
     // Results for the old credential material are ignored.
@@ -268,17 +279,22 @@ api-keys:
   it("session affinity binds a session and is released by a credential failure (per caller scope)", async () => {
     const stub = plane()
     await stub.putConfig("routing: { session-affinity: true }")
+
     for (const id of ["a", "b", "c"])
       await stub.importAuthFile(`claude-${id}.json`, claudeFile({ email: `${id}@x.com` }))
+
     const request = (callerScope: string) => ({
       providers: ["claude"],
       model: "claude-sonnet-4-5",
       session: { id: "session-1", callerScope }
     })
+
     const first = picked(await stub.pick(request("alice")))
+
     for (let index = 0; index < 5; index += 1) {
       expect(picked(await stub.pick(request("alice"))).credential.id).toBe(first.credential.id)
     }
+
     // Another caller does not share the binding.
     const bob = picked(await stub.pick(request("bob")))
     expect(bob.credential.id).not.toBe(first.credential.id)

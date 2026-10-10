@@ -109,6 +109,7 @@ const reportOf = (report: SignatureSanitizeReport): Report => ({
 
 const runSanitize = (testCase: SanitizeCase, sig: string): { readonly payload: unknown; readonly report: Report } => {
   const payload = history(sig)
+
   const empty: Report = {
     targetProvider: "",
     preserved: 0,
@@ -118,6 +119,7 @@ const runSanitize = (testCase: SanitizeCase, sig: string): { readonly payload: u
     decisions: 0,
     reasons: []
   }
+
   switch (testCase.mode) {
     case "forModel":
       return { payload, report: reportOf(sanitizeClaudeMessagesSignaturesForModel(payload, testCase.model)) }
@@ -143,9 +145,11 @@ const runSanitize = (testCase: SanitizeCase, sig: string): { readonly payload: u
       }
     case "stripEmpty":
       stripInvalidClaudeThinkingBlocksAndEmptyMessages(payload, { allowEmptySignatureWithEmptyText: true })
+
       return { payload, report: { ...empty, targetProvider: testCase.report.targetProvider } }
     default:
       stripInvalidClaudeThinkingBlocks(payload, { strict: true })
+
       return { payload, report: { ...empty, targetProvider: testCase.report.targetProvider } }
   }
 }
@@ -216,6 +220,7 @@ describe("signature fixtures (Go internal/signature)", () => {
         expect(compatibleAntigravityClaudeThinkingSignature(sample.signature) ?? null).toBe(
           sample.antigravityClaude ?? null
         )
+
         for (const [provider, expected] of Object.entries(sample.compatible as Record<string, string | null>)) {
           expect(
             compatibleSignatureForProvider(provider as SignatureProvider, sample.signature) ?? null,
@@ -231,6 +236,7 @@ describe("signature fixtures (Go internal/signature)", () => {
       expect(isValidGrokEncryptedContent(sample.signature), "grok").toBe(sample.grok)
       expect(isRecognizedReasoningSignature(sample.signature), "recognized").toBe(sample.recognized)
       expect(isValidGptReasoningSignature(sample.signature), "gpt").toBe(sample.gpt)
+
       for (const [kind, expected] of Object.entries(sample.geminiReplay as Record<string, string>)) {
         expect(geminiReplaySignatureOrBypass(sample.signature), kind).toBe(expected)
       }
@@ -239,6 +245,7 @@ describe("signature fixtures (Go internal/signature)", () => {
 
   it("sanitises Claude messages history like SanitizeClaudeMessagesSignaturesForTarget", () => {
     expect(fixture.sanitize.length).toBeGreaterThan(400)
+
     for (const testCase of fixture.sanitize as SanitizeCase[]) {
       const label = `${testCase.name}/${testCase.mode}/${testCase.model}`
       const { payload, report } = runSanitize(testCase, sampleSignature(testCase.name))
@@ -250,12 +257,15 @@ describe("signature fixtures (Go internal/signature)", () => {
 
   it("validates Gemini signatures, function-call pairing and sanitises requests like Go", () => {
     expect(fixture.gemini.length).toBeGreaterThan(80)
+
     for (const testCase of fixture.gemini as GeminiCase[]) {
       const input = JSON.stringify(testCase.input)
+
       const thought = validateGeminiThoughtSignatures(JSON.parse(input), {
         allowBypassSentinel: true,
         requireKnownEnvelope: true
       })
+
       // Go appends the wrapped base64 decoder error to its own prefix; only the prefix is portable.
       const stable = (text: string) => text.replace(/base64 decode failed.*$/, "base64 decode failed")
       expect(stable(thought ?? ""), `${testCase.name} thought`).toBe(stable(testCase.thought))

@@ -11,6 +11,7 @@ const envelope = (flag: number, payload: Uint8Array): Uint8Array => {
   out[0] = flag
   new DataView(out.buffer).setUint32(1, payload.length, false)
   out.set(payload, 5)
+
   return out
 }
 
@@ -22,12 +23,15 @@ const body = (...frames: Uint8Array[]): Response =>
 
 const toolFrame = (args: string, invalid = false): Uint8Array => {
   const call = new ProtoWriter().string(1, "call_1").string(2, "apply_patch")
+
   if (invalid) call.string(4, args)
   else call.string(3, args)
+
   return envelope(0, new ProtoWriter().bytes(6, call.toBytes()).toBytes())
 }
 
 const textFrame = (text: string): Uint8Array => envelope(0, new ProtoWriter().string(3, text).toBytes())
+
 const trailer = (js: string): Uint8Array => envelope(2, new TextEncoder().encode(js))
 
 const patchTool = { type: "custom", name: "apply_patch", format: { type: "grammar", syntax: "lark", definition: "x" } }
@@ -57,6 +61,7 @@ const executor = makeDevinExecutor()
 describe("Devin apply_patch guards", () => {
   it("answers a failed non-stream request of a patch-declaring client with the sanitised gateway error", async () => {
     const message = "Invalid apply_patch tool arguments received from upstream."
+
     for (const response of [
       body(trailer('{"error":{"code":"resource_exhausted","message":"quota secret"}}')),
       body(textFrame("partial")) // no EOS trailer
@@ -66,10 +71,12 @@ describe("Devin apply_patch guards", () => {
       expect(error.status).toBe(502)
       expect(error.message).toBe(message)
     }
+
     // Without the declaration the upstream error is kept.
     const h = await harness(devinCredential(), () =>
       body(trailer('{"error":{"code":"resource_exhausted","message":"quota secret"}}'))
     )
+
     const plain = await runFail(executor.execute(h.context, request(false), responsesOptions(false)), h.layers)
     expect(plain.status).toBe(429)
     expect(plain.message).toContain("quota secret")
@@ -93,6 +100,7 @@ describe("Devin apply_patch guards", () => {
       undefined,
       true
     )
+
     const collected = await collectStream(executor, h, request(true), responsesOptions(true))
     const failed = collected.chunks.filter((chunk) => chunk.includes("response.failed"))
     expect(failed).toHaveLength(1)
@@ -113,10 +121,13 @@ describe("Devin apply_patch guards", () => {
 describe("Devin catalog from the registry snapshot", () => {
   it("resolves the chat model UID through the refreshed catalog levels before the embedded one", async () => {
     const lookups: string[] = []
+
     const modelLookup = (id: string, provider: string) => {
       lookups.push(`${provider}:${id}`)
+
       return id === "devin/swe-2" ? { id, thinking: { levels: ["low", "high"] } } : undefined
     }
+
     const h = await harness(devinCredential(), () => body(textFrame("ok"), trailer("{}")), undefined, true)
     await collectStream(
       executor,

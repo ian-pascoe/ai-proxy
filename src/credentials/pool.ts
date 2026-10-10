@@ -117,12 +117,15 @@ export class CredentialPool {
   /** Rebuilds the derived credential set when the config or the stored credentials changed. */
   #current(): View {
     const { version, config } = this.#config()
+
     if (this.#view !== undefined && this.#view.configVersion === version) return this.#view
     const now = this.#now()
     const credentials = new Map<string, Credential>()
+
     for (const stored of this.#store.list()) {
       credentials.set(stored.id, deriveFileCredential(stored, { config }))
     }
+
     for (const credential of synthesizeConfigCredentials(config, now)) credentials.set(credential.id, credential)
 
     // Config credentials are content-addressed: state of ids that disappeared (rotated keys) is garbage.
@@ -133,10 +136,13 @@ export class CredentialPool {
         this.#invalidateBindings(id)
       }
     }
+
     const oauthModelAlias: Record<string, ReturnType<typeof sanitizeAliases>> = {}
+
     for (const [channel, aliases] of Object.entries(config.oauth["model-alias"])) {
       oauthModelAlias[channel.trim().toLowerCase()] = sanitizeAliases(aliases)
     }
+
     const ttl = sessionAffinityTtlMs(config)
     this.#affinity.setTtl(ttl)
     this.#lcp.setTtl(ttl)
@@ -156,6 +162,7 @@ export class CredentialPool {
       },
       saveCooldown: config.routing.cooldown["save-cooldown-status"]
     }
+
     return this.#view
   }
 
@@ -177,6 +184,7 @@ export class CredentialPool {
   /** Model-registration view of every credential (no secrets): see `registry/source.ts`. */
   modelSources(): ModelSource[] {
     const view = this.#current()
+
     return [...view.credentials.values()].map((credential) => toModelSource(credential, this.#state(credential.id)))
   }
 
@@ -184,6 +192,7 @@ export class CredentialPool {
     const view = this.#current()
     const now = this.#now()
     const entries: CredentialEntry[] = []
+
     for (const credential of view.credentials.values()) entries.push({ credential, state: this.#state(credential.id) })
 
     const outcome = selectCredential({
@@ -193,17 +202,21 @@ export class CredentialPool {
       runtime: { rotation: this.#rotation, affinity: this.#affinity, lcp: this.#lcp },
       now
     })
+
     if (!outcome.ok) return outcome
 
     const { credential } = outcome.entry
     let route = outcome.route
+
     if (route.upstreamModels.length > 1) {
       const key = `${credential.id}|${route.routeModel.toLowerCase()}`
       const offset = this.#poolOffsets.get(key) ?? 0
       this.#poolOffsets.set(key, (offset + 1) % POOL_OFFSET_WRAP)
       route = rotateRoute(route, offset)
     }
+
     const stateModel = canonicalModelKey(route.selectionModel)
+
     const lease: Lease = {
       id: this.#newId(),
       credentialId: credential.id,
@@ -214,6 +227,7 @@ export class CredentialPool {
       ...(outcome.affinityKeys.length === 0 ? {} : { affinityKeys: outcome.affinityKeys }),
       ...(outcome.lcp === undefined ? {} : { lcp: outcome.lcp })
     }
+
     return {
       ok: true,
       credential: toSnapshot(this.#decorate(credential)),
@@ -239,12 +253,15 @@ export class CredentialPool {
   report(lease: Lease, result: ReportResult): ReportOutcome {
     const view = this.#current()
     const credential = view.credentials.get(lease.credentialId)
+
     if (credential === undefined) return { ok: false, error: "unknown_credential" }
+
     // A result for credentials that changed in the meantime says nothing about the new material.
     if (lease.credentialVersion < credential.credentialVersion) return { ok: true, applied: false }
 
     const now = this.#now()
     const previous = this.#state(credential.id)
+
     const next = markResult({
       credential,
       state: previous,
@@ -253,15 +270,18 @@ export class CredentialPool {
       result,
       settings: view.cooldown
     })
+
     this.#states.set(credential.id, next)
     this.#persistState(credential.id, next, view.saveCooldown)
 
     if (result.success) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.touch(key, credential.id, now)
+
       // A successful extension is recorded (or refreshed) as an LCP sequence of its own.
       if (lease.lcp !== undefined) this.#lcp.touch(lease.lcp.namespace, lease.lcp.sequence, credential.id, now)
     } else if (next.lastError !== undefined && !shouldSkipCredentialCooldown(this.#affinityError(result, next))) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.compareAndDelete(key, credential.id)
+
       // Credential-attributed failures drop only the sequence that was attempted, unless a newer request refreshed it.
       if (lease.lcp !== undefined) {
         this.#lcp.removeBefore(
@@ -273,20 +293,24 @@ export class CredentialPool {
         )
       }
     }
+
     return { ok: true, applied: true }
   }
 
   /** Stored credentials (never config API keys: they have no tokens) with their runtime state. */
   refreshTargets(): RefreshTarget[] {
     const targets: RefreshTarget[] = []
+
     for (const credential of this.#current().credentials.values()) {
       if (credential.source === "file") targets.push({ credential, state: this.#state(credential.id) })
     }
+
     return targets
   }
 
   refreshTarget(id: string): RefreshTarget | undefined {
     const credential = this.#current().credentials.get(id)
+
     return credential === undefined || credential.source !== "file" ? undefined : { credential, state: this.#state(id) }
   }
 
@@ -296,21 +320,26 @@ export class CredentialPool {
    */
   commitRefresh(id: string, change: RefreshCommit): RefreshTarget | undefined {
     const stored = this.#store.get(id)
+
     if (stored === undefined) return undefined
+
     if (change.metadata !== undefined) {
       this.#store.upsert(id, stored.provider, change.metadata, { mergeExisting: false })
       this.#invalidate()
     }
+
     if (change.state !== undefined) {
       this.#states.set(id, change.state)
       this.#store.saveState(id, change.state)
     }
+
     return this.refreshTarget(id)
   }
 
   /** The error as the affinity selector sees it: request-scoped and transport failures keep bindings. */
   #affinityError(result: ReportResult, state: CredentialState) {
     const error = state.lastError
+
     return {
       status: result.error?.httpStatus ?? result.httpStatus ?? 0,
       message: error?.message ?? "",
@@ -325,8 +354,10 @@ export class CredentialPool {
   #persistState(id: string, state: CredentialState, saveCooldown: boolean): void {
     if (saveCooldown || hasUnauthorizedFailure(state)) {
       this.#store.saveState(id, state)
+
       return
     }
+
     this.#store.saveState(id, {
       ...state,
       unavailable: false,
@@ -340,7 +371,9 @@ export class CredentialPool {
   planRetry(query: RetryQuery): RetryPlan {
     const view = this.#current()
     const entries: CredentialEntry[] = []
+
     for (const credential of view.credentials.values()) entries.push({ credential, state: this.#state(credential.id) })
+
     return planRetry({
       credentials: entries,
       query,
@@ -359,21 +392,25 @@ export class CredentialPool {
 
   entry(id: string): RefreshTarget | undefined {
     const credential = this.#current().credentials.get(id)
+
     return credential === undefined ? undefined : { credential, state: this.#state(id) }
   }
 
   /** Clears the cooldown/quota timers of one credential (management "reset cooldown"); `undefined` when unknown. */
   resetCooldown(id: string): { readonly models: ReadonlyArray<string> } | undefined {
     const target = this.entry(id)
+
     if (target === undefined) return undefined
     const reset = resetCooldownState(target.state, this.#now())
     this.#states.set(id, reset.state)
     this.#store.saveState(id, reset.state)
+
     return { models: reset.models }
   }
 
   list(): CredentialSummary[] {
     const view = this.#current()
+
     return [...view.credentials.values()]
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((credential) => summarizeCredential(credential, this.#state(credential.id)))
@@ -382,15 +419,18 @@ export class CredentialPool {
   /** Imports/updates one auth file. `mergeExisting` keeps user settings of the previous file (re-login). */
   upsert(name: string, content: string | JsonObject, options: { readonly mergeExisting: boolean }): UpsertResult {
     const parsed = parseAuthFile(name, content)
+
     if (!parsed.ok) return parsed
     const outcome = this.#store.upsert(parsed.id, parsed.provider, parsed.metadata, options)
     this.#invalidate()
+
     // Replaced material starts a fresh life: stale tokens must not keep a cooldown or a session binding.
     if (outcome.credentialsChanged && !outcome.created) {
       this.#states.delete(parsed.id)
       this.#store.deleteState(parsed.id)
       this.#invalidateBindings(parsed.id)
     }
+
     return {
       ok: true,
       id: parsed.id,
@@ -403,11 +443,13 @@ export class CredentialPool {
 
   remove(id: string): boolean {
     const removed = this.#store.remove(id)
+
     if (removed) {
       this.#states.delete(id)
       this.#invalidateBindings(id)
       this.#invalidate()
     }
+
     return removed
   }
 
@@ -416,9 +458,12 @@ export class CredentialPool {
     if (this.#store.get(id) === undefined) {
       return this.#current().credentials.has(id) ? "config_credential" : "not_found"
     }
+
     this.#store.setDisabled(id, disabled)
+
     if (disabled) this.#invalidateBindings(id)
     this.#invalidate()
+
     return "ok"
   }
 }

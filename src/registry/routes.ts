@@ -26,6 +26,7 @@ const registryUnavailable = HttpServerResponse.text(
 const remainder = (pathname: string, prefix: string): string | undefined => {
   if (pathname === prefix) return undefined
   const rest = pathname.slice(prefix.length + 1)
+
   try {
     return decodeURIComponent(rest)
   } catch {
@@ -40,6 +41,7 @@ const v1Models = (registry: Registry) =>
     const request = yield* HttpServerRequest.HttpServerRequest
     const url = new URL(request.originalUrl, "http://localhost")
     const snapshot = yield* registry.snapshot
+
     const reply = respondModels(
       snapshot.availableModels(),
       {
@@ -68,6 +70,7 @@ const v1Models = (registry: Registry) =>
       },
       remainder(url.pathname, "/v1/models")
     )
+
     return toResponse(reply)
   }).pipe(
     Effect.catch((error) =>
@@ -82,6 +85,7 @@ const v1betaModels = (registry: Registry) =>
     const snapshot = yield* registry.snapshot
     const models = snapshot.availableModels()
     const action = remainder(url.pathname, "/v1beta/models")
+
     return toResponse(action === undefined ? respondGeminiList(models) : respondGeminiDetail(models, action))
   }).pipe(
     Effect.catch((error) =>
@@ -93,6 +97,7 @@ const v1betaModels = (registry: Registry) =>
 export const ModelRoutes = HttpRouter.addAll(
   Effect.gen(function* () {
     const registry = yield* ModelRegistry
+
     return [
       HttpRouter.route("GET", "/v1/models/*", v1Models(registry)),
       HttpRouter.route("GET", "/v1beta/models/*", v1betaModels(registry))

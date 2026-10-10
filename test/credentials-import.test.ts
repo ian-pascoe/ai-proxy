@@ -28,8 +28,10 @@ interface GoAuth {
 }
 
 const config = (yaml: string) => Effect.runSync(parseConfigYaml(yaml))
+
 const withoutHeaders = (attributes: Record<string, string>, drop: string[]) =>
   Object.fromEntries(Object.entries(attributes).filter(([key]) => !key.startsWith("header:") && !drop.includes(key)))
+
 const goHeaders = (attributes: Record<string, string>) =>
   Object.fromEntries(
     Object.entries(attributes)
@@ -43,6 +45,7 @@ describe("config API keys -> credentials (parity with the Go synthesizer)", () =
       const credentials = synthesizeConfigCredentials(config(fixture.yaml), 0)
       const expected = fixture.auths as GoAuth[]
       expect(credentials.map((c) => c.id)).toEqual(expected.map((a) => a.id))
+
       for (const [index, go] of expected.entries()) {
         const ts = credentials[index]!
         expect(ts.provider).toBe(go.provider)
@@ -84,6 +87,7 @@ api-keys:
         - { api-key: k1 }
         - { api-key: k2, priority: 9, prefix: other }
 `)
+
     const [one, two] = synthesizeConfigCredentials(cfg, 0)
     expect(one).toMatchObject({ prefix: "team", priority: 4, headers: { "X-G": "group" } })
     expect(two).toMatchObject({ prefix: "other", priority: 9, headers: { "X-G": "group" } })
@@ -108,17 +112,23 @@ describe("auth files -> credentials (parity with the Go file synthesizer)", () =
     it(fixture.name, () => {
       const parsed = parseAuthFile(fixture.file, fixture.content)
       const expected = fixture.auths as GoAuth[]
+
       if (fixture.error !== undefined) {
         expect(parsed).toMatchObject({ ok: false, reason: "invalid_weight" })
+
         return
       }
+
       if (expected.length === 0) {
         expect(parsed.ok).toBe(false)
+
         return
       }
+
       if (!parsed.ok) throw new Error(parsed.message)
       const go = expected[0]!
       const cfg = config(fixture.config ?? "debug: false")
+
       const credential = deriveFileCredential(
         {
           id: parsed.id,
@@ -130,6 +140,7 @@ describe("auth files -> credentials (parity with the Go file synthesizer)", () =
         },
         { config: cfg }
       )
+
       expect(credential.id).toBe(go.id.split("/").pop())
       expect(credential.provider).toBe(go.provider)
       expect(credential.label).toBe(go.label)
@@ -163,6 +174,7 @@ describe("auth files -> credentials (parity with the Go file synthesizer)", () =
       "a.json",
       '{"type":"Claude","api-key":"x","base_url":"https://b","base-url":"https://legacy","custom":{"k":1}}'
     )
+
     if (!parsed.ok) throw new Error(parsed.message)
     expect(parsed.provider).toBe("claude")
     expect(parsed.metadata).toEqual({ type: "Claude", api_key: "x", base_url: "https://b", custom: { k: 1 } })
@@ -189,6 +201,7 @@ describe("weight validation", () => {
     expect(parseWeightValue("3")).toEqual({ ok: true, value: 3 })
     expect(parseWeightValue("")).toEqual({ ok: true, value: 1 })
     expect(parseWeightValue(-4)).toEqual({ ok: true, value: 0 })
+
     for (const bad of [1.5, "1.5", "abc", true, null, 1_000_001, "9223372036854775808", Number.NaN]) {
       expect(parseWeightValue(bad).ok).toBe(false)
     }
@@ -207,6 +220,7 @@ describe("metadata merge (credentials.md §11)", () => {
       headers: { "X-A": "1" },
       disabled: true
     }
+
     const merged = mergeExistingMetadata("claude", { type: "claude", access_token: "new", priority: 9 }, existing)
     expect(merged).toEqual({
       type: "claude",
@@ -225,6 +239,7 @@ describe("metadata merge (credentials.md §11)", () => {
       { type: "meta", access_token: "n" },
       { api_key: "k", dca_token: "d", email: "e" }
     )
+
     expect(merged).toEqual({ type: "meta", access_token: "n", email: "e" })
   })
 
@@ -239,6 +254,7 @@ describe("metadata merge (credentials.md §11)", () => {
 describe("access token expiry", () => {
   const jwt = (claims: object) =>
     `h.${btoa(JSON.stringify(claims)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")}.s`
+
   const NOW_S = 1_800_000_000
 
   it("JWT exp outranks metadata keys", () => {
@@ -275,15 +291,18 @@ describe("redaction", () => {
       service_account: { client_email: "sa@x", private_key: "-----BEGIN-----" },
       nested: [{ refresh_token: "r" }]
     }
+
     const redacted = JSON.stringify(redactMetadata(metadata))
     expect(redacted).not.toContain("super-secret")
     expect(redacted).not.toContain("BEGIN")
     expect(redacted).toContain("me@x.com")
     expect(redacted).toContain("Bearer")
+
     const summary = summarizeCredential(
       cred("a", { attributes: { api_key: "sk-abcdefghijklmnop" }, metadata }),
       state()
     )
+
     expect(JSON.stringify(summary)).not.toContain("abcdefghijklm")
     expect(JSON.stringify(summary)).not.toContain("super-secret")
     expect(summary.attributes.api_key).toMatch(/…mnop$/)
@@ -293,9 +312,11 @@ describe("redaction", () => {
     const text = redactSecrets(
       "bad Bearer abcdefghijkl and sk-live1234567890 plus api_key=hunter22 url https://user:pw@host/x token: abc.def"
     )
+
     for (const secret of ["abcdefghijkl", "sk-live1234567890", "hunter22", "user:pw", "abc.def"]) {
       expect(text).not.toContain(secret)
     }
+
     expect([...redactSecrets("x".repeat(1000))].length).toBe(256)
   })
 })

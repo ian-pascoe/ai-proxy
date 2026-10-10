@@ -21,6 +21,7 @@ export const makeKvSignatureStore = (kv: KVNamespace): SignatureStore => ({
   get: async (modelName, text) => {
     try {
       const value = await kv.get(signatureStoreKey(modelName, text))
+
       return value === null ? undefined : value
     } catch {
       return undefined
@@ -45,6 +46,7 @@ export const makeKvSignatureStore = (kv: KVNamespace): SignatureStore => ({
 /** Store for tests and for deployments without the `CACHE` binding. */
 export const makeMemorySignatureStore = (): SignatureStore & { readonly entries: Map<string, string> } => {
   const entries = new Map<string, string>()
+
   return {
     entries,
     get: async (modelName, text) => entries.get(signatureStoreKey(modelName, text)),
@@ -72,6 +74,7 @@ export const prefetchSignatures = async (
   await Promise.allSettled(
     wanted.map(async (text) => {
       const signature = await store.get(modelName, text)
+
       if (signature !== undefined) cache.hydrate(modelName, text, signature)
     })
   )
@@ -83,6 +86,7 @@ export const flushSignatureWrites = async (
   store: SignatureStore | undefined
 ): Promise<void> => {
   const writes = cache.drainPendingWrites()
+
   if (store === undefined || writes.length === 0) return
   await Promise.allSettled(writes.map((write) => store.put(write)))
 }

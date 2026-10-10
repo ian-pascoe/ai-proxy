@@ -12,11 +12,16 @@ import { WorkerEnv } from "../../platform/env.ts"
 
 /** Stable Grok CLI version used when npm resolution fails (`DefaultXAIFallbackClientVersion`). */
 export const XAI_FALLBACK_CLIENT_VERSION = "1.0.46"
+
 /** Minimum version the chat proxy accepts; older clients are rejected with HTTP 426. */
 export const XAI_CLIENT_VERSION_FLOOR = "1.0.13"
+
 export const XAI_VERSION_KV_KEY = "xai/client-version"
+
 export const XAI_NPM_REGISTRY_URL = "https://registry.npmjs.org/@xai-official/grok/latest"
+
 const FETCH_LIMIT_BYTES = 1 << 20
+
 const LOCAL_CACHE_MS = 60_000
 
 const isStrictSemver = (version: string): boolean => /^\d+\.\d+\.\d+$/.test(version)
@@ -24,11 +29,14 @@ const isStrictSemver = (version: string): boolean => /^\d+\.\d+\.\d+$/.test(vers
 const versionAtLeast = (got: string, floor: string): boolean => {
   const a = got.split(".").map(Number)
   const b = floor.split(".").map(Number)
+
   for (let index = 0; index < Math.max(a.length, b.length); index++) {
     const left = a[index] ?? 0
     const right = b[index] ?? 0
+
     if (left !== right) return left > right
   }
+
   return true
 }
 
@@ -46,16 +54,21 @@ export const resetXaiClientVersionCache = (): void => {
 /** The active client version: KV (when bindings are available), else the fallback. Never fails. */
 export const currentXaiClientVersion: Effect.Effect<string> = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis
+
   if (cached !== undefined && now - cached.loadedAt < LOCAL_CACHE_MS) return cached.version
   const env = yield* Effect.serviceOption(WorkerEnv)
   let version = XAI_FALLBACK_CLIENT_VERSION
+
   if (env._tag === "Some") {
     const stored = yield* Effect.tryPromise(() => env.value.CACHE.get(XAI_VERSION_KV_KEY)).pipe(
       Effect.orElseSucceed(() => null)
     )
+
     if (stored !== null && acceptableXaiClientVersion(stored.trim())) version = stored.trim()
   }
+
   cached = { version, loadedAt: now }
+
   return version
 })
 
@@ -69,9 +82,11 @@ export const refreshXaiClientVersion = (
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
     const env = yield* WorkerEnv
+
     const request = HttpClientRequest.get(registryUrl).pipe(
       HttpClientRequest.setHeaders({ accept: "application/json", "user-agent": "CLIProxyAPI" })
     )
+
     const body = yield* client.execute(request).pipe(
       Effect.flatMap((response) =>
         response.status === 200
@@ -82,21 +97,27 @@ export const refreshXaiClientVersion = (
       Effect.tapError((error) => Effect.logWarning(`failed to fetch the latest Grok CLI version: ${error.message}`)),
       Effect.option
     )
+
     if (body._tag === "None") return undefined
     let version = ""
+
     try {
       const parsed = JSON.parse(body.value) as { version?: unknown }
       version = typeof parsed.version === "string" ? parsed.version.trim() : ""
     } catch {
       version = ""
     }
+
     if (!acceptableXaiClientVersion(version)) {
       yield* Effect.logWarning("npm registry returned an unacceptable Grok CLI version")
+
       return undefined
     }
+
     yield* Effect.tryPromise(() => env.CACHE.put(XAI_VERSION_KV_KEY, version)).pipe(
       Effect.tapError((error) => Effect.logWarning(`failed to store the Grok CLI version: ${String(error)}`)),
       Effect.ignore
     )
+
     return version
   }).pipe(Effect.catchCause(() => Effect.succeed(undefined)))

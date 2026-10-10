@@ -12,7 +12,9 @@ import { isArr, isObj } from "./gjson.ts"
 export const sanitizeClaudeFunctionName = (name: string): string => {
   if (name === "") return ""
   let sanitized = name.replace(/[^a-zA-Z0-9_-]/gu, "_")
+
   if (sanitized.length > 64) sanitized = sanitized.slice(0, 64)
+
   return sanitized === "" ? "_" : sanitized
 }
 
@@ -20,8 +22,10 @@ const EMPTY_INPUT_SCHEMA = (): JsonObject => ({ type: "object", properties: {} }
 
 const sortedObject = (value: JsonObject): JsonObject => {
   const out: JsonObject = {}
+
   for (const key of Object.keys(value).toSorted())
     Object.defineProperty(out, key, { value: value[key], enumerable: true, writable: true, configurable: true })
+
   return out
 }
 
@@ -30,22 +34,28 @@ const schemaObject = (value: Json | undefined): JsonObject => (isObj(value) ? { 
 const canBeObject = (schema: JsonObject): boolean => {
   if (!Object.hasOwn(schema, "type")) return true
   const type = schema.type
+
   if (typeof type === "string") return type === "object"
+
   if (!isArr(type) || !type.every((item) => typeof item === "string")) return false
+
   return type.includes("object")
 }
 
 const mergeRequired = (root: JsonObject, branchRequired: Json | undefined): void => {
   if (!isArr(branchRequired) || !branchRequired.every((item) => typeof item === "string")) return
   let required: string[] = []
+
   if (isArr(root.required) && root.required.every((item) => typeof item === "string"))
     required = [...(root.required as string[])]
   const seen = new Set(required)
+
   for (const name of branchRequired as string[]) {
     if (seen.has(name)) continue
     required.push(name)
     seen.add(name)
   }
+
   if (required.length > 0) root.required = required
 }
 
@@ -57,21 +67,28 @@ export const normalizeClaudeToolInputSchema = (schema: Json | undefined): JsonOb
   if (!isObj(schema)) return EMPTY_INPUT_SCHEMA()
   const root: JsonObject = { ...schema }
   const properties = schemaObject(root.properties)
+
   for (const unionName of ["anyOf", "oneOf", "allOf"]) {
     if (!Object.hasOwn(root, unionName)) continue
     const union = root[unionName]
     delete root[unionName]
+
     if (!isArr(union)) continue
+
     for (const branch of union) {
       if (!isObj(branch) || !canBeObject(branch)) continue
+
       for (const [name, property] of Object.entries(schemaObject(branch.properties))) {
         if (!Object.hasOwn(properties, name)) properties[name] = property
       }
+
       if (unionName === "allOf") mergeRequired(root, branch.required)
     }
   }
+
   root.type = "object"
   root.properties = sortedObject(properties)
+
   return sortedObject(root)
 }
 
@@ -86,12 +103,14 @@ const UNICODE_ESCAPES: Record<string, string> = {
 /** Go `json.Marshal` of a decoded value: sorted object keys and HTML-safe escapes. */
 export const goMarshal = (value: Json): string => {
   if (isArr(value)) return `[${value.map(goMarshal).join(",")}]`
+
   if (isObj(value)) {
     return `{${Object.keys(value)
       .toSorted()
       .map((key) => `${goMarshal(key)}:${goMarshal(value[key] as Json)}`)
       .join(",")}}`
   }
+
   return JSON.stringify(value).replace(/[<>&\u2028\u2029]/gu, (ch) => UNICODE_ESCAPES[ch] as string)
 }
 
@@ -101,8 +120,10 @@ const GEMINI_CLAUDE_TOOL_USE_ID_PREFIX = "cpa_gemini_"
 export const geminiClaudeToolUseID = (callId: string, name: string, argsRaw: string): string => {
   const call = callId.trim()
   const fn = name.trim()
+
   if (call === "" || fn === "") return ""
   let args = argsRaw
+
   if (args.trim() !== "") {
     try {
       args = goMarshal(JSON.parse(args) as Json)
@@ -110,13 +131,16 @@ export const geminiClaudeToolUseID = (callId: string, name: string, argsRaw: str
       args = args.trim()
     }
   }
+
   const digest = createHash("sha256").update([call, fn, args].join("\u0000")).digest("hex")
+
   return GEMINI_CLAUDE_TOOL_USE_ID_PREFIX + digest.slice(0, 32)
 }
 
 /** `IsGeminiClaudeToolUseID`. */
 export const isGeminiClaudeToolUseID = (id: string): boolean => {
   const trimmedId = id.trim()
+
   return (
     trimmedId.startsWith(GEMINI_CLAUDE_TOOL_USE_ID_PREFIX) &&
     /^[0-9a-fA-F]{32}$/.test(trimmedId.slice(GEMINI_CLAUDE_TOOL_USE_ID_PREFIX.length))

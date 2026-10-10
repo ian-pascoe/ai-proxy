@@ -21,7 +21,9 @@ import {
 } from "../translator/gemini/common/protowire.ts"
 
 export const GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR = "skip_thought_signature_validator"
+
 export const GEMINI_CONTEXT_ENGINEERING_BYPASS = "context_engineering_is_the_way_to_go"
+
 const MAX_GEMINI_THOUGHT_SIGNATURE_LEN = 32 * 1024 * 1024
 
 export type SignatureBlockKind = "unknown" | "gemini_model_part" | "gemini_function_call"
@@ -29,6 +31,7 @@ export type SignatureBlockKind = "unknown" | "gemini_model_part" | "gemini_funct
 /** `IsGeminiThoughtSignatureBypass`. */
 export const isGeminiThoughtSignatureBypass = (raw: string): boolean => {
   const sig = raw.trim()
+
   return sig === GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR || sig === GEMINI_CONTEXT_ENGINEERING_BYPASS
 }
 
@@ -54,8 +57,10 @@ const CACHE_PREFIXES: Readonly<Record<string, string>> = {
 const splitProviderPrefix = (raw: string): { provider: string; unprefixed: string } | undefined => {
   const trimmed = raw.trim()
   const index = trimmed.indexOf("#")
+
   if (index < 0) return undefined
   const provider = CACHE_PREFIXES[trimmed.slice(0, index).trim().toLowerCase()]
+
   return provider === undefined ? undefined : { provider, unprefixed: trimmed.slice(index + 1).trim() }
 }
 
@@ -66,16 +71,20 @@ export const signaturePayloadWithoutProviderPrefix = (raw: string): string =>
 const decodeBase64 = (sig: string): Uint8Array | undefined => {
   if (sig.length > MAX_GEMINI_THOUGHT_SIGNATURE_LEN) return undefined
   const text = sig.replace(/[\r\n]/g, "")
+
   // StdEncoding requires padding, RawStdEncoding forbids it.
   if (text.includes("=")) {
     if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={1,2}$/.test(text)) return undefined
   } else if (text.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(text)) {
     return undefined
   }
+
   try {
     const binary = atob(text)
     const out = new Uint8Array(binary.length)
+
     for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+
     return out
   } catch {
     return undefined
@@ -84,14 +93,17 @@ const decodeBase64 = (sig: string): Uint8Array | undefined => {
 
 const isAsciiUuid = (bytes: Uint8Array): boolean => {
   if (bytes.length !== 36) return false
+
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i] as number
+
     if (i === 8 || i === 13 || i === 18 || i === 23) {
       if (b !== 0x2d) return false
     } else if (!((b >= 0x30 && b <= 0x39) || (b >= 0x61 && b <= 0x66) || (b >= 0x41 && b <= 0x46))) {
       return false
     }
   }
+
   return true
 }
 
@@ -103,60 +115,81 @@ const isLikelyToolInvocationPayload = (value: Uint8Array): boolean => {
   if (value.length === 0) return false
   let offset = 0
   let hasTink = false
+
   while (offset < value.length) {
     const tag = consumeTag(value, offset)
+
     if (tag === undefined) return false
     offset += tag.length
+
     switch (tag.type) {
       case WireType.Varint: {
         const v = consumeVarint(value, offset)
+
         if (v === undefined) return false
         offset += v.length
         break
       }
+
       case WireType.Bytes: {
         const b = consumeBytes(value, offset)
+
         if (b === undefined) return false
         offset += b.length
+
         if (isLikelyOpaquePayload(b.value)) hasTink = true
         break
       }
+
       case WireType.Fixed32:
       case WireType.Fixed64: {
         const width = consumeFixed(value, offset, tag.type === WireType.Fixed32 ? 4 : 8)
+
         if (width === undefined) return false
         offset += width
         break
       }
+
       default:
         return false
     }
   }
+
   return hasTink && offset === value.length
 }
 
 /** `consumeGeminiField2Field1Value`: field 2 (bytes) holding exactly one field-1 (bytes) record. */
 const field2Field1Value = (decoded: Uint8Array): Uint8Array | undefined => {
   const tag = consumeTag(decoded, 0)
+
   if (tag === undefined || tag.num !== 2 || tag.type !== WireType.Bytes) return undefined
   const container = consumeBytes(decoded, tag.length)
+
   if (container === undefined || tag.length + container.length !== decoded.length) return undefined
   const inner = consumeTag(container.value, 0)
+
   if (inner === undefined || inner.num !== 1 || inner.type !== WireType.Bytes) return undefined
   const value = consumeBytes(container.value, inner.length)
+
   if (value === undefined || inner.length + value.length !== container.value.length) return undefined
+
   return value.value
 }
 
 /** `IsValidGeminiThoughtSignature(sig, {RequireKnownEnvelope: true})` (the bypass sentinel is not accepted here). */
 export const isKnownGeminiEnvelope = (raw: string): boolean => {
   const sig = raw.trim()
+
   if (sig === "" || isGeminiThoughtSignatureBypass(sig)) return false
   const decoded = decodeBase64(sig)
+
   if (decoded === undefined || decoded.length === 0) return false
+
   if (isAsciiUuid(decoded)) return false
   const value = field2Field1Value(decoded)
+
   if (value === undefined) return false
+
   return isLikelyOpaquePayload(value) || isAsciiUuid(value) || isLikelyToolInvocationPayload(value)
 }
 
@@ -165,15 +198,22 @@ type Detected = "gemini" | "gemini_bypass" | "other"
 /** `DetectSignatureProviderForBlock` reduced to "is this a Gemini-replayable signature". */
 const detectForGemini = (raw: string): Detected => {
   const sig = raw.trim()
+
   if (sig === "") return "other"
   const prefixed = splitProviderPrefix(sig)
+
   if (prefixed !== undefined) {
     if (prefixed.provider !== "gemini" || prefixed.unprefixed.includes("#")) return "other"
+
     if (isGeminiThoughtSignatureBypass(prefixed.unprefixed)) return "gemini_bypass"
+
     return isKnownGeminiEnvelope(prefixed.unprefixed) ? "gemini" : "other"
   }
+
   if (sig.includes("#")) return "other"
+
   if (isGeminiThoughtSignatureBypass(sig)) return "gemini_bypass"
+
   return isKnownGeminiEnvelope(sig) ? "gemini" : "other"
 }
 
@@ -187,22 +227,26 @@ export interface GeminiSignatureDecision {
 export const decideGeminiSignature = (raw: string): GeminiSignatureDecision => {
   if (detectForGemini(raw) !== "other") {
     const payload = signaturePayloadWithoutProviderPrefix(raw)
+
     if (isGeminiThoughtSignatureBypass(payload) || isKnownGeminiEnvelope(payload)) {
       return { action: "preserve", normalized: payload }
     }
   }
+
   return { action: "replace_with_gemini_bypass", normalized: "" }
 }
 
 /** `CompatibleSignatureForProviderBlock(Gemini, raw, kind)`: the replayable signature, or `undefined`. */
 export const compatibleGeminiSignature = (raw: string): string | undefined => {
   const decision = decideGeminiSignature(raw)
+
   return decision.action === "preserve" && decision.normalized !== "" ? decision.normalized : undefined
 }
 
 /** `SignatureProviderFromModelName(model) == SignatureProviderGemini`. */
 export const isGeminiSignatureModel = (modelName: string): boolean => {
   const lower = modelName.trim().toLowerCase()
+
   return !lower.includes("claude") && lower.includes("gemini")
 }
 
@@ -212,6 +256,7 @@ export const MAX_GEMINI_SIGNATURE_LEN = MAX_GEMINI_THOUGHT_SIGNATURE_LEN
 /** `GeminiReplaySignatureOrBypass`. */
 export const geminiReplaySignatureOrBypass = (raw: string): string => {
   const decision = decideGeminiSignature(raw)
+
   return decision.action === "preserve" && decision.normalized !== ""
     ? decision.normalized
     : GEMINI_SKIP_THOUGHT_SIGNATURE_VALIDATOR
@@ -230,13 +275,16 @@ const SIGNATURE_PATHS = [
 const partThoughtSignature = (part: Json): { raw: string; has: boolean } => {
   for (const path of SIGNATURE_PATHS) {
     const value = get(part, path)
+
     if (value !== undefined) return { raw: asString(value), has: true }
   }
+
   return { raw: "", has: false }
 }
 
 const hasNormalizedSignature = (part: Json, replay: string): boolean => {
   if (!isJsonObject(part) || part["thoughtSignature"] !== replay) return false
+
   return SIGNATURE_PATHS.slice(1).every((path) => !exists(part, path))
 }
 
@@ -255,26 +303,35 @@ const hasServerToolBlock = (part: Json): boolean =>
  */
 export const sanitizeGeminiRequestThoughtSignatures = (payload: Json, contentsPath = "contents"): Json => {
   const contents = get(payload, contentsPath.trim() === "" ? "contents" : contentsPath.trim())
+
   if (!isJsonArray(contents)) return payload
+
   for (const content of contents) {
     const parts = get(content, "parts")
+
     if (!isJsonArray(parts)) continue
     const isModelTurn = asString(get(content, "role")) === "model"
     let firstFunctionCallSeen = false
+
     for (const part of parts) {
       const { raw, has } = partThoughtSignature(part)
+
       if (exists(part, "functionResponse")) {
         if (has) deleteSignatureFields(part)
         continue
       }
+
       if (!isModelTurn || hasServerToolBlock(part)) continue
       const hasFunctionCall = exists(part, "functionCall")
       const isFirstFunctionCall = hasFunctionCall && !firstFunctionCallSeen
+
       if (hasFunctionCall) firstFunctionCallSeen = true
+
       if (!hasFunctionCall && !has) continue
 
       const decision = decideGeminiSignature(raw)
       let replay = ""
+
       if (isFirstFunctionCall) replay = geminiReplaySignatureOrBypass(raw)
       else if (
         has &&
@@ -283,6 +340,7 @@ export const sanitizeGeminiRequestThoughtSignatures = (payload: Json, contentsPa
       ) {
         replay = decision.normalized
       }
+
       if (replay !== "") {
         if (!hasNormalizedSignature(part, replay)) {
           deleteSignatureFields(part)
@@ -293,6 +351,7 @@ export const sanitizeGeminiRequestThoughtSignatures = (payload: Json, contentsPa
       }
     }
   }
+
   return payload
 }
 
@@ -314,23 +373,33 @@ export const inspectGeminiThoughtSignature = (
   options: GeminiSignatureValidationOptions = {}
 ): string | undefined => {
   const sig = raw.trim()
+
   if (sig === "") return "empty Gemini thought signature"
+
   if (isValidClaudeCaisSignature(sig)) return "invalid Gemini thought signature: detected Claude CAIS signature"
+
   if (isGeminiThoughtSignatureBypass(sig)) {
     return options.allowBypassSentinel === true ? undefined : "Gemini thought signature bypass sentinel is not allowed"
   }
+
   if (sig.length > MAX_GEMINI_THOUGHT_SIGNATURE_LEN) {
     return `Gemini thought signature exceeds maximum length (${MAX_GEMINI_THOUGHT_SIGNATURE_LEN} bytes)`
   }
+
   const decoded = decodeBase64(sig)
+
   if (decoded === undefined) return "invalid Gemini thought signature: base64 decode failed"
+
   if (decoded.length === 0) return "invalid Gemini thought signature: empty decoded payload"
+
   if (options.requireKnownEnvelope === true && !isKnownGeminiEnvelope(sig)) {
     return `invalid Gemini thought signature: unknown envelope "${isAsciiUuid(decoded) ? "ascii_uuid" : "unknown"}"`
   }
+
   if (options.requireObservedMarker === true && decoded[0] !== 0x12) {
     return `invalid Gemini thought signature: expected observed marker 0x12, got 0x${(decoded[0] as number).toString(16).padStart(2, "0")}`
   }
+
   return undefined
 }
 
@@ -341,6 +410,7 @@ export const isValidGeminiThoughtSignature = (raw: string, options: GeminiSignat
 /** `geminiContents`: `contents`, else `request.contents`. */
 const geminiContents = (payload: Json): { readonly contents: Json | undefined; readonly path: string } => {
   const contents = get(payload, "contents")
+
   return contents !== undefined
     ? { contents, path: "contents" }
     : { contents: get(payload, "request.contents"), path: "request.contents" }
@@ -356,38 +426,52 @@ export const validateGeminiThoughtSignatures = (
   options: GeminiSignatureValidationOptions = {}
 ): string | undefined => {
   const { contents, path } = geminiContents(payload)
+
   if (!isJsonArray(contents)) return undefined
+
   for (const [i, content] of contents.entries()) {
     const parts = get(content, "parts")
+
     if (!isJsonArray(parts)) continue
     const isModelTurn = asString(get(content, "role")).trim().toLowerCase() === "model"
     let firstFunctionCallSeen = false
+
     for (const [j, part] of parts.entries()) {
       const hasFunctionCall = exists(part, "functionCall")
       const isFirstFunctionCall = isModelTurn && hasFunctionCall && !firstFunctionCallSeen
+
       if (isModelTurn && hasFunctionCall) firstFunctionCallSeen = true
       const { raw, has } = partThoughtSignature(part)
+
       if (!hasFunctionCall && !has) continue
       const partPath = `${path}[${i}].parts[${j}]`
       const signature = raw.trim()
+
       if (exists(part, "functionResponse") && has) {
         return `${partPath}: functionResponse must not carry thoughtSignature`
       }
+
       if (signature === "") {
         if (isFirstFunctionCall) return `${partPath}: missing thoughtSignature on first functionCall`
+
         if (has) return `${partPath}: empty thoughtSignature`
         continue
       }
+
       if (isGeminiThoughtSignatureBypass(signature) && !isFirstFunctionCall) {
         return `${partPath}: Gemini bypass sentinel is allowed only on the first model functionCall`
       }
+
       if (!hasNormalizedSignature(part, signature)) {
         return `${partPath}: thoughtSignature must use one canonical top-level field`
       }
+
       const error = inspectGeminiThoughtSignature(signature, options)
+
       if (error !== undefined) return `${partPath}: ${error}`
     }
   }
+
   return undefined
 }
 
@@ -403,66 +487,89 @@ interface FunctionCallRef {
  */
 export const validateGeminiFunctionCallPairing = (payload: Json): string | undefined => {
   const { contents, path } = geminiContents(payload)
+
   if (!isJsonArray(contents)) return undefined
   let pending: readonly FunctionCallRef[] = []
+
   for (const [i, content] of contents.entries()) {
     const parts = get(content, "parts")
+
     if (!isJsonArray(parts) || parts.length === 0) {
       if (pending.length > 0) {
         return `${path}[${i}]: content appears before ${pending.length} pending functionResponse part(s)`
       }
+
       continue
     }
+
     const calls: FunctionCallRef[] = []
     const responses: Array<{ readonly part: Json; readonly path: string }> = []
+
     for (const [j, part] of parts.entries()) {
       const partPath = `${path}[${i}].parts[${j}]`
       const call = get(part, "functionCall")
+
       if (call !== undefined) {
         const name = asString(get(call, "name"))
+
         if (name === "") return `${partPath}: missing functionCall.name`
         calls.push({ id: asString(get(call, "id")), name, path: partPath })
       }
+
       if (exists(part, "functionResponse")) responses.push({ part, path: partPath })
     }
+
     if (calls.length > 0 && responses.length > 0) {
       return `${path}[${i}]: functionCall and functionResponse parts must not be interleaved in the same content`
     }
+
     if (calls.length > 0) {
       if (pending.length > 0) {
         return `${path}[${i}]: functionCall appears before ${pending.length} pending functionResponse part(s)`
       }
+
       pending = calls
       continue
     }
+
     if (responses.length === 0) {
       // Intervening user content (reminders, developer notices) may precede the pending functionResponse turn; a
       // model turn without responses breaks turn ownership.
       if (pending.length > 0 && asString(get(content, "role")).trim().toLowerCase() === "model") {
         return `${path}[${i}]: model content appears before ${pending.length} pending functionResponse part(s)`
       }
+
       continue
     }
+
     if (pending.length === 0) return `${path}[${i}]: functionResponse without preceding functionCall`
+
     if (responses.length !== pending.length) {
       return `${path}[${i}]: functionResponse count ${responses.length} does not match pending functionCall count ${pending.length}`
     }
+
     for (const [index, response] of responses.entries()) {
       const call = pending[index] as FunctionCallRef
       const body = get(response.part, "functionResponse")
       const responseId = asString(get(body, "id"))
       const responseName = asString(get(body, "name"))
+
       if (call.id !== "" && responseId === "") return `${response.path}: missing functionResponse.id for ${call.path}`
+
       if (call.id !== "" && responseId !== call.id) {
         return `${response.path}: functionResponse.id ${goQuote(responseId)} does not match functionCall.id ${goQuote(call.id)} at ${call.path}`
       }
+
       if (responseName === "") return `${response.path}: missing functionResponse.name`
+
       if (call.name !== "" && responseName !== call.name) {
         return `${response.path}: functionResponse.name ${goQuote(responseName)} does not match functionCall.name ${goQuote(call.name)} at ${call.path}`
       }
     }
+
     pending = []
   }
+
   return undefined
 }
 

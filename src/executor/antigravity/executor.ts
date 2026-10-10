@@ -105,6 +105,7 @@ const requestError = (envelope: RequestEnvelope) =>
 /** `antigravityCoolingDisabled`. */
 const coolingDisabled = (context: ExecutionContext): boolean => {
   const flag = context.credential.metadata["disable_cooling"]
+
   return (
     flag === true ||
     (typeof flag === "string" && flag.toLowerCase() === "true") ||
@@ -162,29 +163,37 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
   ) {
     const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv))
     const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext))
+
     const accessToken =
       typeof context.credential.metadata["access_token"] === "string"
         ? (context.credential.metadata["access_token"] as string).trim()
         : ""
+
     if (accessToken === "") {
       return yield* new ExecutionError({ status: 401, message: "missing access token", credentialScoped: true })
     }
+
     // `PrepareRequestAuth`: a credential without `project_id` (discovery failed at login) is completed here.
     let project =
       typeof context.credential.metadata["project_id"] === "string"
         ? (context.credential.metadata["project_id"] as string).trim()
         : ""
+
     if (project === "") {
       const discovered = yield* fetchProjectId(accessToken).pipe(Effect.result)
+
       if (discovered._tag === "Failure" || discovered.success.trim() === "") {
         const cause = discovered._tag === "Failure" ? `: ${discovered.failure.message}` : ""
+
         return yield* new ExecutionError({
           status: 400,
           message: `antigravity auth missing project_id${cause}`,
           requestScoped: true
         })
       }
+
       project = discovered.success.trim()
+
       if (env !== undefined) {
         yield* Effect.tryPromise(
           async () =>
@@ -194,6 +203,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         ).pipe(Effect.ignore)
       }
     }
+
     return {
       context,
       request,
@@ -220,12 +230,16 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
   const persistSignatures = (attempt: Attempt): Effect.Effect<void> => {
     const store = attempt.kv === undefined ? undefined : makeKvSignatureStore(attempt.kv)
+
     if (store === undefined) return Effect.void
     const flush = flushSignatureWrites(attempt.signatures, store)
+
     if (attempt.waitUntil !== undefined) {
       attempt.waitUntil(flush)
+
       return Effect.void
     }
+
     return Effect.promise(() => flush)
   }
 
@@ -233,6 +247,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     Effect.gen(function* () {
       const version = yield* currentAntigravityVersion(attempt.kv, yield* Clock.currentTimeMillis)
       const credential = attempt.context.credential
+
       return antigravityRequestUserAgent(configuredUserAgent(credential.attributes, credential.metadata), version)
     })
 
@@ -243,7 +258,9 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       authorization: `Bearer ${attempt.accessToken}`,
       "user-agent": agent
     }
+
     applyCustomHeaders(headers, attempt.context.credential, attempt.options.headers, attempt.options.metadata.sessionId)
+
     return headers
   }
 
@@ -251,11 +268,14 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
   const checkShortCooldown = (attempt: Attempt, baseModel: string) =>
     Effect.gen(function* () {
       const { context, options, state } = attempt
+
       if (coolingDisabled(context)) return
       const bypass = options.metadata.antigravityCredits === true && creditsEnabled(context.config)
+
       if (bypass) return
       const now = yield* Clock.currentTimeMillis
       const remaining = yield* Effect.promise(() => state.shortCooldownRemaining(context.credential.id, baseModel, now))
+
       if (remaining > 0) {
         return yield* new ExecutionError({
           status: 429,
@@ -269,14 +289,19 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
   const maybeRefreshCredits = (attempt: Attempt, agent: string): Effect.Effect<void, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
       const { context, state } = attempt
+
       if (!creditsEnabled(context.config) || coolingDisabled(context)) return
       const now = yield* Clock.currentTimeMillis
+
       if ((yield* Effect.promise(() => state.credits(context.credential.id))) !== undefined) return
+
       if (!(yield* Effect.promise(() => state.claimCreditsRefresh(context.credential.id, now)))) return
       const client = yield* HttpClient.HttpClient
+
       const probe = probeCredits(context.credential, attempt.accessToken, agent, state, now).pipe(
         Effect.provideService(HttpClient.HttpClient, client)
       )
+
       if (attempt.waitUntil !== undefined) attempt.waitUntil(Effect.runPromise(probe))
     })
 
@@ -300,6 +325,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       from === Formats.Claude
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
         : []
+
     if (texts.length > 0 && attempt.kv !== undefined) {
       yield* Effect.promise(() =>
         prefetchSignatures(attempt.signatures, makeKvSignatureStore(attempt.kv as KVNamespace), baseModel, texts)
@@ -323,7 +349,9 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
           { headers: options.headers, config: context.config }
         )
       )
+
     const translated = translateWith(original, upstreamStream)
+
     if (translated.error !== undefined) return yield* requestError(translated)
     // Baseline of the payload rules: the translation before thinking and shaping.
     const originalTranslatedBody = structuredClone(translated.body)
@@ -339,14 +367,17 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       modelInfo: request.modelInfo,
       lookupModelInfo: request.modelLookup
     })
+
     const words = context.config.oauth.providers.antigravity["sensitive-words"]
     body = obfuscateSystemInstruction(body, words)
     body = sanitizeGeminiRequestSignatures(baseModel, body)
+
     if (stream) del(body, "request.stream")
     const effort = get(body, "request.generationConfig.thinkingConfig.thinkingLevel")
     context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined)
 
     const useCredits = options.metadata.antigravityCredits === true && creditsEnabled(context.config)
+
     if (useCredits) injectEnabledCreditTypes(body)
     // Gemini reasoning replay (signatures and native function calls of earlier turns), then the boundary turns.
     const replay = yield* prepareReplayPayload(ledger, baseModel, request, options, body)
@@ -362,11 +393,13 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const alt = options.alt === "responses/compact" ? "" : options.alt
     const base = requestBaseUrl(context.credential.attributes, context.credential.metadata)
     let url = base + (upstreamStream ? ANTIGRAVITY_STREAM_PATH : ANTIGRAVITY_GENERATE_PATH)
+
     if (upstreamStream) url += alt === "" ? "?alt=sse" : `?$alt=${encodeURIComponent(alt)}`
     else if (alt !== "") url += `?$alt=${encodeURIComponent(alt)}`
 
     // User payload rules: the final semantic mutation of the business payload (AGENTS.md).
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+
     const finalBody = finalizePayload(
       context.config,
       ANTIGRAVITY_IDENTIFIER,
@@ -382,6 +415,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       },
       body
     )
+
     return {
       url,
       headers: headersFor(attempt, agent),
@@ -397,22 +431,28 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
   const send = Effect.fnUntraced(function* (attempt: Attempt, prepared: PreparedRequest) {
     const { context, state } = attempt
     const client = yield* HttpClient.HttpClient
+
     const request = HttpClientRequest.post(prepared.url).pipe(
       HttpClientRequest.bodyText(JSON.stringify(prepared.body), "application/json"),
       HttpClientRequest.setHeaders(prepared.headers)
     )
+
     const response: HttpClientResponse.HttpClientResponse = yield* client
       .execute(request)
       .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.mapError(transportError))
+
     context.usage.markFirstByte(yield* Clock.currentTimeMillis)
+
     if (response.status >= 200 && response.status < 300) return response
 
     const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
     context.usage.fail(response.status, text)
     yield* clearReplayOnInvalidSignature(ledger, prepared.replayScope, response.status, text)
+
     if (response.status === 429) {
       const decision = decideAntigravity429(text)
       const now = yield* Clock.currentTimeMillis
+
       if (
         decision.kind === "short_cooldown_switch_auth" &&
         (decision.retryAfterMs ?? 0) > 0 &&
@@ -430,6 +470,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         yield* Effect.promise(() => state.markCreditsExhausted(context.credential.id, now))
       }
     }
+
     return yield* antigravityStatusError(response.status, text, new Headers(response.headers))
   })
 
@@ -476,10 +517,13 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       const ctx = responseContext(attempt, prepared, options.alt)
       const out = translating(attempt, () => registry.translateNonStream(responseFormat, to, ctx, text))
       yield* persistSignatures(attempt)
+
       if (out === undefined || out === "") {
         return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE })
       }
+
       context.usage.publish(parseAntigravityUsage(text))
+
       return responseFormat === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out
     })
 
@@ -500,27 +544,36 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 
     if (!aggregate) {
       const text = yield* response.text.pipe(Effect.mapError(transportError))
+
       // `cacheAntigravityReasoningReplayFromResponse`
       if (prepared.replay !== undefined) {
         const parsed = tryParseJson(text)
+
         if (parsed !== undefined) prepared.replay.observePayload(parsed)
         yield* prepared.replay.commit(ledger)
       }
+
       const payload = yield* translateBody(attempt, prepared, text)
+
       return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
     }
+
     // Claude, Gemini 3 Pro and image models only stream upstream: the SSE is merged into one response.
     const filter = new UsageFilter()
     const lines = yield* splitLines(response.stream).pipe(Stream.mapError(transportError), Stream.runCollect)
     const payloads: string[] = []
+
     for (const line of lines) {
       prepared.replay?.observeLine(line)
       const payload = jsonPayloadOf(filter.filter(line))
+
       if (payload !== undefined) payloads.push(payload)
     }
+
     if (prepared.replay !== undefined) yield* prepared.replay.commit(ledger)
     const merged = JSON.stringify(convertStreamToNonStream(payloads))
     const payload = yield* translateBody(attempt, prepared, merged)
+
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -530,6 +583,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
    */
   const expandCompaction = Effect.fnUntraced(function* (request: ExecutorRequest, options: ExecutorOptions) {
     if (!hasResponsesCompactionItem(request.payload)) return { request, options }
+
     const payload = yield* Effect.tryPromise({
       try: () => expandCompactionCapsules(request.payload),
       catch: (error) =>
@@ -539,10 +593,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
           requestScoped: true
         })
     })
+
     const original =
       options.originalRequest === undefined
         ? undefined
         : yield* Effect.promise(() => expandCompactionCapsules(options.originalRequest as Json).catch(() => payload))
+
     return {
       request: { ...request, payload },
       options: original === undefined ? options : { ...options, originalRequest: original }
@@ -561,9 +617,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     options: ExecutorOptions
   ) {
     const baseModel = parseSuffix(request.model).modelName
+
     const source =
       request.payload === undefined && options.originalRequest !== undefined ? options.originalRequest : request.payload
+
     const summaryRequest: ExecutorRequest = { ...request, payload: prepareCompactionSummaryPayload(source) }
+
     const summaryOptions: ExecutorOptions = {
       ...options,
       alt: "",
@@ -572,17 +631,22 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       sourceFormat: Formats.OpenAIResponse,
       responseFormat: Formats.OpenAIResponse
     }
+
     const summary = yield* executeGenerate(context, summaryRequest, summaryOptions)
     const parsed = tryParseJson(summary.payload)
+
     const text = yield* Effect.try({
       try: () => extractSummaryText(parsed as Json),
       catch: (error) => new ExecutionError({ status: 500, message: `extract summary: ${(error as Error).message}` })
     })
+
     const capsule = yield* Effect.tryPromise({
       try: () => sealCompaction(text, baseModel),
       catch: (error) => new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` })
     })
+
     const usage = responsesSummaryUsage(parsed as Json, summary.payload)
+
     return { baseModel, capsule, usage, headers: summary.headers }
   })
 
@@ -592,8 +656,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     options: ExecutorOptions
   ) {
     const expanded = yield* expandCompaction(request, options)
+
     if (compactionRequested(expanded.request, expanded.options, true)) {
       const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+
       const body = buildCompactionResponse(
         sealed.baseModel,
         sealed.capsule,
@@ -602,8 +668,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         sealed.usage.total,
         Date.now()
       )
+
       return { payload: JSON.stringify(body), headers: sealed.headers } satisfies ExecutorResponse
     }
+
     return yield* executeGenerate(context, expanded.request, expanded.options)
   })
 
@@ -619,9 +687,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         requestScoped: true
       })
     }
+
     const expanded = yield* expandCompaction(request, options)
+
     if (compactionRequested(expanded.request, expanded.options, false)) {
       const sealed = yield* executeCompaction(context, expanded.request, expanded.options)
+
       const chunks = buildCompactionStreamChunks(
         sealed.baseModel,
         sealed.capsule,
@@ -630,10 +701,13 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         sealed.usage.total,
         Date.now()
       )
+
       const headers = new Headers(sealed.headers)
       headers.set("Content-Type", "text/event-stream")
+
       return { headers, chunks: Stream.fromIterable(chunks) } satisfies StreamResult
     }
+
     return yield* executeGenerateStream(context, expanded.request, expanded.options)
   })
 
@@ -657,8 +731,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const ctx = responseContext(attempt, prepared, "")
     const filter = new UsageFilter()
     const assembler = new JsonAssembler()
+
     const translate = (payload: string): ReadonlyArray<string> =>
       translating(attempt, () => registry.translateStream(responseFormat, to, ctx, payload))
+
     const withToolInputCheck = (chunks: ReadonlyArray<string>): Stream.Stream<string, ExecutionError> =>
       ctx.state.toolInputError !== undefined
         ? Stream.concat(
@@ -668,15 +744,20 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         : Stream.fromIterable(chunks)
 
     const lines = splitLines(response.stream).pipe(Stream.mapError(transportError))
+
     const body = lines.pipe(
       Stream.flatMap((line) => {
         prepared.replay?.observeLine(line)
         // Accounting is captured before the client-facing filter renames usage.
         const usage = parseAntigravityStreamUsage(line)
+
         if (usage !== undefined) context.usage.publish(usage)
         const assembled = assembler.push(filter.filter(line))
+
         if (assembled.kind === "none") return Stream.empty
+
         if (assembled.kind === "error") return Stream.fail(assembled.error)
+
         return Stream.unwrap(
           resolveGrounding(attempt, prepared, assembled.payload).pipe(
             Effect.provideService(HttpClient.HttpClient, httpClient),
@@ -684,6 +765,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
               context.usage.observeResponseModel(responseModelOf(tryParseJson(payload)))
               const chunks = translate(payload)
               context.usage.observeTokenEvent(Date.now(), isGeminiTokenEvent(payload))
+
               // Responses clients: publish the ledger before the translated completion reaches them, so the next turn
               // finds it (split usage/signature frames may still extend the chain until `response.completed`).
               const commit =
@@ -693,24 +775,30 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
                 chunks.some(isResponseCompleted)
                   ? prepared.replay.commit(ledger)
                   : Effect.void
+
               return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
             })
           )
         )
       })
     )
+
     // Only a clean end of stream may produce a synthetic terminal event (a read error never reports success).
     // The ledger is committed before the EOF-generated completion is delivered.
     const tail = Stream.suspend(() => {
       const chunks = translate("[DONE]")
+
       const commit =
         prepared.replay !== undefined && !prepared.replay.committed ? prepared.replay.commit(ledger) : Effect.void
+
       return Stream.unwrap(commit.pipe(Effect.as(withToolInputCheck(chunks))))
     })
+
     const chunks = Stream.concat(body, tail).pipe(
       Stream.ensuring(persistSignatures(attempt)),
       Stream.tapError((error) => Effect.sync(() => context.usage.fail(error.status, error.message)))
     )
+
     return { headers: new Headers(response.headers), chunks } satisfies StreamResult
   })
 
@@ -724,20 +812,24 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     const baseModel = parseSuffix(request.model).modelName
     const from = options.sourceFormat
     const agent = yield* userAgent(attempt)
+
     const original = validateRequestSignatures(
       baseModel,
       from,
       structuredClone(options.originalRequest ?? request.payload)
     )
+
     const texts =
       from === Formats.Claude
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
         : []
+
     if (texts.length > 0 && attempt.kv !== undefined) {
       yield* Effect.promise(() =>
         prefetchSignatures(attempt.signatures, makeKvSignatureStore(attempt.kv as KVNamespace), baseModel, texts)
       )
     }
+
     const translated = translating(attempt, () =>
       translateRequestForExecutor(
         registry,
@@ -754,8 +846,10 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
         { headers: options.headers, config: context.config }
       )
     )
+
     if (translated.error !== undefined) return yield* requestError(translated)
     const originalTranslated = structuredClone(translated.body)
+
     let body = yield* thinking.apply({
       body: translated.body,
       model: request.model,
@@ -767,9 +861,11 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       modelInfo: request.modelInfo,
       lookupModelInfo: request.modelLookup
     })
+
     body = obfuscateSystemInstruction(body, context.config.oauth.providers.antigravity["sensitive-words"])
     body = sanitizeGeminiRequestSignatures(baseModel, body)
     body = ensureLeadingUserContent(baseModel, body)
+
     for (const path of [
       "project",
       "model",
@@ -780,10 +876,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
     ]) {
       del(body, path)
     }
+
     const alt = options.alt
     const base = requestBaseUrl(context.credential.attributes, context.credential.metadata)
     const url = base + ANTIGRAVITY_COUNT_TOKENS_PATH + (alt !== "" ? `?$alt=${encodeURIComponent(alt)}` : "")
     const requestedModel = options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model
+
     const finalBody = finalizePayload(
       context.config,
       ANTIGRAVITY_IDENTIFIER,
@@ -799,6 +897,7 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       },
       body
     )
+
     const prepared: PreparedRequest = {
       url,
       headers: headersFor(attempt, agent),
@@ -809,10 +908,12 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
       replayScope: NO_REPLAY_SCOPE,
       replay: undefined
     }
+
     const response = yield* send(attempt, prepared)
     const text = yield* response.text.pipe(Effect.mapError(transportError))
     const count = asInt(get(tryParseJson(text), "totalTokens"))
     const payload = registry.translateTokenCount(responseFormatOf(options), to, count, text)
+
     return { payload, headers: new Headers(response.headers) } satisfies ExecutorResponse
   })
 
@@ -823,36 +924,50 @@ export const makeAntigravityExecutor = (settings: AntigravityExecutorOptions = {
 const isResponseCompleted = (chunk: string): boolean =>
   chunk.split("\n").some((line) => {
     const payload = jsonPayloadOf(line)
+
     return payload !== undefined && get(tryParseJson(payload), "type") === "response.completed"
   })
 
 /** `JSONPayload`: the JSON object of an SSE `data:` line or raw JSON line. */
 const jsonPayloadOf = (line: string): string | undefined => {
   let trimmed = line.trim()
+
   if (trimmed === "" || trimmed === "[DONE]" || trimmed.startsWith("event:")) return undefined
+
   if (trimmed.startsWith("data:")) trimmed = trimmed.slice(5).trim()
+
   return trimmed.startsWith("{") ? trimmed : undefined
 }
 
 /** `obfuscateSensitiveWords` for the system instruction of a translated request. */
 const obfuscateSystemInstruction = (body: Json, words: ReadonlyArray<string>): Json => {
   const obfuscate = buildSensitiveWordMatcher(words)?.obfuscate
+
   if (obfuscate === undefined) return body
+
   for (const path of ["request.systemInstruction", "request.system_instruction"]) {
     const instruction = get(body, path)
+
     if (instruction === undefined) continue
+
     if (typeof instruction === "string") {
       const text = obfuscate(instruction)
+
       if (text !== instruction) set(body, path, text)
       continue
     }
+
     const parts = get(instruction, "parts")
+
     if (!isJsonArray(parts)) continue
+
     for (const part of parts) {
       if (!isJsonObject(part) || typeof part["text"] !== "string") continue
       const text = obfuscate(part["text"])
+
       if (text !== part["text"]) part["text"] = text
     }
   }
+
   return body
 }

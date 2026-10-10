@@ -18,6 +18,7 @@ export interface AccessConfig {
 }
 
 const DEFAULT_DEV_EMAIL = "dev@localhost"
+
 const TEAM_HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/
 
 const splitList = (value: string | undefined): ReadonlyArray<string> =>
@@ -33,7 +34,9 @@ const normalizeTeamHost = (raw: string): string | undefined => {
     .toLowerCase()
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "")
+
   if (host === "" || !TEAM_HOST.test(host)) return undefined
+
   return host.includes(".") ? host : `${host}.cloudflareaccess.com`
 }
 
@@ -42,13 +45,17 @@ type AccessEnv = Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "ACCESS_ADMIN_E
 /** Parses and validates the Access settings. Fails closed when the team domain or AUD is missing. */
 export const loadAccessConfig = (env: AccessEnv): Effect.Effect<AccessConfig, ConfigurationError> => {
   const host = normalizeTeamHost(env.ACCESS_TEAM_DOMAIN ?? "")
+
   if (host === undefined) {
     return Effect.fail(new ConfigurationError({ message: "ACCESS_TEAM_DOMAIN is missing or invalid" }))
   }
+
   const audiences = splitList(env.ACCESS_AUD)
+
   if (audiences.length === 0) {
     return Effect.fail(new ConfigurationError({ message: "ACCESS_AUD is missing" }))
   }
+
   return Effect.succeed({
     issuer: `https://${host}`,
     jwksUrl: `https://${host}/cdn-cgi/access/certs`,
@@ -90,20 +97,26 @@ export type DevBypass = { readonly _tag: "Active"; readonly email: string } | { 
  */
 export const devBypass = (env: DevBypassEnv, requestUrl: string): DevBypass => {
   const value = (env.ACCESS_DEV_BYPASS ?? "").trim()
+
   if (value === "") return undefined
+
   if ((env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "") return { _tag: "Refused" }
   let hostname: string
+
   try {
     hostname = new URL(requestUrl).hostname
   } catch {
     return undefined
   }
+
   if (!LOOPBACK_HOSTS.has(hostname)) return undefined
+
   return { _tag: "Active", email: /^(1|true|yes)$/i.test(value) ? DEFAULT_DEV_EMAIL : value }
 }
 
 /** The dev bypass email, or undefined when the bypass does not apply (see {@link devBypass}). */
 export const devBypassEmail = (env: DevBypassEnv, requestUrl: string): string | undefined => {
   const bypass = devBypass(env, requestUrl)
+
   return bypass?._tag === "Active" ? bypass.email : undefined
 }

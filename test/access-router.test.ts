@@ -12,6 +12,7 @@ const key = await makeKey("router-kid")
 
 const whoami = Effect.gen(function* () {
   const identity = yield* AccessPrincipal
+
   return HttpServerResponse.text(JSON.stringify(identity.principal) + "|" + identity.callerScope.slice(0, 8))
 })
 
@@ -38,6 +39,7 @@ const ctx = {} as unknown as ExecutionContext
 
 const makeHandler = () => {
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])))
+
   return HttpRouter.toWebHandler(Layer.mergeAll(RootRoutes, access, makeWithAccess(access)(TestRoutes)), {
     disableLogger: true
   })
@@ -46,7 +48,9 @@ const makeHandler = () => {
 const withToken = async (claims: Record<string, unknown>): Promise<RequestInit> => ({
   headers: { "Cf-Access-Jwt-Assertion": await jwt(claims) }
 })
+
 const now = () => Math.floor(Date.now() / 1000)
+
 const jwt = (claims: Record<string, unknown>) => signToken({ key, now: now(), claims })
 
 describe("Access gate through the router", () => {
@@ -85,10 +89,12 @@ describe("Access gate through the router", () => {
     const admin = await call("/v8/management/config", await withToken(userClaims("admin@example.com")))
     expect(admin.status).toBe(200)
     expect(admin.headers.get("access-control-allow-origin")).toBeNull()
+
     const preflight = await call("/v8/management/requests/api-call", {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" }
     })
+
     expect(preflight.headers.get("access-control-allow-origin")).toBeNull()
     expect(preflight.headers.get("access-control-allow-headers")).toBeNull()
   })
@@ -123,6 +129,7 @@ describe("Access gate through the router", () => {
       method: "POST",
       ...(await withToken(serviceClaims("some.access")))
     })
+
     expect(response.status).toBe(200)
     expect((await response.text()).startsWith('{"kind":"service","commonName":"some.access"}')).toBe(true)
   })
@@ -162,6 +169,7 @@ describe("Access gate through the router", () => {
       ACCESS_TEAM_DOMAIN: "",
       ACCESS_AUD: ""
     })
+
     expect(response.status).toBe(500)
     expect(await response.text()).toBe('{"error":"Authentication service error"}')
     expect((await call("/healthz", {}, { ...accessEnv, ACCESS_TEAM_DOMAIN: "" })).status).toBe(200)
@@ -186,6 +194,7 @@ describe("Access gate through the router", () => {
       expect(response.status).not.toBe(200)
       expect(await response.text()).not.toContain("dev@localhost")
     }
+
     // With full Access settings the request is authenticated normally.
     const refused = await call(
       "/v8/management/config",
@@ -193,13 +202,16 @@ describe("Access gate through the router", () => {
       { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
       "http://localhost:8787"
     )
+
     expect(refused.status).toBe(401)
+
     const token = await call(
       "/v8/management/config",
       await withToken(userClaims("admin@example.com")),
       { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
       "http://localhost:8787"
     )
+
     expect(token.status).toBe(200)
   })
 })

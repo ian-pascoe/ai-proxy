@@ -16,14 +16,19 @@ export interface SuffixResult {
 /** Splits `name(suffix)`: the group starts at the last `(` and the string must end with `)`. */
 export const parseSuffix = (model: string): SuffixResult => {
   const lastOpen = model.lastIndexOf("(")
+
   if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false, rawSuffix: "" }
+
   return { modelName: model.slice(0, lastOpen), hasSuffix: true, rawSuffix: model.slice(lastOpen + 1, -1) }
 }
 
 /** Re-attaches the request's suffix unless `resolved` already has one (Go `preserveResolvedModelSuffix`). */
 export const preserveSuffix = (resolved: string, request: SuffixResult): string => {
   const trimmed = resolved.trim()
+
   if (trimmed === "") return ""
+
   if (parseSuffix(trimmed).hasSuffix) return trimmed
+
   return request.hasSuffix && request.rawSuffix !== "" ? `${trimmed}(${request.rawSuffix})` : trimmed
 }
