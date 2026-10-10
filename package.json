@@ -20,7 +20,7 @@
     "test": "vitest run",
     "lint": "oxlint && prettier --check .",
     "format": "prettier --write .",
-    "catalog:sync": "go run ./tools/fixturegen/registry",
+    "catalog:sync": "tools/sync-reference-repos.sh && go run ./tools/fixturegen/registry",
     "repos:sync": "tools/sync-reference-repos.sh",
     "panel:sync": "node --experimental-strip-types tools/panel-sync/cli.ts"
   },

@@ -6,7 +6,9 @@ deviations from Go).
 
 The Go server ([router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)) is the behavioural source of
 truth. It is not part of this repository: `pnpm install` (the `prepare` script, skipped when `CI` is set) clones it into
-`.repos/CLIProxyAPI` as a read-only reference, and `pnpm repos:sync` (`tools/sync-reference-repos.sh`) fast-forwards it.
+`.repos/CLIProxyAPI` as a read-only reference. pnpm skips `prepare` when dependencies are already up to date, so refresh
+it with `pnpm repos:sync` (`tools/sync-reference-repos.sh`, a fast-forward of upstream `main`; `pnpm catalog:sync` runs it
+first).
 Go paths cited in code and docs (`internal/...`, `sdk/...`) are relative to that checkout.
 
 ## Requirements
