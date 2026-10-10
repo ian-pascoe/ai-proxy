@@ -13,7 +13,7 @@ Go paths cited in code and docs (`internal/...`, `sdk/...`) are relative to that
 
 ## Requirements
 
-- Node.js 22+ and pnpm (`packageManager` in `package.json`).
+- Node.js 22+ (CI uses the version in `.node-version`) and pnpm (`devEngines.packageManager` in `package.json`).
 - Go (only for `tools/fixturegen` and `pnpm catalog:sync`) and the reference checkout above.
 
 ## Commands
@@ -77,6 +77,31 @@ repository root, e.g. `go run ./tools/fixturegen/translator` (use `TZ=UTC` for t
 The reference checkout follows upstream `main`, so regenerating after `pnpm repos:sync` shows what changed upstream: a
 fixture diff is a porting task (port the Go change, then commit the new fixtures), not noise to commit blindly. Some
 fixtures contain generated ids or timestamps that differ on every run; the tests mask those.
+
+`tools/fixturegen/UPSTREAM_COMMIT` records the reference commit the committed fixtures were generated from (the last
+ported upstream state). `tools/upstream-drift.sh` syncs the reference, regenerates every fixture, runs the tests on
+them and reports the upstream commits since that commit and the test files that fail; the weekly
+`.github/workflows/upstream-drift.yml` keeps one `upstream-drift` issue with that report. After porting, set
+`UPSTREAM_COMMIT` to the reference commit you ported up to and commit the regenerated fixtures.
+
+## Git hooks
+
+`pnpm install` enables the Husky hooks in `.husky/` (the `prepare` script runs `husky`):
+
+- `pre-commit`: lint-staged formats staged files with `oxfmt` and lints staged scripts with `oxlint --quiet` (errors
+  only).
+- `commit-msg`: commitlint with `@commitlint/config-conventional` (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`,
+  `style:`, `test:`, `ci:`, …; header and body lines up to 100 characters).
+- `pre-push`: `pnpm typecheck && pnpm lint`. The test suite runs in CI.
+
+Skip them once with `git commit --no-verify` / `git push --no-verify`, or for a whole shell with `HUSKY=0`.
+
+## CI and deployment
+
+`.github/workflows/ci.yml` runs typecheck, lint, actionlint and zizmor, the tests in three shards, and the smoke test;
+then deploys a preview per pull request and production from `main`. Setup and behaviour: [DEPLOY.md](DEPLOY.md).
+Actions are pinned by commit SHA (Dependabot updates them weekly, `.github/dependabot.yml`), jobs get only the
+permissions they need, and deploy jobs use no dependency cache.
 
 ## Lint and format
 

@@ -25,7 +25,7 @@ export default Alchemy.Stack(
   { providers: Cloudflare.providers(), state },
   Effect.gen(function* () {
     const dev = yield* Alchemy.ALCHEMY_DEV;
-    const settings = yield* readSettings(dev);
+    const settings = yield* readSettings(dev, yield* Alchemy.Stage);
 
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
@@ -39,13 +39,16 @@ export default Alchemy.Stack(
     const worker = yield* Cloudflare.Worker("Proxy", {
       main: "./src/index.ts",
       compatibility: COMPATIBILITY,
-      // Access is the only client authentication: no workers.dev or preview URLs, only the Access-protected domain.
-      workersDev: false,
-      ...(dev ? {} : { domain: settings.domain }),
+      // Access is the only client authentication. Production serves only its Access-protected domain; pull-request
+      // previews serve their workers.dev URL, protected by enrolling the Worker into the preview's Access application.
+      workersDev: settings.preview,
+      ...(dev || settings.preview ? {} : { domain: settings.domain }),
+      ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
       // The management panel (`pnpm panel:sync`). The Worker runs first so proxy routes are never shadowed by assets.
       assets: { directory: "./public", runWorkerFirst: true },
-      crons: CRONS,
+      // Previews have no credentials to refresh or catalog worth keeping fresh.
+      crons: settings.preview ? [] : CRONS,
       env: {
         CACHE: cache,
         USAGE: usage,

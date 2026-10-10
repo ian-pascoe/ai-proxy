@@ -14,6 +14,7 @@ settings in `.env` (template: `.env.example`):
 | `CLIPROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`  | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                      | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
+| `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                     | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
 | `ACCESS_SESSION_DURATION`                            | Session duration of the application (default `24h`)                                                             |
 | `ACCESS_SERVICE_TOKEN_HEADER`                        | Optional single-header service tokens (section 5)                                                               |
 | `ACCESS_TEAM_DOMAIN`                                 | Worker variable (issuer and JWKS host); your Zero Trust team name                                               |
@@ -25,7 +26,9 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-The Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Service token credentials:
+The production Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Pull-request preview
+stages (`pr-<number>`, see [DEPLOY.md](DEPLOY.md)) instead serve their `workers.dev` URL behind their own application,
+which the Worker enrolls into. Service token credentials:
 
 - The Client IDs are printed in the deploy outputs (`serviceTokens`).
 - The Client Secrets are returned by Cloudflare only on creation; the deploy writes them to

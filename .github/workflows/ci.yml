@@ -1,41 +1,192 @@
+# Checks every pull request and push to main, then deploys:
+# - pull requests from this repository: a preview stage `pr-<number>` on its workers.dev URL (destroyed on close);
+# - main: the `prod` stage.
+# Deploy setup (environments, secrets, variables): docs/DEPLOY.md.
 name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, closed]
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+env:
+  # Deploy settings shared by every stage (infra/settings.ts); the environments hold the values.
+  STAGE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'prod' }}
+  # Management panel served at /management.html (tools/panel-sync); bump deliberately.
+  PANEL_TAG: v1.26.0
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  static:
+    name: typecheck, lint, workflows
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: static-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Matches devEngines.packageManager in package.json (action-setup reads only `packageManager`).
-          version: 12.10.1
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: actionlint
+        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
-          node-version: 22
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Lint
-        run: pnpm lint
-      - name: Test
-        run: pnpm test
-      - name: Smoke test (alchemy dev, local emulators)
-        run: pnpm smoke
+          advanced-security: false
+
+  test:
+    name: test (${{ matrix.shard }}/3)
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: test-${{ matrix.shard }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm test --shard="$SHARD/3"
+        env:
+          SHARD: ${{ matrix.shard }}
+
+  smoke:
+    name: smoke (alchemy dev)
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: smoke-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm smoke
+
+  deploy:
+    name: deploy ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+    needs: [static, test, smoke]
+    # Previews only for branches of this repository (fork and Dependabot runs get no deploy secrets).
+    # Production only from main (a manual run on another branch must not deploy it).
+    if: >-
+      github.event.action != 'closed' &&
+      ((github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.actor != 'dependabot[bot]') ||
+       (github.event_name != 'pull_request' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write # the preview URL comment
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    # One deploy per stage at a time; never cancel one midway.
+    concurrency:
+      group: deploy-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'prod' }}
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLIPROXY_DOMAIN: ${{ vars.CLIPROXY_DOMAIN }}
+      ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+      ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
+      ACCESS_ALLOW_EMAIL_DOMAINS: ${{ vars.ACCESS_ALLOW_EMAIL_DOMAINS }}
+      ACCESS_ADMIN_EMAILS: ${{ vars.ACCESS_ADMIN_EMAILS }}
+      ACCESS_ALLOW_SERVICE_TOKEN_IDS: ${{ vars.ACCESS_ALLOW_SERVICE_TOKEN_IDS }}
+      ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          # No dependency cache in jobs holding deploy credentials (cache poisoning).
+          cache: "false"
+      - name: Install the management panel
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm panel:sync --tag "$PANEL_TAG"
+      - name: Deploy
+        id: deploy
+        run: |
+          pnpm run deploy --stage "$STAGE" --no-input --yes
+          url="$(pnpm -s exec alchemy state read "cliproxy/$STAGE/output" | jq -r '.url // empty')"
+          if [ -z "$url" ]; then echo "::error::the stack output has no url" >&2; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Check through Access
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: tools/check-deploy.sh "$URL"
+      - name: Comment the preview URL
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.deploy.outputs.url }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}). Sign in with Access; storage starts empty and is destroyed when the pull request closes."
+
+  destroy-preview:
+    name: destroy preview
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # the preview comment
+    environment:
+      name: preview
+    concurrency:
+      group: deploy-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+      ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
+      ACCESS_ALLOW_SERVICE_TOKEN_IDS: ${{ vars.ACCESS_ALLOW_SERVICE_TOKEN_IDS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          cache: "false"
+      - name: Destroy
+        run: |
+          case "$STAGE" in pr-[0-9]*) ;; *) echo "::error::refusing to destroy stage $STAGE" >&2; exit 1 ;; esac
+          pnpm run destroy --stage "$STAGE" --no-input --yes
+      - name: Update the preview comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: tools/preview-comment.sh "$PR" "Preview \`$STAGE\` destroyed."

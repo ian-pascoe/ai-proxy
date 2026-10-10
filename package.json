@@ -14,7 +14,7 @@
     "logs": "alchemy logs",
     "panel:sync": "node --experimental-strip-types tools/panel-sync/cli.ts",
     "plan": "alchemy plan",
-    "prepare": "effect-tsgo patch --no-typescript --oxlint && ([ -n \"$CI\" ] || tools/sync-reference-repos.sh)",
+    "prepare": "effect-tsgo patch --no-typescript --oxlint && husky && ([ -n \"$CI\" ] || tools/sync-reference-repos.sh)",
     "repos:sync": "tools/sync-reference-repos.sh",
     "smoke": "sh tools/dev-smoke.sh",
     "test": "vitest run",
@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.0",
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
     "@distilled.cloud/cloudflare": "1.0.0-rc.13",
     "@effect/platform-node": "4.0.2",
     "@effect/tsgo": "0.51.1",
@@ -35,11 +37,22 @@
     "@oxlint/plugins": "1.87.0",
     "@types/node": "^22.20.5",
     "alchemy": "2.0.0-beta.81",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
+  },
+  "lint-staged": {
+    "*": "oxfmt --no-error-on-unmatched-pattern",
+    "*.{ts,mts,cts,js,mjs,cjs}": "oxlint --quiet --no-error-on-unmatched-pattern"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   },
   "devEngines": {
     "packageManager": {

@@ -1,0 +1,5 @@
+rules:
+  # `uses: $/...` (self-repository syntax) is not understood by actionlint yet; the local action is loaded right after
+  # checkout, before any step could write to the workspace. Revisit when actionlint supports it.
+  self-repository:
+    disable: true

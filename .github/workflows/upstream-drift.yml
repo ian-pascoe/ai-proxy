@@ -1,0 +1,61 @@
+# Weekly: regenerates the golden fixtures from upstream CLIProxyAPI main and keeps one open issue listing what is not
+# ported yet (tools/upstream-drift.sh). Closes the issue when nothing is left.
+name: upstream drift
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: upstream-drift
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write # the drift issue
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache: false
+      - name: Report
+        id: report
+        run: |
+          set +e
+          tools/upstream-drift.sh "$RUNNER_TEMP/report.md"
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "drift=false" >> "$GITHUB_OUTPUT" ;;
+            10) echo "drift=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+      - name: Open, update or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRIFT: ${{ steps.report.outputs.drift }}
+        run: |
+          title="Upstream drift: CLIProxyAPI changes to port"
+          number="$(gh issue list --state open --label upstream-drift --json number --jq '.[0].number // empty')"
+          if [ "$DRIFT" = true ]; then
+            gh label create upstream-drift --color c5def5 --description "Upstream CLIProxyAPI changes to port" 2>/dev/null || true
+            if [ -n "$number" ]; then
+              gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
+            else
+              gh issue create --title "$title" --label upstream-drift --body-file "$RUNNER_TEMP/report.md"
+            fi
+          elif [ -n "$number" ]; then
+            gh issue close "$number" --comment "$(cat "$RUNNER_TEMP/report.md")"
+          fi

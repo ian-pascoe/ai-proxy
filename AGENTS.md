@@ -5,16 +5,27 @@ TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com
 ## Commands
 
 - Run before finishing: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`; `pnpm format` formats.
-- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked.
+- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and production (`main`): `docs/DEPLOY.md`.
+- Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, …); Husky hooks format/lint staged files, check commit messages and run `pnpm typecheck && pnpm lint` before push. Fix hook failures instead of bypassing them.
 
 ## Go reference
 
 - The Go server is the behavioural source of truth. It lives in the read-only reference checkout `.repos/CLIProxyAPI`; Go paths in code and docs (`internal/...`, `sdk/...`) are relative to it. Read it there; change only this repository.
 - Golden fixtures come from `tools/fixturegen` (Go programs run against the reference checkout, see `docs/DEVELOPMENT.md`). A fixture diff after a reference update is an upstream change to port.
 
+## Learning more about Effect
+
+This repository uses the Effect Typescript library.
+
+Before writing any Effect code, first read `node_modules/effect/AGENTS.md`
+**completely**, and follow the links in the file when required.
+
+If you need to learn more about particular Effect apis and concepts that the
+guide doesn't cover, search through the source code in `node_modules/effect/src`.
+Effect v4 APIs differ from Effect 3.
+
 ## Conventions
 
-- Read `node_modules/effect/AGENTS.md` and the effect source before writing Effect code (APIs differ from Effect 3).
 - Infrastructure is Alchemy v2 (`alchemy.run.ts`, `infra/`); there is no Wrangler config. A new binding/variable goes in the Worker `env` in `alchemy.run.ts`, `src/env.d.ts` and `vitest.config.ts` together.
 - Tests under `test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
 - Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); layers stay free of them.
