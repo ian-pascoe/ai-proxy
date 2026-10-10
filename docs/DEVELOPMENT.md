@@ -35,11 +35,13 @@ Run from the repository root:
 | `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
 | `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                   |
 | `pnpm panel:sync`   | Install `public/management.html` (control panel) from its GitHub release                                                    |
+| `pnpm ci:setup`     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
 | `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
 
 ## Infrastructure
 
-`alchemy.run.ts` is the composition root of the deployed resources (Alchemy v2, Effect-based); `infra/settings.ts` reads
+`alchemy.run.ts` is the composition root of the deployed resources (`stacks/github.ts`, a separate stack, holds CI's
+credentials) (Alchemy v2, Effect-based); `infra/settings.ts` reads
 the deploy settings (`.env`), `infra/access.ts` provisions Cloudflare Access. There is no Wrangler configuration. When you
 add a binding or variable, change three places together: the Worker's `env` in `alchemy.run.ts`, the `Env` interface in
 `src/env.d.ts`, and the test bindings in `vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility

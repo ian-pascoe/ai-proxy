@@ -33,42 +33,47 @@ Any machine with the deploy settings can deploy a preview by hand: `pnpm run dep
 
 ## Setup
 
-### 1. Cloudflare API token (secret `CLOUDFLARE_API_TOKEN`)
+CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that creates them and writes them into GitHub.
+It manages:
 
-Create a custom API token (My Profile → API Tokens → Create Custom Token) with:
+- the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
+  `preview`;
+- `cliproxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
+  Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zone of `CLIPROXY_DOMAIN`;
+- `cliproxy-ci-check`, the Access service token of the post-deploy check;
+- in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
+  variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
+  ID); in `production` also `CLIPROXY_DOMAIN`.
 
-| Scope                | Permission                                  | Used for                                                     |
-| -------------------- | ------------------------------------------- | ------------------------------------------------------------ |
-| Account              | Workers Scripts: Edit                       | the Worker, Durable Objects, crons, workers.dev, state store |
-| Account              | Workers KV Storage: Edit                    | the `Cache` namespace                                        |
-| Account              | D1: Edit                                    | the `Usage` database and its migrations                      |
-| Account              | Secrets Store: Edit                         | Alchemy's state store credentials                            |
-| Account              | Access: Apps and Policies: Edit             | the Access applications and policies                         |
-| Account              | Account Settings: Read                      | account lookups                                              |
-| Zone `ianpascoe.dev` | Zone: Read, DNS: Edit, Workers Routes: Edit | the production custom domain                                 |
+Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
+again for GitHub.
 
-Limit it to the one account and zone. It needs no Access service token permission: CI never creates service tokens.
+### 1. An `admin` profile (once)
 
-### 2. CI service token (secrets `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`; variable `ACCESS_ALLOW_SERVICE_TOKEN_IDS`)
+Creating API tokens needs more than the everyday OAuth login, so the stack deploys with a separate Alchemy profile:
 
-An Access service token managed outside the stack (Zero Trust → Access → Service credentials), used only by the
-post-deploy check. Its **ID** (not the Client ID) goes into `ACCESS_ALLOW_SERVICE_TOKEN_IDS`, which adds it to each
-application's Service Auth policy. Set the same value in your local `.env`: a local deploy without it removes the
-token from the production policy and the next CI check fails.
+```bash
+pnpm exec alchemy profile create admin
+pnpm exec alchemy profile edit --profile admin
+```
 
-### 3. GitHub environments
+For Cloudflare, use the **Global API Key** (with your email), or an API token with **Account → API Tokens: Write** and
+**Account → Access: Service Tokens: Write**. For GitHub, choose `gh` (GitHub CLI, needs repository admin). Treat this
+profile like root: use it only for this stack.
 
-Create the environments `production` and `preview` (Settings → Environments), each with:
+### 2. Deploy the CI stack
 
-- Secrets: `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`.
-- Variables: `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_TEAM_DOMAIN`, `ACCESS_ALLOW_EMAILS`, `ACCESS_ADMIN_EMAILS`,
-  `ACCESS_ALLOW_SERVICE_TOKEN_IDS`, and in `production` also `CLIPROXY_DOMAIN`. Optional: `ACCESS_ALLOW_EMAIL_DOMAINS`,
-  `ACCESS_SESSION_DURATION`.
+```bash
+pnpm ci:setup
+```
 
-Restrict `production` to the `main` branch (Deployment branches and tags → Selected branches → `main`). No reviewers:
-a green push to `main` deploys.
+It runs `alchemy deploy --config stacks/github.ts --stage ci --profile admin` and prints the outputs. Copy
+`checkServiceTokenId` into `ACCESS_ALLOW_SERVICE_TOKEN_IDS` in your local `.env`: a local deploy of `prod` without it
+removes the CI token from the production policy and the next CI check fails.
 
-The variables mirror `.env` (see `.env.example`); keep the two in sync, since local deploys of `prod` remain possible.
+Re-run `pnpm ci:setup` to apply changed permissions or `.env` values. To rotate the deploy token, destroy and redeploy
+the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --profile admin`, then `pnpm ci:setup`).
 
 ## Operations
 

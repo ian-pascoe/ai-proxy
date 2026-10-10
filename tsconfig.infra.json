@@ -1,5 +1,5 @@
 {
-  // Deploy-time code (alchemy.run.ts, infra/) runs in Node.js under the Alchemy CLI, not in workerd.
+  // Deploy-time code (alchemy.run.ts, infra/, stacks/) runs in Node.js under the Alchemy CLI, not in workerd.
   "compilerOptions": {
     "composite": true,
     "tsBuildInfoFile": ".tsbuild/tsconfig.infra.tsbuildinfo",
@@ -19,5 +19,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["alchemy.run.ts", "infra"]
+  "include": ["alchemy.run.ts", "infra", "stacks"]
 }
