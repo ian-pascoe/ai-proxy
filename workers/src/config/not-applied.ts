@@ -16,22 +16,10 @@ const claudeKeys = (config: Config): ReadonlyArray<ApiKeyEntry> =>
 const RULES: ReadonlyArray<NotAppliedRule> = [
   { key: "access.api-keys", isSet: (config) => config.access["api-keys"].length > 0 },
   { key: "requests.proxy-url", isSet: (config) => config.requests["proxy-url"].trim() !== "" },
-  {
-    key: "requests.nonstream-keepalive-interval",
-    isSet: (config) => config.requests["nonstream-keepalive-interval"] > 0
-  },
   { key: "upstream.codex.response-steering", isSet: (config) => config.upstream.codex["response-steering"] },
-  {
-    key: "upstream.claude.header-defaults.stabilize-device-profile",
-    isSet: (config) => config.upstream.claude["header-defaults"]["stabilize-device-profile"] !== undefined
-  },
   {
     key: "api-keys.claude[].keys[].experimental-cch-signing",
     isSet: (config) => claudeKeys(config).some((key) => key["experimental-cch-signing"] !== undefined)
-  },
-  {
-    key: "api-keys.claude[].keys[].rebuild-mid-system-message",
-    isSet: (config) => claudeKeys(config).some((key) => key["rebuild-mid-system-message"] === true)
   },
   { key: "observability.logs.debug", isSet: (config) => config.observability.logs.debug },
   { key: "observability.logs.request-log", isSet: (config) => config.observability.logs["request-log"] },

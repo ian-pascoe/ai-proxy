@@ -410,8 +410,7 @@ upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non
   answers replay-required.
 - **Multi-agent v2** input rewriting (`rewriteCodexMultiAgentV2Input`, after the stream/model fields are set) and orphan delegation
   (translation step) are shared with Codex.
-- **Not ported (follow-ups)**: `ForAPIKey` config scoping (OAuth-only payload rules also apply to API-key credentials), non-stream keep-alive bytes
-  for media requests and, for xAI image requests, mask/`input_fidelity` style Codex-only options.
+- **Not ported (follow-ups)**: for xAI image requests, mask/`input_fidelity` style Codex-only options.
 
 - **`ForAPIKey` scoping**: done for every provider by `withApiKeyScope` in the executor registry (xAI included, also on the WebSocket path:
   the socket runs through the conductor). Go's xAI settings live under the shared `upstream.xai`, which `ForAPIKey` keeps, so there is
@@ -604,10 +603,6 @@ Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translato
 Deviations from Go (all deliberate, documented in code headers):
 
 - No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is dropped on import.
-- Device-profile stabilisation, Fable/Opus-5.5 context-management reconcilers, `rebuildMidSystem` and Kimi attribution
-  are not ported; the continuity and thinking-replay stores live in the `SessionState` DO (see below): `begin` = one read (which
-
-- No uTLS/HTTP-2 fingerprinting (Workers limitation); `wire-policy` is parsed but not enforced.
 - **Device-profile stabiliser** (`device-profile.ts`, `upstream.claude.header-defaults.stabilize-device-profile`; Go
   `helps/claude_device_profile.go` local mode): confirmed Claude Code clients contribute their user agent / Stainless
   versions (only when they equal the configured baseline tuple; the platform is always pinned to the baseline), stored per

@@ -45,11 +45,8 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `access.api-keys` (legacy top-level `api-keys`)              | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)                 |
 | `requests.proxy-url`, per-group/per-key `proxy-url`          | Workers `fetch` cannot use outbound proxies                                               |
-| `requests.nonstream-keepalive-interval`                      | Non-stream keep-alive bytes are not ported                                                |
 | `upstream.codex.response-steering`                           | Response steering / full-duplex WebSocket is not ported                                   |
-| `upstream.claude.header-defaults.stabilize-device-profile`   | Device-profile stabilisation is not ported                                                |
 | `api-keys.claude[].keys[].experimental-cch-signing`          | Kept for compatibility (also in Go); signing follows the credential type                  |
-| `api-keys.claude[].keys[].rebuild-mid-system-message`        | Mid-conversation system message rebuild is not ported                                     |
 | `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request            |
 | `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                         |
 | `observability.usage.redis-usage-queue-retention-seconds`    | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS` |

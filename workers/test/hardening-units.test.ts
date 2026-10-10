@@ -37,9 +37,7 @@ describe("notAppliedSettings", () => {
   it("names the accepted keys that have no effect on Workers", async () => {
     expect(notAppliedSettings(await loadConfig(GO_CONFIG))).toEqual([
       "access.api-keys",
-      "requests.nonstream-keepalive-interval",
       "upstream.codex.response-steering",
-      "upstream.claude.header-defaults.stabilize-device-profile",
       "api-keys.claude[].keys[].experimental-cch-signing",
       "observability.logs.request-log",
       "observability.usage.usage-statistics-enabled",
