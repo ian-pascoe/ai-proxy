@@ -25,7 +25,7 @@ Run from `workers/` (or use `pnpm -C workers <script>`):
 | `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
 | `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
 | `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
-| `pnpm logs`         | `alchemy logs` (`-- --tail`)                                                                                                |
+| `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                   |
 | `pnpm panel:sync`   | Install `public/management.html` (control panel) from its GitHub release                                                    |
 | `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry                                                                 |
 

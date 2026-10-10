@@ -122,7 +122,7 @@ domain (zone) in that account, Zero Trust enabled (note your team name), Node 22
 4. **Deploy** (shows the plan and asks for confirmation; `pnpm plan` only previews):
 
    ```bash
-   pnpm run deploy -- --stage prod
+   pnpm run deploy --stage prod
    ```
 
    Use the same `--stage` for every later deploy: resources are named and tracked per stage (the default stage is
@@ -143,7 +143,7 @@ domain (zone) in that account, Zero Trust enabled (note your team name), Node 22
    tools: [CLIENTS.md](../docs/workers-port/CLIENTS.md). Coming from the Go server:
    [MIGRATION.md](../docs/workers-port/MIGRATION.md).
 
-Other commands: `pnpm logs -- --stage prod --tail` (Workers logs), `pnpm destroy -- --stage prod` (deletes everything,
+Other commands: `pnpm logs --stage prod --tail` (Workers logs), `pnpm destroy --stage prod` (deletes everything,
 including the D1 usage history and the Durable Objects holding credentials). In CI set `CLOUDFLARE_ACCOUNT_ID` and
 `CLOUDFLARE_API_TOKEN` instead of a profile (see the Alchemy CI guide).
 
