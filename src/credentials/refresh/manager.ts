@@ -69,7 +69,12 @@ export interface RefreshManagerOptions {
 }
 
 export type RefreshFailureCode =
-  "not_found" | "not_refreshable" | "unauthorized" | "disabled" | "refresh_failed" | "persist_failed"
+  | "not_found"
+  | "not_refreshable"
+  | "unauthorized"
+  | "disabled"
+  | "refresh_failed"
+  | "persist_failed"
 
 export type RefreshResult =
   | {

@@ -1,6 +1,8 @@
 {
   // Deploy-time code (alchemy.run.ts, infra/) runs in Node.js under the Alchemy CLI, not in workerd.
   "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": ".tsbuild/tsconfig.infra.tsbuildinfo",
     "target": "ES2023",
     "lib": ["ES2023"],
     "module": "ESNext",

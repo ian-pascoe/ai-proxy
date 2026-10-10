@@ -13,7 +13,8 @@ import { isTokenPayloadKey } from "./merge.ts"
 import { parseWeightValue } from "./weight.ts"
 
 export type FieldPatchResult =
-  { readonly ok: true; readonly metadata: JsonObject } | { readonly ok: false; readonly message: string }
+  | { readonly ok: true; readonly metadata: JsonObject }
+  | { readonly ok: false; readonly message: string }
 
 const PROTECTED_ROOTS = new Set(["type", "disabled", "api_key", "dca_token", "dca_expired", "dca_expires_at"])
 

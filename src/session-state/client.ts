@@ -117,7 +117,9 @@ export interface EntryOptions {
 }
 
 export type Update =
-  { readonly _tag: "put"; readonly value: string } | { readonly _tag: "delete" } | { readonly _tag: "keep" }
+  | { readonly _tag: "put"; readonly value: string }
+  | { readonly _tag: "delete" }
+  | { readonly _tag: "keep" }
 
 export const putValue = (value: string): Update => ({ _tag: "put", value })
 export const deleteValue: Update = { _tag: "delete" }

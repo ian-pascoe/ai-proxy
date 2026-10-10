@@ -84,7 +84,14 @@ export const unwrapApplyPatchInput = (
 export const escapeApplyPatchInputFragment = (fragment: string): string => goMarshal(fragment).slice(1, -1)
 
 type Phase =
-  "beforeObject" | "beforeKey" | "inKey" | "beforeColon" | "beforeValue" | "inValue" | "afterValue" | "complete"
+  | "beforeObject"
+  | "beforeKey"
+  | "inKey"
+  | "beforeColon"
+  | "beforeValue"
+  | "inValue"
+  | "afterValue"
+  | "complete"
 
 const isJsonSpace = (c: string): boolean => c === " " || c === "\t" || c === "\r" || c === "\n"
 

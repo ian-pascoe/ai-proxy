@@ -175,4 +175,5 @@ export const ReportResult = Schema.Struct({
 export type ReportResult = typeof ReportResult.Type
 
 export type ReportOutcome =
-  { readonly ok: true; readonly applied: boolean } | { readonly ok: false; readonly error: "unknown_credential" }
+  | { readonly ok: true; readonly applied: boolean }
+  | { readonly ok: false; readonly error: "unknown_credential" }

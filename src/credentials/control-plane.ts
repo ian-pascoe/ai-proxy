@@ -51,7 +51,8 @@ const isProtectedMetadataKey = (key: string): boolean => isTokenPayloadKey(key) 
 type WireJsonObject = Record<string, Schema.MutableJson>
 
 export type SetDisabledResult =
-  { readonly ok: true } | { readonly ok: false; readonly error: "not_found" | "config_credential" }
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: "not_found" | "config_credential" }
 
 /**
  * Singleton Durable Object (`CONTROL_PLANE.getByName("global")`): the single writer for config, credentials,
@@ -329,7 +330,8 @@ export class ControlPlane extends DurableObject<Env> {
   resetCredentialCooldown(
     ref: CredentialRef
   ):
-    { readonly ok: true; readonly authIndex: string; readonly models: ReadonlyArray<string> } | { readonly ok: false } {
+    | { readonly ok: true; readonly authIndex: string; readonly models: ReadonlyArray<string> }
+    | { readonly ok: false } {
     const target = findCredential(this.#pool.entries(), ref)
     const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id)
     return target === undefined || reset === undefined

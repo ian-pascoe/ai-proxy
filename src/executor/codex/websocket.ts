@@ -189,7 +189,8 @@ export interface CodexWebsocketDeps {
     completed: Json
   ) => string | undefined
   readonly modelHeaderOverrides?:
-    ((request: ExecutorRequest, model: string) => Readonly<Record<string, string>> | undefined) | undefined
+    | ((request: ExecutorRequest, model: string) => Readonly<Record<string, string>> | undefined)
+    | undefined
   readonly store?: UpstreamSessionStore
 }
 

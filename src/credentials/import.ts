@@ -35,7 +35,13 @@ export const normalizeCredentialMetadata = (metadata: JsonObject): void => {
 }
 
 export type ImportFailureReason =
-  "invalid_name" | "invalid_json" | "not_object" | "empty" | "missing_type" | "unsupported_type" | "invalid_weight"
+  | "invalid_name"
+  | "invalid_json"
+  | "not_object"
+  | "empty"
+  | "missing_type"
+  | "unsupported_type"
+  | "invalid_weight"
 
 export type ParsedAuthFile =
   | { readonly ok: true; readonly id: string; readonly provider: string; readonly metadata: JsonObject }

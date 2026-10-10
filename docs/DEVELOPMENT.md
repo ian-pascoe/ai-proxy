@@ -25,9 +25,9 @@ Run from the repository root:
 | `pnpm install`      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                 |
 | `pnpm repos:sync`   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                             |
 | `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
-| `pnpm typecheck`    | `tsc --noEmit` for the Worker (`tsconfig.json`) and the deploy code (`tsconfig.infra.json`)                                 |
-| `pnpm lint`         | `oxlint` + `prettier --check`                                                                                               |
-| `pnpm format`       | `prettier --write`                                                                                                          |
+| `pnpm typecheck`    | `tsc -b`: the Worker (`tsconfig.worker.json`) and the deploy code (`tsconfig.infra.json`), referenced by `tsconfig.json`    |
+| `pnpm lint`         | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                     |
+| `pnpm format`       | `oxfmt`                                                                                                                     |
 | `pnpm test`         | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
 | `pnpm smoke`        | Boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                |
 | `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |

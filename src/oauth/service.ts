@@ -50,7 +50,9 @@ export type StartResult =
   | { readonly ok: false; readonly status: number; readonly error: string }
 
 export type StatusResult =
-  { readonly status: "ok" } | { readonly status: "wait" } | { readonly status: "error"; readonly error: string }
+  | { readonly status: "ok" }
+  | { readonly status: "wait" }
+  | { readonly status: "error"; readonly error: string }
 
 export interface CallbackInput {
   /** Provider named by the caller; defaults to the session's. Public browser routes pin it. */

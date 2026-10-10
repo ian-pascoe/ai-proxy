@@ -8,7 +8,8 @@ export const DEFAULT_WEIGHT = 1
 export const MAX_WEIGHT = 1_000_000
 
 export type WeightResult =
-  { readonly ok: true; readonly value: number } | { readonly ok: false; readonly message: string }
+  | { readonly ok: true; readonly value: number }
+  | { readonly ok: false; readonly message: string }
 
 const normalize = (weight: number): WeightResult => {
   if (weight <= 0) return { ok: true, value: 0 }

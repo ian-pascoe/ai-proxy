@@ -29,3 +29,5 @@ go.work.sum
 .pi
 .opencode/*
 AGENTS.override.md
+# TypeScript build info (tsc -b)
+.tsbuild

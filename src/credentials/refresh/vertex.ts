@@ -126,7 +126,8 @@ const pkcs8ToPkcs1 = (pkcs8: Uint8Array): Uint8Array | undefined => {
 }
 
 export type NormalizedPrivateKey =
-  { readonly ok: true; readonly pem: string } | { readonly ok: false; readonly message: string }
+  | { readonly ok: true; readonly pem: string }
+  | { readonly ok: false; readonly message: string }
 
 /**
  * `sanitizePrivateKey`: validates the key as RSA and re-encodes it as a canonical `RSA PRIVATE KEY` PEM block (what

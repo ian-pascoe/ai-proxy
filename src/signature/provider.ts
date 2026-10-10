@@ -23,9 +23,17 @@ import {
 
 export type SignatureProvider = "unknown" | "claude" | "gemini" | "gemini_bypass" | "gpt" | "kimi" | "grok" | "swe"
 export type SignatureBlockKind =
-  "unknown" | "claude_thinking" | "gemini_model_part" | "gemini_function_call" | "gpt_reasoning"
+  | "unknown"
+  | "claude_thinking"
+  | "gemini_model_part"
+  | "gemini_function_call"
+  | "gpt_reasoning"
 export type SignatureAction =
-  "preserve" | "drop_block" | "drop_signature" | "replace_with_gemini_bypass" | "no_compatible_replacement"
+  | "preserve"
+  | "drop_block"
+  | "drop_signature"
+  | "replace_with_gemini_bypass"
+  | "no_compatible_replacement"
 
 export interface SignatureCompatibilityDecision {
   readonly targetProvider: SignatureProvider

@@ -297,11 +297,11 @@ Core contracts every provider slice implements (Go references in each module hea
   for unsupported-part refusals). Golden fixtures: `corpus/codex-*.json`; **generate them with `TZ=UTC`** (Gemini timestamps
   use the process time zone in Go). The Interactions `interaction.completed` event embeds the current time, so it is
   covered by a fake-timer unit test instead of a fixture. Request `tool_use.input` text is re-serialised compactly (Go
-  forwards the raw bytes), hence the corpus files are excluded from prettier.
+  forwards the raw bytes), hence the corpus files are excluded from the formatter (`.oxfmtrc.jsonc`).
 - **Executor** (`executor/codex/executor.ts`): per attempt `translate -> Thinking.apply -> model/stream fields ->
-instructions -> image_generation tool -> reasoning sanitising -> parallel_tool_calls -> tool schema normalisation ->
-reasoning replay -> prompt cache key + Session-Id -> input id sanitising -> finalizePayload (last) -> headers (routing
-hint reads the final body) -> fetch`. Streams are processed line by line (`stream.ts`); non-stream aggregates the SSE
+  instructions -> image_generation tool -> reasoning sanitising -> parallel_tool_calls -> tool schema normalisation ->
+  reasoning replay -> prompt cache key + Session-Id -> input id sanitising -> finalizePayload (last) -> headers (routing
+  hint reads the final body) -> fetch`. Streams are processed line by line (`stream.ts`); non-stream aggregates the SSE
   until the terminal event; compaction posts to `/responses/compact` as `openai-response`. Errors (`errors.ts`) follow
   `codex_executor_terminal.go`: usage-limit/capacity -> 429 (credential-scoped unless `model-level-cooling`), body
   rewrites (`context_too_large`, `thinking_signature_invalid`, `previous_response_not_found`, `auth_unavailable`),
@@ -315,7 +315,7 @@ hint reads the final body) -> fetch`. Streams are processed line by line (`strea
   `responses/routes.ts`; the Responses frame assembler (`responses/framer.ts`) buffers partial frames, filters private
   `responsesapi.*`/`codex.*` events (Codex clients keep `codex.response.metadata`), rebuilds an empty
   `response.output`, normalises error payloads (redacting secrets) and ends with a bare newline. `/v1/images/{generations,
-edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (multipart edits become JSON in the handler;
+  edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (multipart edits become JSON in the handler;
   free-plan credentials are excluded through `ExecutionInput.disallowFreeAuth`). `/v1/alpha/search` and
   `/backend-api/codex/alpha/search` (`handlers/codex/alpha-search.ts`) forward the sanitised body to
   `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
@@ -403,7 +403,7 @@ WebSocket transports"). Reuses the Codex translators
   `response.custom_tool_call_input.*` events, expands folded dispatcher envelopes (`{"name": <child>, "arguments": ...}`, folded above 200
   tools) into the child call, validates identity (item id, call id, output index) and arguments, resequences `sequence_number` and
   fails the turn with one local `response.failed` frame plus a sanitised 502 (`Invalid apply_patch tool arguments received from
-upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non-stream, compact answers (bare response), SSE lines and the
+  upstream.`). EOF/`[DONE]` without a validated completion fails the same way. Non-stream, compact answers (bare response), SSE lines and the
   WebSocket path (failure frame, upstream socket invalidated, EOF drop with an open patch call) use the same state. Verified against the real
   Go state over 55 scripted scenarios (`go run ./tools/fixturegen/applypatch`, `test/apply-patch-responses.test.ts`). A non-string
   patch history input is a request-scoped 400 (Go returns a plain error).
@@ -564,7 +564,7 @@ Port of `auto_refresh_loop.go` + `conductor_refresh.go` + the per-provider `Refr
   A refresh whose base tokens were replaced meanwhile (re-login) is discarded. `credentialVersion` bumps on rotation,
   so leases of the old tokens are ignored by `report`.
 - **Protocols** (`claude|codex|antigravity|xai|kimi|meta.ts`): `(context) => Effect<updatedMetadata, RefreshError,
-HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in production, a recording client in
+  HttpClient>` over the injectable Effect `HttpClient` (`FetchHttpClient.layer` in production, a recording client in
   tests). Each HTTP call is bounded to 30 s, a whole refresh to 120 s. Claude retries only HTTP >= 500 and blocks the
   credential for `Retry-After` on 429; Codex retries three times except `refresh_token_reused`.
 - **Request-time preparation** (`ensureFresh(id)`): returns a snapshot with a usable `metadata.access_token`: Meta mints
@@ -755,7 +755,7 @@ until the next page load).
 - **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
   `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),
   `/config.yaml` the sparse YAML export. Writes are read-modify-write over the JSON document with `putConfig(text,
-expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
+  expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
   (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
   injected into `api-keys` entries on read and stripped on write. The Go read-only Home revision paths and TURN secret
   handling do not exist in the Workers schema.
@@ -785,7 +785,7 @@ Port of `sdk/cliproxy/usage` (token accounting v2), `helps/usage_helpers.go` (pa
 once; a 401 retry keeps the rejected attempt's failed record, a failed-over credential gets its own).
 
 - **Accounting v2** (`accounting.ts`): `TokenBreakdown` (`input = uncached + cacheRead + cacheWrite`, `output =
-nonReasoning + reasoning`, `total = input + output + unclassified`, quality `complete|unclassified|inconsistent`).
+  nonReasoning + reasoning`, `total = input + output + unclassified`, quality `complete|unclassified|inconsistent`).
   `ensureTokenBreakdown(detail, provider, executorType)` picks the semantics: **subset** (openai, codex, xai, grok, kimi,
   qwen, deepseek, openrouter, `openai-compatible-*`; cache inside input, reasoning inside output), **independent**
   (claude/anthropic; cache outside `input_tokens`, thinking inside `output_tokens`), **separate-reasoning** (gemini,
@@ -1005,9 +1005,9 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   needs (thinking blocks without a usable signature) before translating and _flushes_ the writes recorded by the response translator through
   `waitUntil`. Every store failure is swallowed. `antigravity.signature-cache-enabled` / `signature-bypass-strict` switch cache and bypass mode.
 - **Executor** (`executor/executor.ts`): per attempt `validate Claude signatures -> prefetch -> translate -> thinking -> sensitive words ->
-Gemini signature sanitising (+ function-response role normalisation) -> credits flag -> boundary user turns -> envelope (project, requestType,
-requestId, sessionId) -> model shaping (maxOutputTokens cap/removal, schema cleaning at schema locations only, Claude `VALIDATED`) ->
-payload rules (root `request`, always last) -> fetch`. Daily endpoint unless `base_url` is set (no cross-tier fallback), header whitelist
+  Gemini signature sanitising (+ function-response role normalisation) -> credits flag -> boundary user turns -> envelope (project, requestType,
+  requestId, sessionId) -> model shaping (maxOutputTokens cap/removal, schema cleaning at schema locations only, Claude `VALIDATED`) ->
+  payload rules (root `request`, always last) -> fetch`. Daily endpoint unless `base_url` is set (no cross-tier fallback), header whitelist
   (`Content-Type`, `Authorization`, short `User-Agent`, `header:*` attributes). Claude, `gemini-3-pro` and `gemini-3.1-flash-image` models
   stream upstream and the SSE is merged for non-stream callers (`stream.ts`); streams filter usage (non-terminal usage becomes
   `cpaUsageMetadata`, the stop-chunk bookkeeping is per stream), join JSON split over several lines, map in-stream `error` objects to status

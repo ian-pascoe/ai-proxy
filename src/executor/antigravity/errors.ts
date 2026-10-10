@@ -69,7 +69,10 @@ export const parseRetryDelayMs = (body: string): number | undefined => {
 }
 
 export type Antigravity429Kind =
-  "soft_retry" | "instant_retry_same_auth" | "short_cooldown_switch_auth" | "full_quota_exhausted"
+  | "soft_retry"
+  | "instant_retry_same_auth"
+  | "short_cooldown_switch_auth"
+  | "full_quota_exhausted"
 
 export interface Antigravity429Decision {
   readonly kind: Antigravity429Kind
