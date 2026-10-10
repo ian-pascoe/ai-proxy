@@ -6,6 +6,7 @@
  * Durable Object RPC boundary.
  */
 import type { Schema } from "effect";
+import type { Json } from "../json/index.ts";
 import type { Credential } from "../credentials/model.ts";
 import type { RefreshTarget } from "../credentials/pool.ts";
 import { authIndexOf } from "./auth-index.ts";
@@ -56,7 +57,7 @@ export type CredentialMutation =
   | { readonly ok: true; readonly id: string }
   | { readonly ok: false; readonly error: "not_found" | "invalid"; readonly message: string };
 
-const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
 /** `tokenValueFromMetadata` + `tokenValueForAuth`: the value `$TOKEN$` stands for. */
 export const apiCallToken = (credential: Pick<Credential, "metadata" | "attributes">): string => {

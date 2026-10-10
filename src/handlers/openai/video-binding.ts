@@ -49,6 +49,7 @@ export const loadVideoBinding = (videoId: string) =>
 
     if (id === "") return undefined;
     const env = yield* WorkerEnv;
+
     const stored = yield* Effect.tryPromise(() => env.CACHE.get(keyOf(id))).pipe(
       Effect.orElseSucceed(() => null),
     );
@@ -56,6 +57,7 @@ export const loadVideoBinding = (videoId: string) =>
     if (stored === null) return undefined;
 
     try {
+      // SAFETY: the parsed value is only read through typeof-checked optional fields.
       const parsed = JSON.parse(stored) as Partial<VideoBinding>;
 
       return typeof parsed.authId === "string" && parsed.authId !== ""

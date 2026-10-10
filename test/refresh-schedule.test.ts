@@ -43,11 +43,13 @@ describe("provider leads", () => {
   ])("%s refreshes %d ms before expiry", (provider, lead) => {
     expect(refreshLeadMs(provider)).toBe(lead);
     const expiry = T0 + lead + 10 * MIN;
+
     const credential = subject(provider, {
       refresh_token: "r",
       access_token: "a",
       expired: iso(expiry),
     });
+
     expect(nextRefreshCheckAt(T0, credential, emptyState())).toBe(expiry - lead);
     expect(shouldRefresh(T0, credential, emptyState())).toBe(false);
     expect(shouldRefresh(T0 + 10 * MIN, credential, emptyState())).toBe(true);
@@ -62,6 +64,7 @@ describe("provider leads", () => {
         dca_token: "d",
         expired: iso(T0 - HOUR),
       });
+
       expect(nextRefreshCheckAt(T0, credential, emptyState())).toBeUndefined();
       expect(shouldRefresh(T0, credential, emptyState())).toBe(false);
     },
@@ -103,6 +106,7 @@ describe("expiry sources", () => {
       access_token: "tok",
       expired: iso(T0 + 100 * HOUR),
     });
+
     expect(shouldRefresh(T0, credential, emptyState())).toBe(false);
     expect(shouldRefresh(T0, credential, state({ rejectedAccessToken: "tok" }))).toBe(true);
     expect(shouldRefresh(T0, credential, state({ rejectedAccessToken: "other" }))).toBe(false);
@@ -198,6 +202,7 @@ describe("refresh failure transitions", () => {
       message: "status 400: invalid_grant",
       status: 400,
     });
+
     expect(first.state).toMatchObject({
       refreshFailures: 1,
       nextRefreshAfter: T0 + MIN,
@@ -258,11 +263,13 @@ describe("refresh failure transitions", () => {
     expect(out.state.unavailable).toBe(false);
     expect(out.state.status).toBe("active");
     expect(out.state.nextRefreshAfter).toBe(T0 + 2 * MIN);
+
     const later = applyRefreshFailure(emptyState(), {
       ...base,
       status: 500,
       hasValidAccessToken: true,
     });
+
     expect(later.state.nextRefreshAfter).toBe(T0 + 5 * MIN);
   });
 
@@ -272,6 +279,7 @@ describe("refresh failure transitions", () => {
       message: "invalid_grant",
       disabled: true,
     });
+
     expect(grant.schedule).toBe("unschedule");
     expect(grant.state).toMatchObject({
       status: "disabled",
@@ -310,20 +318,24 @@ describe("refresh success transitions", () => {
 
   it("keeps a cooldown or error that appeared while the refresh was running", () => {
     const base = emptyState();
+
     const cooling = state({
       unavailable: true,
       nextRetryAfter: T0 + MIN,
       statusMessage: "cooling down",
     });
+
     expect(applyRefreshSuccess(base, cooling, T0, false, false)).toMatchObject({
       unavailable: true,
       statusMessage: "cooling down",
     });
+
     const errored = state({
       status: "error",
       unavailable: true,
       lastError: { message: "new 503", retryable: true },
     });
+
     expect(applyRefreshSuccess(base, errored, T0, false, false)).toMatchObject({
       status: "error",
       lastError: { message: "new 503" },
@@ -351,6 +363,7 @@ describe("three-way metadata merge", () => {
   it("applies executor changes, keeps concurrent user edits and takes token fields from the refresh", () => {
     const base = { access_token: "a1", refresh_token: "r1", priority: 1, prefix: "old", note: "x" };
     const current = { ...base, priority: 9, prefix: "user", disabled: true };
+
     const updated = {
       ...base,
       access_token: "a2",
@@ -359,6 +372,7 @@ describe("three-way metadata merge", () => {
       email: "me@x.com",
       extra: 1,
     };
+
     const merged = mergeRefreshedMetadata(base, current, updated);
     expect(merged).toMatchObject({
       access_token: "a2",

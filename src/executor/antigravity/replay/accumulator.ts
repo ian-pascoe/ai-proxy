@@ -13,6 +13,7 @@ import {
   asString,
   get,
   isJsonArray,
+  isJsonObject,
   type Json,
   tryParseJson,
 } from "../../../json/index.ts";
@@ -82,12 +83,14 @@ export class ReplayAccumulator {
     this.#scope = scope;
     const index = new RequestIndex(requestPayload);
     const { contentIndex, basePartIndex } = index.pendingModelContentIndex();
-    const items = (index.reasoningReplayItemsFromRequest() ?? []) as Item[];
+    const items: Item[] = (index.reasoningReplayItemsFromRequest() ?? []).filter(isJsonObject);
     this.#items = items;
     this.#seenSignatures = new Set(
-      items
-        .map((item) => asString(item["thoughtSignature"]).trim())
-        .filter((signature) => signature !== ""),
+      items.flatMap((item) => {
+        const signature = asString(item["thoughtSignature"]).trim();
+
+        return signature === "" ? [] : [signature];
+      }),
     );
     this.#itemBytes = items.reduce((total, item) => total + JSON.stringify(item).length, 0);
     this.#segmentOccurrences = new Map();
@@ -150,9 +153,9 @@ export class ReplayAccumulator {
     if (signature === "") return;
 
     for (let index = this.#items.length - 1; index >= 0; index--) {
-      const item = this.#items[index] as Item;
+      const item = this.#items[index];
 
-      if (item["type"] !== "function_call_part") continue;
+      if (item?.["type"] !== "function_call_part") continue;
 
       if (asString(item["thoughtSignature"]).trim() !== "") return;
       const delta = JSON.stringify(signature).length + `,"thoughtSignature":`.length;
@@ -318,8 +321,10 @@ export class ReplayAccumulator {
 
     if (signature === "") {
       for (let index = this.#pending.length - 1; index >= 0; index--) {
-        if ((this.#pending[index] as PendingSignature).targetKind === "") {
-          signature = (this.#pending[index] as PendingSignature).signature;
+        const entry = this.#pending[index];
+
+        if (entry?.targetKind === "") {
+          signature = entry.signature;
           this.#pending.splice(index, 1);
           break;
         }
@@ -339,9 +344,11 @@ export class ReplayAccumulator {
       get(functionCall, "args"),
       "",
     );
+
     const occurrence = this.#functionCallOccurrences.get(occurrenceKey) ?? 0;
 
     if (occurrenceKey !== "") this.#functionCallOccurrences.set(occurrenceKey, occurrence + 1);
+
     const item = buildFunctionCallPartItem(
       this.#contentIndex,
       partIndex,
@@ -349,6 +356,7 @@ export class ReplayAccumulator {
       functionCall,
       signature,
     );
+
     this.#appendItem(withContextHash(item, this.#responseContextHash));
 
     if (signature !== "") this.#seenSignatures.add(signature);
@@ -384,6 +392,7 @@ export class ReplayAccumulator {
         targetKind,
         targetHash,
       );
+
       item["targetOccurrence"] = targetOccurrence;
       this.#appendItem(withContextHash(item, this.#responseContextHash));
     }
@@ -425,6 +434,7 @@ export class ReplayAccumulator {
 
     if (!replayScopeValid(scope) || !this.#terminal) return Effect.void;
     this.#committed = true;
+
     const clear = ledger
       .deleteIfUnchanged(scope.modelName, scope.sessionKey, scope.snapshot)
       .pipe(Effect.asVoid);

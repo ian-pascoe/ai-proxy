@@ -14,6 +14,7 @@ import {
   resetControlPlane,
   token,
 } from "./support/management.ts";
+import type { Json } from "../src/json/index.ts";
 
 let release: () => { status?: number; body?: unknown; transportError?: boolean } = () => ({
   body: { tag_name: "v8.1.0" },
@@ -63,7 +64,7 @@ beforeEach(async () => {
 
 const { call, json } = harness;
 
-const apiCall = (body: unknown) => json("/v8/management/requests/api-call", jsonInit("POST", body));
+const apiCall = (body: Json) => json("/v8/management/requests/api-call", jsonInit("POST", body));
 
 describe("api-call", () => {
   it("validates the request", async () => {
@@ -104,11 +105,13 @@ describe("api-call", () => {
     });
 
     expect(result.status).toBe(200);
+
     const body = result.body as {
       status_code: number;
       header: Record<string, string[]>;
       body: string;
     };
+
     expect(body.status_code).toBe(201);
     expect(body.header["x-upstream"]).toEqual(["yes"]);
 
@@ -202,6 +205,7 @@ describe("api-call", () => {
       url: "https://api.example.com/q",
       header: { Authorization: "Bearer $TOKEN$" },
     };
+
     expect((await apiCall(base)).body).toEqual({ error: "auth token not found" });
     expect((await apiCall({ ...base, auth_index: "ffffffffffffffff" })).body).toEqual({
       error: "auth credential not found for auth_index",

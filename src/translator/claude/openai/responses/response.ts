@@ -102,9 +102,14 @@ const newUsage = (): UsageTokens => ({
   hasUsage: false,
 });
 
-const responsesUsage = (
-  u: UsageTokens,
-): { inputTokens: number; outputTokens: number; totalTokens: number; cachedTokens: number } => {
+type ResponsesUsageResult = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedTokens: number;
+};
+
+const responsesUsage = (u: UsageTokens): ResponsesUsageResult => {
   const cachedTokens = u.cacheReadInputTokens;
   const inputTokens = u.inputTokens + u.cacheCreationInputTokens + cachedTokens;
 
@@ -281,6 +286,7 @@ const sortKeysDeep = (value: Json): Json => {
   if (isArr(value)) return value.map(sortKeysDeep);
 
   if (isObj(value)) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()
@@ -404,7 +410,7 @@ const failToolInput = (st: State, error: string, nextSeq: () => number): string[
   if (st.toolInputError !== undefined) return [];
   st.toolInputError = error;
 
-  return [emit("response.failed", applyPatchFailure(st.responseId, nextSeq()) as JsonObject)];
+  return [emit("response.failed", applyPatchFailure(st.responseId, nextSeq()))];
 };
 
 const emitFuncItem = (
@@ -517,7 +523,7 @@ const emitPendingFuncArgs = (st: State, idx: number, nextSeq: () => number): str
       : [
           emit(
             "response.custom_tool_call_input.delta",
-            applyPatchInputDelta(patchCall, pushed.text, nextSeq()) as JsonObject,
+            applyPatchInputDelta(patchCall, pushed.text, nextSeq()),
           ),
         ];
   }
@@ -577,7 +583,7 @@ const finalizeFuncItem = (
         out.push(
           emit(
             "response.custom_tool_call_input.delta",
-            applyPatchInputDelta(patchCall, finished.tail, nextSeq()) as JsonObject,
+            applyPatchInputDelta(patchCall, finished.tail, nextSeq()),
           ),
         );
       }
@@ -591,7 +597,7 @@ const finalizeFuncItem = (
         patchCall !== undefined
           ? emit(
               "response.custom_tool_call_input.done",
-              applyPatchInputDone(patchCall, input, nextSeq()) as JsonObject,
+              applyPatchInputDone(patchCall, input, nextSeq()),
             )
           : emit("response.custom_tool_call_input.done", {
               type: "response.custom_tool_call_input.done",
@@ -611,6 +617,7 @@ const finalizeFuncItem = (
       call_id: callId,
       name: "",
     };
+
     applyNamespaceFields(item, request, name);
     out.push(
       emit("response.output_item.done", {
@@ -723,6 +730,7 @@ const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] =>
   const fullText = st.textBuf;
   const outputIndex = messageOutputIndex(st);
   const status = outputStatus(st.stopReason);
+  // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
   const annotations = sortKeysDeep(st.messageAnnotations) as Json[];
   const out: string[] = [];
   out.push(
@@ -795,7 +803,7 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined): void => {
   if (!exists(req)) return;
   const has = (key: string): Json | undefined => get(req, key);
 
-  const v = (key: string, convert: (value: Json | undefined) => Json): void => {
+  const v = (key: string, convert: (value: Json) => Json): void => {
     const value = has(key);
 
     if (exists(value)) target[key] = convert(value);
@@ -808,19 +816,19 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined): void => {
   v("parallel_tool_calls", asBool);
   v("previous_response_id", str);
   v("prompt_cache_key", str);
-  v("reasoning", (value) => sortKeysDeep(value as Json));
+  v("reasoning", (value) => sortKeysDeep(value));
   v("safety_identifier", str);
   v("service_tier", str);
   v("store", asBool);
   v("temperature", asFloat);
-  v("text", (value) => sortKeysDeep(value as Json));
-  v("tool_choice", (value) => sortKeysDeep(value as Json));
-  v("tools", (value) => sortKeysDeep(value as Json));
+  v("text", (value) => sortKeysDeep(value));
+  v("tool_choice", (value) => sortKeysDeep(value));
+  v("tools", (value) => sortKeysDeep(value));
   v("top_logprobs", asInt);
   v("top_p", asFloat);
   v("truncation", str);
-  v("user", (value) => sortKeysDeep(value as Json));
-  v("metadata", (value) => sortKeysDeep(value as Json));
+  v("user", (value) => sortKeysDeep(value));
+  v("metadata", (value) => sortKeysDeep(value));
 };
 
 /** `ConvertClaudeResponseToOpenAIResponses`. */
@@ -829,6 +837,7 @@ export const convertClaudeResponseToOpenAIResponses = (
   line: string,
 ): ReadonlyArray<string> => {
   const out = convertStreamLine(context, line);
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as State;
 
   if (st.toolInputError !== undefined) context.state.toolInputError = st.toolInputError;
@@ -846,12 +855,13 @@ const finalizeToolInput = (context: ResponseContext, st: State): ReadonlyArray<s
   context.state.toolInputError = st.toolInputError;
   st.seq++;
 
-  return [emit("response.failed", applyPatchFailure(st.responseId, st.seq) as JsonObject)];
+  return [emit("response.failed", applyPatchFailure(st.responseId, st.seq))];
 };
 
 const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArray<string> => {
   const modelName = context.model;
   context.state.value ??= newState(pickRequest(context.originalRequest, context.translatedRequest));
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as State;
 
   if (st.completedEmitted || st.toolInputError !== undefined) return [];
@@ -906,6 +916,7 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
       st.funcOutputIndices = new Map();
       st.usage = newUsage();
       mergeUsage(st.usage, get(msg, "usage"));
+
       const requestModel =
         requestModelName(context.originalRequest, context.translatedRequest) || modelName;
 
@@ -923,7 +934,9 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
         },
       };
 
-      if (requestModel !== "") (created.response as JsonObject).model = requestModel;
+      if (requestModel !== "")
+        // SAFETY: `response` is an object literal in the event built just above.
+        (created.response as JsonObject).model = requestModel;
       out.push(emit("response.created", created));
 
       const inProgress: JsonObject = {
@@ -938,7 +951,9 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
         },
       };
 
-      if (requestModel !== "") (inProgress.response as JsonObject).model = requestModel;
+      if (requestModel !== "")
+        // SAFETY: `response` is an object literal in the event built just above.
+        (inProgress.response as JsonObject).model = requestModel;
       out.push(emit("response.in_progress", inProgress));
       break;
     }
@@ -1050,6 +1065,7 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
 
         if (exists(startInput) && (!isObj(startInput) || Object.keys(startInput).length > 0)) {
           const rawInput = JSON.stringify(startInput);
+
           const snapshotError = validateApplyPatchSnapshots(
             st.funcInputSnapshot.get(idx) ?? "",
             rawInput,
@@ -1359,6 +1375,7 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
         (sum, reasoning) => sum + utf8Length(reasoning.text),
         0,
       );
+
       const reasoningTokens = Math.trunc(reasoningLength / 4);
 
       if (st.usage.hasUsage || reasoningTokens > 0) {
@@ -1701,8 +1718,10 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (
   let failure: string | undefined;
   outputItems.forEach((outputItem, i) => {
     if (failure !== undefined) return;
+
     const itemStatus =
       responseStatus === "incomplete" && i === outputItems.length - 1 ? "incomplete" : "completed";
+
     let item: JsonObject | undefined;
 
     switch (outputItem.itemType) {
@@ -1807,11 +1826,14 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (
   if (outputs.length > 0) out.output = outputs;
 
   const { inputTokens, outputTokens, totalTokens, cachedTokens } = responsesUsage(usageTokens);
+  // SAFETY: `out` was built with usage and its *_details objects by the response template above.
   const usage = out.usage as JsonObject;
 
   if (inputTokens !== 0) usage.input_tokens = inputTokens;
 
-  if (cachedTokens !== 0) (usage.input_tokens_details as JsonObject).cached_tokens = cachedTokens;
+  if (cachedTokens !== 0)
+    // SAFETY: `out` was built with usage and its *_details objects by the response template above.
+    (usage.input_tokens_details as JsonObject).cached_tokens = cachedTokens;
 
   if (outputTokens !== 0) usage.output_tokens = outputTokens;
 
@@ -1825,6 +1847,7 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (
     const reasoningTokens = Math.trunc(reasoningLength / 4);
 
     if (reasoningTokens > 0)
+      // SAFETY: `out` was built with usage and its *_details objects by the response template above.
       (usage.output_tokens_details as JsonObject).reasoning_tokens = reasoningTokens;
   }
 

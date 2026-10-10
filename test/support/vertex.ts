@@ -1,10 +1,11 @@
 // Service-account fixtures for the Vertex JWT-bearer flow: a freshly generated RSA key in several PEM spellings.
-import type { JsonObject } from "../../src/json/index.ts";
+import type { JsonObject, Json } from "../../src/json/index.ts";
 
 const b64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes));
 
 const wrapPem = (kind: string, der: Uint8Array, lineLength = 64): string => {
   const body = b64(der);
+
   const lines =
     lineLength === 0 ? [body] : (body.match(new RegExp(`.{1,${lineLength}}`, "g")) ?? []);
 
@@ -62,6 +63,7 @@ export const makeServiceAccount = async (): Promise<TestServiceAccount> => {
   const pkcs8 = new Uint8Array(
     (await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer,
   );
+
   const pkcs1 = pkcs8ToPkcs1(pkcs8);
 
   return {
@@ -83,7 +85,7 @@ export const makeServiceAccount = async (): Promise<TestServiceAccount> => {
 
 export { wrapPem };
 
-const decodeSegment = (segment: string): unknown => {
+const decodeSegment = (segment: string): Json => {
   const padded = segment
     .replace(/-/g, "+")
     .replace(/_/g, "/")

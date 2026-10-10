@@ -455,6 +455,7 @@ const outputItemDone = (modelName: string, root: Json, st: State): string[] => {
     }
 
     case "message":
+      // SAFETY: the `message` case is only taken when getStr(item, "type") read "message" from `item`, so it exists.
       appendMessageFallback(out, modelName, item as Json, root, st, true);
 
       return out;
@@ -583,12 +584,14 @@ const outputItemToStep = (item: Json, forAntigravity: boolean): JsonObject | und
 const stateOf = (context: ResponseContext): State => {
   if (context.state.value === undefined) context.state.value = newState();
 
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a State before this read.
   return context.state.value as State;
 };
 
 /** Non-stream body: a Responses object -> an Interactions object. */
 const convertNonStream = (context: ResponseContext, body: string): string | undefined => {
   const root = parseJson(body);
+
   const out: JsonObject = {
     id: "",
     object: "interaction",
@@ -596,6 +599,7 @@ const convertNonStream = (context: ResponseContext, body: string): string | unde
     model: "",
     steps: [],
   };
+
   const status = getStr(root, "status");
 
   if (status !== "") out.status = status;

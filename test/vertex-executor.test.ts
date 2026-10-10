@@ -16,6 +16,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 
 const YAML = `
 requests:
@@ -85,7 +86,7 @@ describe("vertex service account", () => {
   });
 
   /** A ControlPlane stub whose `ensureFresh` returns `result` (the wire credential carries the minted metadata). */
-  const controlPlane = (ensured: string[], result: (id: string) => unknown) => ({
+  const controlPlane = (ensured: string[], result: (id: string) => Json) => ({
     getByName: () => ({
       ensureFresh: async (id: string) => {
         ensured.push(id);
@@ -100,7 +101,7 @@ describe("vertex service account", () => {
     }),
   });
 
-  const mintedCredential = (metadata: Record<string, unknown>) => ({
+  const mintedCredential = (metadata: JsonObject) => ({
     ok: true,
     refreshed: true,
     credential: {
@@ -117,9 +118,11 @@ describe("vertex service account", () => {
 
   it("mints a token through the ControlPlane when the snapshot has none", async () => {
     const ensured: string[] = [];
+
     const cp = controlPlane(ensured, () =>
       mintedCredential({ ...saMetadata, access_token: "ya29.minted" }),
     );
+
     const cred = credential("vertex", "vertex:sa", { kind: "oauth", metadata: saMetadata });
     const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred, { CONTROL_PLANE: cp });
     afterAll(h.dispose);
@@ -156,6 +159,7 @@ describe("vertex service account", () => {
       kind: "oauth",
       metadata: { location: "global" },
     });
+
     const h = harness(() => jsonResponse(GEMINI_RESPONSE), cred);
     afterAll(h.dispose);
     const response = await h.call("/v1beta/models/gemini-2.5-pro:generateContent", postJson(body));
@@ -180,10 +184,12 @@ describe("vertex service account", () => {
     );
 
     afterAll(h.dispose);
+
     const stream = await h.call(
       "/v1beta/models/gemini-2.5-pro:streamGenerateContent",
       postJson(body),
     );
+
     expect(h.calls[0]?.url).toBe(
       "https://aiplatform.googleapis.com/v1/projects/proj-1/locations/global/publishers/google/models/gemini-2.5-pro:streamGenerateContent?alt=sse",
     );
@@ -266,10 +272,12 @@ describe("vertex imagen", () => {
     const cred = credential("vertex", "vertex:apikey", { attributes: { api_key: "vk-1" } });
     const h = harness(() => jsonResponse({}), cred);
     afterAll(h.dispose);
+
     const response = await h.call(
       "/v1beta/models/imagen-4.0-generate-001:generateContent",
       postJson({ contents: [] }),
     );
+
     expect(response.status).toBe(400);
     expect(h.calls).toHaveLength(0);
   });

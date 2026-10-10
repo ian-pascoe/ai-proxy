@@ -226,6 +226,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     );
 
     const turnIndex = yield* nextSessionTurnIndex(ids.sessionId, options.metadata.callerScope);
+
     const matcher = buildSensitiveWordMatcher(
       context.config.oauth.providers.devin["sensitive-words"],
     );
@@ -266,7 +267,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       ),
     );
 
-    const headers: Record<string, string> = {
+    const headers = {
       authorization: `Basic ${apiKey}-${apiKey}`,
       "content-type": "application/connect+proto",
       "connect-protocol-version": "1",
@@ -308,6 +309,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       const bytes = yield* response.arrayBuffer.pipe(
         Effect.orElseSucceed(() => new ArrayBuffer(0)),
       );
+
       const text = new TextDecoder().decode(bytes.slice(0, MAX_ERROR_BODY_BYTES));
 
       const error = devinStatusError(
@@ -494,9 +496,9 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
       });
     }
 
-    #readFailure(events: string[], error: unknown): StreamStep {
+    #readFailure(events: string[], cause: unknown): StreamStep {
       this.stopped = true;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = cause instanceof Error ? cause.message : String(cause);
 
       return {
         events,

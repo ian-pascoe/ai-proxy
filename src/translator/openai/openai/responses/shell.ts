@@ -35,7 +35,7 @@ export const shellCallItem = (
   let action: Json;
 
   try {
-    action = JSON.parse(argumentsText) as Json;
+    action = JSON.parse(argumentsText);
   } catch {
     return { error: INVALID_SHELL_ACTION_MESSAGE };
   }

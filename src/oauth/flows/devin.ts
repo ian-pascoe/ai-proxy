@@ -93,6 +93,7 @@ export const devinFlow = (): CallbackFlow => ({
       );
 
       const reply = yield* call(exchange, EXCHANGE_FAILED);
+
       const token =
         reply.status >= 200 && reply.status < 300 ? str(parseJsonObject(reply.text)?.token) : "";
 

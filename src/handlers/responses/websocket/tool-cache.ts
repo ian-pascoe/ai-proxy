@@ -303,6 +303,11 @@ const repairItems = (
   return dedupeInputItems(filtered);
 };
 
+export interface FallbackTurn {
+  readonly request: JsonObject;
+  readonly turn: ToolCacheTurn | undefined;
+}
+
 /**
  * `prepareResponsesWebsocketFallbackTurn`: repairs `request.input` against the session caches and returns the turn that
  * records this request's items. The request is returned unchanged when nothing needs repair.
@@ -311,7 +316,7 @@ export const prepareFallbackTurn = (
   caches: ToolCaches,
   sessionKey: string,
   request: JsonObject,
-): { readonly request: JsonObject; readonly turn: ToolCacheTurn | undefined } => {
+): FallbackTurn => {
   const key = sessionKey.trim();
   const turn = key === "" ? undefined : new ToolCacheTurn(key, caches);
   const input = request["input"];
@@ -321,6 +326,7 @@ export const prepareFallbackTurn = (
   const repairEnabled = key !== "";
   const previous = asString(request["previous_response_id"]).trim() !== "";
   const updated = repairItems(caches, key, items, repairEnabled && previous, turn, repairEnabled);
+
   const unchanged =
     updated.length === items.length &&
     updated.every((item, index) => item.raw === items[index]?.raw);

@@ -153,8 +153,7 @@ describe("error rules", () => {
   });
 
   it("maps in-stream error events to a status (error.code in 400..599, else 502)", () => {
-    const failed = (code: unknown) =>
-      json({ type: "response.failed", error: { code, message: "x" } });
+    const failed = (code: Json) => json({ type: "response.failed", error: { code, message: "x" } });
     expect(metaStreamEventError(failed(429), "p", now)?.status).toBe(429);
     expect(metaStreamEventError(failed("rate_limit"), "p", now)?.status).toBe(502);
     expect(metaStreamEventError(failed(200), "p", now)?.status).toBe(502);
@@ -234,9 +233,11 @@ describe("Meta executor", () => {
     expect(call?.headers["x-client-id"]).toBe("tbh:tui");
     expect(call?.headers["accept"]).toBe("text/event-stream");
     expect(call?.headers["cache-control"]).toBe("no-cache");
+
     const body = JSON.parse(call?.text ?? "{}") as Record<string, unknown> & {
       input: Array<Record<string, unknown>>;
     };
+
     expect(body["stream"]).toBe(true);
 
     for (const field of [
@@ -286,6 +287,7 @@ describe("Meta executor", () => {
       output: [message("plain")],
       usage: {},
     };
+
     const h = await harness(metaKey(), () => new Response(JSON.stringify(body)));
 
     const response = await execute(
@@ -479,7 +481,7 @@ describe("Meta executor", () => {
       executor
         .countTokens(
           h.context,
-          { model: "muse-spark", payload: json(responsesRequest()) as Json },
+          { model: "muse-spark", payload: json(responsesRequest()) },
           responsesOptions(),
         )
         .pipe(Effect.provide(h.layers)),

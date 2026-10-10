@@ -6,7 +6,7 @@
  * writeVideoContentFromURL), internal/api/server_routes.go. Every successful create/retrieve binds the video id to the
  * serving credential (KV, 3 h by default); retrievals are pinned to it.
  */
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Result } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -147,6 +147,7 @@ const bind = (output: ExecutionOutput, videoId: string, model: string, ttlMs: nu
 const retrieve = (request: HttpServerRequest.HttpServerRequest, videoId: string) =>
   Effect.gen(function* () {
     const binding = yield* loadVideoBinding(videoId);
+
     const model =
       binding !== undefined && binding.model.trim() !== ""
         ? binding.model.trim()
@@ -172,7 +173,7 @@ const nativePost = Effect.gen(function* () {
   const onError = (error: ExecutionError) => errorResponse("openai", error, { passthroughHeaders });
   const read = yield* Effect.result(readRequestBody(request));
 
-  if (read._tag === "Failure") return invalid(read.failure.message, read.failure.status);
+  if (Result.isFailure(read)) return invalid(read.failure.message, read.failure.status);
   const body = read.success.json;
 
   if (body === undefined || !isJsonObject(body)) return invalid("body must be valid JSON");
@@ -189,7 +190,7 @@ const nativePost = Effect.gen(function* () {
   const payload: JsonObject = { ...body, model: canonicalXaiVideosModel(requested) };
   const result = yield* Effect.result(runVideo(request, { model: routingModel, body: payload }));
 
-  if (result._tag === "Failure") return onError(result.failure);
+  if (Result.isFailure(result)) return onError(result.failure);
   const output = result.success;
   yield* bind(output, videoIdFromPayload(tryParseJson(output.payload)), routingModel, ttlMs);
 
@@ -204,7 +205,7 @@ const nativeRetrieve = Effect.gen(function* () {
   if (requestId === "" || requestId.includes("/")) return HttpServerResponse.empty({ status: 404 });
   const result = yield* Effect.result(retrieve(request, requestId));
 
-  if (result._tag === "Failure")
+  if (Result.isFailure(result))
     return errorResponse("openai", result.failure, { passthroughHeaders });
   const { model, output } = result.success;
   yield* bind(output, requestId, model, ttlMs);
@@ -237,7 +238,7 @@ const readCreateBody = (request: HttpServerRequest.HttpServerRequest) =>
         catch: (error) => (error instanceof Error ? error.message : String(error)),
       });
 
-      return videosCreateRequestFromForm(form) as Json;
+      return videosCreateRequestFromForm(form);
     }
 
     const read = yield* readRequestBody(request).pipe(Effect.mapError((error) => error.message));
@@ -252,7 +253,7 @@ const soraCreate = Effect.gen(function* () {
   const { passthroughHeaders, ttlMs } = yield* servicesOrDefault;
   const read = yield* Effect.result(readCreateBody(request));
 
-  if (read._tag === "Failure") {
+  if (Result.isFailure(read)) {
     return failedVideo(
       400,
       DEFAULT_XAI_VIDEOS_MODEL,
@@ -294,7 +295,7 @@ const soraCreate = Effect.gen(function* () {
     runVideo(request, { model: built.meta.routingModel, body: built.request }),
   );
 
-  if (result._tag === "Failure")
+  if (Result.isFailure(result))
     return errorResponse("openai", result.failure, { passthroughHeaders });
   const output = result.success;
   const out = buildVideosCreateResponse(tryParseJson(output.payload), built.meta);
@@ -340,7 +341,7 @@ const soraContent = (
 
     const result = yield* Effect.result(retrieve(request, videoId));
 
-    if (result._tag === "Failure")
+    if (Result.isFailure(result))
       return errorResponse("openai", result.failure, { passthroughHeaders });
     const { model, output } = result.success;
     yield* bind(output, videoId, model, ttlMs);
@@ -360,7 +361,7 @@ const soraContent = (
         .pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false)),
     );
 
-    if (download._tag === "Failure") {
+    if (Result.isFailure(download)) {
       return errorResponse(
         "openai",
         new ExecutionErrorClass({ status: 502, message: "video content download failed" }),
@@ -415,7 +416,7 @@ const soraGet = Effect.gen(function* () {
     Effect.gen(function* () {
       const result = yield* Effect.result(retrieve(request, videoId));
 
-      if (result._tag === "Failure")
+      if (Result.isFailure(result))
         return errorResponse("openai", result.failure, { passthroughHeaders });
       const { model, output } = result.success;
       yield* bind(output, videoId, model, ttlMs);

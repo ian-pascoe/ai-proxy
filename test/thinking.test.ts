@@ -547,6 +547,7 @@ describe("ApplySummaryConfig", () => {
           undefined,
           summary(mode),
         );
+
         expect(exists(out, "reasoning.exclude")).toBe(wantExisting);
 
         if (wantExisting) expect(str(out, "reasoning.exclude")).toBe(wantExclude);
@@ -631,6 +632,7 @@ describe("ApplySummaryConfig", () => {
           summary("enabled"),
           catalogLookup,
         );
+
         expect(str(out, "thinking.type")).toBe(c.type);
         expect(str(out, "thinking.display")).toBe("summarized");
 
@@ -643,6 +645,7 @@ describe("ApplySummaryConfig", () => {
   it("ForModel: a disabled Claude summary does not enable thinking", () => {
     for (const model of ["claude-opus-5", "claude-haiku-4-5-20251001"]) {
       const body = parse(`{"model":"${model}","max_tokens":32000}`);
+
       const out = applySummaryConfigForModel(
         body,
         "claude",
@@ -650,6 +653,7 @@ describe("ApplySummaryConfig", () => {
         summary("disabled"),
         catalogLookup,
       );
+
       expect(exists(out, "thinking")).toBe(false);
     }
   });
@@ -743,6 +747,7 @@ describe("Claude enabled with output_config.effort routed to OpenAI", () => {
     const source = parse(
       `{${model},"thinking":{"type":"enabled"},"output_config":{"effort":"high"}}`,
     );
+
     const translated = parse(`{${model},"reasoning_effort":"high"}`);
 
     const result = applyThinking(translated, {
@@ -1062,6 +1067,7 @@ describe("configuration_update routing", () => {
       const body = parse(c.body);
       const original = cloneJson(body);
       const suffix = c.suffix === undefined ? "" : `(${c.suffix})`;
+
       // Go passes the same bytes as body and source; the port clones an aliased source.
       const result = applyWithModelInfo(
         body,
@@ -1072,6 +1078,7 @@ describe("configuration_update routing", () => {
         "codex",
         info,
       );
+
       expect(result.error).toBeUndefined();
       const applied = result.body;
 
@@ -1103,6 +1110,7 @@ describe("configuration_update routing", () => {
       type: "codex",
       thinking: { levels: ["low", "high"] },
     };
+
     const result = applyWithModelInfo(
       undefined,
       undefined,
@@ -1112,6 +1120,7 @@ describe("configuration_update routing", () => {
       "codex",
       info,
     );
+
     expect(result.body).toBeUndefined();
     expect(result.error).toBeUndefined();
   });
@@ -1260,6 +1269,7 @@ describe("configured API-key model definitions", () => {
     };
 
     const body = parse(`{"reasoning_effort":"xhigh"}`);
+
     const result = applyWithModelInfo(
       body,
       cloneJson(body),
@@ -1269,6 +1279,7 @@ describe("configured API-key model definitions", () => {
       "openai",
       info,
     );
+
     expect(result.error?.code).toBe("LEVEL_NOT_SUPPORTED");
     expect(result.error?.statusCode).toBe(400);
     expect(result.error?.message).toBe(
@@ -1665,6 +1676,7 @@ describe("configured API-key model definitions", () => {
         { id: "custom", userDefined: true, supportConfigurationUpdate: true },
         model,
       );
+
       expect(native.error).toBeUndefined();
       expect(str(native.body, "reasoning.effort")).toBe(want);
       expect(str(native.body, "input.0.reasoning.effort")).toBe("low");

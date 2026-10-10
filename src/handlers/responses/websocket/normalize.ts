@@ -164,9 +164,12 @@ const inputWithoutCompactionItems = (input: Json[]): Json[] =>
 
 // --- transcript merging -----------------------------------------------------------------------------------------
 
-const previousInput = (
-  lastRequest: JsonObject,
-): { readonly items?: Json[]; readonly error?: string } => {
+interface PreviousInput {
+  readonly items?: Json[];
+  readonly error?: string;
+}
+
+const previousInput = (lastRequest: JsonObject): PreviousInput => {
   let input: Json | undefined;
 
   for (const [key, value] of Object.entries(lastRequest))
@@ -191,7 +194,7 @@ export const mergeInput = (
     return { ok: false, message: previous.error ?? "invalid previous request input" };
   let items = previous.items.map(toMergeItem);
 
-  if (inputContainsFullTranscript(lastResponseOutput as Json[])) {
+  if (inputContainsFullTranscript([...lastResponseOutput])) {
     items = items.filter((item) => item.itemType !== "compaction_trigger");
   }
 
@@ -397,6 +400,7 @@ export const normalizeSubsequentRequest = (
         { ...withoutKey(raw, "type"), previous_response_id: previous },
         lastRequest,
       );
+
       normalized["stream"] = true;
 
       return { ok: true, request: normalized, last: cloneJson(normalized) };
@@ -412,6 +416,7 @@ export const normalizeSubsequentRequest = (
     const append = inputContainsFullTranscript(nextInput)
       ? inputWithoutCompactionItems(nextInput)
       : nextInput;
+
     const result = mergeInput(lastRequest, state.lastResponseOutput, append);
 
     if (!result.ok) return failure(result.message, lastRequest);

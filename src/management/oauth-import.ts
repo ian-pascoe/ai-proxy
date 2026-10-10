@@ -20,11 +20,9 @@ const DEFAULT_LOCATION = "us-central1";
 const valueAsString = (value: Json | undefined): string => {
   if (value === undefined || value === null) return "";
 
-  return typeof value === "string"
-    ? value
-    : typeof value === "object"
-      ? JSON.stringify(value)
-      : String(value);
+  if (typeof value === "string") return value;
+
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 };
 
 /** `sanitizeVertexFilePart`. */
@@ -87,6 +85,7 @@ const importVertex = Effect.gen(function* () {
   const upload = yield* readUpload;
 
   const parsed = yield* Effect.try({
+    // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
     try: () => JSON.parse(upload.content) as Json,
     catch: (cause) =>
       replyError(400, "invalid json", {
@@ -118,6 +117,7 @@ const importVertex = Effect.gen(function* () {
 
   if (projectId === "") return yield* replyError(400, "project_id missing");
   const email = valueAsString(serviceAccount.client_email).trim();
+
   const location =
     upload.location || (yield* queryParams).get("location")?.trim() || DEFAULT_LOCATION;
 

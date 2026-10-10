@@ -142,6 +142,7 @@ api-keys:
     const result = await run(
       picker.pick({ providers: ["openai-compatible-oc"], model: "shared", callerScope: "s" }),
     );
+
     expect(result.credential).toMatchObject({
       provider: "openai-compatible-oc",
       kind: "apikey",
@@ -159,9 +160,11 @@ api-keys:
         model: "up-1",
       }),
     );
+
     const next = await run(
       picker.pick({ providers: ["openai-compatible-oc"], model: "shared", callerScope: "s" }),
     );
+
     expect(next.route.upstreamModels).toEqual(["up-2"]);
     await run(
       picker.report(next.lease, {

@@ -22,16 +22,16 @@ export const BOOTSTRAP_MAX_BUFFERED_BYTES = 1 << 20;
 
 const UNLIMITED_WORDS = new Set(["", "0", "none", "unlimited", "disabled", "off", "never"]);
 
-const DURATION_UNITS: Readonly<Record<string, number>> = {
-  ns: 1e-6,
-  us: 1e-3,
-  "\u00b5s": 1e-3,
-  "\u03bcs": 1e-3,
-  ms: 1,
-  s: 1000,
-  m: 60_000,
-  h: 3_600_000,
-};
+const DURATION_UNITS = new Map<string, number>([
+  ["ns", 1e-6],
+  ["us", 1e-3],
+  ["\u00b5s", 1e-3],
+  ["\u03bcs", 1e-3],
+  ["ms", 1],
+  ["s", 1000],
+  ["m", 60_000],
+  ["h", 3_600_000],
+]);
 
 /** Go `time.ParseDuration` in milliseconds (`undefined` = invalid). */
 const parseGoDurationMs = (raw: string): number | undefined => {
@@ -55,7 +55,7 @@ const parseGoDurationMs = (raw: string): number | undefined => {
 
     if (match === null || match[1] === undefined || match[1] === "" || match[1] === ".")
       return undefined;
-    total += Number.parseFloat(match[1]) * (DURATION_UNITS[match[2] as string] as number);
+    total += Number.parseFloat(match[1]) * (DURATION_UNITS.get(match[2] ?? "") ?? 0);
     rest = rest.slice(match[0].length);
   }
 

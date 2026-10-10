@@ -120,7 +120,7 @@ export const collectQuotaSignals = (
     })
     .slice(0, MAX_HEADERS);
 
-  return Object.fromEntries(names.map((name) => [name, values.get(name) as string]));
+  return Object.fromEntries(names.map((name) => [name, values.get(name) ?? ""]));
 };
 
 /**

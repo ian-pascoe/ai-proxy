@@ -9,7 +9,7 @@ import {
   goCompactJson,
   goJson,
 } from "../src/registry/listings.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import { asString, type JsonObject } from "../src/json/index.ts";
 import {
   respondGeminiDetail,
   respondGeminiList,
@@ -17,7 +17,7 @@ import {
 } from "../src/registry/models-api.ts";
 import { sectionModels, SECTIONS } from "../src/registry/catalog.ts";
 import {
-  canon,
+  canonOf,
   catalogs,
   fixture,
   fixtureNow,
@@ -29,8 +29,8 @@ import {
 
 describe("embedded catalogs match the Go registry", () => {
   it.each(SECTIONS)("section %s (incl. built-ins)", (section) => {
-    const expected = (fixture.sections[section] ?? []).map((model) => canon(fromGo(model)));
-    const actual = sectionModels(catalogs, section).map((model) => canon(model));
+    const expected = (fixture.sections[section] ?? []).map((model) => canonOf(fromGo(model)));
+    const actual = sectionModels(catalogs, section).map((model) => canonOf(model));
     expect(actual).toEqual(expected);
   });
 });
@@ -59,6 +59,7 @@ const replyFor = (scenario: (typeof fixture.scenarios)[number], request: Fixture
   }
 
   if (request.path === "/v1beta/models") return respondGeminiList(models);
+
   const rest = request.path.startsWith("/v1/models/")
     ? request.path.slice("/v1/models/".length)
     : undefined;
@@ -67,10 +68,10 @@ const replyFor = (scenario: (typeof fixture.scenarios)[number], request: Fixture
 };
 
 /** Lists whose order is Go map-iteration order are compared after sorting. */
-const UNORDERED: Record<string, Record<string, string>> = {
-  "openai list": { data: "id" },
-  "gemini list": { models: "name" },
-};
+const UNORDERED = new Map([
+  ["openai list", { data: "id" }],
+  ["gemini list", { models: "name" }],
+]);
 
 describe("listing parity with the Go handlers", () => {
   for (const scenario of fixture.scenarios) {
@@ -80,7 +81,7 @@ describe("listing parity with the Go handlers", () => {
         (_name, request) => {
           const reply = replyFor(scenario, request);
           expect(reply.status).toBe(request.status);
-          const sort = UNORDERED[request.name];
+          const sort = UNORDERED.get(request.name);
 
           if (sort === undefined) {
             expect(reply.body).toBe(request.body);
@@ -174,15 +175,19 @@ describe("Codex client catalog (client_version) parity with Go", () => {
             ),
           );
 
-          expect(summary.toSorted((a, b) => String(a.slug).localeCompare(String(b.slug)))).toEqual(
+          expect(
+            summary.toSorted((a, b) => asString(a.slug).localeCompare(asString(b.slug))),
+          ).toEqual(
             (result.models ?? []).toSorted((a, b) => String(a.slug).localeCompare(String(b.slug))),
           );
         }
 
         expect(actualHashes).toEqual(result.entries);
+
         const priorities = entries.map((entry) =>
           typeof entry.priority === "number" ? entry.priority : 100,
         );
+
         expect(priorities).toEqual(priorities.toSorted((a, b) => a - b));
 
         // Ties follow Go's map iteration order; scenarios without ties must match the whole body.

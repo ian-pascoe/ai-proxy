@@ -137,7 +137,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     ACCESS_ADMIN_SERVICE_TOKENS: "",
     ACCESS_DEV_BYPASS: "",
     ...options.env,
-  } as unknown as Env;
+  };
 
   const call = async (path: string, init: RequestInit = {}) => {
     const token = await signToken({
@@ -145,6 +145,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
       now: Math.floor(Date.now() / 1000),
       claims: userClaims("dev@example.com"),
     });
+
     const headers = new Headers(init.headers);
     headers.set("Cf-Access-Jwt-Assertion", token);
 

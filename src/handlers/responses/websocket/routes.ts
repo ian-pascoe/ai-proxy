@@ -12,7 +12,7 @@
  * cannot hibernate. The Access gate has already authenticated the upgrade request (the principal is captured for the
  * socket's lifetime).
  */
-import { type Cause, Effect, Queue, type Scope } from "effect";
+import { type Cause, Effect, Queue, Result, type Scope } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "../../../access/principal.ts";
 import { invalidRequestBody } from "../../../http/errors.ts";
@@ -27,7 +27,7 @@ type TurnServices = Exclude<Effect.Services<ReturnType<typeof executeStream>>, S
 const TURN_STATE_HEADER = "x-codex-turn-state";
 
 /** Decodes a client frame: text, or UTF-8 bytes (Go reads text and binary frames alike). */
-const frameText = (data: unknown): string | undefined => {
+const frameText = (data: string | ArrayBuffer | ArrayBufferView): string | undefined => {
   if (typeof data === "string") return data;
 
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
@@ -40,7 +40,7 @@ const frameText = (data: unknown): string | undefined => {
 /** Accepts the upgrade and starts the socket fiber. Requires the per-request services of the turn (see header). */
 export const handleResponsesSocket = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const headers = new Headers(request.headers as Record<string, string>);
+  const headers = new Headers(request.headers);
 
   if ((headers.get("upgrade") ?? "").toLowerCase() !== "websocket") {
     return HttpServerResponse.text(invalidRequestBody("websocket upgrade required"), {
@@ -53,7 +53,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
   const services = yield* Effect.context<TurnServices>();
   // `upstream.codex.response-steering`; an unreadable config surfaces from the turn itself.
   const config = yield* Effect.result(currentConfig);
-  const steering = config._tag === "Success" && config.success.upstream.codex["response-steering"];
+  const steering = Result.isSuccess(config) && config.success.upstream.codex["response-steering"];
 
   const pair = new WebSocketPair();
   const client = pair[0];
@@ -96,7 +96,7 @@ export const handleResponsesSocket = Effect.gen(function* () {
 
   const fiber = Effect.runForkWith(services)(program);
   server.addEventListener("message", (event) => {
-    const text = frameText((event as MessageEvent).data);
+    const text = frameText(event.data);
 
     if (text !== undefined) Queue.offerUnsafe(raw, text);
   });

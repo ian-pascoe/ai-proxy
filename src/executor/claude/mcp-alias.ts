@@ -53,7 +53,7 @@ const digest = (secret: string, purpose: string, original: string): Buffer =>
     .digest();
 
 const word = (bytes: Buffer, offset: number, attempt: number): string =>
-  BIP39_WORDS[(bytes.readUInt16BE(offset) + attempt) % BIP39_WORDS.length] as string;
+  BIP39_WORDS[(bytes.readUInt16BE(offset) + attempt) % BIP39_WORDS.length] ?? "";
 
 const serverComponent = (secret: string): string => {
   const bytes = digest(secret, "server", "");
@@ -102,7 +102,7 @@ export const allocateToolAlias = (
   for (let attempt = 0; attempt < BIP39_WORDS.length; attempt++) {
     const alias = aliasFor(
       server,
-      BIP39_WORDS[(base + attempt) % BIP39_WORDS.length] as string,
+      BIP39_WORDS[(base + attempt) % BIP39_WORDS.length] ?? "",
       original,
     );
 
@@ -223,8 +223,10 @@ export const remapToolNames = (body: JsonObject, secret: string): Map<string, st
     const name = str(get(body, "tool_choice.name"));
     const renamed = rewriteName(name);
 
-    if (renamed !== undefined) {
-      (body.tool_choice as JsonObject).name = renamed;
+    const toolChoice = body.tool_choice;
+
+    if (renamed !== undefined && isObj(toolChoice)) {
+      toolChoice.name = renamed;
       recordRename(name, renamed);
     }
   }
@@ -372,7 +374,9 @@ export class AliasResolver {
       (entry) => entry.parts.server === server && name.endsWith(entry.alias),
     );
 
-    if (matches.length === 1) return (matches[0] as AliasEntry).original;
+    const single = matches[0];
+
+    if (matches.length === 1 && single !== undefined) return single.original;
 
     if (matches.length > 1)
       throw new AliasRestoreError(
@@ -391,9 +395,11 @@ export class AliasResolver {
         (entry) => entry.parts.server === server && normalized.endsWith(`_${entry.parts.semantic}`),
       );
 
+      const firstSuffix = suffixMatches[0];
+
       if (suffixMatches.length === 1) matches = suffixMatches;
-      else if (suffixMatches.length > 1) {
-        let longest = suffixMatches[0] as AliasEntry;
+      else if (suffixMatches.length > 1 && firstSuffix !== undefined) {
+        let longest = firstSuffix;
         let tie = false;
 
         for (const candidate of suffixMatches.slice(1)) {
@@ -409,7 +415,9 @@ export class AliasResolver {
       }
     }
 
-    if (matches.length === 1) return (matches[0] as AliasEntry).original;
+    const resolved = matches[0];
+
+    if (matches.length === 1 && resolved !== undefined) return resolved.original;
 
     if (matches.length > 1) {
       throw new AliasRestoreError(

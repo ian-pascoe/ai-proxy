@@ -5,7 +5,7 @@
  * handleNonStreamingResponse, handleStreamingResponse, handleCompletions*). Difference: a body that is not JSON is
  * rejected with `400 Invalid request` instead of being forwarded and failing model resolution.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import type { ExecutionError } from "../../executor/errors.ts";
@@ -24,7 +24,7 @@ import {
 } from "./completions.ts";
 
 /** `shouldTreatAsResponsesFormat`: a Responses-shaped payload sent to `/v1/chat/completions`. */
-export const isResponsesShaped = (body: Json): boolean =>
+export const isResponsesFormatRequest = (body: Json): boolean =>
   get(body, "messages") === undefined &&
   (get(body, "input") !== undefined || get(body, "instructions") !== undefined);
 
@@ -45,7 +45,7 @@ const handle = (exchange: Exchange) =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     const configResult = yield* Effect.result(currentConfig);
 
-    if (configResult._tag === "Failure") {
+    if (Result.isFailure(configResult)) {
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false });
     }
 
@@ -58,7 +58,7 @@ const handle = (exchange: Exchange) =>
 
     const read = yield* Effect.result(readRequestBody(request));
 
-    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status);
+    if (Result.isFailure(read)) return badRequest(read.failure.message, read.failure.status);
 
     if (read.success.json === undefined) return badRequest("request body is not valid JSON");
     const { body, stream } = exchange.prepare(read.success.json);
@@ -84,7 +84,7 @@ const handle = (exchange: Exchange) =>
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(input));
 
-        if (result._tag === "Failure") return onError(result.failure);
+        if (Result.isFailure(result)) return onError(result.failure);
 
         return jsonResponse(
           exchange.convertResponse(result.success.payload),
@@ -101,7 +101,7 @@ const chatCompletions = handle({
 
     // Some clients send Responses-format payloads to /v1/chat/completions; convert them to Chat Completions.
     if (
-      isResponsesShaped(body) &&
+      isResponsesFormatRequest(body) &&
       builtinTranslators.hasRequestTransformer(Formats.OpenAIResponse, Formats.OpenAI)
     ) {
       const converted = builtinTranslators.translateRequest(

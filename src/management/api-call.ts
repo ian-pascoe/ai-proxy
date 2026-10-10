@@ -12,7 +12,7 @@
  * (the panel probes several provider hosts and admins can download credential files anyway); it is an outbound
  * request from the Worker to any public host, see docs/ACCESS.md "Management API security".
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { isValidJson } from "../http/json-text.ts";
 import { isJsonObject, type Json } from "../json/index.ts";
@@ -47,6 +47,7 @@ const apiCall = Effect.gen(function* () {
   const urlText = text(body.url);
 
   if (urlText === "") return yield* replyError(400, "missing url");
+
   const url = yield* Effect.try({
     try: () => new URL(urlText),
     catch: () => replyError(400, "invalid url"),
@@ -80,6 +81,7 @@ const apiCall = Effect.gen(function* () {
       return yield* replyError(400, "auth token requires an https url");
 
     if (authIndex === "") return yield* replyError(400, "auth token not found");
+
     const result = yield* controlPlane("resolveApiCallToken", (stub) =>
       stub.resolveApiCallToken(authIndex),
     );
@@ -109,6 +111,7 @@ const apiCall = Effect.gen(function* () {
     data = data.replaceAll(TOKEN_PLACEHOLDER, isValidJson(data) ? jsonEscape(resolved) : resolved);
   }
 
+  // SAFETY: method is one of the supported HTTP verbs validated earlier; the client accepts the whole verb union.
   let request = HttpClientRequest.make(method as "GET")(url);
 
   for (const [key, value] of Object.entries(headers)) {
@@ -128,7 +131,7 @@ const apiCall = Effect.gen(function* () {
     return { response, responseBody };
   }).pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.result);
 
-  if (outcome._tag === "Failure") {
+  if (Result.isFailure(outcome)) {
     yield* Effect.logDebug("management api-call request failed");
 
     return yield* replyError(502, "request failed");

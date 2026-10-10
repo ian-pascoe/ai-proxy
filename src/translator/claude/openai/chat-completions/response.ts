@@ -64,6 +64,7 @@ const setOpenAIUsage = (target: JsonObject, usage: UsageTokens): void => {
   const created = usage.cacheCreationInputTokens;
   const prompt = usage.inputTokens + created + cached;
   const completion = usage.outputTokens;
+  // SAFETY: `usage` is only ever set by this translator as an object (or left absent).
   const existing = (target.usage as JsonObject | undefined) ?? {};
   target.usage = {
     ...existing,
@@ -97,7 +98,9 @@ const mapStopReason = (reason: string): string => {
 
 const nowSeconds = (): number => Math.floor(Date.now() / 1000);
 
-const chunkTemplate = (): { out: JsonObject; choice: JsonObject; delta: JsonObject } => {
+type ChunkTemplateResult = { out: JsonObject; choice: JsonObject; delta: JsonObject };
+
+const chunkTemplate = (): ChunkTemplateResult => {
   const delta: JsonObject = {};
   const choice: JsonObject = { index: 0, delta, finish_reason: null };
 
@@ -127,6 +130,7 @@ export const convertClaudeResponseToOpenAI = (
     } satisfies Params;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const params = state.value as Params;
 
   if (!line.startsWith("data:")) return [];
@@ -263,6 +267,7 @@ export const convertClaudeResponseToOpenAI = (
     case "message_stop": {
       if (params.usage.hasUsage && !params.trailingUsageSent) {
         params.trailingUsageSent = true;
+
         const usageOut: JsonObject = {
           id: "",
           object: "chat.completion.chunk",

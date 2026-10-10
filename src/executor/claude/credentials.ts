@@ -39,9 +39,7 @@ const metadataString = (credential: CredentialSnapshot, key: string): string => 
 };
 
 /** `claudeCreds`: attributes first (`api_key`, `base_url`), then the OAuth access token. */
-export const claudeCreds = (
-  credential: CredentialSnapshot,
-): { apiKey: string; baseURL: string } => {
+export const claudeCreds = (credential: CredentialSnapshot) => {
   const apiKey = credential.attributes["api_key"] ?? "";
 
   return {
@@ -113,6 +111,7 @@ export const resolveFingerprintPolicy = (
   apiKey: string,
 ): FingerprintPolicy => {
   const authIsOAuth = isClaudeOAuthToken(apiKey);
+
   let profile =
     lookupAttr(credential, "fingerprint_profile") || lookupAttr(credential, "fingerprint-profile");
 
@@ -144,13 +143,18 @@ export interface CloakSettings {
   readonly cacheUserID: boolean;
 }
 
+export interface WireResolution {
+  readonly policy: WirePolicy;
+  readonly settings: CloakSettings;
+}
+
 /** `resolveClaudeWirePolicy`: whether the request is cloaked as Claude Code CLI traffic. */
 export const resolveWirePolicy = (
   config: Config,
   credential: CredentialSnapshot,
   apiKey: string,
   confirmedClaudeCode: boolean,
-): { readonly policy: WirePolicy; readonly settings: CloakSettings } => {
+): WireResolution => {
   const cloakCfg = resolveClaudeKeyConfig(config, credential)?.entry.cloak;
   const attrMode = lookupAttr(credential, "cloak_mode");
   const attrStrict = lookupAttr(credential, "cloak_strict_mode").toLowerCase() === "true";
@@ -179,8 +183,10 @@ export const resolveWirePolicy = (
   }
 
   const fp = resolveFingerprintPolicy(config, credential, apiKey);
+
   const cloakConfigured =
     cloakCfg !== undefined || attrMode !== "" || attrStrict || attrWords.length > 0 || attrCache;
+
   let cloak = (fp.profileClaudeCodeCLI || cloakConfigured) && !confirmedClaudeCode;
 
   if (!confirmedClaudeCode) {

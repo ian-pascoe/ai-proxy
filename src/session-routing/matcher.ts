@@ -128,6 +128,7 @@ const fallbackEnvDigest = (
   const hash = createHash("sha256");
 
   for (let index = 0; index < count; index += 1) {
+    // SAFETY: index < count <= fingerprints.length.
     const fingerprint = fingerprints[index] as string;
     hash.update(`${Buffer.byteLength(fingerprint)}:`);
     hash.update(fingerprint);
@@ -221,7 +222,7 @@ const tailKeyOf = (group: Group): string | undefined => {
   const tails = group.tailFingerprints.length === 0 ? group.fingerprints : group.tailFingerprints;
 
   return tails.length >= MIN_COMPACTION_OVERLAP_TURNS
-    ? `${tails[tails.length - 2] as string}\0${tails[tails.length - 1] as string}`
+    ? `${tails[tails.length - 2] ?? ""}\0${tails[tails.length - 1] ?? ""}`
     : undefined;
 };
 
@@ -371,8 +372,9 @@ export class MerklePrefixMatcher {
     const first = active[0];
 
     if (first === undefined) return undefined;
+
     const authIds = [
-      ...new Set(active.map((group) => group.authId).filter((id) => id !== "")),
+      ...new Set(active.flatMap((group) => (group.authId === "" ? [] : [group.authId]))),
     ].toSorted();
 
     return authIds.length === 0 ? undefined : { authIds, namespace: first.namespace };
@@ -549,6 +551,7 @@ export class MerklePrefixMatcher {
     if (sessionId === "") {
       const targetIndex =
         minPrefixLength > 0 && minPrefixLength <= prefixKeys.length ? minPrefixLength - 1 : 0;
+
       sessionId = newLcpSessionId(namespace, prefixKeys[targetIndex] ?? "");
     }
 
@@ -716,6 +719,7 @@ export class MerklePrefixMatcher {
       const middle = low + Math.floor((high - low) / 2);
 
       const candidate = this.#newestMatchingGroup(
+        // SAFETY: 1 <= middle <= bestLength bounds; prefixKeys has one entry per fingerprint.
         ns.prefixes.get(prefixKeys[middle - 1] as string),
         fingerprints.slice(0, middle),
         now,
@@ -750,7 +754,9 @@ export class MerklePrefixMatcher {
       if (compaction !== undefined) return compaction;
       isFork = true;
       nodeKind = "fork";
+      // SAFETY: 0 < bestLength < fingerprints.length and prefixKeys has one entry per fingerprint.
       parentSessionId = newLcpSessionId(namespace, prefixKeys[bestLength - 1] as string);
+      // SAFETY: bestLength < fingerprints.length and prefixKeys has one entry per fingerprint.
       sessionId = newLcpSessionId(namespace, prefixKeys[bestLength] as string);
     }
 
@@ -774,8 +780,10 @@ export class MerklePrefixMatcher {
     now: number,
   ): MatchResult | undefined {
     const { fingerprints, minPrefixLength, envDigest } = seq;
+
     const candTail =
       seq.tailFingerprints.length === 0 ? extractTail(fingerprints) : seq.tailFingerprints;
+
     const n = candTail.length;
 
     if (n < MIN_COMPACTION_OVERLAP_TURNS) return undefined;
@@ -785,6 +793,7 @@ export class MerklePrefixMatcher {
     let hasOverflow = false;
 
     for (let candEnd = n - 1; candEnd >= MIN_COMPACTION_OVERLAP_TURNS - 1; candEnd -= 1) {
+      // SAFETY: candEnd >= MIN_COMPACTION_OVERLAP_TURNS - 1 and candEnd < n = candTail.length.
       const tailKey = `${candTail[candEnd - 1] as string}\0${candTail[candEnd] as string}`;
       const candidateGroups = ns.tails.get(tailKey);
 
@@ -809,8 +818,10 @@ export class MerklePrefixMatcher {
 
       for (const group of candidateGroups) {
         if (group.environmentDigest !== envDigest) continue;
+
         const tails =
           group.tailFingerprints.length === 0 ? group.fingerprints : group.tailFingerprints;
+
         const tailLength = tails.length;
 
         if (tailLength < MIN_COMPACTION_OVERLAP_TURNS) continue;
@@ -855,6 +866,7 @@ export class MerklePrefixMatcher {
     );
 
     if (leaves.length !== 1) return undefined;
+    // SAFETY: leaves.length === 1 was checked above.
     const best = leaves[0] as Group;
     best.expiresAt = now + this.#ttlMs;
     best.lastAccessNumber = this.#nextAccess();

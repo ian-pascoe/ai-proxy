@@ -25,7 +25,7 @@ import {
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http";
-import { del, get, type Json, type JsonObject, set, tryParseJson } from "../../json/index.ts";
+import { del, get, isJsonObject, type Json, set, tryParseJson } from "../../json/index.ts";
 import { sanitizeReasoningEncryptedContent } from "../codex/request.ts";
 import { splitLines } from "../../http/sse.ts";
 import { builtinTranslators } from "../../translator/builtin.ts";
@@ -141,8 +141,10 @@ const applyPromptCacheKey = (
   }
 
   const translatedModel = get(translated, "model");
+
   const modelName =
     (typeof translatedModel === "string" ? translatedModel.trim() : "") || baseModel;
+
   const from = options.sourceFormat;
 
   if (from.trim().toLowerCase() === "claude") {
@@ -195,6 +197,25 @@ const responseContext = (
   state: makeTranslationState(),
 });
 
+/** Upstream request headers: JSON content type (unless multipart), key, user agent, custom headers, SSE accept. */
+const upstreamHeaders = (
+  context: ExecutionContext,
+  options: ExecutorOptions,
+  apiKey: string,
+  stream: boolean,
+  jsonContentType: boolean,
+) => {
+  const base = {
+    ...(jsonContentType ? { "content-type": "application/json" } : {}),
+    ...(apiKey !== "" ? { authorization: `Bearer ${apiKey}` } : {}),
+    "user-agent": USER_AGENT,
+  };
+
+  applyCustomHeaders(base, context.credential, options.headers, options.metadata.sessionId);
+
+  return stream ? { ...base, accept: "text/event-stream", "cache-control": "no-cache" } : base;
+};
+
 export interface OpenAICompatExecutorOptions {
   /** Translator registry (defaults to the built-in one). */
   readonly translators?: TranslatorRegistry;
@@ -225,6 +246,7 @@ export const makeOpenAICompatExecutor = (
     const to = compact ? Formats.OpenAIResponse : Formats.OpenAI;
 
     const from = options.sourceFormat;
+
     const rewrite = {
       headers: options.headers,
       config: context.config,
@@ -272,6 +294,7 @@ export const makeOpenAICompatExecutor = (
 
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
+
     const group = resolveCompatConfig(context.config, context.credential);
 
     if (shouldNormalizeToolResults(group, baseModel, requestedModel))
@@ -311,16 +334,7 @@ export const makeOpenAICompatExecutor = (
       body,
     );
 
-    const headers: Record<string, string> = { "content-type": "application/json" };
-
-    if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`;
-    headers["user-agent"] = USER_AGENT;
-    applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId);
-
-    if (stream) {
-      headers["accept"] = "text/event-stream";
-      headers["cache-control"] = "no-cache";
-    }
+    const headers = upstreamHeaders(context, options, apiKey, stream, true);
 
     const url =
       (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) +
@@ -342,14 +356,18 @@ export const makeOpenAICompatExecutor = (
     if (baseURL === "")
       return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" });
     const endpoint = compatImageEndpointPath(options.metadata.requestPath);
+
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
+
     const from = options.sourceFormat;
+
     const original = prepareCompatImagesBody(
       options.originalRequest ?? request.payload,
       baseModel,
       stream,
     );
+
     let body: Json = prepareCompatImagesBody(request.payload, baseModel, stream);
     const effort = get(body, "reasoning_effort");
     context.usage.setReasoningEffort(typeof effort === "string" ? effort : undefined);
@@ -369,19 +387,12 @@ export const makeOpenAICompatExecutor = (
       body,
     );
     const multipart = wantsMultipartEdit(endpoint, options.headers.get("content-type") ?? "");
-    const headers: Record<string, string> = multipart ? {} : { "content-type": "application/json" };
-
-    if (apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`;
-    headers["user-agent"] = USER_AGENT;
-    applyCustomHeaders(headers, context.credential, options.headers, options.metadata.sessionId);
-
-    if (stream) {
-      headers["accept"] = "text/event-stream";
-      headers["cache-control"] = "no-cache";
-    }
+    const headers = upstreamHeaders(context, options, apiKey, stream, !multipart);
 
     const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + endpoint;
-    const form = multipart ? editBodyToFormData(body as JsonObject, baseModel, stream) : undefined;
+
+    const form =
+      multipart && isJsonObject(body) ? editBodyToFormData(body, baseModel, stream) : undefined;
 
     return {
       url,
@@ -416,12 +427,14 @@ export const makeOpenAICompatExecutor = (
     if (response.status < 200 || response.status >= 300) {
       const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
       const webHeaders = new Headers(response.headers);
+
       const retryAfterMs = openAICompatRetryAfterMs(
         response.status,
         webHeaders,
         text,
         yield* Clock.currentTimeMillis,
       );
+
       context.usage.fail(response.status, text);
 
       return yield* new ExecutionError({
@@ -494,6 +507,7 @@ export const makeOpenAICompatExecutor = (
     }
 
     context.usage.publish(parseOpenAIUsage(text));
+
     const payload =
       responseFormatOf(options) === Formats.OpenAIResponse ? ensureResponsesUsageDetails(out) : out;
 
@@ -569,6 +583,7 @@ export const makeOpenAICompatExecutor = (
     const baseModel = parseSuffix(request.model).modelName;
     const from = options.sourceFormat;
     const responseFormat = responseFormatOf(options);
+
     const rewrite = {
       headers: options.headers,
       config: context.config,

@@ -242,6 +242,7 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
   for (const i of st.msgItemAdded.keys()) {
     const msgStatus =
       incompleteByFinishReason(st.finishReason) !== undefined ? "incomplete" : "completed";
+
     outputItems.push({
       index: st.msgOutputIx.get(i) ?? 0,
       item: {
@@ -261,8 +262,10 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
     const args = st.funcArgsBuf.get(key) ?? "";
     const callId = st.funcCallIds.get(key) ?? "";
     const name = st.funcNames.get(key) ?? "";
+
     const toolStatus =
       incompleteByFinishReason(st.finishReason) !== undefined ? "incomplete" : "completed";
+
     const index = st.funcOutputIx.get(key) ?? 0;
 
     if (st.toolIndex.isShell(name)) {
@@ -274,6 +277,7 @@ const buildResponsesCompletedEvent = (st: ChatToResponsesState, nextSeq: () => n
 
     if (st.funcItemCustom.get(key) === true) {
       const patchCall = st.applyPatchCalls.get(key);
+
       const input =
         patchCall !== undefined ? patchCall.decoder.input() : unwrapCustomToolInput(args);
 
@@ -351,7 +355,7 @@ const syncState = (state: TranslationState, st: ChatToResponsesState): void => {
 
 const parseJson = (text: string): Json | undefined => {
   try {
-    return JSON.parse(text) as Json;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }
@@ -363,6 +367,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponses = (
   line: string,
 ): ReadonlyArray<string> => {
   if (context.state.value === undefined) context.state.value = newState();
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a ChatToResponsesState before this read.
   const st = context.state.value as ChatToResponsesState;
   const out: string[] = [];
 
@@ -674,7 +679,11 @@ const processChunk = (
 
     if (modelName === "") modelName = context.model;
 
-    if (modelName !== "") (created.response as JsonObject).model = modelName;
+    if (modelName !== "") {
+      // SAFETY: `created.response` is the object literal assigned when `created` was built above.
+      (created.response as JsonObject).model = modelName;
+    }
+
     out.push(emit("response.created", created));
 
     const inprog: JsonObject = {
@@ -689,7 +698,11 @@ const processChunk = (
       },
     };
 
-    if (modelName !== "") (inprog.response as JsonObject).model = modelName;
+    if (modelName !== "") {
+      // SAFETY: `inprog.response` is the object literal assigned when `inprog` was built above.
+      (inprog.response as JsonObject).model = modelName;
+    }
+
     out.push(emit("response.in_progress", inprog));
     st.started = true;
   }
@@ -762,8 +775,10 @@ const processChunk = (
         part: { type: "output_text", annotations: [], logprobs: [], text: fullText },
       }),
     );
+
     const msgStatus =
       incompleteByFinishReason(st.finishReason) !== undefined ? "incomplete" : "completed";
+
     out.push(
       emit("response.output_item.done", {
         type: "response.output_item.done",
@@ -822,7 +837,7 @@ const processChunk = (
       if (
         !st.toolIndex.isApplyPatch(name) &&
         st.finishReason === "" &&
-        (!hasArgs || !isValidJson(buffered as string))
+        (!hasArgs || !isValidJson(buffered))
       ) {
         continue;
       }
@@ -839,7 +854,7 @@ const processChunk = (
       let toolStatus = "completed";
       let args = "{}";
 
-      if (hasArgs) args = buffered as string;
+      if (hasArgs) args = buffered;
       else if (isIncomplete || !isExplicitToolFinish) args = "";
 
       if (isIncomplete) toolStatus = "incomplete";
@@ -1038,6 +1053,7 @@ const processChunk = (
           }
 
           if (!st.msgOutputIx.has(idx)) st.msgOutputIx.set(idx, allocOutputIndex());
+          // SAFETY: the line above sets msgOutputIx[idx] when it is missing.
           const msgOutputIndex = st.msgOutputIx.get(idx) as number;
           const itemId = `msg_${st.responseId}_${idx}`;
 
@@ -1234,6 +1250,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
     let rid = id;
 
     if (rid.startsWith("resp_")) rid = rid.slice("resp_".length);
+
     const reasoningItem: JsonObject = {
       id: `rs_${rid}`,
       type: "reasoning",
@@ -1267,8 +1284,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
         const tcs = get(msg, "tool_calls");
 
         if (isArr(tcs)) {
-          for (let tcIndex = 0; tcIndex < tcs.length; tcIndex++) {
-            const tc = tcs[tcIndex] as Json;
+          for (const [tcIndex, tc] of tcs.entries()) {
             let callId = getStr(tc, "id");
 
             if (callId === "") {

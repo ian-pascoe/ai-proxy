@@ -6,7 +6,8 @@
  * accepted version in KV `CACHE` and request handling reads it back ({@link currentXaiClientVersion}, cached per
  * isolate for a minute) with the compiled-in fallback when KV has nothing.
  */
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
+import { get, tryParseJson } from "../../json/index.ts";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { WorkerEnv } from "../../platform/env.ts";
 
@@ -59,7 +60,7 @@ export const currentXaiClientVersion: Effect.Effect<string> = Effect.gen(functio
   const env = yield* Effect.serviceOption(WorkerEnv);
   let version = XAI_FALLBACK_CLIENT_VERSION;
 
-  if (env._tag === "Some") {
+  if (Option.isSome(env)) {
     const stored = yield* Effect.tryPromise(() => env.value.CACHE.get(XAI_VERSION_KV_KEY)).pipe(
       Effect.orElseSucceed(() => null),
     );
@@ -100,15 +101,9 @@ export const refreshXaiClientVersion = (
       Effect.option,
     );
 
-    if (body._tag === "None") return undefined;
-    let version = "";
-
-    try {
-      const parsed = JSON.parse(body.value) as { version?: unknown };
-      version = typeof parsed.version === "string" ? parsed.version.trim() : "";
-    } catch {
-      version = "";
-    }
+    if (Option.isNone(body)) return undefined;
+    const parsedVersion = get(tryParseJson(body.value), "version");
+    const version = typeof parsedVersion === "string" ? parsedVersion.trim() : "";
 
     if (!acceptableXaiClientVersion(version)) {
       yield* Effect.logWarning("npm registry returned an unacceptable Grok CLI version");

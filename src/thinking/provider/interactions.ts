@@ -73,7 +73,7 @@ const normalizeInteractionsLevel = (
   if (levels.length > 0) {
     const match = levels.find((candidate) => equalFold(candidate, level));
 
-    return (match ?? (levels[levels.length - 1] as string)).toLowerCase();
+    return (match ?? levels.at(-1) ?? level).toLowerCase();
   }
 
   return level === Level.max || level === Level.xhigh ? Level.high : level;
@@ -89,6 +89,7 @@ const applyLevel = (
   modelInfo: ThinkingModelInfo | undefined,
 ): Json | undefined => {
   const normalized = normalizeInteractionsLevel(level, modelInfo);
+
   const result =
     normalized === "" ? body : setPath(body, "generation_config.thinking_level", normalized);
 

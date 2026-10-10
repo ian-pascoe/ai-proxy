@@ -178,18 +178,18 @@ const RESPONSES_DELTA_EVENTS = new Set([
 ]);
 
 /** Events whose single field carries the finished text. */
-const RESPONSES_DONE_FIELDS: Readonly<Record<string, string>> = {
-  "response.reasoning_summary_text.done": "text",
-  "response.reasoning_text.done": "text",
-  "response.output_text.done": "text",
-  "response.refusal.done": "refusal",
-  "response.function_call_arguments.done": "arguments",
-  "response.mcp_call_arguments.done": "arguments",
-  "response.custom_tool_call_input.done": "input",
-  "response.code_interpreter_call_code.done": "code",
-  "response.shell_call_command.done": "command",
-  "response.reasoning_summary_part.done": "part.text",
-};
+const RESPONSES_DONE_FIELDS: ReadonlyMap<string, string> = new Map([
+  ["response.reasoning_summary_text.done", "text"],
+  ["response.reasoning_text.done", "text"],
+  ["response.output_text.done", "text"],
+  ["response.refusal.done", "refusal"],
+  ["response.function_call_arguments.done", "arguments"],
+  ["response.mcp_call_arguments.done", "arguments"],
+  ["response.custom_tool_call_input.done", "input"],
+  ["response.code_interpreter_call_code.done", "code"],
+  ["response.shell_call_command.done", "command"],
+  ["response.reasoning_summary_part.done", "part.text"],
+]);
 
 const RESPONSES_TERMINAL_EVENTS = new Set([
   "response.completed",
@@ -208,7 +208,7 @@ export const isResponsesTokenEvent = (text: string): boolean => {
   const type = stringOf(get(root, "type"));
 
   if (RESPONSES_DELTA_EVENTS.has(type)) return hasText(get(root, "delta"));
-  const doneField = RESPONSES_DONE_FIELDS[type];
+  const doneField = RESPONSES_DONE_FIELDS.get(type);
 
   if (doneField !== undefined) return hasText(get(root, doneField));
 

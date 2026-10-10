@@ -43,9 +43,12 @@ interface ClaudeIdentities {
 export const stringOf = (value: Json | undefined): string =>
   typeof value === "string" ? value : "";
 
-export const requestRoot = (
-  body: Json | undefined,
-): { root: Json | undefined; nested: Json | undefined } => {
+export interface RequestRoot {
+  root: Json | undefined;
+  nested: Json | undefined;
+}
+
+export const requestRoot = (body: Json | undefined): RequestRoot => {
   if (body === undefined) return { root: undefined, nested: undefined };
   const request = get(body, "request");
   const hasNested = request !== undefined && get(body, "contents") === undefined;
@@ -70,6 +73,7 @@ export const claudeMetadataIdentities = (body: Json | undefined): ClaudeIdentiti
     let parsed: Json;
 
     try {
+      // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
       parsed = JSON.parse(userId) as Json;
     } catch {
       return none;
@@ -321,6 +325,7 @@ export const extractSessionInfo = (
 
   const parentCandidate = field(PARENT_PATHS) || claudeMetadataIdentities(body).parentSessionId;
   const agentFromBody = (): string => field(["metadata.agent_id", "metadata.subagent_id"]);
+
   const parentAgentFromBody = (): string =>
     field(["metadata.parent_agent_id", "metadata.parentAgentId"]);
 
@@ -329,8 +334,10 @@ export const extractSessionInfo = (
 
   if (claudeSid !== "") {
     const info = base("claude");
+
     const agentId =
       header("X-Claude-Code-Agent-Id") || agentFromBody() || claudeMetadataIdentities(body).agentId;
+
     const parentAgentId = header("X-Claude-Code-Parent-Agent-Id") || parentAgentFromBody();
 
     if (agentId !== "" && agentId !== "main") {
@@ -404,6 +411,7 @@ export const extractSessionInfo = (
 
   if (rawTurnMeta !== "") {
     try {
+      // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
       turnMeta = JSON.parse(rawTurnMeta) as Json;
     } catch {
       turnMeta = undefined;
@@ -421,6 +429,7 @@ export const extractSessionInfo = (
 
   if (sid !== "" || tid !== "") {
     const info = base("codex");
+
     const parentThread =
       header("x-codex-parent-thread-id", "X-Codex-Parent-Thread-Id") ||
       turnField("parent_thread_id");

@@ -144,9 +144,11 @@ describe("Responses WebSocket over an upstream WebSocket (Codex)", () => {
     expect((second["response"] as { id: string }).id).toBe("resp_2");
 
     expect(s.mock.dials).toHaveLength(1);
+
     const frames = (s.mock.connections[0]?.received ?? []).map(
       (text) => JSON.parse(text) as Record<string, unknown>,
     );
+
     expect(frames).toHaveLength(2);
     // The continuation keeps previous_response_id and inherits the model from the pinned turn.
     expect(frames[1]).toMatchObject({
@@ -543,16 +545,20 @@ requests:
     });
 
     afterAll(p.dispose);
+
     const client = connectClient(
       await p.call("/v1/responses", { headers: { upgrade: "websocket" } }),
     );
+
     client.send({ type: "response.create", model: "gpt-5.4", input: [] });
     await client.until("response.completed");
     client.send({ type: "response.create", previous_response_id: "resp_1", input: [] });
     await client.until("response.completed");
+
     const frames =
       mock.connections[0]?.received.map((text) => JSON.parse(text) as Record<string, unknown>) ??
       [];
+
     expect(frames).toHaveLength(2);
 
     for (const frame of frames) {

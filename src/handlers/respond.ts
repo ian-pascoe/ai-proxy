@@ -7,7 +7,7 @@
  * (handleStreamingResponse: first-chunk peek, SSE headers), sdk/api/handlers/stream_forwarder.go (ForwardStream),
  * sdk/api/handlers/handlers.go (StartNonStreamingKeepAlive).
  */
-import { Duration, Effect, Fiber, Pull, type Scope, Stream } from "effect";
+import { Data, Duration, Effect, Fiber, Pull, Result, type Scope, Stream } from "effect";
 import { HttpServerResponse } from "effect/http";
 import type { ExecutionError } from "../executor/errors.ts";
 import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts";
@@ -99,10 +99,13 @@ export interface StreamResponseOptions {
   readonly contentType?: string;
 }
 
-type FirstPull<A> =
-  | { readonly _tag: "chunk"; readonly chunk: ReadonlyArray<A> }
-  | { readonly _tag: "done" }
-  | { readonly _tag: "error"; readonly error: ExecutionError };
+type FirstPull = Data.TaggedEnum<{
+  chunk: { readonly chunk: ReadonlyArray<string> };
+  done: {};
+  error: { readonly error: ExecutionError };
+}>;
+
+const FirstPull = Data.taggedEnum<FirstPull>();
 
 /**
  * Runs a stream execution and answers with SSE. Must run inside the request scope: the remaining stream is pulled by
@@ -114,19 +117,17 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
 ) {
   const started = yield* Effect.result(start);
 
-  if (started._tag === "Failure") return options.onError(started.failure);
+  if (Result.isFailure(started)) return options.onError(started.failure);
   const output = started.success;
   const pull = yield* Stream.toPull(output.chunks);
 
-  const first: FirstPull<string> = yield* pull.pipe(
-    Effect.map((chunk): FirstPull<string> => ({ _tag: "chunk", chunk })),
-    Pull.catchDone(() => Effect.succeed<FirstPull<string>>({ _tag: "done" })),
-    Effect.catch((error: ExecutionError) =>
-      Effect.succeed<FirstPull<string>>({ _tag: "error", error }),
-    ),
+  const first: FirstPull = yield* pull.pipe(
+    Effect.map((chunk): FirstPull => FirstPull.chunk({ chunk })),
+    Pull.catchDone(() => Effect.succeed<FirstPull>(FirstPull.done())),
+    Effect.catch((error: ExecutionError) => Effect.succeed<FirstPull>(FirstPull.error({ error }))),
   );
 
-  if (first._tag === "error") return options.onError(first.error);
+  if (FirstPull.$is("error")(first)) return options.onError(first.error);
 
   const headers = mergeUpstreamHeaders(
     {
@@ -138,7 +139,7 @@ export const streamResponse = Effect.fnUntraced(function* <R>(
 
   const { framer } = options;
 
-  if (first._tag === "done") {
+  if (FirstPull.$is("done")(first)) {
     return HttpServerResponse.stream(Stream.make(framer.emptyBody).pipe(Stream.encodeText), {
       headers,
     });

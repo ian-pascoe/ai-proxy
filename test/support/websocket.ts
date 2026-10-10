@@ -6,6 +6,7 @@ import {
   UpstreamWebSocketConnector,
   wrapWebSocket,
 } from "../../src/executor/websocket/connector.ts";
+import type { Json } from "../../src/json/index.ts";
 
 /** One accepted upstream connection as seen by the mock server. */
 export interface UpstreamConnection {
@@ -80,7 +81,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           };
 
           server.addEventListener("message", (event) => {
-            const text = String((event as MessageEvent).data);
+            const text = String(event.data);
             received.push(text);
             const waiter = waiting.shift();
 
@@ -89,8 +90,8 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           });
           server.addEventListener("close", (event) => {
             connection.closed = {
-              code: (event as CloseEvent).code,
-              reason: (event as CloseEvent).reason,
+              code: event.code,
+              reason: event.reason,
             };
           });
           connections.push(connection);
@@ -106,7 +107,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
 
 /** A client-side socket (the `webSocket` of the proxy's 101 response) with queued messages. */
 export interface TestClient {
-  readonly send: (value: unknown) => void;
+  readonly send: (value: Json) => void;
   readonly next: () => Promise<string>;
   readonly nextJson: () => Promise<Record<string, unknown>>;
   /** Reads JSON frames until one has this `type`. */
@@ -126,11 +127,13 @@ export const connectClient = (response: Response): TestClient => {
   const queue: string[] = [];
   const waiting: Array<(frame: string) => void> = [];
   let resolveClosed: (value: { code: number; reason: string }) => void = () => undefined;
+
   const closed = new Promise<{ code: number; reason: string }>(
     (resolve) => (resolveClosed = resolve),
   );
+
   ws.addEventListener("message", (event) => {
-    const text = String((event as MessageEvent).data);
+    const text = String(event.data);
     messages.push(text);
     const waiter = waiting.shift();
 
@@ -138,7 +141,7 @@ export const connectClient = (response: Response): TestClient => {
     else queue.push(text);
   });
   ws.addEventListener("close", (event) =>
-    resolveClosed({ code: (event as CloseEvent).code, reason: (event as CloseEvent).reason }),
+    resolveClosed({ code: event.code, reason: event.reason }),
   );
 
   const next = () =>

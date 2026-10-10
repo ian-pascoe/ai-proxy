@@ -1,7 +1,8 @@
 // Stream responder (bootstrap peek, framing, keep-alives with TestClock), protocol framers, the translator
 // registry fallbacks and the legacy completions conversion.
 import { assert, describe, expect, it } from "@effect/vitest";
-import { Effect, Fiber, Stream } from "effect";
+import { Effect, Fiber, Predicate, Stream } from "effect";
+import type { HttpBody } from "effect/http";
 import { TestClock } from "effect/testing";
 import { ExecutionError } from "../src/executor/errors.ts";
 import {
@@ -26,10 +27,10 @@ import {
 
 const decoder = new TextDecoder();
 
-const collectBody = (body: unknown) => {
-  const stream = (body as { readonly stream: Stream.Stream<Uint8Array> }).stream;
+const collectBody = (body: HttpBody.HttpBody) => {
+  if (!Predicate.isTagged(body, "Stream")) return Effect.die("expected a stream body");
 
-  return Stream.runCollect(stream).pipe(
+  return Stream.runCollect(Stream.orDie(body.stream)).pipe(
     Effect.map((parts) => parts.map((part) => decoder.decode(part)).join("")),
   );
 };
@@ -168,12 +169,14 @@ describe("TranslatorRegistry", () => {
   it("falls back to forcing the model on a copy", () => {
     const registry = new TranslatorRegistry();
     const body = { model: "a", x: 1 };
+
     const out = registry.translateRequest("claude", "claude", {
       format: "claude",
       model: "b",
       stream: false,
       body,
     });
+
     expect(out.body).toEqual({ model: "b", x: 1 });
     expect(out.format).toBe("claude");
     expect(body.model).toBe("a");
@@ -208,12 +211,14 @@ describe("TranslatorRegistry", () => {
 
     expect(out.body).toEqual({ summary: "s", model: "m", translated: true, applied: "s" });
     expect(registry.hasResponseTransformer("a", "b")).toBe(false);
+
     const refused = registry.translateRequest("a", "c", {
       format: "a",
       model: "m",
       stream: false,
       body: {},
     });
+
     expect(refused.error?.message).toBe("unsupported part");
     expect(refused.error?.status).toBe(400);
   });

@@ -11,6 +11,7 @@
  * `fetchAvailableModels` list belongs to the Antigravity slice); config entries are already attached to the
  * credential (`ModelSource.models`), so Go's config-entry lookup by index/key is not needed.
  */
+import type { Types } from "effect";
 import type {
   Config,
   ModelEntry,
@@ -30,8 +31,6 @@ import {
 import { applyAntigravityHints } from "./antigravity-hints.ts";
 import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts";
 import type { ModelSource } from "./source.ts";
-
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 export interface AssemblyOptions {
   readonly config: Pick<Config, "oauth" | "routing">;
@@ -55,6 +54,7 @@ export const normalizeThinkingSupport = (
 ): ThinkingSupport | undefined => {
   if (raw === undefined) return undefined;
 
+  // SAFETY: ConfigThinking uses the dashed keys and ThinkingSupport the camelCase ones; this view lists every field of both as optional.
   const source = raw as {
     min?: number;
     max?: number;
@@ -65,7 +65,7 @@ export const normalizeThinkingSupport = (
     levels?: readonly string[];
   };
 
-  const out: Mutable<ThinkingSupport> = {};
+  const out: Types.Mutable<ThinkingSupport> = {};
 
   if (source.min !== undefined) out.min = source.min;
 
@@ -102,14 +102,14 @@ const buildConfiguredModelInfo = (
   created: number,
   fallbackDisplayName: string,
   userDefined: boolean,
-): Mutable<ModelInfo> | undefined => {
+): Types.Mutable<ModelInfo> | undefined => {
   const name = entry.name.trim();
   const alias = (entry.alias ?? "").trim() || name;
 
   if (alias === "") return undefined;
   const displayName = (entry["display-name"] ?? "").trim() || fallbackDisplayName || alias;
 
-  const info: Mutable<ModelInfo> = {
+  const info: Types.Mutable<ModelInfo> = {
     id: alias,
     metadataModelId: name || alias,
     object: "model",
@@ -171,6 +171,7 @@ const buildConfigModels = (
     const thinking = resolveThinking(options.catalogs, name, entry.thinking);
 
     if (thinking !== undefined) info.thinking = thinking;
+
     const native = lookupStaticModelInfoByChannel(
       options.catalogs,
       name,
@@ -207,6 +208,7 @@ const buildCompatModels = (
   for (const entry of entries) {
     const image = entry.image === true;
     const type = image ? "openai-image" : "openai-compatibility";
+
     const info = buildConfiguredModelInfo(
       entry,
       groupName,
@@ -251,13 +253,14 @@ const buildCodexConfigModels = (
     }));
   }
 
-  const models = buildConfigModels(
+  const models: Types.Mutable<ModelInfo>[] = buildConfigModels(
     entries,
     "openai",
     "openai",
     "codex",
     options,
-  ) as Mutable<ModelInfo>[];
+  );
+
   const displayNames = new Map<string, string>();
   const configurationUpdates = new Map<string, boolean>();
   const seen = new Set<string>();
@@ -294,9 +297,11 @@ export const applyExcludedModels = (
   models: ReadonlyArray<ModelInfo>,
   excluded: ReadonlyArray<string>,
 ): ModelInfo[] => {
-  const patterns = excluded
-    .map((item) => item.trim().toLowerCase())
-    .filter((pattern) => pattern !== "");
+  const patterns = excluded.flatMap((item) => {
+    const pattern = item.trim().toLowerCase();
+
+    return pattern === "" ? [] : [pattern];
+  });
 
   if (models.length === 0 || patterns.length === 0) return [...models];
 
@@ -333,7 +338,7 @@ export const applyModelPrefixes = (
     if (baseId === "") continue;
 
     if (!forceModelPrefix || trimmed === baseId) add(model);
-    const clone = cloneModelInfo(model) as Mutable<ModelInfo>;
+    const clone: Types.Mutable<ModelInfo> = cloneModelInfo(model);
     clone.id = `${trimmed}/${baseId}`;
 
     if (clone.metadataModelId === undefined || clone.metadataModelId === "")
@@ -461,7 +466,7 @@ export const applyOAuthModelAliasEntries = (
 
       if (seen.has(aliasKey)) continue;
       seen.add(aliasKey);
-      const clone = cloneModelInfo(model) as Mutable<ModelInfo>;
+      const clone: Types.Mutable<ModelInfo> = cloneModelInfo(model);
       clone.id = mappedId;
       clone.metadataModelId =
         model.metadataModelId !== undefined && model.metadataModelId !== ""
@@ -530,14 +535,14 @@ const applyOAuthSettings = (
 
 // --- assembly ------------------------------------------------------------------------------------------------------
 
-const CODEX_TIERS: Readonly<Record<string, Section>> = {
-  pro: "codex-pro",
-  plus: "codex-plus",
-  team: "codex-team",
-  business: "codex-team",
-  go: "codex-team",
-  free: "codex-free",
-};
+const CODEX_TIERS = new Map<string, Section>([
+  ["pro", "codex-pro"],
+  ["plus", "codex-plus"],
+  ["team", "codex-team"],
+  ["business", "codex-team"],
+  ["go", "codex-team"],
+  ["free", "codex-free"],
+]);
 
 /** Base list of a non-compat credential, before aliases/settings/prefix; `undefined` = unsupported provider. */
 const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] | undefined => {
@@ -579,7 +584,7 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
     case "codex": {
       if (source.authKind === "apikey")
         return applyExcludedModels(buildCodexConfigModels(configured, options), excluded);
-      const tier = CODEX_TIERS[(source.planType ?? "").toLowerCase()] ?? "codex-pro";
+      const tier = CODEX_TIERS.get((source.planType ?? "").toLowerCase()) ?? "codex-pro";
 
       return applyExcludedModels(sectionModels(catalogs, tier), excluded);
     }

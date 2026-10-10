@@ -108,17 +108,20 @@ describe("Codex multi-agent v2 rewriting (Go parity)", () => {
         input,
         `${label} input`,
       );
+
       const prepared = prepareCodexMultiAgentV2Tools(
         headers,
         copy(),
         result.combo.optimize,
         source,
       );
+
       expectSame(prepared.payload, result.prepare, input, `${label} prepare`);
       expect(prepared.prepared, `${label} prepared`).toBe(result.prepared);
       const optimized = optimizeCodexMultiAgentV2Request(headers, copy(), config, { source });
       expectSame(optimized.payload, result.optimize, input, `${label} optimize`);
       expect(optimized.optimized, `${label} optimized`).toBe(result.optimized);
+
       const forAuth = optimizeCodexMultiAgentV2RequestForAuth(
         headers,
         copy(),
@@ -126,6 +129,7 @@ describe("Codex multi-agent v2 rewriting (Go parity)", () => {
         result.combo.compat,
         { source },
       );
+
       expectSame(forAuth.payload, result.forAuth, input, `${label} forAuth`);
       expect(forAuth.optimized, `${label} forAuth optimized`).toBe(result.forAuthOptimized);
       expect(hasCodexMultiAgentV2NamespaceConflict(copy()), `${label} conflict`).toBe(

@@ -56,15 +56,14 @@ export const modelCooldown = (model: string, provider: string, resetInMs: number
 
   if (provider !== "") message += ` via provider ${provider}`;
 
-  const error: Record<string, unknown> = {
+  const error = {
     code: "model_cooldown",
     message,
     model,
     reset_time: formatDurationSeconds(display),
     reset_seconds: resetSeconds,
+    ...(provider !== "" ? { provider } : {}),
   };
-
-  if (provider !== "") error.provider = provider;
 
   return {
     code: "model_cooldown",

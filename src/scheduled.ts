@@ -26,7 +26,7 @@ export type ScheduledServices =
 
 export interface ScheduledTask {
   readonly name: string;
-  readonly run: Effect.Effect<unknown, unknown, ScheduledServices>;
+  readonly run: Effect.Effect<unknown, Error, ScheduledServices>;
 }
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [

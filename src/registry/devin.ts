@@ -4,7 +4,8 @@
  * Go source: internal/registry/devin_models.go (`ValidateDevinModelsJSON`, `sanitizeAndValidateDevinModels`,
  * `aggregateDevinModels`, `splitDevinModelID`, `cleanDevinDisplayName`, `WithDevinBuiltins`).
  */
-import { Schema } from "effect";
+import { Result, Schema, type Types } from "effect";
+import type { Json } from "../json/index.ts";
 import { fromWire, type ModelInfo, type ThinkingSupport, WireModel } from "./model-info.ts";
 
 const COMPOUND_SUFFIXES: ReadonlyArray<{ suffix: string; effort: string; readd?: string }> = [
@@ -76,20 +77,25 @@ const DISPLAY_NAME_SUFFIXES: ReadonlyArray<string> = [
   " Fast",
 ];
 
-const LEVEL_ORDER: Readonly<Record<string, number>> = {
-  none: 0,
-  minimal: 1,
-  low: 2,
-  medium: 3,
-  high: 4,
-  xhigh: 5,
-  max: 6,
-  fast: 7,
-  priority: 8,
-};
+const LEVEL_ORDER = new Map<string, number>([
+  ["none", 0],
+  ["minimal", 1],
+  ["low", 2],
+  ["medium", 3],
+  ["high", 4],
+  ["xhigh", 5],
+  ["max", 6],
+  ["fast", 7],
+  ["priority", 8],
+]);
 
 /** Splits a lower-cased, unprefixed id into its base model and reasoning effort. */
-export const splitDevinModelId = (cleanId: string): { base: string; effort: string } => {
+export interface DevinModelIdParts {
+  readonly base: string;
+  readonly effort: string;
+}
+
+export const splitDevinModelId = (cleanId: string): DevinModelIdParts => {
   if (cleanId === "swe-1-6-slow") return { base: cleanId, effort: "" };
 
   if (cleanId === "swe-1-6-fast") return { base: "swe-1-6", effort: "" };
@@ -118,6 +124,7 @@ const cleanDisplayName = (name: string): string => {
 
   for (;;) {
     const lower = trimmed.toLowerCase();
+
     const suffix = DISPLAY_NAME_SUFFIXES.find((candidate) =>
       lower.endsWith(candidate.toLowerCase()),
     );
@@ -127,10 +134,8 @@ const cleanDisplayName = (name: string): string => {
   }
 };
 
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
-
 interface Aggregate {
-  readonly model: Mutable<ModelInfo>;
+  readonly model: Types.Mutable<ModelInfo>;
   readonly levels: Set<string>;
 }
 
@@ -140,7 +145,6 @@ const appendUnique = (target: string[], values: readonly string[] | undefined): 
 
 /** `aggregateDevinModels`: one entry per base model with the union of its effort variants as thinking levels. */
 export const aggregateDevinModels = (models: ReadonlyArray<ModelInfo>): ModelInfo[] => {
-  const order: string[] = [];
   const aggregated = new Map<string, Aggregate>();
 
   for (const model of models) {
@@ -157,16 +161,15 @@ export const aggregateDevinModels = (models: ReadonlyArray<ModelInfo>): ModelInf
     let entry = aggregated.get(namespacedBase);
 
     if (entry === undefined) {
-      const clone = structuredClone(model) as Mutable<ModelInfo>;
+      const clone: Types.Mutable<ModelInfo> = structuredClone(model);
       const cleaned = cleanDisplayName(model.displayName ?? "");
-      const next = { ...clone, id: namespacedBase } as Mutable<ModelInfo>;
+      const next: Types.Mutable<ModelInfo> = { ...clone, id: namespacedBase };
       const displayName = cleaned === "" ? model.displayName : cleaned;
 
       if (displayName === undefined || displayName === "") delete next.displayName;
       else next.displayName = displayName;
       entry = { model: next, levels: new Set() };
       aggregated.set(namespacedBase, entry);
-      order.push(namespacedBase);
     }
 
     const target = entry.model;
@@ -178,17 +181,16 @@ export const aggregateDevinModels = (models: ReadonlyArray<ModelInfo>): ModelInf
       if (model.ownedBy !== "") target.ownedBy = model.ownedBy;
     }
 
-    if ((model.contextLength ?? 0) > (target.contextLength ?? 0))
-      target.contextLength = model.contextLength as number;
+    for (const key of [
+      "contextLength",
+      "maxCompletionTokens",
+      "inputTokenLimit",
+      "outputTokenLimit",
+    ] as const) {
+      const value = model[key] ?? 0;
 
-    if ((model.maxCompletionTokens ?? 0) > (target.maxCompletionTokens ?? 0))
-      target.maxCompletionTokens = model.maxCompletionTokens as number;
-
-    if ((model.inputTokenLimit ?? 0) > (target.inputTokenLimit ?? 0))
-      target.inputTokenLimit = model.inputTokenLimit as number;
-
-    if ((model.outputTokenLimit ?? 0) > (target.outputTokenLimit ?? 0))
-      target.outputTokenLimit = model.outputTokenLimit as number;
+      if (value > (target[key] ?? 0)) target[key] = value;
+    }
 
     for (const key of [
       "supportedInputModalities",
@@ -207,14 +209,15 @@ export const aggregateDevinModels = (models: ReadonlyArray<ModelInfo>): ModelInf
     if (split.effort !== "" && split.effort !== "priority") entry.levels.add(split.effort);
   }
 
-  return order.map((id) => {
-    const { model, levels } = aggregated.get(id) as Aggregate;
-
+  // Map iteration follows insertion order, i.e. the order in which each base model first appeared.
+  return [...aggregated.values()].map(({ model, levels }) => {
     if (levels.size > 0) {
-      const rank = (level: string) => LEVEL_ORDER[level] ?? 99;
+      const rank = (level: string) => LEVEL_ORDER.get(level) ?? 99;
+
       const sorted = [...levels].toSorted(
         (a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0),
       );
+
       model.thinking = { levels: sorted } satisfies ThinkingSupport;
     }
 
@@ -276,18 +279,18 @@ const sanitize = (
 };
 
 /** `ValidateDevinModelsJSON`: accepts `{"devin":[...]}`, `{"models":[...]}` or a bare array. */
-export const parseDevinCatalog = (parsed: unknown): CatalogResult<ModelInfo[]> => {
+export const parseDevinCatalog = (parsed: Json | undefined): CatalogResult<ModelInfo[]> => {
   if (parsed === null || parsed === undefined)
     return { ok: false, error: "empty Devin models payload" };
 
   if (Array.isArray(parsed)) {
     const list = Schema.decodeUnknownResult(RawList)(parsed);
 
-    if (list._tag === "Success" && list.success.length > 0) return sanitize(list.success);
+    if (Result.isSuccess(list) && list.success.length > 0) return sanitize(list.success);
   } else if (typeof parsed === "object") {
     const envelope = Schema.decodeUnknownResult(Envelope)(parsed);
 
-    if (envelope._tag === "Success") {
+    if (Result.isSuccess(envelope)) {
       const candidates =
         (envelope.success.devin ?? []).length > 0
           ? envelope.success.devin

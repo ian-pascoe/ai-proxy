@@ -5,7 +5,7 @@
  * handleStreamingResponse, rewriteClaudeDDModelInBody, WriteErrorResponse). `/v1/models` for Claude clients belongs to
  * the model registry slice.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import type { ExecutionError } from "../../executor/errors.ts";
@@ -48,7 +48,7 @@ const handle = (kind: "messages" | "count") =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     const configResult = yield* Effect.result(currentConfig);
 
-    if (configResult._tag === "Failure")
+    if (Result.isFailure(configResult))
       return errorResponse("claude", configResult.failure, { passthroughHeaders: false });
     const config = configResult.success;
 
@@ -59,7 +59,7 @@ const handle = (kind: "messages" | "count") =>
 
     const read = yield* Effect.result(readRequestBody(request));
 
-    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status);
+    if (Result.isFailure(read)) return badRequest(read.failure.message, read.failure.status);
 
     // Go forwards an unparsable body to model resolution, which answers with a model error; JSON is required here.
     if (read.success.json === undefined) return badRequest("request body is not valid JSON");
@@ -76,7 +76,7 @@ const handle = (kind: "messages" | "count") =>
     if (kind === "count") {
       const result = yield* Effect.result(executeCountTokens(input));
 
-      if (result._tag === "Failure") return onError(result.failure);
+      if (Result.isFailure(result)) return onError(result.failure);
 
       return jsonResponse(result.success.payload, result.success.headers);
     }
@@ -96,7 +96,7 @@ const handle = (kind: "messages" | "count") =>
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(input));
 
-        if (result._tag === "Failure") return onError(result.failure);
+        if (Result.isFailure(result)) return onError(result.failure);
 
         return jsonResponse(result.success.payload, result.success.headers);
       }),

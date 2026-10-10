@@ -397,6 +397,7 @@ const emitAnthropicMessageDelta = (
   usage: OpenAIUsage,
 ): void => {
   if (param.messageDeltaSent) return;
+
   const usageOut: JsonObject = {
     input_tokens: usage.inputTokens,
     output_tokens: usage.outputTokens,
@@ -652,7 +653,7 @@ const toolUseInput = (argumentsText: string): Json => {
 
   if (argsStr !== "") {
     try {
-      const parsed = JSON.parse(argsStr) as Json;
+      const parsed = JSON.parse(argsStr);
 
       if (isObj(parsed)) return parsed;
     } catch {
@@ -689,6 +690,7 @@ const convertOpenAINonStreamingToAnthropic = (root: Json): string[] => {
   const choices = get(root, "choices");
 
   if (isArr(choices) && choices.length > 0) {
+    // SAFETY: the enclosing condition checks choices.length > 0.
     const choice = choices[0] as Json;
     const contentBlocks: Json[] = [];
 
@@ -739,6 +741,7 @@ export const convertOpenAIResponseToClaude = (
   const state = context.state;
 
   if (state.value === undefined) state.value = newParams();
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a ClaudeStreamParams before this read.
   const param = state.value as ClaudeStreamParams;
 
   if (!line.startsWith("data:")) return [];
@@ -754,7 +757,7 @@ export const convertOpenAIResponseToClaude = (
   let root: Json;
 
   try {
-    root = JSON.parse(payload) as Json;
+    root = JSON.parse(payload);
   } catch {
     // gjson tolerates invalid JSON by returning empty results; nothing is emitted for an unusable chunk.
     root = {};
@@ -774,7 +777,7 @@ export const convertOpenAIResponseToClaudeNonStream = (
   let root: Json;
 
   try {
-    root = JSON.parse(body) as Json;
+    root = JSON.parse(body);
   } catch {
     root = {};
   }
@@ -806,6 +809,7 @@ export const convertOpenAIResponseToClaudeNonStream = (
   const choices = get(root, "choices");
 
   if (isArr(choices) && choices.length > 0) {
+    // SAFETY: the enclosing condition checks choices.length > 0.
     const choice = choices[0] as Json;
     const finishReason = get(choice, "finish_reason");
 

@@ -1,6 +1,6 @@
 // Google One AI credits fallback in the conductor: after the normal rotation failed with a capacity error, Claude models
 // get one more pass over the Antigravity credentials (cooling ones included) with `enabledCreditTypes`.
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Result } from "effect";
 import type { HttpServerRequest } from "effect/http";
 import { describe, expect, it } from "vitest";
 import { AccessPrincipal } from "../src/access/principal.ts";
@@ -8,7 +8,6 @@ import {
   antigravityStateFor,
   resetMemoryAntigravityState,
 } from "../src/executor/antigravity/state.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
 import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts";
 import { ExecutorRegistry } from "../src/executor/registry.ts";
 import { Thinking } from "../src/executor/thinking.ts";
@@ -73,7 +72,7 @@ const run = async (
 ) => {
   resetMemoryAntigravityState();
 
-  if (options.seed !== undefined) await options.seed(antigravityStateFor({} as Env));
+  if (options.seed !== undefined) await options.seed(antigravityStateFor({}));
   const harness = await makePool(yaml);
 
   for (const name of options.names ?? ["a", "b"]) {
@@ -117,11 +116,7 @@ const run = async (
       Effect.provideService(AccessPrincipal, identity),
       Effect.provideService(WorkerEnv, {} as Env),
       Effect.result,
-    ) as unknown as Effect.Effect<{
-      _tag: string;
-      success?: { payload: string };
-      failure?: ExecutionError;
-    }>,
+    ),
   );
 
   return { calls, records, result, harness };
@@ -139,7 +134,9 @@ describe("antigravity credits fallback", () => {
     );
 
     expect(outcome.result._tag).toBe("Success");
-    expect(outcome.result.success?.payload).toContain("paid");
+    expect(Result.isSuccess(outcome.result) ? outcome.result.success.payload : undefined).toContain(
+      "paid",
+    );
     // Normal rotation: both credentials fail without credits; then the credits pass uses a (cooling) credential.
     const plain = outcome.calls.filter((call) => !hasCredits(call));
     const credited = outcome.calls.filter(hasCredits);
@@ -153,6 +150,7 @@ describe("antigravity credits fallback", () => {
     const off = await run("", "claude-sonnet-4-5", () =>
       jsonResponse(quotaExhausted, { status: 429 }),
     );
+
     expect(off.result._tag).toBe("Failure");
     expect(off.calls.some(hasCredits)).toBe(false);
 
@@ -189,7 +187,7 @@ describe("antigravity credits fallback", () => {
     );
 
     expect(outcome.result._tag).toBe("Failure");
-    expect(outcome.result.failure?.status).toBe(429);
+    expect(Result.isFailure(outcome.result) ? outcome.result.failure.status : undefined).toBe(429);
     // One credits attempt marks that credential as out of credits; the other credential is tried next, then both are skipped.
     expect(outcome.calls.filter(hasCredits).length).toBeLessThanOrEqual(2);
   });

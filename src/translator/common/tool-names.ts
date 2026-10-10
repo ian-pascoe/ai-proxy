@@ -21,6 +21,7 @@ export const fixJson = (input: string): string => {
   const runes = Array.from(input);
 
   for (let i = 0; i < runes.length; i++) {
+    // SAFETY: the loop condition keeps i < runes.length.
     const r = runes[i] as string;
 
     if (inDouble) {
@@ -64,6 +65,7 @@ export const fixJson = (input: string): string => {
             out += "\\u";
 
             for (let k = 0; k < 4 && i + 1 < runes.length; k++) {
+              // SAFETY: the loop condition keeps i + 1 < runes.length.
               const peek = runes[i + 1] as string;
 
               if (/^[0-9a-fA-F]$/.test(peek)) {

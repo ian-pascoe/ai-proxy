@@ -21,6 +21,7 @@ import {
   xaiPicker,
   type XaiPickerLog,
 } from "./support/xai.ts";
+import type { Json } from "../src/json/index.ts";
 
 const YAML = `
 upstream:
@@ -55,8 +56,8 @@ const created = {
 };
 
 const completed = (
-  output: unknown[] = [],
-  usage: unknown = { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+  output: Json[] = [],
+  usage: Json = { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
 ) => ({
   type: "response.completed",
   response: {
@@ -69,7 +70,7 @@ const completed = (
   },
 });
 
-const frame = (event: unknown): string => {
+const frame = (event: Json): string => {
   const type = (event as { type: string }).type;
 
   return `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -140,11 +141,13 @@ describe("POST /v1/responses (non-stream)", () => {
     );
 
     expect(response.status).toBe(200);
+
     const body = (await response.json()) as {
       id: string;
       output: unknown[];
       usage: Record<string, unknown>;
     };
+
     expect(body.id).toBe("resp_1");
     expect(body.output).toEqual([MESSAGE_ITEM]);
     expect(body.usage).toMatchObject({ input_tokens: 10, output_tokens: 4, total_tokens: 14 });
@@ -220,14 +223,18 @@ describe("POST /v1/responses (non-stream)", () => {
     );
 
     expect(response.status).toBe(200);
+
     const body = (await response.json()) as {
       choices: Array<{ message: { content: string }; finish_reason: string }>;
     };
+
     expect(body.choices[0]?.message.content).toBe("Hello!");
     expect(body.choices[0]?.finish_reason).toBe("stop");
+
     const upstream = JSON.parse(p.calls[0]!.body) as Record<string, unknown> & {
       input: Array<{ role: string }>;
     };
+
     expect(upstream.input.map((item) => item.role)).toEqual(["developer", "user"]);
     expect(upstream["max_output_tokens"]).toBe(50);
     expect("stop" in upstream).toBe(false);
@@ -284,6 +291,7 @@ describe("POST /v1/responses (stream)", () => {
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "hi", stream: true }),
     );
+
     expect(response.status).toBe(200);
     const text = await response.text();
     expect(text).toContain("event: response.reasoning_summary_part.added");
@@ -337,6 +345,7 @@ describe("POST /v1/responses (stream)", () => {
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "hi", stream: true }),
     );
+
     const text = await response.text();
     expect(text).not.toContain("x_keyword_search");
     expect(text).not.toContain("xs_call_1");
@@ -549,9 +558,11 @@ describe("request shaping", () => {
         tools: [{ type: "function", name: "f", parameters: { type: "object" } }],
       }),
     );
+
     const body = JSON.parse(p.calls[0]!.body) as Record<string, unknown> & {
       tools: Array<{ name: string }>;
     };
+
     expect(body["metadata"]).toEqual({ via: "payload-rule" });
     // The rule renames the first tool after x_search injection and normalisation; the filter removes the temperature
     // that the translator preserved.
@@ -567,9 +578,11 @@ describe("error rules", () => {
       code: "bad-credentials",
       error: "The access token could not be validated",
     });
+
     const p = pipeline(
       () => new Response(body, { status: 403, headers: { "content-type": "application/json" } }),
     );
+
     const response = await p.call("/v1/responses", postJson({ model: "grok-4.3", input: "hi" }));
     expect(response.status).toBe(401);
     expect(p.log.reports[0]?.result).toMatchObject({ success: false, httpStatus: 401 });
@@ -595,6 +608,7 @@ describe("error rules", () => {
       "/v1/responses",
       postJson({ model: "grok-4.3", input: "hi" }),
     );
+
     expect(response.status).toBe(429);
     expect(exhausted.log.reports[0]?.result).toMatchObject({
       success: false,
@@ -694,6 +708,7 @@ describe("reasoning replay", () => {
   it("re-inserts the encrypted reasoning of the previous turn for Responses clients", async () => {
     const encrypted = grokCiphertext(21);
     const reasoning = { id: "rs_1", type: "reasoning", summary: [], encrypted_content: encrypted };
+
     const call = {
       id: "fc_1",
       type: "function_call",
@@ -742,10 +757,12 @@ describe("reasoning replay", () => {
     );
 
     await second.text();
+
     const upstream = JSON.parse(p.calls[1]!.body) as {
       input: Array<Record<string, unknown>>;
       prompt_cache_key: string;
     };
+
     expect(upstream.prompt_cache_key).toBe("conv-replay-1");
     const types = upstream.input.map((item) => item["type"] ?? "message");
     expect(types.filter((type) => type === "reasoning")).toHaveLength(1);

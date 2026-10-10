@@ -8,7 +8,7 @@
  * credential id is used instead of generating/fetching and persisting one (the OAuth slice owns the profile lookup).
  */
 import { createHash, randomUUID } from "node:crypto";
-import { get, type Json, type JsonObject } from "../../json/index.ts";
+import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
 import { isObj, str } from "../../translator/common/gjson.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 
@@ -20,8 +20,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const uuidV5 = (namespace: string, name: string): string => {
   const nsBytes = Buffer.from(namespace.replaceAll("-", ""), "hex");
   const digest = createHash("sha1").update(nsBytes).update(name).digest();
-  digest[6] = ((digest[6] as number) & 0x0f) | 0x50;
-  digest[8] = ((digest[8] as number) & 0x3f) | 0x80;
+  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
+  digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
   const hex = digest.subarray(0, 16).toString("hex");
 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
@@ -49,13 +49,10 @@ export const agentSessionUuid = (input: {
     const userId = str(get(input.payload, "metadata.user_id"));
 
     if (userId !== "") {
-      try {
-        const session = str(get(JSON.parse(userId) as Json, "session_id"));
+      // A user id that is not JSON falls through to the protocol session id.
+      const session = str(get(tryParseJson(userId), "session_id"));
 
-        if (UUID.test(session)) return session.toLowerCase();
-      } catch {
-        // Not a JSON user id; fall through to the protocol session id.
-      }
+      if (UUID.test(session)) return session.toLowerCase();
     }
   }
 
@@ -103,17 +100,14 @@ export const rebuildMetadataUserId = (
 ): string => {
   const extras: Array<[string, Json]> = [];
 
-  try {
-    const parsed = JSON.parse(existing.trim()) as Json;
+  // Not JSON: nothing to preserve.
+  const parsed = tryParseJson(existing.trim());
 
-    if (isObj(parsed)) {
-      for (const [key, value] of Object.entries(parsed)) {
-        if (key !== "device_id" && key !== "account_uuid" && key !== "session_id")
-          extras.push([key, value]);
-      }
+  if (isObj(parsed)) {
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key !== "device_id" && key !== "account_uuid" && key !== "session_id")
+        extras.push([key, value]);
     }
-  } catch {
-    // Not JSON: nothing to preserve.
   }
 
   const out: JsonObject = { device_id: deviceId, account_uuid: accountUuid, session_id: sessionId };
@@ -136,10 +130,13 @@ export const applyCLIIdentity = (
       ? "anonymous"
       : apiKey.trim()
     : `oauth|${credential.id}`;
+
   const pool = devicePool(credential);
   const deviceId = pool[0] ?? stableDeviceId(seed);
+
   const accountUuid =
     metadataString(credential, "account_uuid", "accountUuid") || stableAccountUuid(seed);
+
   const metadata = body.metadata;
   const existing = isObj(metadata) ? str(metadata.user_id) : "";
   const userId = rebuildMetadataUserId(existing, deviceId, accountUuid, sessionId);

@@ -1,6 +1,6 @@
 // Test helpers for token refresh: a recording HttpClient (no network), an in-memory credential store behind a real
 // CredentialPool, and an alarm recorder.
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Predicate } from "effect";
 import {
   HttpClient,
   HttpClientError,
@@ -9,7 +9,7 @@ import {
 } from "effect/http";
 import type { Config } from "../../src/config/schema.ts";
 import { decodeStoredConfig } from "../../src/config/store.ts";
-import type { JsonObject } from "../../src/json/index.ts";
+import type { JsonObject, Json } from "../../src/json/index.ts";
 import type { StoredCredential } from "../../src/credentials/derive.ts";
 import { mergeExistingMetadata, credentialsChanged } from "../../src/credentials/merge.ts";
 import type { CredentialState } from "../../src/credentials/model.ts";
@@ -44,7 +44,7 @@ export type MockHandler = (request: RecordedRequest) => MockReply | Promise<Mock
 const decode = (request: HttpClientRequest.HttpClientRequest): string => {
   const body = request.body;
 
-  if (body._tag === "Uint8Array") return new TextDecoder().decode(body.body);
+  if (Predicate.isTagged(body, "Uint8Array")) return new TextDecoder().decode(body.body);
 
   return "";
 };
@@ -252,8 +252,7 @@ export const makeFixture = (
 };
 
 /** Unsigned JWT with the given claims (tests only read claims). */
-const b64 = (value: unknown) =>
+const b64 = (value: Json) =>
   btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-export const jwt = (claims: Record<string, unknown>): string =>
-  `${b64({ alg: "none" })}.${b64(claims)}.sig`;
+export const jwt = (claims: JsonObject): string => `${b64({ alg: "none" })}.${b64(claims)}.sig`;

@@ -11,7 +11,7 @@
  * (`mid-system.ts`) run inside the pipeline. Responses compaction (`responses/compact` and `compaction_trigger`) runs a
  * summary request through this executor and seals the answer into a capsule (`compaction.ts`).
  */
-import { Clock, Effect, Stream } from "effect";
+import { Clock, Effect, Exit, Stream } from "effect";
 import {
   HttpClient,
   type HttpClientError,
@@ -127,10 +127,10 @@ const transportError = (error: HttpClientError.HttpClientError) =>
     cause: error,
   });
 
-const readError = (error: unknown) =>
+const readError = (cause: unknown) =>
   new ExecutionError({
     status: 502,
-    message: `claude executor: failed to read upstream response: ${String(error)}`,
+    message: `claude executor: failed to read upstream response: ${String(cause)}`,
   });
 
 const gatewayError = (message: string) => new ExecutionError({ status: 502, message });
@@ -484,11 +484,11 @@ export const makeClaudeExecutor = (
     const parsed = tryParseJson(summary.payload);
 
     const text = yield* Effect.try({
-      try: () => extractSummaryText(parsed as Json),
+      try: () => extractSummaryText(parsed ?? null),
       catch: (error) =>
         new ExecutionError({
           status: 500,
-          message: `extract summary: ${(error as Error).message}`,
+          message: `extract summary: ${error instanceof Error ? error.message : String(error)}`,
         }),
     });
 
@@ -499,6 +499,7 @@ export const makeClaudeExecutor = (
     });
 
     const usage = claudeCompactionUsage(parsed, summary.payload);
+
     const body = buildCompactionResponse(
       baseModel,
       capsule,
@@ -507,6 +508,7 @@ export const makeClaudeExecutor = (
       usage.total,
       Date.now(),
     );
+
     set(body, "usage.input_tokens_details.cached_tokens", usage.cached);
 
     return { payload: JSON.stringify(body), headers: summary.headers } satisfies ExecutorResponse;
@@ -635,7 +637,7 @@ export const makeClaudeExecutor = (
         Effect.sync(() => context.usage.fail(error.status, error.message)),
       ),
       Stream.onExit((exit) =>
-        exit._tag === "Success" && reader.completed
+        Exit.isSuccess(exit) && reader.completed
           ? Effect.andThen(
               commitContinuity(prepared, reader.messageId, requestId, options.metadata.callerScope),
               finishReplay(prepared, reader.accumulator.content()),

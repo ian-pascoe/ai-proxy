@@ -19,11 +19,13 @@
 import {
   type Cause,
   Clock,
+  Data,
   Deferred,
   Effect,
   Option,
   Pull,
   Queue,
+  Result,
   type Scope,
   Stream,
 } from "effect";
@@ -54,7 +56,7 @@ import {
   isWebsocketProvider,
   newSocketState,
   planTurn,
-  type Plan,
+  Plan,
   type SocketState,
 } from "./plan.ts";
 import {
@@ -98,12 +100,11 @@ export interface SocketDeps<R> {
   readonly now?: () => { readonly id: string; readonly createdAt: number };
 }
 
-interface ForwardStop {
-  readonly _tag: "ForwardStop";
+class ForwardStop extends Data.TaggedError("ForwardStop")<{
   readonly error: ExecutionError;
   /** The error event as received (forwarded to the client as is when it is exposed). */
   readonly payload?: JsonObject;
-}
+}> {}
 
 interface ForwardResult {
   /** The duplex stream ended with its socket (the downstream side is gone or closing). */
@@ -274,11 +275,7 @@ export const runResponsesSocket = <R>(
                 const preserveErrorEvent = responseStarted && duplexStream;
 
                 if (type === "error" && !preserveErrorEvent) {
-                  const stop: ForwardStop = {
-                    _tag: "ForwardStop",
-                    error: errorFromPayload(payload),
-                    payload,
-                  };
+                  const stop = new ForwardStop({ error: errorFromPayload(payload), payload });
 
                   return yield* Effect.fail(stop);
                 }
@@ -297,7 +294,7 @@ export const runResponsesSocket = <R>(
             }),
           ),
           Effect.mapError((error): ForwardStop =>
-            error instanceof ExecutionError ? { _tag: "ForwardStop", error } : error,
+            error instanceof ExecutionError ? new ForwardStop({ error }) : error,
           ),
         );
 
@@ -319,7 +316,7 @@ export const runResponsesSocket = <R>(
 
         const outcome = yield* Effect.result(result);
 
-        if (outcome._tag === "Failure") {
+        if (Result.isFailure(outcome)) {
           const failure = outcome.failure;
 
           return {
@@ -417,7 +414,7 @@ export const runResponsesSocket = <R>(
               }),
             );
 
-            if (started._tag === "Failure") {
+            if (Result.isFailure(started)) {
               return {
                 error: started.failure,
                 payload: undefined,
@@ -489,33 +486,29 @@ export const runResponsesSocket = <R>(
         const plan = planTurn(state, payload);
 
         // Go prepares the normalised request (after the transcript was rebuilt), not the raw frame.
-        if (deps.prepare !== undefined && (plan._tag === "execute" || plan._tag === "prewarm")) {
+        if (
+          deps.prepare !== undefined &&
+          (Plan.$is("execute")(plan) || Plan.$is("prewarm")(plan))
+        ) {
           yield* deps.prepare(plan.request);
         }
 
-        switch (plan._tag) {
-          case "error":
-            write(buildErrorPayload(plan.error));
-            break;
-          case "replay":
-            closeSocket(1012, "upstream requires HTTP replay");
-            break;
-          case "prewarm": {
-            const now = deps.now?.() ?? {
-              id: crypto.randomUUID(),
-              createdAt: Math.floor((yield* Clock.currentTimeMillis) / 1000),
-            };
+        if (Plan.$is("error")(plan)) {
+          write(buildErrorPayload(plan.error));
+        } else if (Plan.$is("replay")(plan)) {
+          closeSocket(1012, "upstream requires HTTP replay");
+        } else if (Plan.$is("prewarm")(plan)) {
+          const now = deps.now?.() ?? {
+            id: crypto.randomUUID(),
+            createdAt: Math.floor((yield* Clock.currentTimeMillis) / 1000),
+          };
 
-            const [created, completed] = syntheticPrewarmPayloads(plan.request, now);
-            write(created);
-            write(completed);
-            commitPrewarm(state, plan, asString(get(created, "response.id")));
-            break;
-          }
-
-          case "execute":
-            if (yield* executeTurn(plan)) return;
-            break;
+          const [created, completed] = syntheticPrewarmPayloads(plan.request, now);
+          write(created);
+          write(completed);
+          commitPrewarm(state, plan, asString(get(created, "response.id")));
+        } else if (yield* executeTurn(plan)) {
+          return;
         }
       }
     }),

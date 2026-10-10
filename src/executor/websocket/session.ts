@@ -14,11 +14,11 @@
  * response can never reach the next turn. Per-credential `proxy-url` is not supported on Workers, so a session target is
  * `(credential id, url)`.
  */
-import { Duration, Effect, Option, Queue, Scope, Semaphore } from "effect";
+import { Duration, Effect, Option, Queue, Result, Scope, Semaphore } from "effect";
 import { ExecutionError } from "../errors.ts";
 import {
   HandshakeError,
-  type UpstreamMessage,
+  UpstreamMessage,
   type UpstreamSocket,
   UpstreamWebSocketConnector,
   fetchConnector,
@@ -228,9 +228,10 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
       yield* Effect.serviceOption(UpstreamWebSocketConnector),
       fetchConnector,
     );
+
     const { store } = input;
     const ephemeral = input.sessionId === undefined;
-    const session = ephemeral ? newSession("ephemeral") : store.get(input.sessionId as string);
+    const session = ephemeral ? newSession("ephemeral") : store.get(input.sessionId);
     let completed = false;
 
     if (!ephemeral)
@@ -310,7 +311,7 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
 
     const sent = yield* Effect.result(current.send(input.frame()));
 
-    if (sent._tag === "Failure") {
+    if (Result.isFailure(sent)) {
       yield* store.invalidate(session, current);
 
       // Retry once on a fresh socket (the upstream may close between sequential requests); a continuation cannot.
@@ -322,7 +323,7 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
       headers = reopened.headers;
       const retry = yield* Effect.result(current.send(input.frame()));
 
-      if (retry._tag === "Failure") {
+      if (Result.isFailure(retry)) {
         yield* store.invalidate(session, current);
 
         return yield* transient(`${input.label} websocket send failed`);
@@ -342,26 +343,20 @@ export const openTurn = (input: OpenTurnInput): Effect.Effect<Turn, ExecutionErr
           }),
         );
 
-        switch (message._tag) {
-          case "text": {
-            const text = message.data.trim();
+        const text = yield* UpstreamMessage.$match(message, {
+          text: ({ data }) => Effect.succeed(data.trim()),
+          binary: () =>
+            Effect.fail(transient(`${input.label} websockets executor: unexpected binary message`)),
+          close: ({ code }) =>
+            Effect.fail(
+              code === 1009
+                ? messageTooBigError()
+                : transient(`${input.label} upstream websocket closed (${code})`),
+            ),
+          error: () => Effect.fail(transient(`${input.label} upstream websocket error`)),
+        });
 
-            if (text === "") continue;
-
-            return text;
-          }
-
-          case "binary":
-            return yield* transient(
-              `${input.label} websockets executor: unexpected binary message`,
-            );
-          case "close":
-            return yield* message.code === 1009
-              ? messageTooBigError()
-              : transient(`${input.label} upstream websocket closed (${message.code})`);
-          case "error":
-            return yield* transient(`${input.label} upstream websocket error`);
-        }
+        if (text !== "") return text;
       }
     }).pipe(Effect.tapError(() => invalidate));
 

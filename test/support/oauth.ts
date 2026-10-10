@@ -73,13 +73,16 @@ export const iso = (ms: number): string => new Date(ms).toISOString().replace(/\
 export const s256 = async (verifier: string): Promise<string> => base64Url(await sha256(verifier));
 
 /** The only file a login produced. */
-export const onlyFile = (
-  harness: OAuthHarness,
-): { readonly name: string; readonly file: JsonObject } => {
+export const onlyFile = (harness: OAuthHarness) => {
   const entries = [...harness.files];
 
-  if (entries.length !== 1) throw new Error(`expected one credential, got ${entries.length}`);
-  const [name, file] = entries[0] as [string, JsonObject];
+  const [entry] = entries;
+
+  if (entries.length !== 1 || entry === undefined) {
+    throw new Error(`expected one credential, got ${entries.length}`);
+  }
+
+  const [name, file] = entry;
 
   return { name, file };
 };

@@ -6,7 +6,7 @@
  * (classifyClaudeUpstreamErrorWithCooling, claudeBodyIndicatesFastModeCredits).
  */
 import { randomInt } from "node:crypto";
-import { get, tryParseJson } from "../../json/index.ts";
+import { asString, get, tryParseJson } from "../../json/index.ts";
 import { ExecutionError, headersRecord } from "../errors.ts";
 
 const FUZZ_MIN_SECONDS = 1;
@@ -176,9 +176,11 @@ export const parseRateLimitResetMs = (
 
     if (raw !== "") {
       const claim = lower(h(headers, "anthropic-ratelimit-unified-representative-claim"));
+
       const overageReset = parseUnixOrTimestamp(
         h(headers, "anthropic-ratelimit-unified-overage-reset"),
       );
+
       const unifiedReset = parseUnixOrTimestamp(raw);
 
       const overageBoundary =
@@ -202,7 +204,7 @@ export const parseRateLimitResetMs = (
 /** `claudeBodyIndicatesFastModeCredits`. */
 export const bodyIndicatesFastModeCredits = (body: string): boolean => {
   const parsed = tryParseJson(body);
-  let message = lower(String(get(parsed, "error.message") ?? ""));
+  let message = lower(asString(get(parsed, "error.message")));
 
   if (message === "") message = body.toLowerCase();
 

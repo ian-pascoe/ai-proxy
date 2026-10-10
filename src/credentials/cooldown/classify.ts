@@ -9,6 +9,7 @@
  * Errors are described by {@link ClassifiableError}: `status` is the upstream HTTP status (0 when the failure happened
  * before an HTTP answer), `message` the upstream body or error text, `code` one of the conductor codes.
  */
+import { isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
 
 /** Well-known error codes (sdk/cliproxy/auth/errors.go). */
 export const ErrorCode = {
@@ -48,20 +49,13 @@ const REQUEST_FAULT_TYPES = new Set([
   "invalid_prompt",
 ]);
 
-const parseJsonObject = (text: string): Record<string, unknown> | undefined => {
+const parseJsonObject = (text: string): JsonObject | undefined => {
   const trimmed = text.trim();
 
   if (trimmed === "" || (trimmed[0] !== "{" && trimmed[0] !== "[")) return undefined;
+  const parsed = tryParseJson(trimmed);
 
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return isJsonObject(parsed) ? parsed : undefined;
 };
 
 const isJsonText = (text: string): boolean => {
@@ -79,15 +73,17 @@ const isJsonText = (text: string): boolean => {
 };
 
 /** gjson-style lookup of a dotted path of plain keys; non-strings read as "". */
-const stringAt = (root: Record<string, unknown>, path: string): string => {
-  let current: unknown = root;
+const stringAt = (root: JsonObject, path: string): string => {
+  let current: Json | undefined = root;
 
   for (const key of path.split(".")) {
-    if (typeof current !== "object" || current === null) return "";
-    current = (current as Record<string, unknown>)[key];
+    if (!isJsonObject(current)) return "";
+    current = current[key];
   }
 
-  return typeof current === "string" ? current : typeof current === "number" ? String(current) : "";
+  if (typeof current === "string") return current;
+
+  return typeof current === "number" ? String(current) : "";
 };
 
 const CODE_PATHS = ["error.code", "code", "response.error.code", "body.error.code"];
@@ -217,14 +213,18 @@ const MISSING_MODEL_PHRASES = new Set([
   "does not exist or you do not have access to it",
 ]);
 
+interface TrimmedReference {
+  readonly rest: string;
+  readonly matches: boolean;
+}
+
+const NO_REFERENCE: TrimmedReference = { rest: "", matches: false };
+
 /** `trimRequestedModelReference`: strips the (possibly quoted) requested model from the start of `value`. */
-const trimRequestedModelReference = (
-  value: string,
-  requestedModel: string,
-): { readonly rest: string; readonly matches: boolean } => {
+const trimRequestedModelReference = (value: string, requestedModel: string): TrimmedReference => {
   const model = lower(requestedModel);
 
-  if (model === "") return { rest: "", matches: false };
+  if (model === "") return NO_REFERENCE;
 
   for (const candidate of [model, `'${model}'`, `"${model}"`, `\`${model}\``]) {
     if (value === candidate) return { rest: "", matches: true };
@@ -232,12 +232,12 @@ const trimRequestedModelReference = (
     if (!value.startsWith(candidate)) continue;
     const remainder = value.slice(candidate.length);
 
-    if (remainder === "" || " :,".includes(remainder[0] as string)) {
+    if (remainder === "" || " :,".includes(remainder.charAt(0))) {
       return { rest: remainder.replace(/^[ :,]+/, ""), matches: true };
     }
   }
 
-  return { rest: "", matches: false };
+  return NO_REFERENCE;
 };
 
 const stripPrefixWord = (lowerText: string, prefix: string): string | undefined => {
@@ -307,7 +307,10 @@ const isExactRequestedModelReference = (message: string, requestedModel: string)
   return false;
 };
 
-const containsStructuredModelNotFound = (value: unknown, requestedModel: string): boolean => {
+const containsStructuredModelNotFound = (
+  value: Json | undefined,
+  requestedModel: string,
+): boolean => {
   if (Array.isArray(value)) {
     return value.some(
       (item) =>
@@ -361,7 +364,7 @@ export const isExplicitModelNotFound = (error: ClassifiableError, requestedModel
   const text = error.message.trim();
 
   if (text === "") return false;
-  let parsed: unknown;
+  let parsed: Json;
 
   try {
     parsed = JSON.parse(text);

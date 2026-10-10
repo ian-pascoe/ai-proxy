@@ -47,6 +47,7 @@ const parseSetPath = (path: string): SetPart[] => {
     let i = 0;
 
     for (; i < rest.length; i++) {
+      // SAFETY: i is bounded by the enclosing loop condition i < rest.length.
       const c = rest[i] as string;
 
       if (c === ".") {
@@ -112,6 +113,7 @@ const setParts = (
   index: number,
   value: Json,
 ): Json => {
+  // SAFETY: callers only pass index < parts.length (recursion stops at the last part).
   const part = parts[index] as SetPart;
   const last = index === parts.length - 1;
 
@@ -130,6 +132,7 @@ const setParts = (
   }
 
   const n = numericIndex(part);
+
   const container: Json =
     isJsonArray(node) || isJsonObject(node) ? node : n !== undefined ? [] : {};
 
@@ -167,6 +170,7 @@ export const setRaw = (root: Json | undefined, path: string, raw: string): Json 
 };
 
 const deleteParts = (node: Json | undefined, parts: readonly SetPart[], index: number): void => {
+  // SAFETY: callers only pass index < parts.length (recursion stops at the last part).
   const part = parts[index] as SetPart;
   const last = index === parts.length - 1;
 

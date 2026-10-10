@@ -239,7 +239,9 @@ const disambiguateResponsesChatToolNames = (declarations: ResponsesToolDeclarati
   }
 
   for (const i of longDeclarations) {
+    // SAFETY: longDeclarations holds positions of `declarations`, which `identities` mirrors one to one.
     const identity = identities[i] as string;
+    // SAFETY: longDeclarations holds positions of `declarations`.
     const d = declarations[i] as ResponsesToolDeclaration;
     const name = d.chatName;
 
@@ -410,6 +412,7 @@ export class ResponsesToolIndex {
     if (this.custom.size !== 1) return undefined;
     const [name] = this.custom;
 
+    // SAFETY: the `size !== 1` guard above returned, so the set has exactly one name.
     return { name: name as string, only: this.byChat.size === 1 };
   }
 
@@ -516,7 +519,7 @@ export const unwrapCustomToolInput = (argumentsText: string): string => {
   let parsed: Json;
 
   try {
-    parsed = JSON.parse(argumentsText) as Json;
+    parsed = JSON.parse(argumentsText);
   } catch {
     return argumentsText;
   }

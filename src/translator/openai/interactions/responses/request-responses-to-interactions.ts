@@ -345,12 +345,14 @@ export const convertOpenAIResponsesRequestToInteractions = (
   const instructions = get(root, "instructions");
 
   if (instructions !== undefined) out.system_instruction = responsesInstructionsText(instructions);
+
   const previous = firstNonEmpty(
     getStr(root, "previous_response_id"),
     getStr(root, "previous_interaction_id"),
   );
 
   if (previous !== "") out.previous_interaction_id = previous;
+
   const environmentId = firstNonEmpty(
     getStr(root, "environment_id"),
     getStr(root, "environment.id"),

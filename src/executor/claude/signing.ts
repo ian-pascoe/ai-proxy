@@ -83,7 +83,10 @@ export const ensureBillingCCHPlaceholder = (
 
   const updated = `${text.slice(0, insertAt)} cch=00000;${text.slice(insertAt)}`;
 
-  (body.system as JsonObject[])[0] = { ...(body.system as JsonObject[])[0], text: updated };
+  const system = body.system;
+  const firstBlock = isArr(system) ? system[0] : undefined;
+
+  if (isArr(system) && isObj(firstBlock)) system[0] = { ...firstBlock, text: updated };
 
   return body;
 };
@@ -166,7 +169,7 @@ class Scanner {
       default: {
         const start = this.pos;
 
-        while (this.pos < this.text.length && !",}] \t\r\n".includes(this.text[this.pos] as string))
+        while (this.pos < this.text.length && !",}] \t\r\n".includes(this.text.charAt(this.pos)))
           this.pos++;
 
         if (this.pos === start) throw new CchSigningError(`missing JSON value at ${start}`);
@@ -239,7 +242,9 @@ class Scanner {
 
   #addExcludedMemberEdits(members: Member[]): void {
     for (let start = 0; start < members.length;) {
-      const first = members[start] as Member;
+      const first = members[start];
+
+      if (first === undefined) break;
 
       if (!first.excluded) {
         start++;
@@ -248,8 +253,10 @@ class Scanner {
 
       let end = start;
 
-      while (end + 1 < members.length && (members[end + 1] as Member).excluded) end++;
-      const last = members[end] as Member;
+      while (end + 1 < members.length && members[end + 1]?.excluded === true) end++;
+      const last = members[end];
+
+      if (last === undefined) break;
 
       if (end + 1 < members.length) this.#addEdit(first.start, last.commaAfter + 1);
       else if (start > 0 && end > start) this.#addEdit(first.start, last.end);
@@ -318,6 +325,7 @@ export const serializeAndSign = (body: JsonObject, sign: boolean): string => {
   if (offset === undefined) return serialized;
   const unsigned = `${serialized.slice(0, offset)}00000${serialized.slice(offset + CCH_LENGTH)}`;
   const normalized = normalizeCchInput(unsigned);
+
   const cch = (xxh64(new TextEncoder().encode(normalized), CCH_SEED) & 0xfffffn)
     .toString(16)
     .padStart(5, "0");

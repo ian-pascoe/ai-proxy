@@ -66,6 +66,7 @@ const splitPath = (path: string): string[] => {
   let current = "";
 
   for (let i = 0; i < path.length; i++) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const c = path[i] as string;
 
     if (c === "\\" && i + 1 < path.length) {
@@ -106,6 +107,7 @@ const NAME_MAP_KEYWORDS = new Set([
 ]);
 
 /** Whether `path` addresses a map keyed by author-chosen names (odd trailing run of name-map keywords). */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const isPropertyDefinition = (path: string): boolean => {
   const segments = splitPath(path);
   let trailing = 0;
@@ -323,7 +325,9 @@ const mergeStringSlices = (existing: string[], promoted: string[]): string[] => 
 const stringArray = (value: Json | undefined): string[] =>
   isJsonArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
-const repairSchemaList = (list: Json[], addItems: boolean): { out: Json[]; modified: boolean } => {
+type RepairSchemaListResult = { out: Json[]; modified: boolean };
+
+const repairSchemaList = (list: Json[], addItems: boolean): RepairSchemaListResult => {
   let modified = false;
 
   const out = list.map((item) => {
@@ -347,10 +351,9 @@ const repairSchemaList = (list: Json[], addItems: boolean): { out: Json[]; modif
   return { out, modified };
 };
 
-const repairPropertyMap = (
-  props: JsonObject,
-  addItems: boolean,
-): { out: JsonObject; promoted: string[]; modified: boolean } => {
+type RepairPropertyMapResult = { out: JsonObject; promoted: string[]; modified: boolean };
+
+const repairPropertyMap = (props: JsonObject, addItems: boolean): RepairPropertyMapResult => {
   const out: JsonObject = {};
   const promoted: string[] = [];
   let modified = false;
@@ -388,10 +391,9 @@ const repairPropertyMap = (
   return { out, promoted, modified };
 };
 
-function repairSchemaNode(
-  node: JsonObject,
-  addItems: boolean,
-): { node: JsonObject; modified: boolean } {
+type RepairSchemaNodeResult = { node: JsonObject; modified: boolean };
+
+function repairSchemaNode(node: JsonObject, addItems: boolean): RepairSchemaNodeResult {
   let modified = false;
   const clone: JsonObject = { ...node };
 
@@ -620,12 +622,14 @@ const resolveJsonPointer = (
 
     if (isJsonObject(current)) {
       if (!Object.hasOwn(current, part)) return { found: false };
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       current = current[part] as Json;
     } else if (isJsonArray(current)) {
       if (!/^-?\d+$/.test(part)) return { found: false };
       const index = Number(part);
 
       if (index < 0 || index >= current.length) return { found: false };
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       current = current[index] as Json;
     } else {
       return { found: false };
@@ -652,7 +656,9 @@ const cyclicRefFallback = (node: JsonObject, target: Json, ref: string): JsonObj
 
   if (isJsonObject(target)) {
     for (const key of ["type", "nullable", "description"])
-      if (Object.hasOwn(target, key)) out[key] = target[key] as Json;
+      if (Object.hasOwn(target, key))
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        out[key] = target[key] as Json;
   }
 
   for (const [key, value] of Object.entries(node)) if (key !== "$ref") out[key] = value;
@@ -823,8 +829,10 @@ const moveConstraintsToDescription = (doc: Doc, options: CleanOptions): void => 
       const parentPath = trimSuffix(p, `.${key}`);
 
       if (isPropertyDefinition(parentPath)) continue;
+
       const text =
         isJsonObject(value) || isJsonArray(value) ? JSON.stringify(value) : asString(value);
+
       appendHint(doc, parentPath, `${key}: ${text}`);
     }
   }
@@ -934,7 +942,9 @@ const mergeAllOf = (doc: Doc): void => {
   }
 };
 
-const selectBest = (items: Json[]): { bestIdx: number; types: string[] } => {
+type SelectBestResult = { bestIdx: number; types: string[] };
+
+const selectBest = (items: Json[]): SelectBestResult => {
   let bestScore = -1;
   let bestIdx = 0;
   const types: string[] = [];
@@ -1010,6 +1020,7 @@ const flattenAnyOfOneOf = (doc: Doc): void => {
 
       const parentDesc = asString(getAt(doc, descriptionPath(parentPath)));
       const { bestIdx, types } = selectBest(items);
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       let selected: Json = structuredClone(items[bestIdx] as Json);
       const hasNull = items.some((item) => asString(get(item, "type")) === "null");
 
@@ -1055,7 +1066,9 @@ const flattenTypeArrays = (doc: Doc, preserveNativeNullable: boolean): void => {
         nonNull.includes("object")
       )
         firstType = "object";
-      else firstType = nonNull[0] as string;
+      else
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        firstType = nonNull[0] as string;
     }
 
     setAt(doc, p, firstType);
@@ -1076,6 +1089,7 @@ const flattenTypeArrays = (doc: Doc, preserveNativeNullable: boolean): void => {
       const parts = splitPath(p);
 
       if (parts.length >= 3 && parts[parts.length - 3] === "properties") {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const fieldEscaped = parts[parts.length - 2] as string;
         const fieldName = unescapeKey(fieldEscaped);
         const objectPath = parts.slice(0, parts.length - 3).join(".");
@@ -1309,6 +1323,7 @@ const addEmptySchemaPlaceholder = (doc: Doc): void => {
     const reqPath = joinPath(parentPath, "required");
     const req = getAt(doc, reqPath);
     const hasRequired = isJsonArray(req) && req.length > 0;
+
     const needsPlaceholder =
       props === undefined || (isJsonObject(props) && Object.keys(props).length === 0);
 

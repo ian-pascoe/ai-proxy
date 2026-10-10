@@ -1,10 +1,11 @@
 // JWKS cache for Cloudflare Access (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`).
 // New in the Workers port. Keys are cached per isolate (the layer lives as long as the web handler) and refreshed
 // when an unknown `kid` shows up, at most once per cooldown so bogus `kid`s cannot trigger a fetch per request.
-import { Clock, Context, Effect, Layer, Schema } from "effect";
+import { Clock, Context, Effect, Layer, Result, Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 import { importJWK } from "jose";
 import type { JWK } from "jose";
+import { isJsonArray, isJsonObject } from "../json/index.ts";
 
 /** Keys are considered fresh for this long (same default as jose's `createRemoteJWKSet`). */
 export const JWKS_MAX_AGE_MS = 600_000;
@@ -50,12 +51,13 @@ interface CacheEntry {
   readonly attemptedAt: number;
 }
 
-const importKeys = async (body: unknown): Promise<ReadonlyMap<string, CryptoKey>> => {
-  const list = (body as { readonly keys?: unknown } | null)?.keys;
+const importKeys = async (body: Schema.Json): Promise<ReadonlyMap<string, CryptoKey>> => {
+  const list = isJsonObject(body) ? body["keys"] : undefined;
 
-  if (!Array.isArray(list)) throw new Error("JWKS document has no keys array");
+  if (!isJsonArray(list)) throw new Error("JWKS document has no keys array");
   const keys = new Map<string, CryptoKey>();
 
+  // SAFETY: each entry is only used after the kty/kid checks below and importJWK validates the remaining fields.
   for (const candidate of list as ReadonlyArray<JWK>) {
     if (candidate?.kty !== "RSA" || typeof candidate.kid !== "string") continue;
 
@@ -108,7 +110,7 @@ const makeJwksCache = (httpClient: HttpClient.HttpClient) => {
 
       const refreshed = yield* fetchKeys(url).pipe(Effect.result);
 
-      if (refreshed._tag === "Failure") {
+      if (Result.isFailure(refreshed)) {
         // Keep serving a stale key when the endpoint is down.
         return cached ?? (yield* refreshed.failure);
       }

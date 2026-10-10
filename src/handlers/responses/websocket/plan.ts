@@ -13,6 +13,7 @@
  * to WebSocket-capable credentials (Go only pins when the turn ran over the upstream socket) and is dropped when the
  * model changes.
  */
+import { Data } from "effect";
 import { asString, cloneJson, type Json, type JsonObject } from "../../../json/index.ts";
 import { parseSuffix } from "../../../executor/suffix.ts";
 import {
@@ -77,22 +78,24 @@ export const modelKeyOf = (modelName: string): string => {
   return base === "" ? modelName.trim() : base;
 };
 
-export type Plan =
-  | { readonly _tag: "error"; readonly error: WsRequestError }
+export type Plan = Data.TaggedEnum<{
+  error: { readonly error: WsRequestError };
   /** The continuation needs the live upstream socket, which this turn cannot use: the client replays. */
-  | { readonly _tag: "replay" }
-  | { readonly _tag: "prewarm"; readonly request: JsonObject; readonly last: JsonObject }
-  | {
-      readonly _tag: "execute";
-      readonly request: JsonObject;
-      readonly modelName: string;
-      readonly nativePassthrough: boolean;
-      /** `WithRequiredUpstreamWebsocket`. */
-      readonly requiresCurrentUpstream: boolean;
-      /** The normalised request: the transcript to remember when the turn runs over HTTP (before tool-call repair). */
-      readonly lastRequest: JsonObject | undefined;
-      readonly pinnedId: string;
-    };
+  replay: {};
+  prewarm: { readonly request: JsonObject; readonly last: JsonObject };
+  execute: {
+    readonly request: JsonObject;
+    readonly modelName: string;
+    readonly nativePassthrough: boolean;
+    /** `WithRequiredUpstreamWebsocket`. */
+    readonly requiresCurrentUpstream: boolean;
+    /** The normalised request: the transcript to remember when the turn runs over HTTP (before tool-call repair). */
+    readonly lastRequest: JsonObject | undefined;
+    readonly pinnedId: string;
+  };
+}>;
+
+export const Plan = Data.taggedEnum<Plan>();
 
 const trimmed = (value: Json | undefined): string => asString(value).trim();
 
@@ -131,7 +134,7 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
   const requiresCurrent = requiresCurrentUpstream(payload);
 
   if (state.upstreamMode === "websocket" && !nativePassthrough && requiresCurrent)
-    return { _tag: "replay" };
+    return Plan.replay();
 
   if (explicitModel !== "" && !useUpstreamWebsocket) state.passthroughModelName = "";
 
@@ -146,6 +149,7 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
   const previousResponseId = trimmed(payload["previous_response_id"]);
   const isPrewarm = !useUpstreamWebsocket && shouldHandlePrewarmLocally(payload);
   const rawInput = payload["input"];
+
   const inputError: WsRequestError = {
     status: 400,
     message: "websocket request requires array field: input",
@@ -195,26 +199,26 @@ export const planTurn = (state: SocketState, payload: JsonObject): Plan => {
   }
 
   if (error !== undefined || request === undefined) {
-    return { _tag: "error", error: error ?? { status: 400, message: "invalid websocket request" } };
+    return Plan.error({
+      error: error ?? { status: 400, message: "invalid websocket request" },
+    });
   }
 
   if (isPrewarm) {
-    return {
-      _tag: "prewarm",
+    return Plan.prewarm({
       request: withoutGenerate(request),
       last: withoutGenerate(last ?? request),
-    };
+    });
   }
 
-  return {
-    _tag: "execute",
+  return Plan.execute({
     request,
     modelName: trimmed(request["model"]),
     nativePassthrough,
     requiresCurrentUpstream: nativePassthrough && requiresCurrent,
     lastRequest: last,
     pinnedId: state.pinned?.authId ?? "",
-  };
+  });
 };
 
 const withoutGenerate = (request: JsonObject): JsonObject => {

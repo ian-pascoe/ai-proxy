@@ -1,5 +1,6 @@
 // Pure helpers of the management API: config document edits, credential entries, field patches, cooldown reset.
 import { describe, expect, it } from "vitest";
+import type { JsonObject } from "../src/json/index.ts";
 import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";
 import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
@@ -17,7 +18,7 @@ import { cred, cooling, state } from "./support/credentials.ts";
 
 const NOW = 1_800_000_000_000;
 
-const unsignedJwt = (claims: object) =>
+const unsignedJwt = (claims: JsonObject) =>
   `x.${btoa(JSON.stringify(claims)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")}.y`;
 
 describe("config document paths", () => {
@@ -226,6 +227,7 @@ describe("field patch", () => {
       "excluded-models": ["x"],
       "model-aliases": [],
     });
+
     expect(result).toEqual({
       ok: true,
       metadata: { ...meta, a: { b: { c: 1 } }, excluded_models: ["x"], model_aliases: [] },

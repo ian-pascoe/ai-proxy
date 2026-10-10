@@ -271,10 +271,12 @@ const findToolCallState = (
 /** `isOriginalCustomPatch`: never promotes an ordinary same-name function to custom. */
 const isOriginalCustomPatch = (original: Json | undefined, item: Json | undefined): boolean => {
   if (asString(get(item, "type")) !== "custom_tool_call") return false;
+
   const name = qualifyResponsesNamespaceToolName(
     asString(get(item, "namespace")),
     asString(get(item, "name")),
   );
+
   const tools = get(original, "tools");
 
   if (isJsonArray(tools)) {
@@ -349,6 +351,7 @@ export const convertCodexResponseToOpenAI = (
   line: string,
 ): ReadonlyArray<string> => {
   if (context.state.value === undefined) context.state.value = newParams(context.model);
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a ConvertCliToOpenAIParams before this read.
   const p = context.state.value as ConvertCliToOpenAIParams;
 
   if (!line.startsWith("data:")) return [];
@@ -758,6 +761,7 @@ export const convertCodexResponseToOpenAINonStream = (
             type: "function",
             function: { name: "", arguments: "" },
           };
+
           const callId = get(item, "call_id");
 
           if (callId !== undefined) set(call, "id", asString(callId));

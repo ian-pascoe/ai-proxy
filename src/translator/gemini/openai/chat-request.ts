@@ -199,6 +199,7 @@ export const convertOpenAIRequestToGemini = (
     let hasEncounteredConversation = false;
 
     for (let i = 0; i < messages.length; i++) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const m = messages[i] as Json;
       const role = asString(get(m, "role"));
       const content = get(m, "content");
@@ -357,6 +358,7 @@ export const convertOpenAIRequestToGemini = (
           const turnToolResponses = new Map<string, string>();
 
           for (let j = i + 1; j < messages.length; j++) {
+            // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
             const next = messages[j] as Json;
             const nextRole = asString(get(next, "role"));
 

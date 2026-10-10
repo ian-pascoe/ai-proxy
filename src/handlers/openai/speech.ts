@@ -6,7 +6,7 @@
  * OpenAI request is converted to the xAI `/tts` body; the upstream audio is written back verbatim (no keep-alive
  * bytes: they would be prefixed onto the audio).
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import { goMarshal } from "../../http/json-text.ts";
@@ -30,19 +30,21 @@ const MAX_SPEECH_BODY_BYTES = 1 << 20;
 const DEFAULT_SAMPLE_RATE = 24000;
 
 /** OpenAI TTS voice names mapped onto Grok voices; unknown names pass through. */
-const OPENAI_VOICES: Readonly<Record<string, string>> = {
-  alloy: "ara",
-  ash: "orion",
-  ballad: "luna",
-  coral: "celeste",
-  echo: "rex",
-  fable: "sal",
-  onyx: "leo",
-  nova: "eve",
-  sage: "iris",
-  shimmer: "aurora",
-  verse: "lumen",
-};
+const OPENAI_VOICES: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    alloy: "ara",
+    ash: "orion",
+    ballad: "luna",
+    coral: "celeste",
+    echo: "rex",
+    fable: "sal",
+    onyx: "leo",
+    nova: "eve",
+    sage: "iris",
+    shimmer: "aurora",
+    verse: "lumen",
+  }),
+);
 
 /** `speechModelBase`: provider prefix and a trailing `(...)` suffix are dropped, lower case. */
 const speechModelBase = (model: string): string => {
@@ -126,7 +128,8 @@ export const buildSpeechPayload = (
 
   if (input === "") return "input is required";
 
-  if ([...input].length > MAX_SPEECH_CHARACTERS) return "input is longer than 60000 characters";
+  if (Array.from(input).length > MAX_SPEECH_CHARACTERS)
+    return "input is longer than 60000 characters";
   let voice = asString(get(raw, "voice")).trim();
 
   if (voice === "") voice = asString(get(raw, "voice_id"));
@@ -135,7 +138,7 @@ export const buildSpeechPayload = (
 
   const payload: JsonObject = {
     text: input,
-    voice_id: voice === "" ? DEFAULT_VOICE : (OPENAI_VOICES[voice] ?? voice),
+    voice_id: voice === "" ? DEFAULT_VOICE : (OPENAI_VOICES.get(voice) ?? voice),
     language: language === "" ? "auto" : language,
   };
 
@@ -151,8 +154,13 @@ export const buildSpeechPayload = (
   return { payload, format: format.format };
 };
 
+const SPEECH_CONTENT_TYPES: ReadonlyMap<string, string> = new Map([
+  ["wav", "audio/wav"],
+  ["pcm", "audio/pcm"],
+]);
+
 const speechContentType = (format: string): string =>
-  format === "wav" ? "audio/wav" : format === "pcm" ? "audio/pcm" : "audio/mpeg";
+  SPEECH_CONTENT_TYPES.get(format) ?? "audio/mpeg";
 
 /** `speechResponseContentType`: a generic upstream type is replaced by the one of the requested codec. */
 export const speechResponseContentType = (
@@ -160,11 +168,14 @@ export const speechResponseContentType = (
   upstream: string | null | undefined,
 ): string => {
   const mediaType = (upstream ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+
   const generic = ["", "application/json", "application/octet-stream", "text/plain"].includes(
     mediaType,
   );
 
-  return generic ? speechContentType(format) : (upstream as string);
+  return generic || upstream === null || upstream === undefined
+    ? speechContentType(format)
+    : upstream;
 };
 
 const speechError = (status: number, message: string) =>
@@ -177,12 +188,12 @@ const handle = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const configResult = yield* Effect.result(currentConfig);
 
-  if (configResult._tag === "Failure")
+  if (Result.isFailure(configResult))
     return errorResponse("openai", configResult.failure, { passthroughHeaders: false });
   const config = configResult.success;
   const read = yield* Effect.result(readRequestBody(request));
 
-  if (read._tag === "Failure")
+  if (Result.isFailure(read))
     return HttpServerResponse.text(invalidRequestBody(read.failure.message), {
       status: read.failure.status,
       contentType: "application/json",
@@ -220,7 +231,7 @@ const handle = Effect.gen(function* () {
 
   const result = yield* Effect.result(executeNonStream(input));
 
-  if (result._tag === "Failure") {
+  if (Result.isFailure(result)) {
     return errorResponse("openai", result.failure, {
       passthroughHeaders: config.requests["passthrough-headers"],
     });

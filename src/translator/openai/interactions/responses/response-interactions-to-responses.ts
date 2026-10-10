@@ -11,7 +11,14 @@
  *  - gjson's lazy reading of malformed event JSON is approximated by recovering the longest valid prefix of the
  *    object's top-level members (truncated payloads); other malformations are ignored.
  */
-import { asInt, get, type Json, type JsonObject, set } from "../../../../json/index.ts";
+import {
+  asInt,
+  get,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  set,
+} from "../../../../json/index.ts";
 import { isValidJson } from "../../../../http/json-text.ts";
 import { sseEvent } from "../../../../http/sse.ts";
 import type { ResponseContext, ResponseTransform } from "../../../registry.ts";
@@ -275,13 +282,18 @@ const finishWhole = (
 // Step identity
 // ---------------------------------------------------------------------------------------------------------------------
 
+interface ResolvedStepIndex {
+  readonly index: number;
+  readonly error?: string;
+}
+
 /** Reconciles every supplied index and ID before snapshot types are inspected (`interactionsResolveStepIndex`). */
 const resolveStepIndex = (
   explicitIndex: Json | undefined,
   step: Json | undefined,
   fallback: number,
   st: State,
-): { readonly index: number; readonly error?: string } => {
+): ResolvedStepIndex => {
   const stepIndex = get(step, "index");
   let index = fallback;
   const indexed = explicitIndex !== undefined || stepIndex !== undefined;
@@ -655,6 +667,7 @@ const finishPatchCalls = (st: State): string[] => {
   const events: string[] = [];
 
   for (const index of indexes) {
+    // SAFETY: every index in `indexes` was taken from st.functionCalls keys.
     const call = st.functionCalls.get(index) as CallState;
 
     if (call.patchCall === undefined) {
@@ -839,10 +852,12 @@ const completedEvent = (modelName: string, root: Json, st: State): string => {
   let status = "completed";
   const interaction = get(root, "interaction");
   const interactionStatus = firstNonEmpty(getStr(interaction, "status"), getStr(root, "status"));
+
   const finishReason = firstNonEmpty(
     getStr(interaction, "finish_reason"),
     getStr(root, "finish_reason"),
   );
+
   let incompleteReason = "";
 
   if (finishReason === "content_filter") {
@@ -1055,7 +1070,7 @@ const stepDelta = (root: Json, st: State): string[] => {
     // Process the same real delta after its late identity update, without replaying the update.
     const rest: JsonObject = {};
 
-    for (const [key, value] of Object.entries(root as JsonObject))
+    for (const [key, value] of isJsonObject(root) ? Object.entries(root) : [])
       if (key !== "step") rest[key] = value;
     rest.index = index;
 
@@ -1323,7 +1338,8 @@ const functionCallStop = (
     const done: JsonObject = { type: "response.output_item.done" };
     done.sequence_number = nextSeq(st);
     done.output_index = index;
-    done.item = item as JsonObject;
+
+    if (item !== undefined) done.item = item;
     call.itemDoneEmitted = true;
     call.argumentsDoneEmitted = true;
     events.push(emit("response.output_item.done", done));
@@ -1405,6 +1421,7 @@ const lenientParse = (payload: string): Json | undefined => {
   let inString = false;
 
   for (let i = 0; i < text.length; i++) {
+    // SAFETY: the loop condition keeps i < text.length.
     const c = text[i] as string;
 
     if (inString) {
@@ -1620,6 +1637,7 @@ const stepToOutput = (
 
 const convertNonStream = (context: ResponseContext, body: string): string | undefined => {
   const root = parseJson(body);
+
   const out: JsonObject = {
     id: "",
     object: "response",
@@ -1627,6 +1645,7 @@ const convertNonStream = (context: ResponseContext, body: string): string | unde
     model: "",
     output: [],
   };
+
   out.id = firstNonEmpty(getStr(root, "id"), getStr(root, "interaction.id"));
   const modelName = context.model;
   out.model = responseModel(modelName, root);
@@ -1692,10 +1711,12 @@ const convertNonStream = (context: ResponseContext, body: string): string | unde
   }
 
   if (outputs.length > 0) out.output = outputs;
+
   const interactionStatus = firstNonEmpty(
     getStr(root, "status"),
     getStr(root, "interaction.status"),
   );
+
   const finishReason = firstNonEmpty(
     getStr(root, "finish_reason"),
     getStr(root, "interaction.finish_reason"),
@@ -1727,6 +1748,7 @@ const convertNonStream = (context: ResponseContext, body: string): string | unde
 };
 
 const stateOf = (context: ResponseContext): State => {
+  // SAFETY: only this translator writes `state.value`, always with a State.
   let st = context.state.value as State | undefined;
 
   if (st === undefined) {
@@ -1765,6 +1787,7 @@ export const interactionsToOpenAIResponsesResponse: ResponseTransform = {
   stream: (context, line) => {
     const st = stateOf(context);
     context.state.finalizeToolInput ??= () => finalizeToolInput(context, st);
+
     const events = convertEvent(
       context.model,
       context.originalRequest,

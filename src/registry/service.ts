@@ -9,7 +9,7 @@
  * `snapshot.lookupModelInfo` has the `ModelInfoLookup` shape the thinking pipeline expects
  * (`applyThinking({ lookupModelInfo })`).
  */
-import { Clock, Context, Effect, Layer, Ref, Schema } from "effect";
+import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
 import { ConfigReader } from "../config/reader.ts";
 import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
@@ -165,7 +165,7 @@ export class ModelRegistry extends Context.Service<
         if (cached !== undefined && now - cached.now < SNAPSHOT_TTL_MS) return cached;
         const built = yield* build.pipe(Effect.result);
 
-        if (built._tag === "Success") {
+        if (Result.isSuccess(built)) {
           yield* Ref.set(cache, built.success);
 
           return built.success;

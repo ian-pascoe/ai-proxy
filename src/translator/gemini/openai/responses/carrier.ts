@@ -213,6 +213,7 @@ const carrierMatchesAdjacent = (
   const step = direction === CARRIER_PREVIOUS ? -1 : 1;
 
   for (let adjacent = index + step; adjacent >= 0 && adjacent < items.length; adjacent += step) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const item = items[adjacent] as Json;
     const kind = semanticTarget(item);
 
@@ -240,16 +241,18 @@ const stripCarrierMetadata = (item: Json): JsonObject | undefined => {
   const out: JsonObject = {};
 
   for (const key of Object.keys(item).toSorted()) {
-    if (!CARRIER_FIELDS.includes(key)) out[key] = item[key] as Json;
+    if (!CARRIER_FIELDS.includes(key))
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      out[key] = item[key] as Json;
   }
 
   return out;
 };
 
+export type NormalizeCarriersResult = { readonly items: Json[]; readonly hasValidCarrier: boolean };
+
 /** `normalizeGeminiResponsesCarriers`: validates carrier markers and strips client-supplied internal fields. */
-export const normalizeCarriers = (
-  items: readonly Json[],
-): { readonly items: Json[]; readonly hasValidCarrier: boolean } => {
+export const normalizeCarriers = (items: readonly Json[]): NormalizeCarriersResult => {
   const normalized: Json[] = [];
   let hasValidCarrier = false;
   items.forEach((originalItem, itemIndex) => {

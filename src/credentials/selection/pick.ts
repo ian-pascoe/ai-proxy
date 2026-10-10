@@ -9,6 +9,7 @@
  * Multiple providers are selected from one ID-sorted union (the Go "mixed" legacy path); the scheduler fast path's
  * per-provider slot cursor is not reproduced.
  */
+import type { Json } from "../../json/index.ts";
 import type { RoutingStrategy } from "../../config/schema.ts";
 import { boundSessionIdentity } from "../../session-routing/identity.ts";
 import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts";
@@ -87,7 +88,7 @@ const resolved = (value: {
   ...(value.nodeKind === "" ? {} : { nodeKind: value.nodeKind }),
 });
 
-const truthy = (value: unknown): boolean =>
+const truthy = (value: Json | undefined): boolean =>
   value === true || (typeof value === "string" && value.toLowerCase() === "true");
 
 /** Prefix set of enabled credentials: `team-a/gpt-5` only belongs to credentials registered under `team-a`. */
@@ -113,6 +114,7 @@ const highestPriority = (candidates: ReadonlyArray<Candidate>): Candidate[] => {
 /** Selects one credential for `request`, or explains why none is selectable. */
 export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const { request, settings, runtime, now } = input;
+
   const providers = new Set(
     request.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean),
   );
@@ -170,7 +172,9 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
         return !block.blocked;
       });
 
-      if (usable.length === 0) {
+      const [firstUsable] = usable;
+
+      if (firstUsable === undefined) {
         if (poolNext !== 0 && (poolCooldownUntil === 0 || poolNext < poolCooldownUntil))
           poolCooldownUntil = poolNext;
         continue;
@@ -179,7 +183,7 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
       route = {
         ...route,
         pooled: true,
-        upstreamModel: usable[0] as string,
+        upstreamModel: firstUsable,
         upstreamModels: usable,
       };
     }
@@ -305,7 +309,7 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     runtime.lcp === undefined || lcpRequest === undefined
       ? ""
       : lcpNamespace(
-          providers.size === 1 ? (providers.values().next().value as string) : "mixed",
+          providers.size === 1 ? ([...providers][0] ?? "mixed") : "mixed",
           modelKey,
           lcpRequest.callerScope,
         );

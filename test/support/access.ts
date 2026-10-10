@@ -87,6 +87,7 @@ export const fakeJwksLayer = (state: FakeJwks): Layer.Layer<AccessJwks> =>
         HttpClient.make((request) =>
           Effect.sync(() => {
             state.fetches++;
+
             const body = state.fail
               ? "boom"
               : JSON.stringify({ keys: state.keys, public_cert: {} });

@@ -32,6 +32,7 @@ const trimmed = (value: Json | undefined): string => asString(value).trim();
 export const modelSupportsWebSearch = (modelId: string): boolean => {
   const info = lookupModelInfo(modelId, "");
   const infoAg = lookupModelInfo(modelId, "antigravity");
+
   const nativeOf = (candidate: typeof info): boolean | null | undefined =>
     candidate?.nativeCapabilities?.webSearch;
 
@@ -112,6 +113,7 @@ export const extractResponsesWebSearchQuery = (root: Json | undefined): string =
     if (isFlatParts && flatParts.length > 0) return flatParts.join("\n");
 
     for (let i = input.length - 1; i >= 0; i--) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const item = input[i] as Json;
       const role = asString(get(item, "role"));
 
@@ -306,6 +308,7 @@ export const mergeGroundingMetadata = (
         if (prevRawCount === 0) cumulativeRemap.set(i, existingIdx);
 
         if (title !== "") {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const existingChunk = mergedChunks[existingIdx] as Json;
 
           if (trimmed(get(existingChunk, "web.title")) === "") {
@@ -346,6 +349,7 @@ export const mergeGroundingMetadata = (
     const remap: JsonObject = {};
 
     for (const key of [...cumulativeRemap.keys()].toSorted((a, b) => a - b)) {
+      // SAFETY: keys come from cumulativeRemap.keys(), so the entry exists.
       remap[String(key)] = cumulativeRemap.get(key) as number;
     }
 
@@ -364,16 +368,16 @@ export const mergeGroundingMetadata = (
   ): string =>
     `${partIndex}:${startByte}:${endByte}:[${indices.toSorted((a, b) => a - b).join(" ")}]`;
 
-  const remapIndices = (
-    orig: readonly Json[],
-    isExisting: boolean,
-  ): { indices: number[]; needRewrite: boolean } => {
+  type RemapIndicesResult = { indices: number[]; needRewrite: boolean };
+
+  const remapIndices = (orig: readonly Json[], isExisting: boolean): RemapIndicesResult => {
     const remapped: number[] = [];
     let needRewrite = false;
 
     for (const idxRes of orig) {
       const oldIdx = asInt(idxRes);
       let target = oldIdx;
+
       // Existing supports hold cumulative raw stream indices: only unresolved (pending) ones are remapped. Stream
       // supports always use cumulative stream-wide indices, resolved through the same map.
       const shouldRemap = isExisting
@@ -555,10 +559,12 @@ const mapByteOffsetsToRuneRanges = (
     const overlapEnd = Math.min(endByte, span.cumEnd);
 
     if (overlapStart >= overlapEnd) continue;
+
     const partStartRune = byteOffsetToRuneOffset(
       span.mapping.partText,
       overlapStart - span.cumStart,
     );
+
     const partEndRune = byteOffsetToRuneOffset(span.mapping.partText, overlapEnd - span.cumStart);
 
     if (partEndRune <= partStartRune || partStartRune < 0) continue;
@@ -638,6 +644,7 @@ export const buildResponsesUrlCitationsForMessages = (
     } else if (mappings.length > 0) {
       ranges = mapByteOffsetsToRuneRanges(mappings, startByte, endByte);
     } else if (messageTexts.length > 0) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const text = messageTexts[0] as string;
       const startRune = byteOffsetToRuneOffset(text, startByte);
       const endRune = byteOffsetToRuneOffset(text, endByte);
@@ -653,6 +660,7 @@ export const buildResponsesUrlCitationsForMessages = (
       const idx = asInt(indexValue);
 
       if (idx < 0 || idx >= chunks.length) continue;
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const chunk = chunks[idx] as Json;
       const uri = trimmed(get(chunk, "web.uri"));
       const title = trimmed(get(chunk, "web.title"));

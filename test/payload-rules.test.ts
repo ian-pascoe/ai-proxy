@@ -16,7 +16,7 @@ import fixtures from "./fixtures/payload-rules.json";
 const decodePayload = Schema.decodeUnknownSync(PayloadConfig);
 
 const makeConfig = (
-  payload: unknown,
+  payload: Json,
   disable: DisableImageGenerationMode = false,
 ): PayloadRulesConfig => ({
   requests: { payload: decodePayload(payload) },
@@ -24,7 +24,7 @@ const makeConfig = (
 });
 
 const apply = (
-  payload: unknown,
+  payload: Json,
   request: PayloadRequest,
   body: Json,
   disable: DisableImageGenerationMode = false,
@@ -36,7 +36,7 @@ describe("payload rules parity (golden fixtures)", () => {
   for (const c of fixtures) {
     it(c.name, () => {
       const v8 = c.config as {
-        requests: { payload: unknown };
+        requests: { payload: Json };
         multimedia?: { "disable-image-generation": DisableImageGenerationMode };
       };
 
@@ -56,10 +56,10 @@ describe("payload rules parity (golden fixtures)", () => {
         ...(c.request.requestPath !== undefined ? { requestPath: c.request.requestPath } : {}),
         ...(c.request.headers !== undefined ? { headers: c.request.headers } : {}),
         ...(c.request.trackedPaths !== undefined ? { trackedPaths: c.request.trackedPaths } : {}),
-        ...(c.original !== undefined ? { original: structuredClone(c.original) as Json } : {}),
+        ...(c.original !== undefined ? { original: structuredClone(c.original) } : {}),
       };
 
-      const result = applyPayloadRules(config, request, structuredClone(c.payload) as Json);
+      const result = applyPayloadRules(config, request, structuredClone(c.payload));
       expect(result.payload).toEqual(c.out);
       expect([...result.touched].toSorted()).toEqual(c.touched);
     });
@@ -164,14 +164,17 @@ describe("payload rules (ported Go tests)", () => {
       body(),
       "chat",
     );
+
     expect(get(chatImages, "tools.#")).toBe(2);
     expect(exists(chatImages, "tool_choice")).toBe(true);
+
     const chatResponses = apply(
       {},
       { model: "m", protocol: "x", requestPath: "/v1/responses" },
       body(),
       "chat",
     );
+
     expect(get(chatResponses, "tools.#")).toBe(1);
 
     for (const requestPath of ["", "/v1/responses", "/v1/images/generations"]) {

@@ -10,6 +10,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { Effect } from "effect";
+import { isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
 import {
   type BackendResolver,
   bestEffort,
@@ -76,8 +77,8 @@ export const isValidPromptId = (id: string): boolean => PROMPT_ID.test(id.trim()
 /** `ClaudeDeterministicPromptID`: a v4-shaped UUID derived from a seed. */
 export const deterministicPromptId = (seed: string): string => {
   const digest = createHash("sha256").update(seed).digest();
-  digest[6] = ((digest[6] as number) & 0x0f) | 0x40;
-  digest[8] = ((digest[8] as number) & 0x3f) | 0x80;
+  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x40;
+  digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
   const hex = digest.toString("hex");
 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
@@ -94,16 +95,17 @@ const parseEntry = (text: string | undefined): Entry | undefined => {
   if (text === undefined) return undefined;
 
   try {
-    const parsed = JSON.parse(text) as Partial<Entry> | null;
+    const parsed = tryParseJson(text);
 
-    if (parsed === null || typeof parsed !== "object") return undefined;
-    const field = (value: unknown): string => (typeof value === "string" ? value : "");
+    if (parsed === undefined || parsed === null || typeof parsed !== "object") return undefined;
+    const record = isJsonObject(parsed) ? parsed : {};
+    const field = (value: Json | undefined): string => (typeof value === "string" ? value : "");
 
     return {
-      previousMessageId: field(parsed.previousMessageId),
-      previousRequestId: field(parsed.previousRequestId),
-      promptId: field(parsed.promptId),
-      pinnedDate: field(parsed.pinnedDate),
+      previousMessageId: field(record.previousMessageId),
+      previousRequestId: field(record.previousRequestId),
+      promptId: field(record.promptId),
+      pinnedDate: field(record.pinnedDate),
     };
   } catch {
     return undefined;

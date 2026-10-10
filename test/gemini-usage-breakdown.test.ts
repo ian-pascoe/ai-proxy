@@ -49,9 +49,11 @@ describe("Gemini usage breakdown (usage.ts v2)", () => {
         usageMetadata: { promptTokenCount: 10, cachedContentTokenCount: 20, totalTokenCount: 30 },
       }).tokenBreakdown?.quality,
     ).toBe("inconsistent");
+
     const invalid = parseGeminiUsageBody({
       usageMetadata: { promptTokenCount: -5, totalTokenCount: 7 },
     });
+
     expect(invalid.tokenBreakdown).toMatchObject({ quality: "inconsistent", totalTokens: 7 });
   });
 

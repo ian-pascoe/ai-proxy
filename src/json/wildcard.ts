@@ -9,6 +9,7 @@ const tokenize = (pattern: string): Token[] => {
   const chars = Array.from(pattern);
 
   for (let i = 0; i < chars.length; i++) {
+    // SAFETY: i is bounded by the loop condition i < chars.length.
     const ch = chars[i] as string;
 
     if (ch === "*") {
@@ -17,6 +18,7 @@ const tokenize = (pattern: string): Token[] => {
       tokens.push({ kind: "any" });
     } else if (ch === "\\" && i + 1 < chars.length) {
       i++;
+      // SAFETY: i + 1 < chars.length was checked before the increment.
       tokens.push({ kind: "lit", cp: chars[i] as string });
     } else {
       tokens.push({ kind: "lit", cp: ch });

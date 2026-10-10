@@ -9,6 +9,7 @@
  * content is suppressed (the caller turns it into an HTTP error); the stream must end with the EOS trailer.
  */
 import { randomUUID } from "node:crypto";
+import { asString, type JsonObject, tryParseJson } from "../../json/index.ts";
 import { Formats } from "../../translator/formats.ts";
 import {
   applyDimensionUsage,
@@ -23,7 +24,7 @@ export const MAX_DEVIN_TOOL_CALLS = 128;
 /** `interaction_<first 12 characters of a UUID>` (the hyphen included, like Go). */
 export const newInteractionId = (): string => `interaction_${randomUUID().slice(0, 12)}`;
 
-type Event = Record<string, unknown>;
+type Event = JsonObject;
 
 interface ToolSlot {
   readonly stepIndex: number;
@@ -39,13 +40,16 @@ class Utf8Stream {
   }
 }
 
-const COMPLETION_BY_STOP_REASON: Readonly<
-  Record<number, { status: string; finishReason: string }>
-> = {
-  1: { status: "incomplete", finishReason: "length" },
-  3: { status: "incomplete", finishReason: "length" },
-  11: { status: "incomplete", finishReason: "content_filter" },
-};
+interface StopCompletion {
+  readonly status: string;
+  readonly finishReason: string;
+}
+
+const COMPLETION_BY_STOP_REASON = new Map<number, StopCompletion>([
+  [1, { status: "incomplete", finishReason: "length" }],
+  [3, { status: "incomplete", finishReason: "length" }],
+  [11, { status: "incomplete", finishReason: "content_filter" }],
+]);
 
 const usageObject = (usage: DevinUsage | undefined): Event => {
   const out: Event = { total_input_tokens: 0, total_output_tokens: 0, total_cached_tokens: 0 };
@@ -118,7 +122,7 @@ export class DevinStreamAssembler {
   }
 
   #emit(event: Event): void {
-    const type = String(event["event_type"]);
+    const type = asString(event["event_type"]);
     const failed = type === "response.failed" || type === "interaction.failed";
 
     // A failure before any stream content is suppressed so the caller can return a proper HTTP status.
@@ -406,7 +410,7 @@ export class DevinStreamAssembler {
   complete(): string[] {
     this.#sawEos = true;
     this.#closeOpenSteps();
-    const completion = COMPLETION_BY_STOP_REASON[this.#lastStopReason];
+    const completion = COMPLETION_BY_STOP_REASON.get(this.#lastStopReason);
 
     const interaction: Event = {
       id: this.interactionId,
@@ -435,7 +439,7 @@ interface ToolBuilder {
 
 export interface DevinAggregate {
   /** The Interactions response document. */
-  readonly interaction: Record<string, unknown>;
+  readonly interaction: JsonObject;
   readonly usage: DevinUsage | undefined;
   /** Tool calls whose arguments arrived as invalid JSON (`legacy`), by name (apply_patch detection). */
   readonly legacyToolNames: ReadonlyArray<string>;
@@ -496,7 +500,10 @@ export class DevinAggregator {
 
         if (call.id !== "") this.#toolIndexById.set(call.id, index);
       } else {
-        builder = this.#tools[index] as ToolBuilder;
+        const existing = this.#tools[index];
+
+        if (existing === undefined) continue;
+        builder = existing;
 
         if (builder.id === "" && call.id !== "") {
           builder.id = call.id;
@@ -518,19 +525,20 @@ export class DevinAggregator {
   }
 
   finish(model: string, interactionId: string = newInteractionId()): DevinAggregate {
-    const completion = COMPLETION_BY_STOP_REASON[this.#lastStopReason];
-    const out: Record<string, unknown> = {
+    const completion = COMPLETION_BY_STOP_REASON.get(this.#lastStopReason);
+
+    const out: JsonObject = {
       id: interactionId,
       model,
       status: completion?.status ?? "completed",
     };
 
     if (completion !== undefined) out["finish_reason"] = completion.finishReason;
-    const steps: Array<Record<string, unknown>> = [];
+    const steps: JsonObject[] = [];
     const signature = this.#signature.length > 0 ? concat(this.#signature) : "";
 
     if (this.#thinking.length > 0 || this.#signature.length > 0) {
-      const thought: Record<string, unknown> = { type: "thought" };
+      const thought: JsonObject = { type: "thought" };
 
       if (this.#thinking.length > 0)
         thought["content"] = [{ type: "text", text: concat(this.#thinking) }];
@@ -557,7 +565,7 @@ export class DevinAggregator {
 
       if (tool.legacy) legacyToolNames.push(tool.name);
 
-      const step: Record<string, unknown> = {
+      const step: JsonObject = {
         type: "function_call",
         name: tool.name,
         id: tool.id,
@@ -566,11 +574,7 @@ export class DevinAggregator {
       };
 
       if (tool.args !== "") {
-        try {
-          step["arguments"] = JSON.parse(tool.args) as unknown;
-        } catch {
-          step["arguments"] = tool.args;
-        }
+        step["arguments"] = tryParseJson(tool.args) ?? tool.args;
       }
 
       steps.push(step);

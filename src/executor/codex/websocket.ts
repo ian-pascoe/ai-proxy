@@ -19,7 +19,7 @@
  * Response steering / full duplex (`upstream.codex.response-steering`, off by default) is `duplex.ts`; non-stream execution over
  * WebSocket aggregates the Responses events (`executor.ts` `execute`).
  */
-import { Clock, Effect, Option, Stream } from "effect";
+import { Clock, Data, Effect, Option, Stream } from "effect";
 import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts";
 import {
   asInt,
@@ -96,10 +96,29 @@ const parseBool = (raw: string): boolean | undefined => {
   }
 };
 
+/** Classification of one upstream message: a failure to surface, or the chunks to forward. */
+type Outcome = Data.TaggedEnum<{
+  failure: {
+    readonly error: ExecutionError;
+    /** Where the failure came from: an upstream `error` frame, a terminal failure event, an empty incomplete. */
+    readonly kind: "ws" | "terminal" | "empty";
+    readonly body: string;
+    readonly overload: boolean;
+  };
+  frame: {
+    readonly chunks: ReadonlyArray<string>;
+    readonly terminal: boolean;
+    readonly bufferable: boolean;
+    readonly bytes: number;
+  };
+}>;
+
+const Outcome = Data.taggedEnum<Outcome>();
+
 /** `codexWebsocketsEnabled`: the `websockets` attribute, else the metadata flag (Go `ParseBool` / bool). */
 export const codexWebsocketsEnabled = (credential: {
   readonly attributes: Readonly<Record<string, string>>;
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: Readonly<Record<string, Json>>;
 }): boolean => {
   const attribute = (credential.attributes["websockets"] ?? "").trim();
 
@@ -295,11 +314,13 @@ export const makeCodexWebsocketStream =
   (context: ExecutionContext, request: ExecutorRequest, options: ExecutorOptions) =>
     Effect.gen(function* () {
       const services = yield* Effect.context<Thinking>();
+
       const prepared = yield* deps.prepare(context, request, options, {
         stream: true,
         compact: false,
         websocket: true,
       });
+
       const websocket = options.metadata.websocket;
       const modelLevelCooling = context.config.upstream.codex["model-level-cooling"];
       const turnInput = turnInputOf(deps, context, request, options, prepared);
@@ -355,30 +376,15 @@ export const makeCodexWebsocketStream =
             prepared.replayScope.sessionKey,
           );
 
-          type Outcome =
-            | {
-                readonly _tag: "failure";
-                readonly error: ExecutionError;
-                /** Where the failure came from: an upstream `error` frame, a terminal failure event, an empty incomplete. */
-                readonly kind: "ws" | "terminal" | "empty";
-                readonly body: string;
-                readonly overload: boolean;
-              }
-            | {
-                readonly _tag: "frame";
-                readonly chunks: ReadonlyArray<string>;
-                readonly terminal: boolean;
-                readonly bufferable: boolean;
-                readonly bytes: number;
-              };
-
           /** Observes one upstream message (usage, output items, replay cache) and classifies it. */
           const classify = (text: string) =>
             Effect.gen(function* () {
               const nowMs = yield* Clock.currentTimeMillis;
+
               const event = tryParseJson(
                 restoreCodexMultiAgentV2Response(text, prepared.multiAgentV2),
               );
+
               context.usage.observeResponseModel(responseModelOf(event));
 
               if (!context.usage.ttftObserved)
@@ -387,37 +393,34 @@ export const makeCodexWebsocketStream =
               const wsError = parseCodexWebsocketError(event, { modelLevelCooling, nowMs });
 
               if (wsError !== undefined) {
-                return {
-                  _tag: "failure",
+                return Outcome.failure({
                   error: wsError.error,
                   kind: "ws",
                   body: wsError.body,
                   overload: false,
-                } as Outcome;
+                });
               }
 
               const failure = codexTerminalFailure(event, { modelLevelCooling, nowMs });
 
               if (failure !== undefined) {
-                return {
-                  _tag: "failure",
+                return Outcome.failure({
                   error: failure.error,
                   kind: "terminal",
                   body: failure.body,
                   overload: isOverloadBootstrapFailure(failure.body),
-                } as Outcome;
+                });
               }
 
               if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true;
 
               if (isTerminalEmptyIncomplete(event, collector.count, sawOutputDelta)) {
-                return {
-                  _tag: "failure",
+                return Outcome.failure({
                   error: codexEmptyIncompleteStreamError(),
                   kind: "empty",
                   body: "",
                   overload: false,
-                } as Outcome;
+                });
               }
 
               const type = asString(get(event, "type"));
@@ -445,30 +448,28 @@ export const makeCodexWebsocketStream =
                 if (detail !== undefined) context.usage.publish(detail);
                 const out = ensureResponsesUsageDetails(JSON.stringify(completed));
 
-                return {
-                  _tag: "frame",
+                return Outcome.frame({
                   chunks: [out],
                   terminal: true,
                   bufferable: false,
                   bytes: text.length + out.length,
-                } as Outcome;
+                });
               }
 
               const out = text.includes('"usage"') ? ensureResponsesUsageDetails(text) : text;
 
-              return {
-                _tag: "frame",
+              return Outcome.frame({
                 chunks: [out],
                 terminal: false,
                 bufferable: isBootstrapBufferableEvent(type, text, event),
                 bytes: text.length + out.length,
-              } as Outcome;
+              });
             });
 
           const page = Effect.gen(function* () {
             const outcome = yield* classify(yield* turn.read);
 
-            if (outcome._tag === "failure") return yield* fail(outcome.error);
+            if (Outcome.$is("failure")(outcome)) return yield* fail(outcome.error);
 
             if (outcome.terminal) turn.complete();
 
@@ -478,11 +479,13 @@ export const makeCodexWebsocketStream =
             ] as const;
           });
 
-          const streaming = Stream.paginate(undefined as void, () => page);
+          const firstPage: void = undefined;
+          const streaming = Stream.paginate(firstPage, () => page);
 
           // `stream-bootstrap-buffering`: hold handshake frames until the first real event so an overload rejection
           // can fail the attempt over to another credential before anything reaches the client.
           const bootstrap = context.config.upstream.codex["stream-bootstrap-buffering"];
+
           const timeoutMs = bootstrapTimeoutMs(
             context.config.upstream.codex["stream-bootstrap-timeout"],
           );
@@ -509,7 +512,7 @@ export const makeCodexWebsocketStream =
 
                   const outcome = yield* classify(text);
 
-                  if (outcome._tag === "failure") {
+                  if (Outcome.$is("failure")(outcome)) {
                     if (outcome.overload && !timeoutReached) {
                       return yield* fail(
                         bootstrapOverloadError(outcome.body, yield* Clock.currentTimeMillis),
@@ -545,7 +548,7 @@ export const makeCodexWebsocketStream =
                   };
                 }
               })
-            : Effect.succeed({ held: [] as string[], rest: streaming });
+            : Effect.succeed({ held: Array.of<string>(), rest: streaming });
 
           const { held, rest } = yield* buffered;
 
@@ -583,6 +586,7 @@ export const makeCodexWebsocketExecute =
         );
 
         context.usage.recordFirstPacket(yield* Clock.currentTimeMillis);
+
         const clearReplay = deps.replayStore.clear(
           prepared.replayScope.modelName,
           prepared.replayScope.sessionKey,
@@ -642,6 +646,7 @@ export const makeCodexWebsocketExecute =
           const detail = parseCodexUsage(completed);
 
           if (detail !== undefined) context.usage.publish(detail);
+
           const translated =
             deps.translateNonStream?.(prepared, request, completed) ?? JSON.stringify(completed);
 

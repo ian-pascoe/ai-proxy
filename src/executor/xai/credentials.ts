@@ -9,6 +9,7 @@
  * the official API. `/responses/compact` and `/tts` never go to the chat proxy (it answers 404 and a 404 would cool
  * the whole credential pool down).
  */
+import type { Json } from "../../json/index.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 
 export const XAI_PROVIDER = "xai";
@@ -17,12 +18,10 @@ export const XAI_DEFAULT_API_BASE_URL = "https://api.x.ai/v1";
 
 export const XAI_CLI_CHAT_PROXY_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
 
-const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
 /** `xaiCreds`: bearer token (attribute API key, else OAuth access token) and configured base URL. */
-export const xaiCreds = (
-  credential: CredentialSnapshot,
-): { readonly token: string; readonly baseURL: string } => {
+export const xaiCreds = (credential: CredentialSnapshot) => {
   let token = text(credential.attributes["api_key"]);
   let baseURL = text(credential.attributes["base_url"]);
 

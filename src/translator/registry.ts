@@ -16,6 +16,7 @@
  */
 import { cloneJson, get, type Json, set } from "../json/index.ts";
 import { applyClaudeInputTokens, type ClaudeInputTokenState } from "../tokenizer/claude-input.ts";
+import type { SummaryConfig } from "../thinking/index.ts";
 import { Formats, type Format } from "./formats.ts";
 
 /** A request translator refused the request (Go `RequestEnvelope.Err`); maps to a request-scoped 400. */
@@ -106,12 +107,15 @@ export interface ResponseTransform {
   readonly tokenCount?: ResponseTokenCountTransform;
 }
 
+/** Opaque summary intent handed from `extract` to `apply` (a thinking `SummaryConfig`, or a plain JSON value in tests). */
+export type SummaryIntent = Json | SummaryConfig | undefined;
+
 /** Reasoning-summary visibility hooks applied around request transforms (owned by the thinking pipeline). */
 export interface SummaryHooks {
   /** Reads the client's summary intent from the source body (`thinking.ExtractTranslatedSummaryConfig`). */
-  readonly extract: (body: Json, client: Format, provider: Format) => unknown;
+  readonly extract: (body: Json, client: Format, provider: Format) => SummaryIntent;
   /** Writes it into the translated body (`thinking.ApplySummaryConfigForModel`); may mutate and return `body`. */
-  readonly apply: (body: Json, provider: Format, model: string, summary: unknown) => Json;
+  readonly apply: (body: Json, provider: Format, model: string, summary: SummaryIntent) => Json;
 }
 
 export const noopSummaryHooks: SummaryHooks = { extract: () => undefined, apply: (body) => body };

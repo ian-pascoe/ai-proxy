@@ -176,6 +176,7 @@ export const convertStreamToNonStream = (lines: ReadonlyArray<string>): Json => 
 
   const normalizePart = (part: Json): Json => {
     const copy = isJsonObject(part) ? structuredClone(part) : {};
+
     const signature =
       asString(get(part, "thoughtSignature")) || asString(get(part, "thought_signature"));
 
@@ -229,10 +230,13 @@ export const convertStreamToNonStream = (lines: ReadonlyArray<string>): Json => 
 
     for (const part of nodeParts) {
       const hasFunctionCall = get(part, "functionCall") !== undefined;
+
       const hasInlineData =
         get(part, "inlineData") !== undefined || get(part, "inline_data") !== undefined;
+
       const signature =
         asString(get(part, "thoughtSignature")) || asString(get(part, "thought_signature"));
+
       const text = asString(get(part, "text"));
       const thought = asBool(get(part, "thought"));
 
@@ -263,6 +267,7 @@ export const convertStreamToNonStream = (lines: ReadonlyArray<string>): Json => 
   const template: Json = responseTemplate ?? {
     candidates: [{ content: { role: "model", parts: [] } }],
   };
+
   set(template, "candidates.0.content.parts", parts);
 
   if (role !== "") set(template, "candidates.0.content.role", role);

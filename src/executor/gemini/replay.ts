@@ -10,7 +10,7 @@
  * applies per caller.
  */
 import { Effect } from "effect";
-import { type Json } from "../../json/index.ts";
+import { isJsonArray, type Json, tryParseJson } from "../../json/index.ts";
 import {
   type BackendResolver,
   bestEffort,
@@ -39,13 +39,9 @@ export interface RequestReplayCache extends ReplayCache {
 const parseItems = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined;
 
-  try {
-    const parsed: unknown = JSON.parse(text);
+  const parsed = tryParseJson(text);
 
-    return Array.isArray(parsed) ? (parsed as Json[]) : undefined;
-  } catch {
-    return undefined;
-  }
+  return isJsonArray(parsed) ? parsed : undefined;
 };
 
 export const makeRequestReplayCache = (

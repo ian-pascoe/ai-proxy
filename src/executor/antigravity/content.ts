@@ -177,12 +177,16 @@ export const normalizeFunctionResponseRoles = (payload: Json): Json => {
 
           if (index >= 0) {
             used[index] = true;
-            ordered.push(responseParts[index] as Json);
+            const part = responseParts[index];
+
+            if (part !== undefined) ordered.push(part);
           }
         }
 
         responses.forEach((_, index) => {
-          if (!used[index]) ordered.push(responseParts[index] as Json);
+          const part = responseParts[index];
+
+          if (!used[index] && part !== undefined) ordered.push(part);
         });
 
         if (ordered.length === responseParts.length) {

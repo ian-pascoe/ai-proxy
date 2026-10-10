@@ -65,7 +65,7 @@ export const toCamelCase = (s: string): string => {
 export const toSnakeCase = (s: string): string => {
   let out = "";
 
-  for (const [i, ch] of [...s].entries()) {
+  for (const [i, ch] of Array.from(s).entries()) {
     if (i > 0 && ch >= "A" && ch <= "Z") out += "_";
     out += ch;
   }
@@ -368,11 +368,13 @@ export const geminiPartToInteractionsSteps = (part: Json): JsonObject[] => {
     const steps: JsonObject[] = [];
 
     if (sig !== "") steps.push(geminiThoughtStepJson(sig, ""));
+
     const step: JsonObject = {
       type: "function_call",
       name: asString(get(fc, "name")),
       arguments: {},
     };
+
     const id = get(fc, "id");
     const callId = get(fc, "call_id");
 
@@ -394,6 +396,7 @@ export const geminiPartToInteractionsSteps = (part: Json): JsonObject[] => {
       name: asString(get(fr, "name")),
       result: {},
     };
+
     const id = get(fr, "id");
     const callId = get(fr, "call_id");
 

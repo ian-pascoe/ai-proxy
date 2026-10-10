@@ -88,6 +88,7 @@ const cooldownView = (
   const reason = state.quota.exceeded
     ? quotaReason(state.quota.reason)
     : state.lastError?.code?.trim() || "unknown";
+
   const status = state.lastError?.httpStatus;
 
   return {
@@ -106,6 +107,7 @@ const cooldownView = (
 /** `CooldownSnapshotForAuth`: unexpired credential-wide and per-model retry timers. */
 export const cooldownSnapshot = (state: CredentialState, now: number): JsonObject[] => {
   const views: JsonObject[] = [];
+
   const credentialNext =
     state.quota.exceeded && state.quota.nextRecoverAt > now ? state.quota.nextRecoverAt : 0;
 

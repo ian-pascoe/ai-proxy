@@ -143,12 +143,13 @@ const readFirstFrameAndCancel = async (response: Response): Promise<string> => {
 };
 
 beforeAll(async () => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     upstreamCalls.push(`${request.method} ${request.url}`);
 
     return await upstream(request);
-  }) as typeof fetch;
+  };
+
   const stored = await controlPlane().putConfig(YAML);
   expect(stored.ok).toBe(true);
 });
@@ -218,7 +219,7 @@ describe("production Worker end to end", () => {
       waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
       passThroughOnException: () => undefined,
       props: {},
-    } as unknown as ExecutionContext<unknown>;
+    } as unknown as ExecutionContext;
 
     const request = chatRequest({ stream: true }) as Request<unknown, IncomingRequestCfProperties>;
     const response = await worker.fetch(request, env, ctx);
@@ -252,9 +253,11 @@ describe("production Worker end to end", () => {
     });
     expect(await reportedCounts()).toEqual({ success: before.success, failed: before.failed + 1 });
     expect(stream.state.cancelled).toBe(true);
+
     const summary = (await controlPlane().listCredentials()).find((entry) =>
       entry.id.startsWith(CONFIG_KEY_ID),
     );
+
     expect(summary?.unavailable).toBe(false);
   });
 

@@ -5,24 +5,24 @@
  * (`synthesizeFileAuths`: skipped files, provider type), sdk/auth/filestore.go. Docs: credentials.md §2-3.
  * A file is one flat JSON object that is kept verbatim as credential metadata (unknown keys are preserved).
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { parseWeightValue } from "./weight.ts";
 
 /** Legacy dashed spellings -> canonical snake_case (`CanonicalCredentialMetadataKey`). */
-const KEY_ALIASES: Readonly<Record<string, string>> = {
-  "api-key": "api_key",
-  "base-url": "base_url",
-  "disable-cooling": "disable_cooling",
-  "excluded-models": "excluded_models",
-  "fingerprint-profile": "fingerprint_profile",
-  "model-aliases": "model_aliases",
-  "proxy-url": "proxy_url",
-  "request-retry": "request_retry",
-  "request-scoped-errors": "request_scoped_errors",
-  "tool-prefix-disabled": "tool_prefix_disabled",
-};
+const KEY_ALIASES = new Map<string, string>([
+  ["api-key", "api_key"],
+  ["base-url", "base_url"],
+  ["disable-cooling", "disable_cooling"],
+  ["excluded-models", "excluded_models"],
+  ["fingerprint-profile", "fingerprint_profile"],
+  ["model-aliases", "model_aliases"],
+  ["proxy-url", "proxy_url"],
+  ["request-retry", "request_retry"],
+  ["request-scoped-errors", "request_scoped_errors"],
+  ["tool-prefix-disabled", "tool_prefix_disabled"],
+]);
 
-export const canonicalMetadataKey = (key: string): string => KEY_ALIASES[key] ?? key;
+export const canonicalMetadataKey = (key: string): string => KEY_ALIASES.get(key) ?? key;
 
 /** Renames legacy keys in place; an explicitly present canonical key wins. */
 export const normalizeCredentialMetadata = (metadata: JsonObject): void => {
@@ -31,7 +31,9 @@ export const normalizeCredentialMetadata = (metadata: JsonObject): void => {
 
     if (canonical === key) continue;
 
-    if (!Object.hasOwn(metadata, canonical)) metadata[canonical] = metadata[key] as Json;
+    const value = metadata[key];
+
+    if (value !== undefined && !Object.hasOwn(metadata, canonical)) metadata[canonical] = value;
     delete metadata[key];
   }
 };

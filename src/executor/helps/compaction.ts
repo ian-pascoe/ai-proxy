@@ -217,7 +217,7 @@ export const unsealCompaction = async (encryptedContent: string): Promise<string
     );
   }
 
-  return isJsonObject(data as Json) ? asString((data as JsonObject)["summary"]) : "";
+  return isJsonObject(data) ? asString(data["summary"]) : "";
 };
 
 /**
@@ -449,11 +449,14 @@ export const buildCompactionStreamChunks = (
   ];
 };
 
+export interface ResponsesSummaryUsage {
+  readonly input: number;
+  readonly output: number;
+  readonly total: number;
+}
+
 /** Usage of a Responses-format summary answer (`usage.input_tokens` ...), falling back to `ParseOpenAIUsage`. */
-export const responsesSummaryUsage = (
-  payload: Json,
-  rawText: string,
-): { readonly input: number; readonly output: number; readonly total: number } => {
+export const responsesSummaryUsage = (payload: Json, rawText: string): ResponsesSummaryUsage => {
   const input = asInt(get(payload, "usage.input_tokens"));
   const output = asInt(get(payload, "usage.output_tokens"));
   const total = asInt(get(payload, "usage.total_tokens"));

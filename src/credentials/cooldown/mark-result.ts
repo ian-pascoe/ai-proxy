@@ -8,6 +8,7 @@
  * Pure: `markResult` takes the previous {@link CredentialState}, the clock and the settings and returns the next
  * state. All times are epoch milliseconds, `0` = unset (Go zero time).
  */
+import type { Json } from "../../json/index.ts";
 import type {
   Credential,
   CredentialError,
@@ -68,6 +69,7 @@ type DraftModel = DeepMutable<ModelState>;
 
 type DraftQuota = DeepMutable<QuotaState>;
 
+// SAFETY: Draft is the deep-mutable view of CredentialState and structuredClone keeps the shape of plain data.
 const cloneState = (state: CredentialState): Draft => structuredClone(state) as Draft;
 
 /** Stored copy of an error: secrets redacted, message truncated (upstream bodies can be large). */
@@ -137,7 +139,7 @@ export const recoverableRetryAfter = (
 
 // --- settings -------------------------------------------------------------------------------------------------------
 
-const parseBoolAny = (value: unknown): boolean | undefined => {
+const parseBoolAny = (value: Json | undefined): boolean | undefined => {
   if (typeof value === "boolean") return value;
 
   if (typeof value === "number") return value !== 0;
@@ -508,6 +510,7 @@ export const markResult = (input: MarkInput): CredentialState => {
   const error = resultError(result);
   const wasTerminalUnauthorized = hasUnauthorizedFailure(state);
   const retryAfterMs = result.retryAfterMs;
+
   let modelState: DraftModel | undefined =
     modelKey === "" ? undefined : state.modelStates[modelKey];
 
@@ -543,8 +546,8 @@ export const markResult = (input: MarkInput): CredentialState => {
     } else {
       clearStateOnSuccess(state, now);
     }
-  } else {
-    const failure = error as CredentialError;
+  } else if (error !== undefined) {
+    const failure = error;
     const classified = classifiable(failure);
     const forced = failure.code === ErrorCode.forceCooldown;
     const disableCooling = forced ? false : coolingDisabledFor(input.credential, settings);
@@ -578,6 +581,7 @@ export const markResult = (input: MarkInput): CredentialState => {
             disableCooling,
             now,
           );
+
           model.nextRetryAfter = next;
           model.statusMessage = "cloudflare challenge";
 

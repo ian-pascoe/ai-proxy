@@ -120,10 +120,18 @@ export interface ProtoField {
   readonly encoded: Uint8Array;
 }
 
-const readVarint = (
-  data: Uint8Array,
-  start: number,
-): { readonly value: number; readonly next: number } => {
+interface Varint {
+  readonly value: number;
+  readonly next: number;
+}
+
+const isWireType = (value: number): value is WireTypeValue =>
+  value === WireType.Varint ||
+  value === WireType.Fixed64 ||
+  value === WireType.Bytes ||
+  value === WireType.Fixed32;
+
+const readVarint = (data: Uint8Array, start: number): Varint => {
   let value = 0;
   let scale = 1;
   let position = start;
@@ -150,9 +158,13 @@ export function* readFields(data: Uint8Array): Generator<ProtoField> {
     const tag = readVarint(data, position);
     position = tag.next;
     const num = Math.floor(tag.value / 8);
-    const wire = (tag.value % 8) as WireTypeValue;
+    const rawWire = tag.value % 8;
 
     if (num === 0) throw new ProtoError(`invalid field number 0 at offset ${fieldStart}`);
+
+    if (!isWireType(rawWire))
+      throw new ProtoError(`unsupported wire type ${String(rawWire)} at offset ${position}`);
+    const wire = rawWire;
     let varint = 0;
     let bytes: Uint8Array = new Uint8Array(0);
 
@@ -185,9 +197,6 @@ export function* readFields(data: Uint8Array): Generator<ProtoField> {
         position += length.value;
         break;
       }
-
-      default:
-        throw new ProtoError(`unsupported wire type ${String(wire)} at offset ${position}`);
     }
 
     yield { num, wire, varint, bytes, encoded: data.subarray(fieldStart, position) };

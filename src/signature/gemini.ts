@@ -46,23 +46,23 @@ export const isGeminiThoughtSignatureBypass = (raw: string): boolean => {
   );
 };
 
-const CACHE_PREFIXES: Readonly<Record<string, string>> = {
-  claude: "claude",
-  anthropic: "claude",
-  cais: "claude",
-  "claude-cais": "claude",
-  claude_cais: "claude",
-  ccmax: "claude",
-  "claude-code-max": "claude",
-  claude_code_max: "claude",
-  gemini: "gemini",
-  google: "gemini",
-  openai: "gpt",
-  gpt: "gpt",
-  codex: "gpt",
-  swe: "swe",
-  sealed: "swe",
-};
+const CACHE_PREFIXES = new Map<string, string>([
+  ["claude", "claude"],
+  ["anthropic", "claude"],
+  ["cais", "claude"],
+  ["claude-cais", "claude"],
+  ["claude_cais", "claude"],
+  ["ccmax", "claude"],
+  ["claude-code-max", "claude"],
+  ["claude_code_max", "claude"],
+  ["gemini", "gemini"],
+  ["google", "gemini"],
+  ["openai", "gpt"],
+  ["gpt", "gpt"],
+  ["codex", "gpt"],
+  ["swe", "swe"],
+  ["sealed", "swe"],
+]);
 
 /** `SplitSignatureProviderPrefix`: this repo's `provider#payload` cache envelope. */
 const splitProviderPrefix = (raw: string): { provider: string; unprefixed: string } | undefined => {
@@ -70,7 +70,7 @@ const splitProviderPrefix = (raw: string): { provider: string; unprefixed: strin
   const index = trimmed.indexOf("#");
 
   if (index < 0) return undefined;
-  const provider = CACHE_PREFIXES[trimmed.slice(0, index).trim().toLowerCase()];
+  const provider = CACHE_PREFIXES.get(trimmed.slice(0, index).trim().toLowerCase());
 
   return provider === undefined
     ? undefined
@@ -108,7 +108,7 @@ const isAsciiUuid = (bytes: Uint8Array): boolean => {
   if (bytes.length !== 36) return false;
 
   for (let i = 0; i < bytes.length; i++) {
-    const b = bytes[i] as number;
+    const b = bytes[i] ?? 0;
 
     if (i === 8 || i === 13 || i === 18 || i === 23) {
       if (b !== 0x2d) return false;
@@ -290,14 +290,25 @@ const SIGNATURE_PATHS = [
   "extra_content.google.thought_signature",
 ] as const;
 
-const partThoughtSignature = (part: Json): { raw: string; has: boolean } => {
+interface PartThoughtSignature {
+  readonly raw: string;
+  readonly has: boolean;
+}
+
+const partThoughtSignature = (part: Json): PartThoughtSignature => {
   for (const path of SIGNATURE_PATHS) {
     const value = get(part, path);
 
-    if (value !== undefined) return { raw: asString(value), has: true };
+    if (value !== undefined) {
+      const found: PartThoughtSignature = { raw: asString(value), has: true };
+
+      return found;
+    }
   }
 
-  return { raw: "", has: false };
+  const missing: PartThoughtSignature = { raw: "", has: false };
+
+  return missing;
 };
 
 const hasNormalizedSignature = (part: Json, replay: string): boolean => {
@@ -421,7 +432,7 @@ export const inspectGeminiThoughtSignature = (
   }
 
   if (options.requireObservedMarker === true && decoded[0] !== 0x12) {
-    return `invalid Gemini thought signature: expected observed marker 0x12, got 0x${(decoded[0] as number).toString(16).padStart(2, "0")}`;
+    return `invalid Gemini thought signature: expected observed marker 0x12, got 0x${(decoded[0] ?? 0).toString(16).padStart(2, "0")}`;
   }
 
   return undefined;
@@ -579,7 +590,9 @@ export const validateGeminiFunctionCallPairing = (payload: Json): string | undef
     }
 
     for (const [index, response] of responses.entries()) {
-      const call = pending[index] as FunctionCallRef;
+      const call = pending[index];
+
+      if (call === undefined) continue;
       const body = get(response.part, "functionResponse");
       const responseId = asString(get(body, "id"));
       const responseName = asString(get(body, "name"));

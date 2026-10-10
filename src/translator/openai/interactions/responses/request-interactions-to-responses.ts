@@ -105,6 +105,7 @@ const thoughtToResponses = (item: Json): JsonObject => {
     type: "summary_text",
     text,
   }));
+
   const out: JsonObject = { type: "reasoning", summary: [] };
 
   if (summary.length > 0) out.summary = summary;
@@ -191,12 +192,14 @@ export const convertInteractionsRequestToOpenAIResponses = (
   const instructions = systemInstructionText(root);
 
   if (instructions !== "") out.instructions = instructions;
+
   const previous = firstNonEmpty(
     getStr(root, "previous_interaction_id"),
     getStr(root, "previous_response_id"),
   );
 
   if (previous !== "") out.previous_response_id = previous;
+
   const environmentId = firstNonEmpty(
     getStr(root, "environment_id"),
     getStr(root, "environment.id"),

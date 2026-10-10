@@ -38,6 +38,7 @@ describe("POST /v1/alpha/search with API keys", async () => {
       "/v1/alpha/search",
       postJson({ model: "team/search-alias", query: "q" }),
     );
+
     expect(response.status).toBe(200);
     expect(p.calls.at(-1)?.url).toBe("https://s.test/v1/alpha/search");
     expect(JSON.parse(p.calls.at(-1)?.body ?? "{}")).toEqual({

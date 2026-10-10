@@ -163,6 +163,7 @@ const convertRequest = (
             }
 
             if (exists(get(message, "cache_control")) && systemBlocks.length > systemStart) {
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               const last = systemBlocks[systemBlocks.length - 1] as JsonObject;
 
               if (last.cache_control === undefined) attachCacheControl(last, message);
@@ -317,10 +318,12 @@ const convertRequest = (
 
       if (isAllowedTools && !allowedToolNames.has(fnName) && !allowedToolNames.has(sanitized))
         continue;
+
       const anthropicTool: JsonObject = {
         name: sanitized,
         description: str(get(fn, "description")),
       };
+
       const parameters = get(fn, "parameters") ?? get(fn, "parametersJsonSchema");
       anthropicTool.input_schema = normalizeClaudeToolInputSchema(parameters);
       attachCacheControl(anthropicTool, tool);
@@ -376,6 +379,7 @@ const convertRequest = (
 
     if (choice !== undefined) {
       if (str(get(choice, "type")) !== "none")
+        // SAFETY: every `out.tool_choice` assignment above stores an object literal like { type: "auto" }.
         (choice as JsonObject).disable_parallel_tool_use = true;
     } else if (out.tools !== undefined) {
       out.tool_choice = { type: "auto", disable_parallel_tool_use: true };
@@ -384,6 +388,7 @@ const convertRequest = (
 
   const result =
     applyTranslatedSummaryToClaude(out, root, "openai", modelName, lookupModelInfo) ?? out;
+
   const refusal = drops.err(result);
 
   if (refusal !== undefined) throw refusal;
@@ -398,6 +403,7 @@ const toolInput = (args: Json | undefined): Json => {
   if (text === "") return {};
 
   try {
+    // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
     const parsed = JSON.parse(text) as Json;
 
     return isObj(parsed) ? parsed : {};

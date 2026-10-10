@@ -311,6 +311,7 @@ const buildFunctionResponse = (
         asString(get(item, "type")) === "image" &&
         asString(get(item, "source.type")) === "base64"
       ) {
+        // SAFETY: the surrounding check confirmed `source.type` is "base64", so `source` exists.
         images.push(inlineDataPartOf(get(item, "source") as Json));
         continue;
       }
@@ -332,6 +333,7 @@ const buildFunctionResponse = (
     if (images.length > 0) set(functionResponse, "parts", images);
   } else if (isJsonObject(result)) {
     if (asString(result["type"]) === "image" && asString(get(result, "source.type")) === "base64") {
+      // SAFETY: the surrounding check confirmed `source.type` is "base64", so `source` exists.
       set(functionResponse, "parts", [inlineDataPartOf(get(result, "source") as Json)]);
       set(functionResponse, "response.result", "");
     } else {
@@ -422,11 +424,13 @@ export const convertClaudeRequestToAntigravity = (
       if (isJsonArray(contents)) {
         if (originalRole === "user")
           contents = alignClaudeToolResults(contents, precedingToolUseIds);
-        const contentResults = contents as Json[];
+        const contentResults = contents;
         const numContents = contentResults.length;
 
         for (let j = 0; j < numContents; j++) {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const contentResult = contentResults[j] as Json;
+
           const type =
             typeof get(contentResult, "type") === "string"
               ? asString(get(contentResult, "type"))
@@ -436,6 +440,7 @@ export const convertClaudeRequestToAntigravity = (
             if (originalRole !== "assistant") continue;
             const thinkingText = getThinkingText(contentResult);
             const signatureResult = get(contentResult, "signature");
+
             let signature = resolveThinkingSignature(
               modelName,
               thinkingText,
@@ -564,6 +569,7 @@ export const convertClaudeRequestToAntigravity = (
             let foundSemanticPart = false;
 
             for (let partIndex = partItems.length - 1; partIndex >= 0; partIndex--) {
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               const part = partItems[partIndex] as JsonObject;
               let partTargetKind: string;
 
@@ -699,6 +705,7 @@ export const convertClaudeRequestToAntigravity = (
             const source = get(contentResult, "source");
 
             if (asString(get(source, "type")) === "base64") {
+              // SAFETY: the surrounding check confirmed `source.type` is "base64", so `source` exists.
               partItems.push(inlineDataPartOf(source as Json));
             } else if (originalRole === "user") {
               // A part that cannot be inlined (url or file source) is dropped; the turn is refused only if nothing is left.

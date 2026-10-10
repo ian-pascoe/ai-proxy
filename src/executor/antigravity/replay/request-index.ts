@@ -18,6 +18,7 @@ import {
   isJsonArray,
   isJsonObject,
   type Json,
+  type JsonObject,
 } from "../../../json/index.ts";
 import { goMarshal } from "../../../translator/common/claude-util.ts";
 
@@ -77,8 +78,13 @@ export const replayToolCallKeys = (item: Json | undefined): string[] => {
   return key === "" ? [] : [key];
 };
 
+export interface PartFingerprint {
+  readonly kind: string;
+  readonly fingerprint: string;
+}
+
 /** `antigravityReplayPartFingerprint`: only plain text parts have one. */
-export const partFingerprint = (part: Json | undefined): { kind: string; fingerprint: string } => {
+export const partFingerprint = (part: Json | undefined): PartFingerprint => {
   if (get(part, "functionCall") !== undefined || get(part, "functionResponse") !== undefined) {
     return { kind: "", fingerprint: "" };
   }
@@ -168,7 +174,9 @@ class ContextFingerprints {
       return "";
 
     while (this.#sums.length <= beforeContentIndex) {
-      const content = this.#contents[this.#sums.length - 1] as IndexedContent;
+      const content = this.#contents[this.#sums.length - 1];
+
+      if (content === undefined) return "";
       this.#write(asString(get(content.content, "role")).trim().toLowerCase());
       this.#write("\u0000");
 
@@ -188,8 +196,13 @@ class ContextFingerprints {
       this.#sums.push(this.#sum());
     }
 
-    return this.#sums[beforeContentIndex] as string;
+    return this.#sums[beforeContentIndex] ?? "";
   }
+}
+
+export interface PendingContentPosition {
+  readonly contentIndex: number;
+  readonly basePartIndex: number;
 }
 
 export class RequestIndex {
@@ -255,10 +268,11 @@ export class RequestIndex {
   }
 
   /** `pendingModelContentIndex`: where the model turn being generated will land. */
-  pendingModelContentIndex(): { contentIndex: number; basePartIndex: number } {
-    if (this.contents.length === 0) return { contentIndex: 0, basePartIndex: 0 };
+  pendingModelContentIndex(): PendingContentPosition {
     const lastIndex = this.contents.length - 1;
-    const last = this.contents[lastIndex] as IndexedContent;
+    const last = this.contents[lastIndex];
+
+    if (last === undefined) return { contentIndex: 0, basePartIndex: 0 };
 
     if (
       isModelRole(last.content) &&
@@ -289,9 +303,11 @@ export class RequestIndex {
             get(functionCall, "args"),
             "",
           );
+
           const occurrence = occurrences.get(key) ?? 0;
 
           if (key !== "") occurrences.set(key, occurrence + 1);
+
           const item = buildFunctionCallPartItem(
             contentIndex,
             partIndex,
@@ -299,6 +315,7 @@ export class RequestIndex {
             functionCall,
             signature,
           );
+
           items.push(withContextHash(item, this.contextFingerprint(contentIndex)));
 
           return;
@@ -314,6 +331,7 @@ export class RequestIndex {
         }
 
         if (fingerprint === "") return;
+
         const item = buildThoughtSignatureItem(
           contentIndex,
           targetPartIndex,
@@ -321,6 +339,7 @@ export class RequestIndex {
           kind,
           fingerprint,
         );
+
         item["targetOccurrence"] = partOccurrence(
           content.parts,
           targetPartIndex,
@@ -335,7 +354,7 @@ export class RequestIndex {
   }
 }
 
-type ItemObject = Record<string, Json>;
+type ItemObject = JsonObject;
 
 export const withContextHash = (item: ItemObject, contextHash: string): ItemObject => {
   if (contextHash !== "") item["contextHash"] = contextHash;

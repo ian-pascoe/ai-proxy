@@ -125,22 +125,26 @@ describe("fill-first and round-robin", () => {
 
   it("never selects disabled credentials or credentials of other providers", () => {
     const h = new Harness();
+
     const pool = [
       entry(cred("a", { disabled: true })),
       entry(cred("b", { provider: "claude" })),
       entry(cred("c")),
     ];
+
     expect(h.ids(pool, 3)).toEqual(["c", "c", "c"]);
     expect(h.id(pool, { providers: [] })).toBe("failure:provider_not_found");
   });
 
   it("selects one ID-sorted union across several providers", () => {
     const h = new Harness();
+
     const pool = [
       entry(cred("a", { provider: "claude" })),
       entry(cred("b")),
       entry(cred("c", { provider: "codex" })),
     ];
+
     expect(h.ids(pool, 4, { providers: ["gemini", "claude"] })).toEqual(["a", "b", "a", "b"]);
   });
 });
@@ -151,12 +155,14 @@ describe("weighted round-robin", () => {
 
   it("distributes by weight and skips non-positive weights", () => {
     const h = wrr();
+
     const pool = [
       weighted("a", 5),
       weighted("b", 3),
       weighted("c", 2),
       weighted("disabled-by-weight", 0),
     ];
+
     expect(h.counts(pool, 100)).toEqual({ a: 50, b: 30, c: 20 });
   });
 
@@ -218,10 +224,12 @@ describe("weighted round-robin", () => {
     const a = weighted("a", 5);
     const b = weighted("b", 1);
     h.ids([a, b], 6);
+
     const cooled = entry(
       a.credential,
       state({ unavailable: true, nextRetryAfter: NOW + 3_600_000 }),
     );
+
     expect(h.ids([cooled, b], 6)).toEqual(["b", "b", "b", "b", "b", "b"]);
     expect(h.counts([a, b], 6)).toEqual({ a: 5, b: 1 });
   });
@@ -341,9 +349,11 @@ describe("availability", () => {
     const expired = cred("e", {
       metadata: { access_token: "tok", expired: new Date(NOW - 1000).toISOString() },
     });
+
     const fresh = cred("f", {
       metadata: { access_token: "tok", expired: new Date(NOW + 60_000).toISOString() },
     });
+
     expect(isBlockedForModel(expired, state(), "m", NOW).blocked).toBe(true);
     expect(isBlockedForModel(fresh, state(), "m", NOW).blocked).toBe(false);
     const rejected = state({ rejectedAccessToken: "tok" });
@@ -470,11 +480,13 @@ describe("session affinity", () => {
 
     const g1 = h.id(pool, { ...session("s"), model: "m1" });
     expect(g1).toBe("a");
+
     // `a` cools down for m2 only: the m2 binding differs while the m1 binding is untouched.
     const m2Pool = [
       entry(pool[0]!.credential, state({ modelStates: { m2: cooling(NOW + 60_000) } })),
       ...pool.slice(1),
     ];
+
     expect(h.id(m2Pool, { ...session("s"), model: "m2" })).toBe("b");
     expect(h.id(pool, { ...session("s"), model: "m1" })).toBe("a");
     const claude = h.id(pool, { ...session("s"), providers: ["claude"] });
@@ -498,6 +510,7 @@ describe("session affinity", () => {
       strategy: "weighted-round-robin",
       sessionAffinity: true,
     });
+
     const a = (weight: number) => entry(cred("auth-a", { weight }));
     const b = entry(cred("auth-b", { weight: 1 }));
     expect(h.id([a(1), b], session("w"))).toBe("auth-a");
@@ -534,6 +547,7 @@ describe("session affinity", () => {
         sessionAffinity: true,
         sessionAffinitySubagents: subagents,
       });
+
       const pool = entries("a", "b", "c");
       const parent = h.id(pool, session("parent"));
       const fork = h.id(pool, session("child", { parentId: "parent", isFork: true }));

@@ -68,20 +68,24 @@ describe.each([
 
   it("compare-and-swap: absent = 0, stale writers get the current state back", async () => {
     const run = makeRun();
+
     const [first] = await run(
       [{ op: "put", key: "k", value: "a", ttlMs: HOUR, ifGeneration: 0 }],
       T0,
     );
+
     expect(first?.status).toBe("ok");
     const g1 = first?.status === "ok" ? first.generation : -1;
     // A second "must be absent" writer loses and learns the winner's state.
     expect(
       await run([{ op: "put", key: "k", value: "b", ttlMs: HOUR, ifGeneration: 0 }], T0),
     ).toEqual([{ status: "conflict", generation: g1, value: "a" }]);
+
     const [second] = await run(
       [{ op: "put", key: "k", value: "c", ttlMs: HOUR, ifGeneration: g1 }],
       T0,
     );
+
     expect(second?.status).toBe("ok");
     const g2 = second?.status === "ok" ? second.generation : -1;
     expect(g2).toBeGreaterThan(g1);
@@ -119,10 +123,12 @@ describe.each([
       status: "conflict",
       generation: 0,
     });
+
     const [again] = await run(
       [{ op: "put", key: "k", value: "w", ttlMs: 10_000, ifGeneration: 0 }],
       T0 + 20_000,
     );
+
     expect(again?.status === "ok" ? again.generation : 0).toBeGreaterThan(g1);
 
     await run([{ op: "put", key: "short", value: "v", ttlMs: 1 }], T0);
@@ -269,10 +275,12 @@ describe("SessionState Durable Object", () => {
     expect(await stub.run([{ op: "get", key: "late" }], T0 + 2 * HOUR)).toEqual([
       { status: "ok", generation: 0 },
     ]);
+
     const [fresh] = await stub.run(
       [{ op: "put", key: "again", value: "a", ttlMs: HOUR }],
       T0 + 2 * HOUR,
     );
+
     expect(fresh?.status).toBe("ok");
   });
 
@@ -281,10 +289,12 @@ describe("SessionState Durable Object", () => {
     const [first] = await stub.run([{ op: "put", key: "k", value: "a", ttlMs: MIN_TTL_MS }], T0);
     const g1 = first?.status === "ok" ? first.generation : -1;
     await runInDurableObject(stub, (instance) => instance.sweep(T0 + 2 * MIN_TTL_MS));
+
     const [second] = await stub.run(
       [{ op: "put", key: "k", value: "b", ttlMs: MIN_TTL_MS }],
       T0 + 2 * MIN_TTL_MS,
     );
+
     expect(second?.status === "ok" ? second.generation : 0).toBeGreaterThan(g1);
     // The stale token of the first entry cannot overwrite the second.
     expect(

@@ -22,18 +22,18 @@ import { lookupModelInfo } from "../../translator/gemini/util/model-info.ts";
 
 // --- white image (fixGeminiImageAspectRatio) ---------------------------------------------------------------------------
 
-const ASPECT_SIZES: Readonly<Record<string, readonly [number, number]>> = {
-  "1:1": [1024, 1024],
-  "2:3": [832, 1248],
-  "3:2": [1248, 832],
-  "3:4": [864, 1184],
-  "4:3": [1184, 864],
-  "4:5": [896, 1152],
-  "5:4": [1152, 896],
-  "9:16": [768, 1344],
-  "16:9": [1344, 768],
-  "21:9": [1536, 672],
-};
+const ASPECT_SIZES = new Map<string, readonly [number, number]>([
+  ["1:1", [1024, 1024]],
+  ["2:3", [832, 1248]],
+  ["3:2", [1248, 832]],
+  ["3:4", [864, 1184]],
+  ["4:3", [1184, 864]],
+  ["4:5", [896, 1152]],
+  ["5:4", [1152, 896]],
+  ["9:16", [768, 1344]],
+  ["16:9", [1344, 768]],
+  ["21:9", [1536, 672]],
+]);
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -51,7 +51,7 @@ const CRC_TABLE = (() => {
 const crc32 = (bytes: Uint8Array): number => {
   let c = 0xffffffff;
 
-  for (const byte of bytes) c = (CRC_TABLE[(c ^ byte) & 0xff] as number) ^ (c >>> 8);
+  for (const byte of bytes) c = (CRC_TABLE[(c ^ byte) & 0xff] ?? 0) ^ (c >>> 8);
 
   return (c ^ 0xffffffff) >>> 0;
 };
@@ -70,7 +70,7 @@ const pngChunk = (type: string, data: Uint8Array): Uint8Array => {
 
 /** `CreateWhiteImageBase64`: an opaque white RGBA PNG sized for the aspect ratio (default 1024x1024). */
 export const createWhiteImageBase64 = (aspectRatio: string): string => {
-  const [width, height] = ASPECT_SIZES[aspectRatio] ?? [1024, 1024];
+  const [width, height] = ASPECT_SIZES.get(aspectRatio) ?? [1024, 1024];
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width);
@@ -139,10 +139,9 @@ export const capGeminiMaxOutputTokens = (body: Json, modelName: string): Json =>
   const info = lookupModelInfo(modelName, "gemini");
 
   if (info === undefined) return body;
-  const limit =
-    (info.outputTokenLimit ?? 0) > 0
-      ? (info.outputTokenLimit as number)
-      : (info.maxCompletionTokens ?? 0);
+
+  const outputTokenLimit = info.outputTokenLimit ?? 0;
+  const limit = outputTokenLimit > 0 ? outputTokenLimit : (info.maxCompletionTokens ?? 0);
 
   if (limit <= 0 || asInt(maxOut) <= limit) return body;
 

@@ -14,7 +14,7 @@ import {
   sealCompaction,
   unsealCompaction,
 } from "../src/executor/helps/compaction.ts";
-import { tryParseJson } from "../src/json/index.ts";
+import { type JsonObject, tryParseJson } from "../src/json/index.ts";
 import fixtures from "./fixtures/compaction.json";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {
@@ -54,6 +54,7 @@ describe("compaction capsule helpers (Go parity)", () => {
       const nonce = Uint8Array.from(entry.nonceHex.match(/../g) ?? [], (hex) =>
         Number.parseInt(hex, 16),
       );
+
       expect(
         await sealCompaction(entry.summary, entry.model, { createdAtSec: entry.createdAt, nonce }),
       ).toBe(entry.capsule);
@@ -114,9 +115,11 @@ describe("compaction capsule helpers (Go parity)", () => {
     const now = 1_700_000_000_123;
     const response = buildCompactionResponse("m", "cpa-ag-compact-v1:X", 11, 7, 18, now);
     expect(normalize(JSON.stringify(response))).toBe(helpers.response.output);
+
     const chunks = buildCompactionStreamChunks("m", "cpa-ag-compact-v1:X", 11, 7, 18, now).map(
       normalize,
     );
+
     expect(chunks).toEqual(helpers.stream.chunks);
   });
 });
@@ -231,16 +234,18 @@ describe("compaction scenarios against the Go executors", () => {
       });
 
       afterAll(h.dispose);
-      const payload = JSON.parse(scenario.payload) as Record<string, unknown>;
+      const payload = JSON.parse(scenario.payload) as JsonObject;
       const compact = scenario.alt === "responses/compact";
 
       if (compact && scenario.stream !== true) delete payload["stream"];
 
       if (compact && scenario.stream === true) payload["stream"] = true;
+
       const response = await h.call(
         compact ? "/v1/responses/compact" : "/v1/responses",
         postJson(payload),
       );
+
       const text = await response.text();
 
       if (scenario.status !== undefined) {

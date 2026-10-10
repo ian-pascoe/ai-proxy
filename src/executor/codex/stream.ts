@@ -196,10 +196,12 @@ export class CodexStreamReader {
     if (!line.startsWith("data:"))
       return { step: { chunks: this.#translate(line), stop: false }, handshake: true };
     const { usage, modelLevelCooling, nowMs } = this.options;
+
     const payload = restoreCodexMultiAgentV2Response(
       line.slice(5).trim(),
       this.options.multiAgentV2 === true,
     );
+
     const parsed = tryParseJson(payload);
     usage.observeResponseModel(responseModelOf(parsed));
 
@@ -272,6 +274,7 @@ export class CodexStreamReader {
   end(): CodexStreamStep {
     if (this.#stopped) return { chunks: [], stop: true };
     this.#stopped = true;
+
     const error =
       this.#emitted === 0 ? codexClosedBeforeFirstPayloadError() : codexIncompleteStreamError();
 

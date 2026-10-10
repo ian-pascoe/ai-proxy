@@ -7,7 +7,7 @@
  * first parseable of `expired, expire, expires_at, expiresAt, expiry, expires`; then `expires_in` + `timestamp`;
  * then the same inside a nested `token`/`Token` object. A token the upstream rejected counts as expired at epoch 0.
  */
-import { isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 
 const EXPIRE_KEYS = ["expired", "expire", "expires_at", "expiresAt", "expiry", "expires"] as const;
 
@@ -28,7 +28,7 @@ const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d
 const LOCAL_DATE_TIME = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?::(\d{2}))?$/;
 
 /** Go `parseTimeValue`: RFC3339 (+nano), `YYYY-MM-DD HH:MM[:SS]` (UTC), unix s/ms as number or numeric string. */
-export const parseTimeValue = (value: unknown): number | undefined => {
+export const parseTimeValue = (value: Json | undefined): number | undefined => {
   if (typeof value === "number") return normaliseUnix(value);
 
   if (typeof value !== "string") return undefined;
@@ -76,7 +76,8 @@ export const decodeJwtClaims = (token: string): JsonObject | undefined => {
   const parts = token.trim().split(".");
 
   if (parts.length !== 3) return undefined;
-  const text = base64UrlDecode(parts[1] as string);
+  const [, payload = ""] = parts;
+  const text = base64UrlDecode(payload);
 
   if (text === undefined) return undefined;
 
@@ -100,15 +101,17 @@ export const parseJwtExp = (token: string): number | undefined => {
   return undefined;
 };
 
+const numericOrNaN = (value: Json | undefined): number => {
+  if (typeof value === "number") return value;
+
+  return typeof value === "string" ? Number(value.trim()) : Number.NaN;
+};
+
 const relativeSeconds = (meta: JsonObject): number | undefined => {
   for (const key of RELATIVE_KEYS) {
     const value = meta[key];
-    const seconds =
-      typeof value === "number"
-        ? value
-        : typeof value === "string"
-          ? Number(value.trim())
-          : Number.NaN;
+
+    const seconds = numericOrNaN(value);
 
     if (Number.isFinite(seconds) && Math.trunc(seconds) > 0) return Math.trunc(seconds);
   }

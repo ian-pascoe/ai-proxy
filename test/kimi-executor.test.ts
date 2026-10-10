@@ -20,7 +20,7 @@ import {
   normalizeKimiTools,
 } from "../src/executor/kimi/request.ts";
 import { makeKimiReplayStore } from "../src/executor/kimi/replay.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject, Json } from "../src/json/index.ts";
 import {
   collectStream,
   credential,
@@ -31,7 +31,7 @@ import {
   runFail,
 } from "./support/executor-run.ts";
 
-const obj = (value: unknown): JsonObject => value as JsonObject;
+const obj = (value: Json): JsonObject => value as JsonObject;
 
 describe("normalizeKimiUpstreamModel (Go table)", () => {
   const cases: Array<[string, string]> = [
@@ -246,7 +246,7 @@ describe("tools, temperature and Responses input", () => {
     ).toBe("object");
   });
 
-  const temperatureCases: Array<[string, Record<string, unknown>, number | undefined]> = [
+  const temperatureCases: Array<[string, JsonObject, number | undefined]> = [
     ["absent", { model: "m" }, undefined],
     ["enabled keeps 1.0", { thinking: { type: "enabled" }, temperature: 1.0 }, 1.0],
     ["enabled strips 0.7", { thinking: { type: "enabled" }, temperature: 0.7 }, undefined],
@@ -373,11 +373,13 @@ describe("Kimi chat completions path", () => {
 
   it("applies the suffix thinking config and the payload rules last", async () => {
     const yaml = `payload:\n  override:\n    - models: [{ name: "kimi-k2.8*", protocol: openai }]\n      params:\n        temperature: 0.42\n`;
+
     const h = await harness(
       kimiCredential(),
       () => new Response(JSON.stringify(chatCompletion)),
       yaml,
     );
+
     await execute(
       executor,
       h,
@@ -531,9 +533,11 @@ describe("Kimi responses path", () => {
     expect((body["tools"] as Array<{ parameters: { type: string } }>)[0]?.parameters.type).toBe(
       "object",
     );
+
     const out = JSON.parse(response.payload) as {
       usage: { input_tokens_details: { cached_tokens: number } };
     };
+
     expect(out.usage.input_tokens_details.cached_tokens).toBe(0);
     expect(h.usage.failed).toBe(false);
   });
@@ -620,12 +624,12 @@ describe("Kimi responses path: apply_patch bridge", () => {
     ],
   });
 
-  const frame = (event: unknown): string =>
+  const frame = (event: Json): string =>
     `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`;
 
-  const done = (item: unknown) => ({ type: "response.output_item.done", output_index: 0, item });
+  const done = (item: Json) => ({ type: "response.output_item.done", output_index: 0, item });
 
-  const completed = (output: unknown[]) => ({
+  const completed = (output: Json[]) => ({
     type: "response.completed",
     response: {
       id: "resp_1",
@@ -804,7 +808,7 @@ describe("Kimi responses path: apply_patch bridge", () => {
   });
 });
 
-const anthropicMessage = (content: unknown[], model = "kimi-for-coding") => ({
+const anthropicMessage = (content: Json[], model = "kimi-for-coding") => ({
   id: "msg_1",
   type: "message",
   role: "assistant",
@@ -824,7 +828,7 @@ describe("Kimi Claude Messages path", () => {
       metadata: { ...options().metadata, requestPath: "/v1/messages" },
     });
 
-  const claudeRequest = (extra: Record<string, unknown> = {}) => ({
+  const claudeRequest = (extra: JsonObject = {}) => ({
     model: "kimi-k2.8[1m]",
     max_tokens: 64,
     messages: [{ role: "user", content: "hi" }],
@@ -863,10 +867,12 @@ describe("Kimi Claude Messages path", () => {
     expect(call?.url).toBe("https://api.kimi.com/coding/v1/messages?beta=true");
     expect(call?.headers["authorization"]).toBe("Bearer kimi-token");
     expect(call?.headers).not.toHaveProperty("x-api-key");
+
     const body = JSON.parse(call?.text ?? "{}") as {
       model: string;
       system: Array<{ text: string }>;
     };
+
     expect(body.model).toBe("kimi-for-coding");
     // The Claude Code attribution block is prompt text for Kimi; other system content stays.
     expect(body.system.map((block) => block.text)).toEqual(["Be brief."]);
@@ -876,6 +882,7 @@ describe("Kimi Claude Messages path", () => {
 
   it("counts tokens upstream through the Messages base URL", async () => {
     const executor = makeKimiExecutor();
+
     const h = await harness(
       kimiCredential(),
       () => new Response(JSON.stringify({ input_tokens: 42 })),
@@ -925,7 +932,10 @@ describe("Kimi Claude Messages path", () => {
     await execute(
       executor,
       h,
-      { model: "kimi-k2.8", payload: json({ ...followUp, messages: [followUp.messages[0]] }) },
+      {
+        model: "kimi-k2.8",
+        payload: json({ ...followUp, messages: followUp.messages.slice(0, 1) }),
+      },
       claudeOptions(),
     );
     reply = anthropicMessage([{ type: "text", text: "done" }]);
@@ -942,6 +952,7 @@ describe("Kimi Claude Messages path", () => {
       kimiCredential(),
       () => new Response('{"error":"bad"}', { status: 400 }),
     );
+
     await runFail(
       executor.execute(
         failing.context,
@@ -962,9 +973,11 @@ describe("Kimi Claude Messages path", () => {
       { model: "kimi-k2.8", payload: json(followUp) },
       claudeOptions(),
     );
+
     const third = JSON.parse(again.calls[0]?.text ?? "{}") as {
       messages: Array<{ content: Array<{ type: string }> }>;
     };
+
     expect(third.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"]);
   });
 
@@ -1031,7 +1044,7 @@ describe("Kimi Claude Messages path", () => {
       h,
       {
         model: "kimi-k2.8",
-        payload: json({ ...followUp, stream: true, messages: [followUp.messages[0]] }),
+        payload: json({ ...followUp, stream: true, messages: followUp.messages.slice(0, 1) }),
       },
       claudeOptions(true),
     );
@@ -1056,14 +1069,19 @@ describe("Kimi Claude Messages path", () => {
   it("isolates replay per caller scope", async () => {
     const store = makeKimiReplayStore();
     const executor = makeKimiExecutor({ replay: store });
+
     const h = await harness(
       kimiCredential(),
       () => new Response(JSON.stringify(anthropicMessage(thinkingContent))),
     );
+
     await execute(
       executor,
       h,
-      { model: "kimi-k2.8", payload: json({ ...followUp, messages: [followUp.messages[0]] }) },
+      {
+        model: "kimi-k2.8",
+        payload: json({ ...followUp, messages: followUp.messages.slice(0, 1) }),
+      },
       claudeOptions(),
     );
 
@@ -1081,9 +1099,11 @@ describe("Kimi Claude Messages path", () => {
         metadata: { ...claudeOptions().metadata, callerScope: "someone-else" },
       },
     );
+
     const sent = JSON.parse(other.calls[0]?.text ?? "{}") as {
       messages: Array<{ content: Array<{ type: string }> }>;
     };
+
     expect(sent.messages[1]?.content.map((part) => part.type)).toEqual(["tool_use"]);
   });
 });

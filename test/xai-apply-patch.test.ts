@@ -11,13 +11,14 @@ import {
   type UpstreamResponder,
 } from "./support/pipeline.ts";
 import { xaiModels, xaiOauth, xaiPicker, type XaiPickerLog } from "./support/xai.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 
 const created = {
   type: "response.created",
   response: { id: "resp_1", object: "response", model: "grok-4.3", status: "in_progress" },
 };
 
-const completed = (output: unknown[]) => ({
+const completed = (output: Json[]) => ({
   type: "response.completed",
   response: {
     id: "resp_1",
@@ -28,14 +29,14 @@ const completed = (output: unknown[]) => ({
   },
 });
 
-const frame = (event: unknown): string =>
+const frame = (event: Json): string =>
   `event: ${(event as { type: string }).type}\ndata: ${JSON.stringify(event)}\n\n`;
 
 const PATCH = "*** Begin Patch\n*** Add File: a.txt\n+hi\n*** End Patch";
 
 const ARGS = JSON.stringify({ input: PATCH });
 
-const call = (name: string, args: string, extra: Record<string, unknown> = {}) => ({
+const call = (name: string, args: string, extra: JsonObject = {}) => ({
   id: "fc_1",
   type: "function_call",
   call_id: "call_1",
@@ -59,12 +60,14 @@ beforeAll(async () => {
 
 const pipeline = (respond: UpstreamResponder) => {
   const log: XaiPickerLog = { picks: [], reports: [] };
+
   const p = makePipeline({
     config,
     respond,
     credentialPicker: xaiPicker([xaiOauth()], log),
     modelProviders: xaiModels,
   });
+
   afterAll(p.dispose);
 
   return p;
@@ -76,11 +79,12 @@ const payloads = (text: string): Array<Item> =>
     .filter((line) => line.startsWith("data: ") && line !== "data: [DONE]")
     .map((line) => JSON.parse(line.slice(6)) as Item);
 
-const stream = (...events: unknown[]) => sseResponse([frame(created), ...events.map(frame)]);
+const stream = (...events: Json[]) => sseResponse([frame(created), ...events.map(frame)]);
 
 describe("xAI apply_patch bridge", () => {
   it("declares the custom tool as a strict function and restores custom_tool_call items (non-stream)", async () => {
     const item = call("apply_patch", ARGS);
+
     const p = pipeline(() =>
       stream({ type: "response.output_item.done", output_index: 0, item }, completed([item])),
     );
@@ -176,13 +180,17 @@ describe("xAI apply_patch bridge", () => {
     expect(types).toContain("response.custom_tool_call_input.delta");
     expect(types).toContain("response.custom_tool_call_input.done");
     expect(types).not.toContain("response.function_call_arguments.delta");
+
     const deltas = events.filter(
       (event) => event["type"] === "response.custom_tool_call_input.delta",
     );
+
     expect(deltas.map((event) => event["delta"]).join("")).toBe(PATCH);
+
     const sequences = events
       .map((event) => event["sequence_number"])
       .filter((n) => typeof n === "number");
+
     expect(sequences).toEqual([...sequences].toSorted((a, b) => a - b));
     const last = events.at(-1) as { type: string; response: { output: Array<Item> } };
     expect(last.type).toBe("response.completed");
@@ -244,6 +252,7 @@ describe("xAI apply_patch bridge", () => {
 
   it("leaves ordinary function calls untouched when no apply_patch tool is declared", async () => {
     const item = call("lookup", '{"q":1}');
+
     const p = pipeline(() =>
       stream({ type: "response.output_item.done", output_index: 0, item }, completed([item])),
     );

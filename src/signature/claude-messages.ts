@@ -81,6 +81,22 @@ const stripToolUseSignatureFields = (part: JsonObject): boolean => {
   return cleanExtraContent(part) || changed;
 };
 
+interface ToolUseSanitization {
+  readonly changed: boolean;
+  readonly decisions: SignatureCompatibilityDecision[];
+}
+
+const toolUseBlockKind = (target: SignatureProvider): SignatureBlockKind => {
+  switch (target) {
+    case "claude":
+      return "claude_thinking";
+    case "gpt":
+      return "gpt_reasoning";
+    default:
+      return "gemini_function_call";
+  }
+};
+
 /** `sanitizeClaudeToolUseSignature`. */
 const sanitizeToolUseSignature = (
   part: JsonObject,
@@ -88,7 +104,7 @@ const sanitizeToolUseSignature = (
   targetModel: string,
   messageIndex: number,
   partIndex: number,
-): { readonly changed: boolean; readonly decisions: SignatureCompatibilityDecision[] } => {
+): ToolUseSanitization => {
   let changed = false;
   const decisions: SignatureCompatibilityDecision[] = [];
 
@@ -97,12 +113,7 @@ const sanitizeToolUseSignature = (
 
     if (current === undefined) continue;
 
-    const blockKind: SignatureBlockKind =
-      target === "claude"
-        ? "claude_thinking"
-        : target === "gpt"
-          ? "gpt_reasoning"
-          : "gemini_function_call";
+    const blockKind = toolUseBlockKind(target);
 
     const raw = asString(current);
     const decision = decideSignatureCompatibility(target, raw, blockKind, targetModel);
@@ -129,7 +140,9 @@ const sanitizeToolUseSignature = (
     }
   }
 
-  return { changed: cleanExtraContent(part) || changed, decisions };
+  const result: ToolUseSanitization = { changed: cleanExtraContent(part) || changed, decisions };
+
+  return result;
 };
 
 /**
@@ -143,6 +156,7 @@ export const sanitizeClaudeMessagesSignaturesForTarget = (
 ): SignatureSanitizeReport => {
   let target: SignatureProvider =
     options.targetProvider === "gemini_bypass" ? "gemini" : options.targetProvider;
+
   const targetModel = options.targetModel ?? "";
 
   if (target === "unknown" && targetModel !== "")

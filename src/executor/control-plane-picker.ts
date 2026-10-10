@@ -35,7 +35,7 @@ type WireCredential = Extract<WirePickResult, { ok: true }>["credential"];
 
 /** Maps the DO snapshot to the executor view: `kind`, Go-style `header:<Name>` attributes and `base_url`. */
 export const toExecutorSnapshot = (credential: WireCredential): CredentialSnapshot => {
-  const attributes: Record<string, string> = { ...credential.attributes };
+  const attributes = { ...credential.attributes };
 
   if (credential.baseUrl !== undefined && (attributes["base_url"] ?? "").trim() === "") {
     attributes["base_url"] = credential.baseUrl;
@@ -174,7 +174,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
         const env = yield* WorkerEnv;
         yield* Effect.tryPromise({
           try: async () => await api(env).report(lease, result),
-          catch: (cause) => cause,
+          catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
         }).pipe(
           Effect.catch(() => Effect.logWarning(`control plane report failed (lease ${lease.id})`)),
         );
@@ -185,7 +185,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
 
         return yield* Effect.tryPromise({
           try: async () => await api(env).planRetry(query),
-          catch: (cause) => cause,
+          catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
         }).pipe(
           // Without cooldown knowledge a retry would be a guess: stop retrying.
           Effect.catch(() => Effect.succeed<RetryPlan>({ retry: false })),

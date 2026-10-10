@@ -9,7 +9,8 @@
  * registry` refreshes them together with `builtins.json`, the hard-coded Go definitions). A refreshed catalog from KV
  * replaces them at runtime (see `catalog-store.ts`).
  */
-import { Schema } from "effect";
+import { Result, Schema } from "effect";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import builtinsJson from "./catalog/builtins.json";
 import codexClientJson from "./catalog/codex_client_models.json";
 import devinJson from "./catalog/devin_models.json";
@@ -49,7 +50,7 @@ export interface ModelCatalogs {
   /** Active Devin catalog (`devin_models.json`, already aggregated and with built-ins). Empty = use fallbacks. */
   readonly devin: ReadonlyArray<ModelInfo>;
   /** Codex client catalog (`codex_client_models.json`), validated JSON. Served by the Codex client listing. */
-  readonly codexClient: unknown;
+  readonly codexClient: Json;
 }
 
 const SectionList = Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel))));
@@ -61,15 +62,18 @@ const ModelsFile = Schema.Struct(
 const decodeModelsFile = Schema.decodeUnknownResult(ModelsFile);
 
 /** Parses and validates a `models.json` payload (`validateModelsCatalog`). */
-export const parseModelsCatalog = (parsed: unknown): CatalogResult<ModelsCatalog> => {
+export const parseModelsCatalog = (parsed: Json | undefined): CatalogResult<ModelsCatalog> => {
   const decoded = decodeModelsFile(parsed);
 
-  if (decoded._tag === "Failure")
+  if (Result.isFailure(decoded))
     return { ok: false, error: `decode models catalog: ${String(decoded.failure)}` };
+
+  // SAFETY: ModelsFile is built from SECTIONS with SectionList for each key (Object.fromEntries erased the key names).
   const file = decoded.success as Record<
     string,
     ReadonlyArray<WireModel | null> | null | undefined
   >;
+
   const out: Partial<Record<Section, ModelInfo[]>> = {};
 
   for (const section of SECTIONS) {
@@ -103,6 +107,7 @@ export const parseModelsCatalog = (parsed: unknown): CatalogResult<ModelsCatalog
     out[section] = models;
   }
 
+  // SAFETY: the loop above assigns a model list to every section of SECTIONS, which are exactly the keys of ModelsCatalog.
   return { ok: true, value: out as ModelsCatalog };
 };
 
@@ -115,7 +120,7 @@ export const withMetaFallback = (
 
 // --- codex client catalog ------------------------------------------------------------------------------------------
 
-const requiredString = (model: Record<string, unknown>, field: string): string => {
+const requiredString = (model: JsonObject, field: string): string => {
   const value = model[field];
 
   if (typeof value !== "string" || value.trim() === "")
@@ -124,11 +129,7 @@ const requiredString = (model: Record<string, unknown>, field: string): string =
   return value.trim();
 };
 
-const requiredInteger = (
-  model: Record<string, unknown>,
-  field: string,
-  positive: boolean,
-): number => {
+const requiredInteger = (model: JsonObject, field: string, positive: boolean): number => {
   const value = model[field];
 
   if (typeof value !== "number" || !Number.isInteger(value))
@@ -141,10 +142,7 @@ const requiredInteger = (
   return value;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const validateCodexClientModel = (model: Record<string, unknown>): void => {
+const validateCodexClientModel = (model: JsonObject): void => {
   for (const field of [
     "display_name",
     "description",
@@ -171,7 +169,7 @@ const validateCodexClientModel = (model: Record<string, unknown>): void => {
   const efforts = new Set<string>();
 
   for (const [index, level] of levels.entries()) {
-    if (!isRecord(level))
+    if (!isJsonObject(level))
       throw new Error(`field "supported_reasoning_levels" entry ${index} must be an object`);
     const effort = requiredString(level, "effort");
 
@@ -189,16 +187,15 @@ const validateCodexClientModel = (model: Record<string, unknown>): void => {
 };
 
 /** `ValidateCodexClientModelsJSON`. */
-export const validateCodexClientModels = (parsed: unknown): CatalogResult<unknown> => {
+export const validateCodexClientModels = (parsed: Json | undefined): CatalogResult<Json> => {
   try {
-    const models = isRecord(parsed) ? parsed.models : undefined;
-
-    if (!Array.isArray(models) || models.length === 0)
+    if (!isJsonObject(parsed) || !Array.isArray(parsed.models) || parsed.models.length === 0)
       throw new Error("Codex client model catalog has no models");
+    const models = parsed.models;
     const slugs = new Set<string>();
 
     for (const [index, model] of models.entries()) {
-      if (!isRecord(model)) throw new Error(`models[${index}] must be an object`);
+      if (!isJsonObject(model)) throw new Error(`models[${index}] must be an object`);
       const slug = requiredString(model, "slug");
 
       if (slugs.has(slug)) throw new Error(`duplicate slug "${slug}"`);
@@ -299,7 +296,7 @@ const parseEmbeddedDevin = (): ReadonlyArray<ModelInfo> => {
 };
 
 /** The raw embedded `models.json` document (the base of `meta` carry-over during a refresh). */
-export const embeddedModelsDocument: unknown = modelsJson;
+export const embeddedModelsDocument: Json = modelsJson;
 
 let embedded: ModelCatalogs | undefined;
 

@@ -110,9 +110,11 @@ export const parseClaudeStreamUsage = (line: string): UsageDetail | undefined =>
 /** `parseGeminiFamilyUsageDetail`: `candidatesTokenCount` excludes `thoughtsTokenCount`. */
 export const parseGeminiFamilyNode = (node: Json): UsageDetail => {
   const cached = tokenInt(get(node, "cachedContentTokenCount"));
+
   const toolUse = tokenInt(
     firstExisting(node, "toolUsePromptTokenCount", "tool_use_prompt_token_count"),
   );
+
   const input = safeSum(tokenInt(get(node, "promptTokenCount")), toolUse);
 
   const base: UsageDetail = {
@@ -222,6 +224,7 @@ export const parseInteractionsNode = (node: Json): UsageDetail => {
     tokenInt(firstExisting(node, "input_tokens", "prompt_tokens", "total_input_tokens")),
     toolUse,
   );
+
   const cached = tokenInt(
     firstExisting(node, "cached_tokens", "cachedContentTokenCount", "total_cached_tokens"),
   );
@@ -277,10 +280,14 @@ const parseInteractionsRoot = (root: Json | undefined): UsageDetail => {
   const node = firstExisting(root, ...INTERACTIONS_USAGE_PATHS);
 
   if (node === undefined) return emptyUsageDetail;
-  const geminiShaped =
+
+  const usesGeminiFields =
     exists(get(node, "promptTokenCount")) || exists(get(node, "candidatesTokenCount"));
 
-  return withTier(geminiShaped ? parseGeminiFamilyNode(node) : parseInteractionsNode(node), root);
+  return withTier(
+    usesGeminiFields ? parseGeminiFamilyNode(node) : parseInteractionsNode(node),
+    root,
+  );
 };
 
 /** `ParseInteractionsUsage` over a parsed non-stream response body. */
@@ -323,8 +330,10 @@ export const mergeStreamUsageDetail = (existing: UsageDetail, update: UsageDetai
 
   if (cache === 0) cache = cachedTokens;
   const calculated = inputTokens + outputTokens + cache;
+
   const totalTokens =
     update.totalTokens === 0 || update.totalTokens < calculated ? calculated : update.totalTokens;
+
   const tier = update.responseServiceTier ?? existing.responseServiceTier;
 
   return {

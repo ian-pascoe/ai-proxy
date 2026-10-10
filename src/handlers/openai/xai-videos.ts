@@ -279,6 +279,7 @@ export const videosCreateRequestFromForm = (form: FormData): JsonObject => {
 
   const first = (...names: string[]): string =>
     names.map(field).find((value) => value !== "") ?? "";
+
   const out: JsonObject = {};
 
   for (const name of ["model", "prompt", "seconds", "size", "aspect_ratio", "resolution"]) {

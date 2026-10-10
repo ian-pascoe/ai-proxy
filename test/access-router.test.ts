@@ -106,10 +106,12 @@ describe("Access gate through the router", () => {
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('{"error":"Missing API key"}');
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
+
     const admin = await call(
       "/v8/management/config",
       await withToken(userClaims("admin@example.com")),
     );
+
     expect(admin.status).toBe(200);
     expect(admin.headers.get("access-control-allow-origin")).toBeNull();
 
@@ -126,15 +128,18 @@ describe("Access gate through the router", () => {
     const malformed = await call("/v1/models", {
       headers: { "cf-access-jwt-assertion": "garbage" },
     });
+
     expect(malformed.status).toBe(401);
     expect(await malformed.text()).toBe('{"error":"Invalid API key"}');
 
     const other = await makeKey("router-kid");
+
     const forged = await signToken({
       key: other,
       now: now(),
       claims: userClaims("alice@example.com"),
     });
+
     expect(
       (await call("/v1/models", { headers: { "cf-access-jwt-assertion": forged } })).status,
     ).toBe(401);
@@ -145,6 +150,7 @@ describe("Access gate through the router", () => {
       claims: userClaims("a@x.com"),
       audience: "nope",
     });
+
     expect(
       (await call("/v1/models", { headers: { "cf-access-jwt-assertion": wrongAud } })).status,
     ).toBe(401);
@@ -179,6 +185,7 @@ describe("Access gate through the router", () => {
       method: "OPTIONS",
       headers: { origin: "https://x.test" },
     });
+
     expect(response.status).toBe(204);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
   });
@@ -202,6 +209,7 @@ describe("Access gate through the router", () => {
       "/v8/management/config",
       await withToken(userClaims("alice@example.com")),
     );
+
     expect(alice.status).toBe(403);
     expect(await alice.text()).toBe('{"error":"Forbidden"}');
 
@@ -209,18 +217,21 @@ describe("Access gate through the router", () => {
       "/v8/management/config",
       await withToken(userClaims("Admin@Example.com")),
     );
+
     expect(admin.status).toBe(200);
 
     const adminService = await call(
       "/v8/management/config",
       await withToken(serviceClaims("admin.access")),
     );
+
     expect(adminService.status).toBe(200);
 
     const otherService = await call(
       "/v8/management/config",
       await withToken(serviceClaims("other.access")),
     );
+
     expect(otherService.status).toBe(403);
   });
 

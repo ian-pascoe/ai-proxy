@@ -60,6 +60,7 @@ export const convertClaudeResponseToInteractions = (
 ): ReadonlyArray<string> => {
   const modelName = context.model;
   context.state.value ??= newState(modelName);
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as State;
   st.model = firstNonEmpty(st.model, modelName);
 
@@ -443,6 +444,7 @@ const mergedUsage = (st: State): Json | undefined => st.usageRaw;
 /** `setInteractionsUsageFromClaude`. */
 const setUsage = (out: JsonObject, path: string, usage: Json | undefined): void => {
   if (!exists(usage)) return;
+  // SAFETY: split always yields at least one element and these paths have at most two segments.
   const [first, second] = path.split(".") as [string, string | undefined];
   let target: JsonObject;
 
@@ -450,6 +452,7 @@ const setUsage = (out: JsonObject, path: string, usage: Json | undefined): void 
     target = isObj(out[first]) ? out[first] : {};
     out[first] = target;
   } else {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const parent = out[first] as JsonObject;
     target = isObj(parent[second]) ? parent[second] : {};
     parent[second] = target;

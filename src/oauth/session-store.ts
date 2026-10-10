@@ -103,13 +103,16 @@ export class SqliteSessionTable implements SessionTable {
     const rows = this.#sql
       .exec<SessionRow>("SELECT * FROM oauth_sessions WHERE state = ?", state)
       .toArray();
+
     const row = rows[0];
 
     return row === undefined
       ? undefined
       : {
           state: row.state,
+          // SAFETY: the provider column is only written from an OAuthProvider value.
           provider: row.provider as OAuthProvider,
+          // SAFETY: the flow column is only written from a SessionFlow value.
           flow: row.flow as SessionFlow,
           status: row.status,
           completed: row.completed === 1,
@@ -118,6 +121,7 @@ export class SqliteSessionTable implements SessionTable {
           nextPollAt: row.next_poll_at,
           intervalMs: row.interval_ms,
           busyUntil: row.busy_until,
+          // SAFETY: the data column is only written by this store as a serialized JsonObject.
           data: JSON.parse(row.data) as JsonObject,
         };
   }

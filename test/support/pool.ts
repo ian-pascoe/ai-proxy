@@ -78,6 +78,7 @@ export const makePool = async (
   const config = await loadConfig(yaml);
   const store = options.store ?? new MemoryPoolStore();
   const clock = options.clock ?? new TestNow();
+
   const pool = new CredentialPool({
     store,
     config: () => ({ version: 1, config }),

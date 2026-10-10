@@ -23,6 +23,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
+import type { Json } from "../src/json/index.ts";
 
 let config: Config;
 
@@ -42,7 +43,7 @@ const harness = (respond: UpstreamResponder) =>
     models: { "gemini-3.1-flash-lite": ["gemini-interactions"] },
   });
 
-const sseFrame = (event: string, data: unknown): string =>
+const sseFrame = (event: string, data: Json): string =>
   `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 /** Parses Claude SSE output into `[event, payload]` pairs. */

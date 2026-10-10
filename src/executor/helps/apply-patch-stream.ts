@@ -33,9 +33,7 @@ export const applyPatchGatewayError = (): ExecutionError =>
  * `EndApplyPatchStream` (the part before delivery): asks the translator state to fail a patch-enabled stream that ends
  * without its protocol terminator. Returns the frames to emit and whether the stream must now fail with the gateway error.
  */
-export const endApplyPatchStream = (
-  state: TranslationState,
-): { readonly chunks: ReadonlyArray<string>; readonly failed: boolean } => {
+export const endApplyPatchStream = (state: TranslationState) => {
   const chunks = state.finalizeToolInput?.() ?? [];
 
   return { chunks, failed: state.toolInputError !== undefined };

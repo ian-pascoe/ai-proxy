@@ -52,10 +52,10 @@ const mergeRequired = (root: JsonObject, branchRequired: Json | undefined): void
   let required: string[] = [];
 
   if (isArr(root.required) && root.required.every((item) => typeof item === "string"))
-    required = [...(root.required as string[])];
+    required = [...root.required];
   const seen = new Set(required);
 
-  for (const name of branchRequired as string[]) {
+  for (const name of branchRequired) {
     if (seen.has(name)) continue;
     required.push(name);
     seen.add(name);
@@ -97,13 +97,13 @@ export const normalizeClaudeToolInputSchema = (schema: Json | undefined): JsonOb
   return sortedObject(root);
 };
 
-const UNICODE_ESCAPES: Record<string, string> = {
-  "<": "\\u003c",
-  ">": "\\u003e",
-  "&": "\\u0026",
-  "\u2028": "\\u2028",
-  "\u2029": "\\u2029",
-};
+const UNICODE_ESCAPES = new Map([
+  ["<", "\\u003c"],
+  [">", "\\u003e"],
+  ["&", "\\u0026"],
+  ["\u2028", "\\u2028"],
+  ["\u2029", "\\u2029"],
+]);
 
 /** Go `json.Marshal` of a decoded value: sorted object keys and HTML-safe escapes. */
 export const goMarshal = (value: Json): string => {
@@ -112,13 +112,13 @@ export const goMarshal = (value: Json): string => {
   if (isObj(value)) {
     return `{${Object.keys(value)
       .toSorted()
-      .map((key) => `${goMarshal(key)}:${goMarshal(value[key] as Json)}`)
+      .map((key) => `${goMarshal(key)}:${goMarshal(value[key] ?? null)}`)
       .join(",")}}`;
   }
 
   return JSON.stringify(value).replace(
     /[<>&\u2028\u2029]/gu,
-    (ch) => UNICODE_ESCAPES[ch] as string,
+    (ch) => UNICODE_ESCAPES.get(ch) ?? ch,
   );
 };
 
@@ -134,7 +134,7 @@ export const geminiClaudeToolUseID = (callId: string, name: string, argsRaw: str
 
   if (args.trim() !== "") {
     try {
-      args = goMarshal(JSON.parse(args) as Json);
+      args = goMarshal(JSON.parse(args));
     } catch {
       args = args.trim();
     }

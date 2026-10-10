@@ -170,9 +170,9 @@ const sortKeys = (value: Json): Json => {
 
   if (isObj(value))
     return Object.fromEntries(
-      Object.keys(value)
-        .toSorted()
-        .map((key) => [key, sortKeys(value[key] as Json)]),
+      Object.entries(value)
+        .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, child]) => [key, sortKeys(child)]),
     );
 
   return value;
@@ -346,8 +346,7 @@ export class ReplayStreamAccumulator {
     if (!this.#complete || this.#failed) return undefined;
     const out: Json[] = [];
 
-    for (const index of [...this.#blocks.keys()].toSorted((a, b) => a - b)) {
-      const block = this.#blocks.get(index) as AccumulatedBlock;
+    for (const [, block] of [...this.#blocks.entries()].toSorted((a, b) => a[0] - b[0])) {
       const raw = block.raw;
 
       if (block.hasText) raw.text = block.text;

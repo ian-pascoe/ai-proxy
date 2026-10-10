@@ -12,15 +12,15 @@ import { refreshMeta } from "./meta.ts";
 import type { RefreshProtocol } from "./types.ts";
 import { refreshXai } from "./xai.ts";
 
-const PROTOCOLS: Readonly<Record<string, RefreshProtocol>> = {
-  claude: refreshClaude,
-  codex: refreshCodex,
-  antigravity: refreshAntigravity,
-  xai: refreshXai,
-  kimi: refreshKimi,
-  "kimi-ai": refreshKimi,
-  meta: refreshMeta,
-};
+const PROTOCOLS = new Map<string, RefreshProtocol>([
+  ["claude", refreshClaude],
+  ["codex", refreshCodex],
+  ["antigravity", refreshAntigravity],
+  ["xai", refreshXai],
+  ["kimi", refreshKimi],
+  ["kimi-ai", refreshKimi],
+  ["meta", refreshMeta],
+]);
 
 export const refreshProtocolFor = (executor: string): RefreshProtocol | undefined =>
-  Object.hasOwn(PROTOCOLS, executor) ? PROTOCOLS[executor] : undefined;
+  PROTOCOLS.get(executor);

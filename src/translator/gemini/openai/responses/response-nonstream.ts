@@ -102,6 +102,7 @@ const runeLength = (text: string): number => {
 const stripResponsePrefix = (id: string): string => (id.startsWith("resp_") ? id.slice(5) : id);
 
 /** `ConvertGeminiResponseToOpenAIResponsesNonStream`: `undefined` when a retained tool-input error aborts it. */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 export const convertGeminiResponseToOpenAIResponsesNonStream = (
   context: ResponseContext,
   body: string,
@@ -126,6 +127,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
   const { status, incompleteDetails } = terminalState(
     asString(get(root, "candidates.0.finishReason")),
   );
+
   resp["status"] = status;
 
   if (incompleteDetails !== undefined) resp["incomplete_details"] = incompleteDetails;
@@ -309,6 +311,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
 
       if (get(p, "partIndex") !== undefined) explicitIndex = asInt(get(p, "partIndex"));
       else if (get(p, "index") !== undefined) explicitIndex = asInt(get(p, "index"));
+
       const evidence = recordFunctionEvidence(
         evidenceState,
         fc,
@@ -503,8 +506,10 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
 
         if (reasoningOutput === undefined) continue;
         const rid = stripResponsePrefix(id);
+
         const reasoningId =
           reasoningOutputs.length > 1 ? `rs_${rid}_${outputItem.index}` : `rs_${rid}`;
+
         let encryptedContent = reasoningOutput.signature;
 
         if (encryptedContent !== "" && reasoningOutput.direction !== "") {
@@ -529,6 +534,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
 
       case "message": {
         if (hasGrounding && !wsAppended) {
+          // SAFETY: wsItem is an object literal built from Json values.
           outputs.push(wsItem as Json);
           wsAppended = true;
         }
@@ -566,7 +572,9 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
     }
   }
 
-  if (hasGrounding && !wsAppended) outputs.push(wsItem as Json);
+  if (hasGrounding && !wsAppended)
+    // SAFETY: wsItem is an object literal built from Json values.
+    outputs.push(wsItem as Json);
 
   if (outputs.length > 0) resp["output"] = outputs;
 

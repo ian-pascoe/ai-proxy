@@ -5,12 +5,19 @@
  * `GetRequestErrorLogs`: file based, answers `logging to file disabled` when file logging is off). Workers have no
  * log files (use `alchemy logs --tail` / Workers Logs), so the log routes behave like Go with file logging disabled.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest, HttpServerRequest } from "effect/http";
 import { isJsonObject, type Json } from "../json/index.ts";
 import { handled, jsonReply, replyError } from "./http.ts";
 
 const RELEASE_URL = "https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest";
+
+/** A release field as text: strings and scalars only. */
+const releaseText = (value: Json | undefined): string => {
+  if (typeof value === "string") return value.trim();
+
+  return typeof value === "number" || typeof value === "boolean" ? String(value) : "";
+};
 
 const latestVersion = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
@@ -31,7 +38,7 @@ const latestVersion = Effect.gen(function* () {
     };
   }).pipe(Effect.provideService(HttpClient.TracerPropagationEnabled, false), Effect.result);
 
-  if (outcome._tag === "Failure") {
+  if (Result.isFailure(outcome)) {
     return yield* replyError(502, "request_failed", { message: "failed to reach the release API" });
   }
 
@@ -44,12 +51,13 @@ const latestVersion = Effect.gen(function* () {
   }
 
   const release = yield* Effect.try({
+    // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(502, "decode_failed", { message: "release response is not JSON" }),
   });
 
   const tag = isJsonObject(release)
-    ? String(release.tag_name ?? "").trim() || String(release.name ?? "").trim()
+    ? releaseText(release["tag_name"]) || releaseText(release["name"])
     : "";
 
   if (tag === "")

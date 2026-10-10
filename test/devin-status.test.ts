@@ -102,6 +102,7 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
       200,
       fromHex(fixtures.scenarios[0]?.response ?? ""),
     );
+
     expect(toHex(calls[0]?.bytes ?? new Uint8Array())).toBe(fixtures.deterministicRequest);
   });
 
@@ -121,7 +122,7 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
     const { summary, calls } = await refresh(
       [
         credential("", { disabled: true }),
-        credential("", { id: "cfg", source: "config" } as Partial<Credential>),
+        credential("", { id: "cfg", source: "config" }),
         credential("", { id: "other", provider: "codex" }),
         credential("", { id: "none", attributes: {}, metadata: {} }),
       ],
@@ -145,6 +146,7 @@ describe("Devin GetUserStatus refresh (Go parity)", () => {
       parseUserStatus(fromHex(fixtures.scenarios[1]?.response ?? ""))!,
       5,
     );
+
     expect(next.state.quota.signals).toMatchObject({
       stale: "x",
       plan: "Free",

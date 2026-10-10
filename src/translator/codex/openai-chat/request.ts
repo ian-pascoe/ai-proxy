@@ -204,6 +204,7 @@ const toolOutputContentPart = (item: Json | undefined): JsonObject => {
       if (imageUrl !== "") part["image_url"] = imageUrl;
 
       if (fileId !== "") part["file_id"] = fileId;
+
       const detail = asString(
         get(item, itemType === "input_image" ? "detail" : "image_url.detail"),
       );

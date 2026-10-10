@@ -33,11 +33,16 @@ const adaptive = (body: Json | undefined, effort: string | undefined): Json | un
     : setPath(result, "output_config.effort", effort);
 };
 
+interface EffectiveMaxTokens {
+  readonly max: number;
+  readonly fromModel: boolean;
+}
+
 /** Request max_tokens, else the model default (`fromModel` = it must be written back). */
 const effectiveMaxTokens = (
   body: Json | undefined,
   modelInfo: ThinkingModelInfo | undefined,
-): { readonly max: number; readonly fromModel: boolean } => {
+): EffectiveMaxTokens => {
   const requested = get(body, "max_tokens");
 
   if (requested !== undefined && asInt(requested) > 0)

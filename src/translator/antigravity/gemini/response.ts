@@ -42,6 +42,7 @@ const stateOf = (context: ResponseContext): GeminiStreamState => {
     context.state.value = fresh;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   return context.state.value as GeminiStreamState;
 };
 

@@ -129,6 +129,7 @@ const trimmedOrNull = (value: string | undefined): string | null => {
 /** Maps a record (with its v2 breakdown ensured) to a row without `exported_at`. */
 export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> => {
   const detail = ensureTokenBreakdown(record.detail, record.provider, record.executorType);
+  // SAFETY: ensureTokenBreakdown always fills tokenBreakdown.
   const breakdown = detail.tokenBreakdown as TokenBreakdown;
 
   return {
@@ -195,7 +196,7 @@ export const insertUsageRecord = async (db: D1Database, record: UsageRecord): Pr
 // ---------------------------------------------------------------------------------------------------------------
 
 /** `session_id`/`parent_session_id` of the export: canonical UUIDs, the parent only when it differs (redisqueue). */
-const sessionPayload = (row: UsageRow): Record<string, string> => {
+const sessionPayload = (row: UsageRow) => {
   const sessionId = normalizeToCanonicalUuid(row.session_id ?? "");
 
   if (sessionId === "") return {};
@@ -208,7 +209,7 @@ const sessionPayload = (row: UsageRow): Record<string, string> => {
 };
 
 /** The export JSON of one record. `api_key` carries the Access principal id (the Go client API key). */
-export const rowToPayload = (row: UsageRow): Record<string, unknown> => {
+export const rowToPayload = (row: UsageRow) => {
   const failed = row.failed === 1;
 
   return {
@@ -322,9 +323,12 @@ export interface UsageFilter {
   readonly failed?: boolean;
 }
 
-const filterClauses = (
-  filter: UsageFilter,
-): { readonly where: string; readonly params: Array<string | number> } => {
+interface FilterClauses {
+  readonly where: string;
+  readonly params: Array<string | number>;
+}
+
+const filterClauses = (filter: UsageFilter): FilterClauses => {
   const clauses: string[] = [];
   const params: Array<string | number> = [];
 
@@ -385,6 +389,7 @@ export const listUsageRecords = async (
     1,
     Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)),
   );
+
   const { where, params } = filterClauses(query);
   const cursor = query.before === undefined ? undefined : parseCursor(query.before);
   let sql = `SELECT * FROM usage_records${where}`;
@@ -471,10 +476,12 @@ export const summarizeUsage = async (
   query: UsageSummaryQuery,
 ): Promise<UsageSummary> => {
   const { where, params } = filterClauses(query);
+
   const limit = Math.max(
     1,
     Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)),
   );
+
   const expression = GROUP_EXPRESSIONS[query.groupBy];
   const order = query.groupBy === "day" ? "key DESC" : "total_tokens DESC, requests DESC, key ASC";
 
@@ -488,7 +495,7 @@ export const summarizeUsage = async (
   ]);
 
   return {
-    totals: (totals?.results[0] ?? {
+    totals: totals?.results[0] ?? {
       requests: 0,
       failed: 0,
       input_tokens: 0,
@@ -501,11 +508,11 @@ export const summarizeUsage = async (
       total_tokens: 0,
       avg_latency_ms: 0,
       avg_ttft_ms: null,
-    }) as UsageTotals,
+    },
     groups: (groups?.results ?? []).map((group) => ({
       ...group,
       key: String(group.key ?? ""),
-    })) as UsageGroup[],
+    })),
   };
 };
 

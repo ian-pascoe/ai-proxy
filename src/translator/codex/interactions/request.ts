@@ -586,8 +586,9 @@ const appendInput = (items: Json[], input: Json | undefined): UserRun | undefine
     for (const step of input) appendStep(items, step, "user", run);
   } else if (isJsonArray(get(input, "steps"))) {
     const role = stepRole(input, "user");
+    const steps = get(input, "steps");
 
-    for (const step of get(input, "steps") as Json[]) appendStep(items, step, role, run);
+    for (const step of isJsonArray(steps) ? steps : []) appendStep(items, step, role, run);
   } else {
     appendStep(items, input, "user", run);
   }

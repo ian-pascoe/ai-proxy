@@ -3,7 +3,7 @@
  *
  * Go source: internal/translator/common/file_data.go (NormalizeOpenAIFileData).
  */
-import { MIME_TYPES } from "./mime-types.ts";
+import { mimeTypeForExtension } from "./mime-types.ts";
 
 const extensionOf = (filename: string): string => {
   const base = filename.slice(filename.lastIndexOf("/") + 1);
@@ -23,7 +23,7 @@ export const normalizeOpenAIFileData = (
 
   if (fallback === "") {
     const ext = extensionOf(filename);
-    fallback = Object.hasOwn(MIME_TYPES, ext) ? (MIME_TYPES[ext] as string) : "";
+    fallback = mimeTypeForExtension(ext);
   }
 
   if (fileData.slice(0, 5).toLowerCase() !== "data:") {

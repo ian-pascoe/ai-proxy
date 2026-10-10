@@ -13,14 +13,14 @@ import {
   sseResponse,
 } from "./support/pipeline.ts";
 
-const providers = (provider: string): Layer.Layer<ModelProviders, never, never> =>
+const providers = (provider: string): Layer.Layer<ModelProviders, never> =>
   Layer.succeed(
     ModelProviders,
     ModelProviders.of({
       providersFor: () => Effect.succeed([provider]),
       firstAvailableModel: Effect.succeed("m"),
     }),
-  ) as never;
+  );
 
 const kimi: CredentialSnapshot = {
   id: "kimi-1",
@@ -47,7 +47,7 @@ describe("Kimi via /v1/chat/completions", () => {
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([kimi]),
-      modelProviders: providers("kimi") as never,
+      modelProviders: providers("kimi"),
       respond: () =>
         jsonResponse({
           id: "c1",
@@ -114,15 +114,17 @@ describe("Meta via /v1/responses", () => {
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([meta]),
-      modelProviders: providers("meta") as never,
+      modelProviders: providers("meta"),
       respond: () => sseResponse([`data: ${JSON.stringify(completed)}\n\n`]),
     });
 
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "muse-spark", input: "hello" }),
     );
+
     expect(response.status).toBe(200);
     const body = (await response.json()) as { output: Array<{ content: Array<{ text: string }> }> };
     expect(body.output[0]?.content[0]?.text).toBe("hey");
@@ -137,7 +139,7 @@ describe("Meta via /v1/responses", () => {
     const p = makePipeline({
       config,
       credentialPicker: fixedPicker([meta]),
-      modelProviders: providers("meta") as never,
+      modelProviders: providers("meta"),
       respond: () =>
         new Response(JSON.stringify({ error: { message: "subscription quota exhausted" } }), {
           status: 429,
@@ -145,10 +147,12 @@ describe("Meta via /v1/responses", () => {
     });
 
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "muse-spark", input: "hello" }),
     );
+
     expect(response.status).toBe(429);
   });
 });

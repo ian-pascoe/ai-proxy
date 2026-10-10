@@ -32,6 +32,7 @@ export const buildClaudeStructuredOutputInstruction = (format: Json | undefined)
       const name = str(get(jsonSchema, "name")).trim() || str(get(format, "name")).trim();
 
       if (name !== "") out += `Schema Name: ${name}\n`;
+
       const desc =
         str(get(jsonSchema, "description")).trim() || str(get(format, "description")).trim();
 

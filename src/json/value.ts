@@ -40,8 +40,8 @@ export const jsonEquals = (a: Json | undefined, b: Json | undefined): boolean =>
     return a.every((item, index) => jsonEquals(item, b[index]));
   }
 
-  if (isJsonObject(a)) {
-    if (!isJsonObject(b)) return false;
+  if (typeof a === "object" && a !== null) {
+    if (typeof b !== "object" || b === null || Array.isArray(b)) return false;
     const keys = Object.keys(a);
 
     if (keys.length !== Object.keys(b).length) return false;
@@ -69,7 +69,9 @@ export const setOwn = (target: JsonObject, key: string, value: Json): void => {
 /** Parses JSON text, returning `undefined` when it is not valid JSON (gjson.Valid semantics). */
 export const tryParseJson = (text: string): Json | undefined => {
   try {
-    return JSON.parse(text) as Json;
+    const parsed: Json = JSON.parse(text);
+
+    return parsed;
   } catch {
     return undefined;
   }

@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { type HttpClient, HttpClientRequest } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { Json, JsonObject } from "../../json/index.ts";
 import {
   CODEX_CLIENT_ID,
   CODEX_TOKEN_URL,
@@ -129,6 +129,7 @@ const exchangeCode = (
 
     const accountId = identity?.accountId ?? "";
     const planType = identity?.planType ?? DEFAULT_PLAN;
+
     const hashAccountId =
       accountId === "" ? "" : yield* Effect.promise(() => sha256Hex(accountId, 4));
 
@@ -185,13 +186,11 @@ export const codexFlow = (): CallbackFlow => ({
 });
 
 /** `parseCodexDevicePollInterval`: seconds as a string or a number, 5 s by default. */
-const parseInterval = (value: unknown): number => {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value.trim())
-        : Number.NaN;
+const parseInterval = (value: Json | undefined): number => {
+  let parsed = Number.NaN;
+
+  if (typeof value === "number") parsed = value;
+  else if (typeof value === "string") parsed = Number(value.trim());
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed * 1000 : DEVICE_DEFAULT_INTERVAL_MS;
 };

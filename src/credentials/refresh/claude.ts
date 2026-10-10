@@ -9,7 +9,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
 import { refreshError } from "./error.ts";
 import {
   parseJsonObject,
@@ -118,7 +118,8 @@ interface Profile {
   readonly organizationName: string;
 }
 
-const field = (value: unknown, key: string): string => (isJsonObject(value) ? str(value[key]) : "");
+const field = (value: Json | undefined, key: string): string =>
+  isJsonObject(value) ? str(value[key]) : "";
 
 /** Best-effort `GET /api/oauth/profile`: any failure yields `undefined` and never blanks stored identity. */
 export const fetchClaudeProfile = (accessToken: string) =>

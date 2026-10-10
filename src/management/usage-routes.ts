@@ -40,11 +40,14 @@ const usageDb = Effect.gen(function* () {
 
 /** D1 failures are logged without details and answered with a generic 502. */
 const query = <A>(label: string, run: () => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: (cause) => cause }).pipe(
-    Effect.catch((cause) =>
-      Effect.logError(
-        `usage ${label} failed: ${cause instanceof Error ? cause.message : "unknown error"}`,
-      ).pipe(Effect.andThen(Effect.fail(replyError(502, "usage store unavailable")))),
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) => (cause instanceof Error ? cause.message : "unknown error"),
+  }).pipe(
+    Effect.catch((message) =>
+      Effect.logError(`usage ${label} failed: ${message}`).pipe(
+        Effect.andThen(Effect.fail(replyError(502, "usage store unavailable"))),
+      ),
     ),
   );
 
@@ -136,6 +139,7 @@ const usageQueue = Effect.gen(function* () {
   if (count === undefined) return yield* replyError(400, "count must be a positive integer");
   const db = yield* usageDb;
   const now = yield* Clock.currentTimeMillis;
+
   const rows = yield* query("queue", () =>
     popUsageQueue(db, Math.min(count, MAX_QUEUE_COUNT), now),
   );
@@ -201,7 +205,7 @@ const parseFilter = (params: URLSearchParams) =>
       filter.failed = failed === "true";
     }
 
-    return filter as UsageFilter;
+    return filter;
   });
 
 const parseLimit = (params: URLSearchParams) =>
@@ -247,6 +251,7 @@ const usageSummary = Effect.gen(function* () {
   const limit = yield* parseLimit(params);
   const groupBy = optional(params, "group_by") ?? "model";
 
+  // SAFETY: widening the literal tuple to string for the membership test; it is only read.
   if (!(GROUP_BY as ReadonlyArray<string>).includes(groupBy)) {
     return yield* replyError(400, `group_by must be one of ${GROUP_BY.join(", ")}`);
   }
@@ -256,6 +261,7 @@ const usageSummary = Effect.gen(function* () {
   const summary = yield* query("summary", () =>
     summarizeUsage(db, {
       ...filter,
+      // SAFETY: groupBy was checked against GROUP_BY above.
       groupBy: groupBy as GroupBy,
       ...(limit === undefined ? {} : { limit }),
     }),

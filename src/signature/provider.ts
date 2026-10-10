@@ -167,7 +167,7 @@ export const isValidKimiThinkingSignature = (raw: string): boolean => {
 };
 
 const selfDescribingFirstChar = (sig: string): boolean =>
-  sig !== "" && "CEQRg".includes(sig[0] as string);
+  sig !== "" && "CEQRg".includes(sig.charAt(0));
 
 /** `isRecognizedGeminiProviderSignature`. */
 const isRecognizedGeminiSignature = (raw: string): boolean =>

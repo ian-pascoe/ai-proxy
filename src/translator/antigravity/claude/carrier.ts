@@ -61,6 +61,7 @@ const blockKindOf = (targetKind: string): SignatureBlockKind =>
 /** `decodeGeminiClaudeCarrierSignature`: unmarked signatures pass through (`marked: false, ok: true`). */
 export const decodeGeminiClaudeCarrierSignature = (rawSignature: string): DecodedCarrier => {
   const raw = rawSignature.trim();
+
   const invalid: DecodedCarrier = {
     signature: "",
     direction: "",
@@ -77,21 +78,23 @@ export const decodeGeminiClaudeCarrierSignature = (rawSignature: string): Decode
   const fields = raw.slice(CARRIER_PREFIX.length).split(":");
 
   if (fields.length < 3) return invalid;
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const direction = fields[0] as string;
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const targetKind = fields[1] as string;
   // Go `SplitN(..., 3)`: the payload keeps any further colons.
   const payload = fields.slice(2).join(":");
 
-  if (
-    ![CarrierDirection.Next, CarrierDirection.Previous, CarrierDirection.Standalone].includes(
-      direction as never,
-    )
-  ) {
-    return invalid;
-  }
+  const directions = new Set<string>([
+    CarrierDirection.Next,
+    CarrierDirection.Previous,
+    CarrierDirection.Standalone,
+  ]);
 
-  if (![CarrierKind.Text, CarrierKind.Function, CarrierKind.Any].includes(targetKind as never))
-    return invalid;
+  if (!directions.has(direction)) return invalid;
+  const kinds = new Set<string>([CarrierKind.Text, CarrierKind.Function, CarrierKind.Any]);
+
+  if (!kinds.has(targetKind)) return invalid;
   const bytes = decodeBase64Raw(payload);
 
   if (bytes === undefined || bytes.length === 0) return invalid;
@@ -134,6 +137,7 @@ export const carrierMatchesAdjacent = (
   const step = direction === CarrierDirection.Previous ? -1 : 1;
 
   for (let adjacent = index + step; adjacent >= 0 && adjacent < blocks.length; adjacent += step) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const block = blocks[adjacent] as Json;
     const kind = semanticTargetKind(block);
 
@@ -208,6 +212,7 @@ const precomputeCarrierContext = (blocks: ReadonlyArray<Json>): CarrierContext =
   let currentNext = "";
 
   for (let i = n - 1; i >= 0; i--) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const block = blocks[i] as Json;
     const blockType = asString(get(block, "type"));
     ctx.nextSemanticKind[i] = currentNext;
@@ -345,6 +350,7 @@ export const stripInvalidGeminiSignatureThinkingBlocks = (payload: Json): Json =
         if (carrier.marked) {
           switch (carrier.direction) {
             case CarrierDirection.Next: {
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               const nextKind = ctx.nextSemanticKind[blockIndex] as string;
               invalidMarkedPlacement =
                 nextKind === "" ||

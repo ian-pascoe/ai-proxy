@@ -349,6 +349,7 @@ export const convertGeminiRequestToCodex = (
             if (at >= 0)
               pendingCallIds = [...pendingCallIds.slice(0, at), ...pendingCallIds.slice(at + 1)];
           } else if (pendingCallIds.length > 0) {
+            // SAFETY: the branch condition checked pendingCallIds.length > 0.
             id = pendingCallIds[0] as string;
             pendingCallIds = pendingCallIds.slice(1);
           } else {

@@ -169,9 +169,18 @@ const unsendableMediaType = (part: Json | undefined): string => {
     : "";
 };
 
-const extractStepContent = (
-  step: Json | undefined,
-): { readonly text: string; readonly images: DevinImage[]; readonly droppedPart: string } => {
+interface StepContent {
+  readonly text: string;
+  readonly images: DevinImage[];
+  readonly droppedPart: string;
+}
+
+interface ResultContent {
+  readonly text: string;
+  readonly images: DevinImage[];
+}
+
+const extractStepContent = (step: Json | undefined): StepContent => {
   const content = get(step, "content");
   const textParts: string[] = [];
   const images: DevinImage[] = [];
@@ -232,9 +241,7 @@ const isProtocolWrapper = (value: Json | undefined, wrapperKey: string): boolean
 const isPureTextPart = (value: JsonObject): boolean =>
   Object.keys(value).every((key) => key === "type" || key === "text" || key === "cache_control");
 
-const extractResultTarget = (
-  target: Json | undefined,
-): { readonly text: string; readonly images: DevinImage[] } => {
+const extractResultTarget = (target: Json | undefined): ResultContent => {
   if (target === undefined) return { text: "", images: [] };
 
   if (typeof target === "string") return { text: target, images: [] };
@@ -310,9 +317,7 @@ const extractResultTarget = (
 };
 
 /** `extractFunctionResultContent`. */
-const extractFunctionResultContent = (
-  step: Json | undefined,
-): { readonly text: string; readonly images: DevinImage[] } => {
+const extractFunctionResultContent = (step: Json | undefined): ResultContent => {
   const target = get(step, "result") ?? get(step, "output") ?? get(step, "content");
 
   if (target === undefined) return { text: EMPTY_TOOL_RESULT, images: [] };
@@ -381,10 +386,13 @@ const decodeStdBase64 = (value: string): Uint8Array | undefined => {
   }
 };
 
+export interface SignatureBytes {
+  readonly bytes: Uint8Array;
+  readonly type: string;
+}
+
 /** `parseSignatureBytes`: the wire signature bytes and its type tag. */
-export const parseSignatureBytes = (
-  signature: string,
-): { readonly bytes: Uint8Array; readonly type: string } => {
+export const parseSignatureBytes = (signature: string): SignatureBytes => {
   const s = signature.trim();
 
   if (s === "") return { bytes: new Uint8Array(0), type: "" };
@@ -440,17 +448,23 @@ export const parseSignatureBytes = (
 // Supplements from the original (Claude-format) request
 // ---------------------------------------------------------------------------------------------------------------
 
+interface AssistantSignatureMeta {
+  signature: Uint8Array;
+  signatureType: string;
+  thinking: string;
+}
+
 /** `supplementSignaturesFromOriginal`: thinking/signature blocks the translator lost, by assistant order. */
 const supplementSignatures = (original: Json, prompts: DevinPrompt[]): void => {
   const messages = get(original, "messages");
 
   if (!isJsonArray(messages)) return;
-  const assistants: Array<{ signature: Uint8Array; signatureType: string; thinking: string }> = [];
+  const assistants: AssistantSignatureMeta[] = [];
 
   for (const message of messages) {
     if (asString(get(message, "role")).toLowerCase() !== "assistant") continue;
 
-    const meta: { signature: Uint8Array; signatureType: string; thinking: string } = {
+    const meta: AssistantSignatureMeta = {
       signature: new Uint8Array(0),
       signatureType: "",
       thinking: "",
@@ -553,6 +567,7 @@ const supplementImages = (original: Json, prompts: DevinPrompt[]): void => {
         asString(get(message, "tool_call_id")),
         asString(get(message, "id")),
       );
+
       const toolImages: DevinImage[] = [];
       const content = get(message, "content");
 
@@ -676,7 +691,7 @@ export const parseInteractionsPayload = (
     else if (pending.length > 0) index = 0;
 
     if (index < 0) return undefined;
-    const matched = pending[index] as string;
+    const matched = pending[index] ?? "";
     pending.splice(index, 1);
 
     return id !== "" ? id : matched;
@@ -923,12 +938,16 @@ export const normalizeDevinUuid = (value: string): string => {
   return UUID.test(trimmed) ? trimmed : uuidV5Oid(trimmed);
 };
 
+export interface CheckedUserTurns {
+  readonly prompts: DevinPrompt[];
+  readonly error?: ReturnType<UserRun["err"]>;
+}
+
 /** `CheckDevinUserTurns`: refuses user turns that only carried media Devin cannot send; drops emptied prompts. */
-export const checkDevinUserTurns = (
-  prompts: DevinPrompt[],
-): { readonly prompts: DevinPrompt[]; readonly error?: ReturnType<UserRun["err"]> } => {
+export const checkDevinUserTurns = (prompts: DevinPrompt[]): CheckedUserTurns => {
   const hasContent = (prompt: DevinPrompt): boolean =>
     prompt.content.trim() !== "" || prompt.images.length > 0;
+
   const run = new UserRun();
 
   for (const prompt of prompts) {

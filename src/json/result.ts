@@ -63,7 +63,7 @@ export const escapePathKey = (key: string): string => {
   let out = "";
 
   for (const ch of key) {
-    const code = ch.codePointAt(0) as number;
+    const code = ch.codePointAt(0) ?? 0;
 
     const safe =
       (code >= 97 && code <= 122) || // a-z

@@ -18,6 +18,7 @@
  *  - Snapshots must be treated as read-only; secrets in `attributes`/`metadata` must never be logged.
  */
 import { Context, type Effect } from "effect";
+import type { JsonObject } from "../json/index.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts";
 import type { LcpPrepared } from "../session-routing/canonical.ts";
@@ -44,7 +45,7 @@ export interface CredentialSnapshot {
    */
   readonly attributes: Readonly<Record<string, string>>;
   /** Provider metadata (OAuth tokens, account ids, `disable_cooling`, `request_retry`, ...). */
-  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly metadata: JsonObject;
 }
 
 /** Session identity extracted by the handler (see `handlers/session.ts`). */

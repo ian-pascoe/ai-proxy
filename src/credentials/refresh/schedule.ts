@@ -7,7 +7,7 @@
  * Pure functions of (now, credential, state): the DO alarm takes the minimum of `nextRefreshCheckAt` over all
  * credentials, which replaces the Go min-heap.
  */
-import type { JsonObject } from "../../json/index.ts";
+import type { Json, JsonObject } from "../../json/index.ts";
 import { accessTokenOf, expirationFromMetadata, parseJwtExp, parseTimeValue } from "../expiry.ts";
 import type { CredentialState } from "../model.ts";
 import { hasUnauthorizedFailure } from "../selection/availability.ts";
@@ -17,22 +17,22 @@ const MINUTE = 60_000;
 const HOUR = 3_600_000;
 
 /** Provider refresh leads. Providers absent here (devin, meta, kimi.com, vertex, ...) are never auto-refreshed. */
-const REFRESH_LEADS_MS: Readonly<Record<string, number>> = {
-  codex: 24 * HOUR,
-  claude: 4 * HOUR,
-  antigravity: 30 * MINUTE,
-  xai: 5 * MINUTE,
-  kimi: 5 * MINUTE,
-  "kimi-ai": 5 * MINUTE,
-  "kimi.ai": 5 * MINUTE,
-};
+const REFRESH_LEADS_MS = new Map<string, number>([
+  ["codex", 24 * HOUR],
+  ["claude", 4 * HOUR],
+  ["antigravity", 30 * MINUTE],
+  ["xai", 5 * MINUTE],
+  ["kimi", 5 * MINUTE],
+  ["kimi-ai", 5 * MINUTE],
+  ["kimi.ai", 5 * MINUTE],
+]);
 
 /** Request-time guard of the Antigravity executor (`antigravityRequestTokenSafetyWindow`). */
 export const ANTIGRAVITY_REQUEST_SAFETY_MS = 5 * MINUTE;
 
 /** `ProviderRefreshLead`: keyed by the auth `type` (not the executor key: `kimi.com` has no lead). */
 export const refreshLeadMs = (provider: string): number | undefined =>
-  REFRESH_LEADS_MS[provider.trim().toLowerCase()];
+  REFRESH_LEADS_MS.get(provider.trim().toLowerCase());
 
 export interface RefreshSubject {
   readonly provider: string;
@@ -87,7 +87,14 @@ const INTERVAL_KEYS = [
   "refreshInterval",
 ] as const;
 
-const intervalMs = (raw: unknown): number => {
+const INTERVAL_UNIT_MS = new Map<string, number>([
+  ["ms", 1],
+  ["s", 1000],
+  ["m", MINUTE],
+  ["h", HOUR],
+]);
+
+const intervalMs = (raw: Json | undefined): number => {
   if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw * 1000 : 0;
 
   if (typeof raw !== "string") return 0;
@@ -103,9 +110,7 @@ const intervalMs = (raw: unknown): number => {
 
   for (const part of text.matchAll(pattern)) {
     matched += part[0].length;
-    total +=
-      Number(part[1]) *
-      ({ ms: 1, s: 1000, m: MINUTE, h: HOUR }[part[2] as "ms" | "s" | "m" | "h"] ?? 0);
+    total += Number(part[1]) * (INTERVAL_UNIT_MS.get(part[2] ?? "") ?? 0);
   }
 
   return matched === text.length ? total : 0;

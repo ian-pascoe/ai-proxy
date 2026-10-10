@@ -19,7 +19,15 @@ import {
   type HttpClientResponse,
 } from "effect/http";
 import { applyPayloadRules } from "../../config/payload/index.ts";
-import { asInt, del, get, type Json, set, tryParseJson } from "../../json/index.ts";
+import {
+  asInt,
+  del,
+  get,
+  type Json,
+  type JsonObject,
+  set,
+  tryParseJson,
+} from "../../json/index.ts";
 import { splitLines } from "../../http/sse.ts";
 import { builtinTranslators } from "../../translator/builtin.ts";
 import { Formats } from "../../translator/formats.ts";
@@ -170,6 +178,7 @@ export const convertToImagenRequest = (payload: Json): Json | undefined => {
     if (Array.isArray(messages)) {
       for (const message of messages) {
         const content = get(message, "content");
+
         const text =
           typeof content === "string"
             ? content
@@ -192,8 +201,8 @@ export const convertToImagenRequest = (payload: Json): Json | undefined => {
   }
 
   if (prompt === "") return undefined;
-  const instance: Record<string, Json> = { prompt };
-  const parameters: Record<string, Json> = { sampleCount: 1 };
+  const instance: JsonObject = { prompt };
+  const parameters: JsonObject = { sampleCount: 1 };
   const aspectRatio = get(payload, "aspectRatio");
 
   if (aspectRatio !== undefined)
@@ -276,11 +285,8 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     return response;
   });
 
-  const headersFor = (
-    attempt: Attempt,
-    extra: Record<string, string> = {},
-  ): Record<string, string> => {
-    const headers: Record<string, string> = {
+  const headersFor = (attempt: Attempt, extra: Record<string, string> = {}) => {
+    const headers = {
       "content-type": "application/json",
       ...attempt.target.authHeaders,
       ...extra,
@@ -304,6 +310,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     body: Json,
   ): Json => {
     const { options, request, context } = attempt;
+
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 
@@ -475,6 +482,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const working = translate(request.payload);
 
     if (working.error !== undefined) return yield* requestError(working);
+
     const original =
       options.originalRequest === undefined ? working : translate(options.originalRequest);
 
@@ -625,6 +633,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
 
     const translated = (payload: string) =>
       Stream.unwrap(translate(payload).pipe(Effect.map(check)));
+
     const lines = splitLines(response.stream).pipe(Stream.mapError(transportError));
 
     return Stream.concat(
@@ -782,6 +791,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     const response = yield* send(context, prepared);
     const text = yield* response.text.pipe(Effect.mapError(transportError));
     const count = asInt(get(tryParseJson(text), "totalTokens"));
+
     const payload = registry.translateTokenCount(
       responseFormatOf(options),
       prepared.providerFormat,

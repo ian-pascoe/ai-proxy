@@ -133,6 +133,7 @@ describe("assembleCredentialModels: catalog providers", () => {
       source("k", "kimi.com", { executor: "kimi" }),
       options(),
     );
+
     expect(assembled?.provider).toBe("kimi");
     expect(ids(assembled?.models)).toEqual(ids(sectionModels(catalogs, "kimi")));
   });

@@ -1,6 +1,6 @@
 // Go source: internal/misc/mime-type.go (MimeTypes: file extension -> MIME type).
 // Keys are lower-case extensions without the dot.
-export const MIME_TYPES: Readonly<Record<string, string>> = {
+export const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   ez: "application/andrew-inset",
   aw: "application/applixware",
   atom: "application/atom+xml",
@@ -733,4 +733,8 @@ export const MIME_TYPES: Readonly<Record<string, string>> = {
   movie: "video/x-sgi-movie",
   smv: "video/x-smv",
   ice: "x-conference/x-cooltalk",
-};
+});
+
+/** Looks up a lower-case extension (no dot); `""` when unknown. */
+export const mimeTypeForExtension = (ext: string): string =>
+  Object.hasOwn(MIME_TYPES, ext) ? (MIME_TYPES[ext] ?? "") : "";

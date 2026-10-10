@@ -9,6 +9,7 @@ import {
   resetControlPlane,
   token,
 } from "./support/management.ts";
+import type { Json } from "../src/json/index.ts";
 
 // The ControlPlane talks to providers through Effect's FetchHttpClient, which resolves `globalThis.fetch` once:
 // install one stable fetch that delegates to the current test's upstream table.
@@ -23,7 +24,7 @@ const upstreamCalls: string[] = [];
 const harness = makeHarness();
 
 beforeAll(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const body = new TextDecoder().decode(await request.arrayBuffer());
     upstreamCalls.push(`${request.method} ${request.url}`);
@@ -32,7 +33,7 @@ beforeAll(() => {
       upstream({ method: request.method, url: request.url, body }) ??
       new Response("no upstream route", { status: 599 })
     );
-  }) as typeof fetch;
+  };
 });
 
 afterAll(async () => {
@@ -132,12 +133,15 @@ describe("management oauth routes", () => {
     const entries = (await json("/v8/management/credentials")).body as {
       files: Array<{ name: string }>;
     };
+
     expect(entries.files.map((file) => file.name)).toHaveLength(1);
     const stored = entries.files[0]?.name ?? "";
     expect(stored).toMatch(/^claude-[0-9a-f]{8}-me@x\.com\.json$/);
+
     const download = await json(
       `/v8/management/credentials/download?name=${encodeURIComponent(stored)}`,
     );
+
     expect(download.body).toMatchObject({
       type: "claude",
       email: "me@x.com",
@@ -186,7 +190,7 @@ describe("management oauth routes", () => {
       status: 400,
       body: { status: "error", error: "missing state" },
     });
-    const post = (body: unknown) => json("/v8/management/oauth/callback", jsonInit("POST", body));
+    const post = (body: Json) => json("/v8/management/oauth/callback", jsonInit("POST", body));
     expect(
       await json("/v8/management/oauth/callback", {
         method: "POST",
@@ -215,9 +219,11 @@ describe("management oauth routes", () => {
 
   it("cancels a pending login and rejects its callback", async () => {
     const started = await start("provider=codex");
+
     const cancelled = await json(`/v8/management/oauth/session?state=${started.state}`, {
       method: "DELETE",
     });
+
     expect(cancelled.body).toEqual({ status: "ok", cancelled: true });
     expect(
       (await json(`/v8/management/oauth/session?state=${started.state}`, { method: "DELETE" }))
@@ -328,9 +334,11 @@ describe("management oauth routes", () => {
     });
     expect(await status(started.state)).toEqual({ status: "ok" });
     expect(tokenCalls).toBe(2);
+
     const files = (await json("/v8/management/credentials")).body as {
       files: Array<{ name: string; type?: string }>;
     };
+
     expect(files.files.map((file) => file.name)).toEqual([
       expect.stringMatching(/^xai-\d+\.json$/),
     ]);

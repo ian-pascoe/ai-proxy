@@ -268,6 +268,7 @@ export const signServiceAccountJwt = async (
   };
 
   const signingInput = `${jsonSegment(header)}.${jsonSegment(claims)}`;
+
   const signature = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
     key,

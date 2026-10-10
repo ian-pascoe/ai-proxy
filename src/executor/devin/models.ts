@@ -6,6 +6,7 @@
  * `Thinking.Levels`) is reached through a lookup so the executor can use the live registry snapshot with the embedded
  * catalog as fallback.
  */
+import { Match } from "effect";
 import { parseSuffix } from "../suffix.ts";
 
 /** Exact model UID suffixes that mean "already resolved". */
@@ -44,10 +45,18 @@ const KNOWN_SUFFIXES = [
   "_thinking",
 ];
 
-const SPECIAL_ALIASES: Readonly<Record<string, string>> = {
-  "claude-haiku-4-5": "MODEL_PRIVATE_11",
-  "gpt-4-1": "MODEL_CHAT_GPT_4_1_2025_04_14",
-};
+const SPECIAL_ALIASES = new Map([
+  ["claude-haiku-4-5", "MODEL_PRIVATE_11"],
+  ["gpt-4-1", "MODEL_CHAT_GPT_4_1_2025_04_14"],
+]);
+
+/** The GLM 5.2 variants: `none` and `max` efforts have their own models, everything else is the base one. */
+const glmEffortModel = (effort: string, base: string, tail = ""): string =>
+  Match.value(effort).pipe(
+    Match.when("none", () => `${base}-none${tail}`),
+    Match.when("max", () => `${base}-max${tail}`),
+    Match.orElse(() => `${base}${tail}`),
+  );
 
 export const hasDevinEffortSuffix = (model: string): boolean => {
   const lower = model.trim().toLowerCase();
@@ -195,7 +204,7 @@ export const resolveDevinChatModelUid = (
   const lowerBase = baseModel.toLowerCase();
   let canonicalBase = lowerBase.replaceAll(".", "-");
 
-  const alias = SPECIAL_ALIASES[canonicalBase];
+  const alias = SPECIAL_ALIASES.get(canonicalBase);
 
   if (alias !== undefined) return alias;
 
@@ -223,13 +232,9 @@ export const resolveDevinChatModelUid = (
     case "swe-1-6":
       return effort === "fast" ? "swe-1-6-fast" : "swe-1-6";
     case "glm-5-2":
-      return effort === "none" ? "glm-5-2-none" : effort === "max" ? "glm-5-2-max" : "glm-5-2";
+      return glmEffortModel(effort, "glm-5-2");
     case "glm-5-2-1m":
-      return effort === "none"
-        ? "glm-5-2-none-1m"
-        : effort === "max"
-          ? "glm-5-2-max-1m"
-          : "glm-5-2-1m";
+      return glmEffortModel(effort, "glm-5-2", "-1m");
     case "claude-opus-4-6":
     case "claude-sonnet-4-6":
       return thinks ? `${canonicalBase}-thinking` : canonicalBase;

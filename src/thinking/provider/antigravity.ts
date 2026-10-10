@@ -17,11 +17,21 @@ const MAX_OUTPUT_PATH = "request.generationConfig.maxOutputTokens";
 const isClaudeModel = (modelInfo: ThinkingModelInfo | undefined): boolean =>
   modelInfo !== undefined && modelInfo.id.toLowerCase().includes("claude");
 
+interface EffectiveMaxTokens {
+  readonly max: number;
+  readonly fromModel: boolean;
+}
+
+interface NormalizedBudget {
+  readonly budget: number | "removed";
+  readonly body: Json | undefined;
+}
+
 /** Request maxOutputTokens, else the model default (`fromModel` = it must be written back). */
 const effectiveMaxTokens = (
   payload: Json | undefined,
   modelInfo: ThinkingModelInfo,
-): { readonly max: number; readonly fromModel: boolean } => {
+): EffectiveMaxTokens => {
   const requested = get(payload, MAX_OUTPUT_PATH);
 
   if (requested !== undefined && asInt(requested) > 0)
@@ -36,7 +46,7 @@ const normalizeClaudeBudget = (
   budgetIn: number,
   payloadIn: Json | undefined,
   modelInfo: ThinkingModelInfo,
-): { readonly budget: number | "removed"; readonly body: Json | undefined } => {
+): NormalizedBudget => {
   let budget = budgetIn;
   let payload = payloadIn;
   const { max, fromModel } = effectiveMaxTokens(payload, modelInfo);

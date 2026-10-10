@@ -100,9 +100,11 @@ describe("GET /records and /summary", () => {
     const page = await json(`${BASE}/records?limit=2`);
     const body = page.body as { records: Array<{ request_id: string }>; next_before: string };
     expect(body.records.map((item) => item.request_id)).toEqual(["r3", "r2"]);
+
     const next = await json(
       `${BASE}/records?limit=2&before=${encodeURIComponent(body.next_before)}`,
     );
+
     expect(
       (next.body as { records: Array<{ request_id: string }> }).records.map(
         (item) => item.request_id,
@@ -113,9 +115,11 @@ describe("GET /records and /summary", () => {
     expect((failed.body as { records: Array<{ fail: unknown }> }).records).toMatchObject([
       { fail: { status_code: 502, body: "bad gateway" } },
     ]);
+
     const since = await json(
       `${BASE}/records?since=${new Date(1_700_000_001_000).toISOString()}&model=gpt-5`,
     );
+
     expect(
       (since.body as { records: Array<{ request_id: string }> }).records.map(
         (item) => item.request_id,

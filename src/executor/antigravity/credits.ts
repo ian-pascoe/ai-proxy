@@ -17,7 +17,7 @@ import { type AntigravityState, type CreditsRecord } from "./state.ts";
 
 /** `antigravityCreditsRetryEnabled`. */
 export const creditsEnabled = (config: Config): boolean =>
-  config.oauth.providers.antigravity["antigravity-credits"] === true;
+  config.oauth.providers.antigravity["antigravity-credits"];
 
 /** Credits only apply to Claude models (`route model contains claude`). */
 export const creditsModel = (model: string): boolean => model.toLowerCase().includes("claude");
@@ -34,11 +34,14 @@ export const shouldAttemptCreditsFallback = (error: ExecutionError): boolean =>
   error.code === "auth_unavailable" ||
   error.code === "model_cooldown";
 
+/** Outcome of {@link parseCreditsReply}: `known` is false when the reply carries no GOOGLE_ONE_AI entry. */
+export interface CreditsReply {
+  readonly record: CreditsRecord | undefined;
+  readonly known: boolean;
+}
+
 /** Parses a `loadCodeAssist` reply into a credits record (`undefined` = no GOOGLE_ONE_AI entry). */
-export const parseCreditsReply = (
-  body: Json | undefined,
-  now: number,
-): { readonly record: CreditsRecord | undefined; readonly known: boolean } => {
+export const parseCreditsReply = (body: Json | undefined, now: number): CreditsReply => {
   const paidTierId = asString(get(body, "paidTier.id")).trim();
   const credits = get(body, "paidTier.availableCredits");
 
@@ -52,6 +55,7 @@ export const parseCreditsReply = (
   for (const credit of credits) {
     if (asString(get(credit, "creditType")).toUpperCase() !== "GOOGLE_ONE_AI") continue;
     const creditAmount = Number.parseFloat(asString(get(credit, "creditAmount")).trim());
+
     const minCreditAmount = Number.parseFloat(
       asString(get(credit, "minimumCreditAmountForUsage")).trim(),
     );
@@ -95,6 +99,7 @@ export const probeCredits = (
     if (response.status < 200 || response.status >= 300) return;
     const parsed = parseCreditsReply(tryParseJson(yield* response.text), now);
 
-    if (parsed.record !== undefined)
-      yield* Effect.promise(() => state.setCredits(credential.id, parsed.record as CreditsRecord));
+    const { record } = parsed;
+
+    if (record !== undefined) yield* Effect.promise(() => state.setCredits(credential.id, record));
   }).pipe(Effect.catchCause(() => Effect.void));

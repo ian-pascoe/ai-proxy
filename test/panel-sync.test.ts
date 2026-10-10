@@ -8,6 +8,7 @@ import {
   selectPanelAsset,
   sha256Hex,
 } from "../tools/panel-sync/release.ts";
+import type { Json } from "../src/json/index.ts";
 
 const html = new TextEncoder().encode("<!doctype html><title>panel</title>");
 
@@ -31,11 +32,17 @@ interface Call {
   readonly headers: Record<string, string>;
 }
 
-const fakeFetch = (release: unknown, download: () => Response = () => new Response(html)) => {
+const fakeFetch = (release: Json, download: () => Response = () => new Response(html)) => {
   const calls: Call[] = [];
 
+  const requestUrl = (input: RequestInfo | URL): string => {
+    if (typeof input === "string") return input;
+
+    return input instanceof URL ? input.href : input.url;
+  };
+
   const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
+    const url = requestUrl(input);
     calls.push({ url, headers: Object.fromEntries(new Headers(init?.headers)) });
 
     return url.startsWith("https://api.github.com/") ? Response.json(release) : download();

@@ -18,6 +18,7 @@ import {
   commitPrewarm,
   commitTurn,
   newSocketState,
+  Plan,
   planTurn,
 } from "../src/handlers/responses/websocket/plan.ts";
 import { ExecutionError } from "../src/executor/errors.ts";
@@ -70,6 +71,7 @@ describe("normalizeRequest (HTTP mode transcript)", () => {
       false,
       false,
     );
+
     expect(result).toMatchObject({
       ok: true,
       request: {
@@ -107,6 +109,7 @@ describe("normalizeRequest (HTTP mode transcript)", () => {
       true,
       false,
     );
+
     expect(result).toMatchObject({
       ok: true,
       request: { previous_response_id: "resp_1", model: "m", instructions: "sys" },
@@ -230,19 +233,21 @@ describe("normalizePassthroughRequest", () => {
 describe("planTurn / commitTurn", () => {
   it("plans a first create, then passes continuations through while the pinned credential owns the socket", () => {
     const socket = newSocketState();
+
     const first = planTurn(socket, {
       type: "response.create",
       model: "gpt-5.4",
       input: [user("one")],
     });
+
+    expect(first._tag).toBe("execute");
     expect(first).toMatchObject({
-      _tag: "execute",
       nativePassthrough: false,
       pinnedId: "",
       modelName: "gpt-5.4",
     });
 
-    if (first._tag !== "execute") throw new Error("unreachable");
+    if (!Plan.$is("execute")(first)) throw new Error("unreachable");
     commitTurn(socket, {
       modelName: "gpt-5.4",
       executedRequest: first.request,
@@ -259,8 +264,9 @@ describe("planTurn / commitTurn", () => {
       previous_response_id: "resp_1",
       input: [user("two")],
     });
+
+    expect(next._tag).toBe("execute");
     expect(next).toMatchObject({
-      _tag: "execute",
       nativePassthrough: true,
       requiresCurrentUpstream: true,
       pinnedId: "a1",
@@ -272,7 +278,7 @@ describe("planTurn / commitTurn", () => {
     const socket = newSocketState();
     const first = planTurn(socket, { type: "response.create", model: "gpt-5.4", input: [] });
 
-    if (first._tag !== "execute") throw new Error("unreachable");
+    if (!Plan.$is("execute")(first)) throw new Error("unreachable");
     commitTurn(socket, {
       modelName: "gpt-5.4",
       executedRequest: first.request,
@@ -288,37 +294,38 @@ describe("planTurn / commitTurn", () => {
         model: "other",
         input: [],
       }),
-    ).toEqual({
-      _tag: "replay",
-    });
+    ).toEqual(Plan.replay());
     // A full create is a self-contained reset and may use a new route.
-    expect(
-      planTurn(socket, { type: "response.create", model: "other", input: [user("x")] }),
-    ).toMatchObject({
-      _tag: "execute",
-      nativePassthrough: false,
-    });
+    const reset = planTurn(socket, { type: "response.create", model: "other", input: [user("x")] });
+    expect(reset._tag).toBe("execute");
+    expect(reset).toMatchObject({ nativePassthrough: false });
   });
 
   it("answers generate:false locally and merges the follow-up that references the warm-up id", () => {
     const socket = newSocketState();
+
     const warm = planTurn(socket, {
       type: "response.create",
       model: "m",
       generate: false,
       input: [user("w")],
     });
-    expect(warm).toMatchObject({ _tag: "prewarm", request: { model: "m", input: [user("w")] } });
 
-    if (warm._tag !== "prewarm") throw new Error("unreachable");
+    expect(warm._tag).toBe("prewarm");
+    expect(warm).toMatchObject({ request: { model: "m", input: [user("w")] } });
+
+    if (!Plan.$is("prewarm")(warm)) throw new Error("unreachable");
     expect("generate" in warm.request).toBe(false);
     commitPrewarm(socket, warm, "resp_prewarm_1");
+
     const mismatch = planTurn(socket, {
       type: "response.create",
       previous_response_id: "other",
       input: [],
     });
-    expect(mismatch).toMatchObject({ _tag: "error", error: { status: 409 } });
+
+    expect(mismatch._tag).toBe("error");
+    expect(mismatch).toMatchObject({ error: { status: 409 } });
 
     const follow = planTurn(socket, {
       type: "response.create",
@@ -326,11 +333,13 @@ describe("planTurn / commitTurn", () => {
       input: [user("go")],
     });
 
-    expect(follow).toMatchObject({ _tag: "execute", request: { input: [user("w"), user("go")] } });
+    expect(follow._tag).toBe("execute");
+    expect(follow).toMatchObject({ request: { input: [user("w"), user("go")] } });
   });
 
   it("keeps a transcript for HTTP-mode credentials and merges the next append", () => {
     const socket = newSocketState();
+
     const first = planTurn(socket, {
       type: "response.create",
       model: "m",
@@ -338,7 +347,7 @@ describe("planTurn / commitTurn", () => {
       input: [user("one")],
     });
 
-    if (first._tag !== "execute") throw new Error("unreachable");
+    if (!Plan.$is("execute")(first)) throw new Error("unreachable");
     commitTurn(socket, {
       modelName: "m",
       executedRequest: first.request,
@@ -350,8 +359,8 @@ describe("planTurn / commitTurn", () => {
     expect(socket.upstreamMode).toBe("http");
     expect(socket.pinned).toBeUndefined();
     const next = planTurn(socket, { type: "response.append", input: [user("two")] });
+    expect(next._tag).toBe("execute");
     expect(next).toMatchObject({
-      _tag: "execute",
       request: { input: [user("one"), assistant("hi"), user("two")], instructions: "sys" },
     });
   });
@@ -363,6 +372,7 @@ describe("synthetic warm-up", () => {
       { model: "m" },
       { id: "u", createdAt: 5 },
     );
+
     expect(created).toMatchObject({
       type: "response.created",
       sequence_number: 0,
@@ -398,10 +408,12 @@ describe("tool-call repair", () => {
 
   it("keeps orphans when the request continues a response and is inert without a session key", () => {
     const caches = new ToolCaches();
+
     const continued = prepareFallbackTurn(caches, key, {
       previous_response_id: "r",
       input: [output("c1")],
     });
+
     expect(continued.request["input"]).toEqual([output("c1")]);
     const keyless = prepareFallbackTurn(caches, "", { input: [output("c1")] });
     expect(keyless.request["input"]).toEqual([output("c1")]);

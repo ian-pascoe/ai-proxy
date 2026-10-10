@@ -4,14 +4,14 @@
  * Go source: internal/translator/common/claude_native_response.go. Go marshals the events through `map[string]any`,
  * so event keys are sorted; the literals below keep that order.
  */
-import { cloneJson, get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
+import { cloneJson, get, isJsonObject, type JsonObject, tryParseJson } from "../../json/index.ts";
 import { isArr, isObj, str, toArray } from "./gjson.ts";
 
 /** `ClaudeMessagesJSONToSSE`: returns the input unchanged (empty model) when it is not a Messages body. */
 export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] => {
   const root = tryParseJson(raw);
 
-  if (root === undefined || str(get(root, "type")) !== "message" || !isArr(get(root, "content")))
+  if (!isJsonObject(root) || str(get(root, "type")) !== "message" || !isArr(get(root, "content")))
     return [raw, ""];
   let out = "";
 
@@ -19,13 +19,14 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
     out += `data: ${JSON.stringify(event)}\n\n`;
   };
 
-  const message = cloneJson(root as JsonObject);
+  const message = cloneJson(root);
   message.content = [];
   message.stop_reason = null;
   message.stop_sequence = null;
   emit({ message, type: "message_start" });
 
   toArray(get(root, "content")).forEach((block, index) => {
+    // SAFETY: the content blocks of a Messages body are objects, as in the Go struct decoding this ports.
     const start = cloneJson(block) as JsonObject;
     let delta: JsonObject | undefined;
     const blockType = str(get(block, "type"));
@@ -77,8 +78,8 @@ export const claudeMessagesJSONToSSE = (raw: string): readonly [string, string] 
   const stopSequence = get(root, "stop_sequence");
   emit({
     delta: {
-      stop_reason: (stopReason ?? null) as Json,
-      stop_sequence: (stopSequence ?? null) as Json,
+      stop_reason: stopReason ?? null,
+      stop_sequence: stopSequence ?? null,
     },
     type: "message_delta",
     usage: isObj(usage) || isArr(usage) ? usage : {},

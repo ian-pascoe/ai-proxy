@@ -8,7 +8,7 @@
  *
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
-import { Effect, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 import type { JsonObject } from "../json/index.ts";
 import type { StoredCredential } from "./derive.ts";
 import { credentialsChanged, mergeExistingMetadata } from "./merge.ts";
@@ -45,10 +45,17 @@ export interface UpsertOutcome {
 
 const decodeState = Schema.decodeUnknownEffect(CredentialState);
 
+// The metadata column is serialised from a JsonObject on write, so it always parses back to one.
+const parseMetadata = (text: string): JsonObject => {
+  const parsed: JsonObject = JSON.parse(text);
+
+  return parsed;
+};
+
 const toRecord = (row: CredentialRow): StoredCredential => ({
   id: row.id,
   provider: row.provider,
-  metadata: JSON.parse(row.metadata) as JsonObject,
+  metadata: parseMetadata(row.metadata),
   credentialVersion: row.credential_version,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -188,7 +195,7 @@ export class CredentialStore {
       try {
         const decoded = Effect.runSync(Effect.result(decodeState(JSON.parse(row.state))));
 
-        if (decoded._tag === "Success") states.set(row.id, decoded.success);
+        if (Result.isSuccess(decoded)) states.set(row.id, decoded.success);
         else this.deleteState(row.id);
       } catch {
         this.deleteState(row.id);

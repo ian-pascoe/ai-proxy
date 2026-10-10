@@ -175,6 +175,7 @@ export const splitGeminiFunctionResponseTurns = (contents: Json[]): Json[] => {
     const current = split[i];
 
     if (asString(get(current, "role")) !== "user") {
+      // SAFETY: i < n, so split[i] exists.
       out.push(current as Json);
       i++;
       continue;
@@ -195,7 +196,7 @@ export const splitGeminiFunctionResponseTurns = (contents: Json[]): Json[] => {
       j++;
     }
 
-    const run = split.slice(i, j) as Json[];
+    const run = split.slice(i, j);
 
     if (precedingModelHasFC && hasFR && run.length > 1) {
       const combined: Json[] = [];
@@ -258,6 +259,7 @@ export const setGeminiFunctionResponseRaw = (part: Json, path: string, raw: stri
   let parsed: Json | undefined;
 
   try {
+    // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
     parsed = JSON.parse(trimmed) as Json;
   } catch {
     parsed = undefined;

@@ -20,6 +20,7 @@ import { rewriteResponseModel, rewriteStreamChunk } from "../src/handlers/model-
 import { extractSessionInfo, normalizeExplicitId } from "../src/handlers/session.ts";
 import { builtinTranslators } from "../src/translator/builtin.ts";
 import { Formats } from "../src/translator/formats.ts";
+import type { JsonObject } from "../src/json/index.ts";
 import { loadConfig } from "./support/pool.ts";
 
 const headers = (init: Record<string, string>) => new Headers(init);
@@ -67,9 +68,11 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
 
     assert.strictEqual(json?.sessionId, "claude:sess:agent:ag");
     assert.strictEqual(json?.parentSessionId, "claude:sess");
+
     const legacy = extractSessionInfo(headers({}), {
       metadata: { user_id: `user_abc_account__session_${uuid}` },
     });
+
     assert.strictEqual(legacy?.sessionId, `claude:${uuid}`);
   });
 
@@ -78,18 +81,22 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
       extractSessionInfo(headers({ "session-id": "c1" }), undefined)?.sessionId,
       "codex:c1",
     );
+
     const thread = extractSessionInfo(
       headers({ "session-id": "c1", "thread-id": "t2" }),
       undefined,
     );
+
     assert.deepInclude(thread, {
       sessionId: "codex:t2",
       parentSessionId: "codex:c1",
       isSubagent: true,
     });
+
     const fork = extractSessionInfo(headers({ "session-id": "c1" }), {
       forked_from_thread_id: "c0",
     });
+
     assert.deepInclude(fork, { sessionId: "codex:c1", parentSessionId: "codex:c0", isFork: true });
 
     const meta = extractSessionInfo(
@@ -188,11 +195,13 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
       isSubagent: true,
       agentName: "subagent",
     });
+
     const fork = extractSessionInfo(headers({}), {
       session_id: "s",
       parent_session_id: "p",
       forked_from_id: "p",
     });
+
     assert.deepInclude(fork, { isFork: true, isSubagent: false });
     // A self-referential parent is dropped.
     assert.isUndefined(
@@ -223,8 +232,10 @@ describe("force-mapping rewrite (response_model_rewriter.go)", () => {
 
   it("rewrites bare JSON chunks and SSE data lines, keeping event framing", () => {
     assert.strictEqual(rewriteStreamChunk('{"model":"u"}', "a"), '{"model":"a"}');
+
     const framed =
       'event: message_start\ndata: {"type":"message_start","message":{"model":"u"}}\n\n';
+
     assert.strictEqual(
       rewriteStreamChunk(framed, "a"),
       'event: message_start\ndata: {"type":"message_start","message":{"model":"a"}}\n\n',
@@ -297,6 +308,7 @@ oauth:
         const own = snapshot({
           metadata: { request_scoped_errors: [{ status: 429, match: ["x"], action: "continue" }] },
         });
+
         assert.deepStrictEqual(requestScopedRules(config, own), [
           { status: 429, match: ["x"], action: "continue" },
         ]);
@@ -344,9 +356,11 @@ oauth:
       ).error,
       { code: "transient_transport" },
     );
+
     const transport = report(
       new ExecutionError({ status: 500, code: "transient_transport", message: "x" }),
     );
+
     assert.isUndefined(transport.httpStatus);
     assert.deepInclude(
       report(new ExecutionError({ status: 400, message: "bad" }), { action: "stop-and-cooldown" })
@@ -440,6 +454,7 @@ oauth:
 
 describe("live thinking layer", () => {
   const thinking = makeLiveThinking(builtinTranslators);
+
   const levels = {
     id: "m",
     type: "openai-compatibility",
@@ -554,7 +569,7 @@ describe("live thinking layer", () => {
 describe("credential preparation rules (needsPreparation)", () => {
   const NOW = 1_800_000_000_000;
 
-  const oauth = (provider: string, metadata: Record<string, unknown>): CredentialSnapshot =>
+  const oauth = (provider: string, metadata: JsonObject): CredentialSnapshot =>
     snapshot({ provider, kind: "oauth", metadata });
 
   const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();

@@ -55,6 +55,7 @@ const rfc = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z")
 describe("claude", () => {
   const TOKEN = "POST https://platform.claude.com/v1/oauth/token";
   const PROFILE = "GET https://api.anthropic.com/api/oauth/profile";
+
   const metadata = {
     type: "claude",
     access_token: "old",
@@ -145,6 +146,7 @@ describe("claude", () => {
       metadata,
       routes({ [TOKEN]: { status: 503, body: "busy" } }),
     );
+
     expect(server.requests).toHaveLength(3);
     expect(failure(server.outcome)).toMatchObject({ status: 503 });
 
@@ -163,6 +165,7 @@ describe("claude", () => {
     const { outcome, requests } = await run(refreshClaude, metadata, () => ({
       transportError: true,
     }));
+
     expect(requests).toHaveLength(1);
     expect(failure(outcome).status).toBeUndefined();
   });
@@ -184,11 +187,13 @@ describe("claude", () => {
     expect((await block({ "retry-after": "99999" })).blockMs).toBe(300_000);
     expect((await block({ "retry-after-ms": "12000" })).blockMs).toBe(12_000);
     expect((await block({})).blockMs).toBe(5_000);
+
     const retried = await run(
       refreshClaude,
       metadata,
       routes({ [TOKEN]: { status: 429, body: "slow" } }),
     );
+
     expect(retried.requests).toHaveLength(1);
   });
 });
@@ -269,6 +274,7 @@ describe("codex", () => {
       metadata,
       routes({ [TOKEN]: { status: 400, body: "nope" } }),
     );
+
     expect(flaky.requests).toHaveLength(3);
 
     const reused = await run(
@@ -284,6 +290,7 @@ describe("codex", () => {
 
 describe("antigravity", () => {
   const TOKEN = "POST https://oauth2.googleapis.com/token";
+
   const metadata = {
     type: "antigravity",
     refresh_token: "rt-1",
@@ -505,15 +512,18 @@ describe("kimi", () => {
       metadata,
       routes({ [COM]: { status: 403, body: "x" } }),
     );
+
     expect(failure(rejected.outcome)).toMatchObject({
       status: 403,
       message: "kimi: refresh token rejected (status 403)",
     });
+
     const empty = await run(
       refreshKimi,
       metadata,
       routes({ [COM]: { body: { access_token: "" } } }),
     );
+
     expect(failure(empty.outcome).message).toContain("empty access token");
   });
 });
@@ -538,9 +548,11 @@ describe("meta", () => {
     expect(overridden.requests.map((request) => request.url)).toEqual([
       "https://mint.example.test/key",
     ]);
+
     const blank = await run(refreshMeta, metadata, routes({ [MINT]: minted }), {
       metaMintUrl: "  ",
     });
+
     expect(success(blank.outcome)).toMatchObject({ api_key: "meta-key" });
     expect(blank.requests.map((request) => request.url)).toEqual([
       "https://api.meta.ai/muse-code/key",
@@ -601,6 +613,7 @@ describe("meta", () => {
       { dca_token: "dca:abc" },
       routes({ [MINT]: { body: { api_key: "" } } }),
     );
+
     expect(failure(empty.outcome).message).toContain("empty key");
 
     const denied = await run(

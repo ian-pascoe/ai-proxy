@@ -8,15 +8,14 @@
  */
 import { asString, get, type Json, type JsonObject } from "../../../../json/index.ts";
 import { normalizeOpenAIFileData } from "../../../common/file-data.ts";
-import { MIME_TYPES } from "../../../common/mime-types.ts";
+import { mimeTypeForExtension } from "../../../common/mime-types.ts";
 
 export interface MediaBlock {
   readonly mimeType: string;
   readonly data: string;
 }
 
-const mimeFor = (key: string): string =>
-  Object.hasOwn(MIME_TYPES, key) ? (MIME_TYPES[key] as string) : "";
+const mimeFor = mimeTypeForExtension;
 
 /** `firstNonEmpty`: the first value that is not blank, trimmed. */
 export const firstNonEmpty = (...values: string[]): string => {
@@ -398,6 +397,7 @@ export const imageFromBlock = (block: Json): MediaBlock | undefined => {
   );
 
   const filename = firstNonEmpty(str(block, "filename"), str(block, "file.filename"));
+
   const imageUrl = firstNonEmpty(
     str(block, "image_url.url"),
     str(block, "image_url"),
@@ -444,6 +444,7 @@ export const fileFromBlock = (block: Json): MediaBlock | undefined => {
 
   if (bType !== "input_file" && bType !== "file") return undefined;
   const filename = firstNonEmpty(str(block, "filename"), str(block, "file.filename"));
+
   let fileData = firstNonEmpty(
     str(block, "file_data"),
     str(block, "file.file_data"),

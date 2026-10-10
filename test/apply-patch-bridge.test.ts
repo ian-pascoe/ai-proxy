@@ -10,7 +10,7 @@ const PATCH_TOOL = {
   format: { type: "grammar", syntax: "lark", definition: "x" },
 };
 
-const line = (event: unknown): string => `data: ${JSON.stringify(event)}`;
+const line = (event: Json): string => `data: ${JSON.stringify(event)}`;
 
 const START = line({
   type: "message_start",

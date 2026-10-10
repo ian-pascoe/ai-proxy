@@ -75,10 +75,12 @@ describe("ModelCapabilities.registryLayer", () => {
     () =>
       Effect.gen(function* () {
         const capabilities = yield* ModelCapabilities;
+
         const claude = yield* capabilities.thinking(
           "claude-sonnet-4-5-20250929",
           credential("claude-a.json", "claude"),
         );
+
         assert.strictEqual(claude.modelInfo?.id, "claude-sonnet-4-5-20250929");
         assert.isDefined(claude.modelInfo?.thinking);
         assert.isDefined(claude.lookup);
@@ -105,10 +107,12 @@ describe("ModelCapabilities.registryLayer", () => {
         );
 
         assert.strictEqual(stranger.modelInfo?.id, "claude-sonnet-4-5-20250929");
+
         const unknown = yield* capabilities.thinking(
           "no-such-model",
           credential("claude-a.json", "claude"),
         );
+
         assert.isUndefined(unknown.modelInfo);
       }).pipe(
         Effect.provide(ModelCapabilities.registryLayer),

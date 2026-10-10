@@ -30,13 +30,17 @@ export const jsonPayload = (line: string): string | undefined => {
   return trimmed.startsWith("{") ? trimmed : undefined;
 };
 
+/** Result of {@link stripUsageMetadataFromJson}. */
+export interface StrippedUsage {
+  readonly text: string;
+  readonly changed: boolean;
+}
+
 /**
  * `StripUsageMetadataFromJSON`: renames `usageMetadata` to `cpaUsageMetadata` on non-terminal chunks (no
  * `finishReason`) so translators only report usage once the stream finishes.
  */
-export const stripUsageMetadataFromJson = (
-  raw: string,
-): { readonly text: string; readonly changed: boolean } => {
+export const stripUsageMetadataFromJson = (raw: string): StrippedUsage => {
   const root = tryParseJson(raw.trim());
 
   if (root === undefined) return { text: raw, changed: false };

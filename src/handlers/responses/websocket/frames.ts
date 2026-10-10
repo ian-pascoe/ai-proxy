@@ -99,9 +99,11 @@ export const buildErrorPayload = (
 ): JsonObject => {
   const status = error.status > 0 ? error.status : 500;
   const text = error.message.trim() !== "" ? error.message : statusText(status);
+
   const body = tryParseJson(
     openAIErrorBody(status, text, error.terminalAuth === true ? { terminalAuth: true } : {}),
   );
+
   const payload: JsonObject = { type: "error", status };
 
   if (error.headers !== undefined && Object.keys(error.headers).length > 0)
@@ -171,9 +173,9 @@ export class OutputCollector {
   }
 
   private collected(): JsonObject[] {
-    const indexes = [...this.byIndex.keys()].toSorted((a, b) => a - b);
+    const indexed = [...this.byIndex.entries()].toSorted(([a], [b]) => a - b);
 
-    return [...indexes.map((index) => this.byIndex.get(index) as JsonObject), ...this.fallback];
+    return [...indexed.map(([, item]) => item), ...this.fallback];
   }
 
   /** `responseCompletedOutputFromPayload`. */
@@ -245,8 +247,11 @@ export class OutputCollector {
 
   pending(): string[] {
     return [...this.pendingToolCallIds]
-      .map((id) => id.trim())
-      .filter((id) => id !== "")
+      .flatMap((id) => {
+        const trimmed = id.trim();
+
+        return trimmed === "" ? [] : [trimmed];
+      })
       .toSorted();
   }
 

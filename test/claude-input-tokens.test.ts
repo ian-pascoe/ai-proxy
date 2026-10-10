@@ -124,9 +124,11 @@ describe("Claude input token estimate", () => {
     expect(collected.error).toBeUndefined();
     const starts = collected.chunks.filter((chunk) => chunk.includes('"type":"message_start"'));
     expect(starts).toHaveLength(1);
+
     const data = (starts[0] as string)
       .split("\n")
       .find((line) => line.startsWith("data:")) as string;
+
     const expected = countClaudeInputTokens(claudeRequest);
     expect(expected).toBeGreaterThan(0);
     expect(JSON.parse(data.slice(5)).message.usage.input_tokens).toBe(expected);

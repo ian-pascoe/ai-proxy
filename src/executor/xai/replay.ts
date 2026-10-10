@@ -13,7 +13,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { asString, get, isJsonArray, type Json } from "../../json/index.ts";
+import { asString, get, isJsonArray, type Json, tryParseJson } from "../../json/index.ts";
 import {
   type BackendResolver,
   bestEffort,
@@ -134,7 +134,11 @@ const normalizeItem = (item: Json): Json | undefined => {
 
 /** `normalizeXAIReasoningReplayItems`: undefined when nothing anchors a replay (no reasoning or tool call). */
 export const normalizeReplayItems = (items: ReadonlyArray<Json>): Json[] | undefined => {
-  const normalized = items.map(normalizeItem).filter((item): item is Json => item !== undefined);
+  const normalized = items.flatMap((item) => {
+    const entry = normalizeItem(item);
+
+    return entry === undefined ? [] : [entry];
+  });
 
   const anchored = normalized.some((item) =>
     ["reasoning", "function_call", "custom_tool_call"].includes(asString(get(item, "type"))),
@@ -152,13 +156,9 @@ const addressOf = (sessionKey: string): SessionAddress => ({
 const parseItems = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined;
 
-  try {
-    const parsed: unknown = JSON.parse(text);
+  const parsed = tryParseJson(text);
 
-    return Array.isArray(parsed) ? (parsed as Json[]) : undefined;
-  } catch {
-    return undefined;
-  }
+  return isJsonArray(parsed) ? parsed : undefined;
 };
 
 /** Store over the `SessionState` backend of the current request (one instance per session key, one entry per model). */
@@ -334,8 +334,7 @@ const assistantContentEqual = (left: Json | undefined, right: Json | undefined):
 };
 
 const lastAssistantMessage = (inputItems: readonly Json[]): Json | undefined => {
-  for (let index = inputItems.length - 1; index >= 0; index--) {
-    const item = inputItems[index] as Json;
+  for (const item of inputItems.toReversed()) {
     const type = asString(get(item, "type")).trim();
 
     if (

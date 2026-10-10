@@ -203,10 +203,12 @@ describe("grounding URL resolution in the Antigravity executor", () => {
 
   it("does not resolve for requests without typed web search tools", async () => {
     const h = await harness(false);
+
     const response = await h.call(
       "/v1/responses",
       postJson({ model: "gemini-3-flash", input: "hi" }),
     );
+
     expect(response.status).toBe(200);
     expect(h.calls.every((call) => call.method === "POST")).toBe(true);
   });

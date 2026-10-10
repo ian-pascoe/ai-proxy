@@ -5,6 +5,7 @@
  * API-key mint itself runs in the ControlPlane (`ensureFresh`, credentials/refresh/meta.ts); the conductor wraps every
  * attempt with it, so the executor only reads the minted key. A `dca:` value is never used as a bearer token.
  */
+import type { Json } from "../../json/index.ts";
 import { ExecutionError } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 
@@ -15,18 +16,21 @@ export const META_USER_AGENT =
 
 export const META_CLIENT_ID = "tbh:tui";
 
-const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
-const usableToken = (value: unknown): string => {
+const usableToken = (value: Json | undefined): string => {
   const token = text(value);
 
   return token !== "" && !token.startsWith("dca:") ? token : "";
 };
 
+export interface MetaCreds {
+  readonly baseUrl: string;
+  readonly token: string;
+}
+
 /** `metaCreds`: base URL (attributes, then metadata) and bearer token (attributes, then metadata). */
-export const metaCreds = (
-  credential: CredentialSnapshot,
-): { readonly baseUrl: string; readonly token: string } => {
+export const metaCreds = (credential: CredentialSnapshot): MetaCreds => {
   const { attributes, metadata } = credential;
   let baseUrl = text(attributes["base_url"]) || META_DEFAULT_BASE_URL;
   const token = usableToken(attributes["api_key"]) || usableToken(attributes["access_token"]);
@@ -42,9 +46,7 @@ export const metaCreds = (
 };
 
 /** The credential's token or the Go 401 `ensureAuth` failure (config keys cannot mint from a DCA token). */
-export const requireMetaToken = (
-  credential: CredentialSnapshot,
-): { readonly baseUrl: string; readonly token: string } => {
+export const requireMetaToken = (credential: CredentialSnapshot): MetaCreds => {
   const creds = metaCreds(credential);
 
   if (creds.token !== "") return creds;

@@ -32,17 +32,16 @@ export const kimiHeaders = (
   clientHeaders: Headers,
   sessionId: string | undefined,
 ): Record<string, string> => {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    authorization: `Bearer ${token}`,
-    "user-agent": `CLIProxyAPI/${KIMI_VERSION}`,
-    "x-msh-platform": "CLIProxyAPI",
-    "x-msh-version": KIMI_VERSION,
-    "x-msh-device-name": DEVICE_NAME,
-    "x-msh-device-model": DEVICE_MODEL,
-    "x-msh-device-id": kimiDeviceId(credential),
-    accept: stream ? "text/event-stream" : "application/json",
-  };
+  const headers: Record<string, string> = {};
+  headers["content-type"] = "application/json";
+  headers["authorization"] = `Bearer ${token}`;
+  headers["user-agent"] = `CLIProxyAPI/${KIMI_VERSION}`;
+  headers["x-msh-platform"] = "CLIProxyAPI";
+  headers["x-msh-version"] = KIMI_VERSION;
+  headers["x-msh-device-name"] = DEVICE_NAME;
+  headers["x-msh-device-model"] = DEVICE_MODEL;
+  headers["x-msh-device-id"] = kimiDeviceId(credential);
+  headers["accept"] = stream ? "text/event-stream" : "application/json";
 
   return applyCustomHeaders(headers, credential, clientHeaders, sessionId);
 };

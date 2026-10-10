@@ -78,6 +78,27 @@ The reference checkout follows upstream `main`, so regenerating after `pnpm repo
 fixture diff is a porting task (port the Go change, then commit the new fixtures), not noise to commit blindly. Some
 fixtures contain generated ids or timestamps that differ on every run; the tests mask those.
 
+## Lint and format
+
+`pnpm lint` runs oxlint and `oxfmt --check`. oxlint (`.oxlintrc.json`) is type-aware (`options.typeAware`, via
+`oxlint-tsgolint`) and also reports TypeScript errors (`options.typeCheck`); on top of its own rules it runs:
+
+- **Effect tsgo** (`@effect/tsgo`, recommended preset): Effect-specific diagnostics. The `prepare` script
+  (`effect-tsgo patch --no-typescript --oxlint`) patches the installed oxlint/tsgolint binaries after every install;
+  `oxlint`, `oxlint-tsgolint` and `@effect/tsgo` are pinned to versions the patch supports, so upgrade them together.
+- **anti-slop** (vendored in `tools/oxlint/anti-slop/`, provenance in its `UPSTREAM.md`): the copy belongs to this
+  repository; edit its rules there.
+
+Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/unstable-api-usage` (the HTTP stack is
+`effect/unstable/http`), `anti-slop-effect/no-service-constructor-imports` (flags every `make*` function),
+`anti-slop/no-runtime-typeof` (the translators walk arbitrary JSON like Go's gjson; `typeof` is the parse step) and
+`anti-slop/no-conditional-empty-object-spread` (the `...(x === undefined ? {} : { x })` idiom required by
+`exactOptionalPropertyTypes`). In `test/` the type-assertion and
+dictionary-type rules are off (fake bindings and loose fixtures).
+
+Errors fail lint; warnings are reported but do not. Fix findings rather than silencing them: no disable comments. A type
+assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on the line(s) before it.
+
 ## Conventions
 
 - Per-request Cloudflare `env` / `ctx` are passed as the `Context` argument of the web handler
@@ -91,6 +112,9 @@ fixtures contain generated ids or timestamps that differ on every run; the tests
 
 ## Dependency notes
 
+- TypeScript 7 (native `tsc`); `tsconfig.json` is a solution config referencing `tsconfig.worker.json` (Worker, workerd
+  types) and `tsconfig.infra.json` (deploy code, Node.js types). `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
+  range; it only ships types, so the peer warning is harmless.
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
   which `@effect/vitest@4` requires.
 - `alchemy` (2.0.0 beta, pinned) needs `@effect/platform-node` for its CLI; `@distilled.cloud/cloudflare` is pinned to

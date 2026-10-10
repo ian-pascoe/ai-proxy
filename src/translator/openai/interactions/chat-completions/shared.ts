@@ -94,7 +94,7 @@ export const rawJsonValue = (value: Json | undefined, fallback: Json): Json => {
 
   if (typeof value === "string") {
     try {
-      return JSON.parse(value.trim()) as Json;
+      return JSON.parse(value.trim());
     } catch {
       return value;
     }
@@ -204,7 +204,7 @@ export const ssePayloadOf = (rawLine: string): string => {
 /** Parses JSON text; invalid text becomes `undefined` (gjson `Exists()` false for the root). */
 export const parseJsonOrUndefined = (text: string): Json | undefined => {
   try {
-    return JSON.parse(text) as Json;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }

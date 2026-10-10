@@ -55,14 +55,14 @@ export const matchWildcard = (pattern: string, value: string): boolean => {
   if (!pattern.includes("*")) return pattern === value;
   const parts = pattern.split("*");
   let rest = value;
-  const prefix = parts[0] as string;
+  const [prefix = ""] = parts;
 
   if (prefix !== "") {
     if (!rest.startsWith(prefix)) return false;
     rest = rest.slice(prefix.length);
   }
 
-  const suffix = parts[parts.length - 1] as string;
+  const suffix = parts.at(-1) ?? "";
 
   if (suffix !== "") {
     if (!rest.endsWith(suffix)) return false;
@@ -70,7 +70,7 @@ export const matchWildcard = (pattern: string, value: string): boolean => {
   }
 
   for (let index = 1; index < parts.length - 1; index += 1) {
-    const segment = parts[index] as string;
+    const segment = parts[index] ?? "";
 
     if (segment === "") continue;
     const at = rest.indexOf(segment);

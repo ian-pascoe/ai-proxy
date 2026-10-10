@@ -25,10 +25,11 @@ const whole = (value: number) =>
   Schema.Int.pipe(Schema.withDecodingDefaultKey(Effect.succeed(value)));
 
 const section = <const Fields extends Schema.Struct.Fields>(fields: Fields) =>
-  // `{}` is valid because every field of a section carries a decoding default.
+  // SAFETY: `{}` is valid because every field of a section carries a decoding default.
   Schema.Struct(fields).pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never)));
 
 const list = <S extends Schema.Constraint>(item: S) =>
+  // SAFETY: an empty array is a valid value of every Schema.Array.
   Schema.Array(item).pipe(Schema.withDecodingDefaultKey(Effect.succeed([] as never)));
 
 const optional = Schema.optionalKey;
@@ -223,6 +224,7 @@ const requests = section({
     "keepalive-seconds": whole(0),
     "bootstrap-retries": whole(0),
   }),
+  // SAFETY: `{}` is valid because every field of PayloadConfig carries a decoding default.
   payload: PayloadConfig.pipe(Schema.withDecodingDefaultKey(Effect.succeed({} as never))),
 });
 

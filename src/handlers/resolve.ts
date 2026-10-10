@@ -127,9 +127,11 @@ export const resolveModel = Effect.fnUntraced(function* (
     });
   }
 
+  const NO_PROVIDERS: ReadonlyArray<string> = [];
+
   const lookup = (model: string) =>
     Effect.gen(function* () {
-      if (model === "") return [] as ReadonlyArray<string>;
+      if (model === "") return NO_PROVIDERS;
       const exact = yield* models.providersFor(model);
 
       if (exact.length > 0 || model.toLowerCase() === model) return exact;

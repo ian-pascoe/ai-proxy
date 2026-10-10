@@ -11,7 +11,6 @@ import {
   isJsonArray,
   isJsonObject,
   type Json,
-  type JsonArray,
   type JsonObject,
 } from "../../../json/index.ts";
 import { convertBudgetToLevel } from "../../../thinking/convert.ts";
@@ -47,8 +46,7 @@ export const normalizeObjectSchemaProperties = (schema: Json): Json => {
   }
 
   if (isJsonArray(schema)) {
-    for (let i = 0; i < schema.length; i++)
-      schema[i] = normalizeObjectSchemaProperties(schema[i] as Json);
+    for (const [i, item] of schema.entries()) schema[i] = normalizeObjectSchemaProperties(item);
 
     return schema;
   }
@@ -90,7 +88,7 @@ export const normalizeObjectSchemaProperties = (schema: Json): Json => {
     } else if (isJsonObject(sub)) {
       value[valKey] = normalizeObjectSchemaProperties(sub);
     } else if (isJsonArray(sub)) {
-      for (let i = 0; i < sub.length; i++) sub[i] = normalizeObjectSchemaProperties(sub[i] as Json);
+      for (const [i, item] of sub.entries()) sub[i] = normalizeObjectSchemaProperties(item);
     }
   }
 
@@ -201,10 +199,13 @@ const convertClaudeFilePartToOpenAI = (part: Json): JsonObject | undefined => {
   };
 };
 
+interface ToolResultContent {
+  text: string;
+  images: JsonObject[];
+}
+
 /** `convertClaudeToolResultContent`: the text for the tool message plus images to relay in a user message. */
-const convertClaudeToolResultContent = (
-  content: Json | undefined,
-): { text: string; images: JsonObject[] } => {
+const convertClaudeToolResultContent = (content: Json | undefined): ToolResultContent => {
   if (content === undefined) return { text: "", images: [] };
 
   if (typeof content === "string") return { text: content, images: [] };
@@ -385,7 +386,7 @@ const convertClaudeRequestToOpenAIImpl = (
 
       if (isArr(contentResult)) {
         if (role === "user" && pendingToolUseIds.length > 0) {
-          contentResult = alignClaudeToolResults(contentResult, pendingToolUseIds) as JsonArray;
+          contentResult = alignClaudeToolResults(contentResult, pendingToolUseIds);
         }
 
         const precedingToolCallsPending = pendingToolUseIds.length > 0;
@@ -538,6 +539,7 @@ const convertClaudeRequestToOpenAIImpl = (
         name: getStr(tool, "name"),
         description: getStr(tool, "description"),
       };
+
       const inputSchema = get(tool, "input_schema");
 
       if (present(inputSchema)) {

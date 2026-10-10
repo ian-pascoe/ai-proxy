@@ -16,6 +16,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import { ensureUsageDetailsInEvent, type OutputItemCollector } from "../codex/output.ts";
 import { clientToolKey, type NamespaceRefs, qualifyNamespaceToolName } from "./tools.ts";
@@ -47,9 +48,12 @@ const normalizeSummaryIndex = (event: JsonObject): void => {
   delete event["content_index"];
 };
 
-const normalizeSummaryItems = (
-  items: ReadonlyArray<Json>,
-): { readonly items: Json[]; readonly changed: boolean } => {
+interface NormalizedSummaryItems {
+  readonly items: Json[];
+  readonly changed: boolean;
+}
+
+const normalizeSummaryItems = (items: ReadonlyArray<Json>): NormalizedSummaryItems => {
   let changed = false;
 
   const out = items.map((item) => {
@@ -129,7 +133,7 @@ export const normalizeReasoningSummaryEvents = (event: Json): Json[] => {
     return [normalizeReasoningSummaryEvent(event)];
   }
 
-  const textDone = cloneJson(event) as JsonObject;
+  const textDone = cloneJson(event);
   textDone["type"] = "response.reasoning_summary_text.done";
   normalizeSummaryIndex(textDone);
 
@@ -151,13 +155,9 @@ const unwrapDispatcherArguments = (
   namespaceName: string,
   refs: NamespaceRefs,
 ): Unwrapped | undefined => {
-  let parsed: Json;
+  const parsed = tryParseJson(rawArgs);
 
-  try {
-    parsed = JSON.parse(rawArgs) as Json;
-  } catch {
-    return undefined;
-  }
+  if (parsed === undefined) return undefined;
 
   const nameField = get(parsed, "name");
 
@@ -265,6 +265,7 @@ export class NamespaceRestorer {
       ref.namespace,
       this.refs,
     );
+
     const childName = unwrapped?.childName ?? ref.name;
     item["namespace"] = ref.namespace;
 
@@ -313,14 +314,19 @@ const INTERNAL_X_SEARCH_TOOLS = new Set([
   "x_thread_fetch",
 ]);
 
+const DECLARED_TOOL_TYPES = new Map([
+  ["function_call", "function"],
+  ["custom_tool_call", "custom"],
+]);
+
 /** `xaiIsInternalXSearchCall`: server-side X Search subtool traces that clients must not execute again. */
 const isInternalXSearchCall = (
   item: Json | undefined,
   clientDeclared: ReadonlySet<string>,
 ): boolean => {
   const itemType = trimmed(item, "type");
-  const declaredType =
-    itemType === "function_call" ? "function" : itemType === "custom_tool_call" ? "custom" : "";
+
+  const declaredType = DECLARED_TOOL_TYPES.get(itemType) ?? "";
 
   if (declaredType === "") return false;
   const name = trimmed(item, "name");
@@ -440,11 +446,8 @@ export const patchCompletedOutput = (
   const empty = !isJsonArray(output) || output.length === 0;
 
   if (!empty || collector.count === 0) return event;
-  const indexes = [...collector.byIndex.keys()].toSorted((a, b) => a - b);
-  set(event, "response.output", [
-    ...indexes.map((index) => collector.byIndex.get(index) as Json),
-    ...collector.fallback,
-  ]);
+  const indexed = [...collector.byIndex.entries()].toSorted((a, b) => a[0] - b[0]);
+  set(event, "response.output", [...indexed.map(([, item]) => item), ...collector.fallback]);
 
   return event;
 };

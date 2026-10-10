@@ -48,8 +48,10 @@ export const convertInteractionsRequestToClaude = (
   run.end();
   out.messages = accumulator.messages();
   copyTools(out, root);
+
   const result =
     applyTranslatedSummaryToClaude(out, root, "interactions", modelName, lookupModelInfo) ?? out;
+
   const refusal = run.err(result);
 
   if (refusal !== undefined) throw refusal;

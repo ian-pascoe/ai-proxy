@@ -5,7 +5,8 @@
  * and increases by one on every write. All methods are synchronous so a read-check-write sequence is atomic under the
  * Durable Object input gate.
  */
-import { Effect, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
+import type { Json } from "../json/index.ts";
 import { decodeConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
 import { notAppliedSettings } from "./not-applied.ts";
 import { Config } from "./schema.ts";
@@ -105,7 +106,7 @@ export class ConfigStore {
 
     const parsed = Effect.runSync(Effect.result(parseConfigYaml(text)));
 
-    if (parsed._tag === "Failure")
+    if (Result.isFailure(parsed))
       return { ok: false, error: "invalid", message: parsed.failure.message };
     // Round-trip through the schema so the stored document is exactly what readers will decode.
     const document = JSON.stringify(encodeConfig(parsed.success));
@@ -132,6 +133,6 @@ export class ConfigStore {
 /** Decodes a stored/wire JSON document into a `Config` (the DO already validated it on write). */
 export const decodeStoredConfig = (document: string) =>
   Effect.try({
-    try: () => JSON.parse(document) as unknown,
+    try: (): Json => JSON.parse(document),
     catch: (error) => (error instanceof Error ? error : new Error(String(error))),
   }).pipe(Effect.flatMap(decodeConfig));

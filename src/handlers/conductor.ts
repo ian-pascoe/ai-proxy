@@ -16,7 +16,7 @@
  * upstream attempts per request (each costs subrequests: pick, fetch, report) and cooldown waits of at most
  * {@link MAX_COOLDOWN_WAIT_MS}; a longer recovery is answered with the last error plus `Retry-After`.
  */
-import { Clock, Duration, Effect, Option, Random, Scope } from "effect";
+import { Clock, Duration, Effect, Option, Random, Result, Scope } from "effect";
 import type { Config } from "../config/schema.ts";
 import type { RetryPlan } from "../credentials/selection/retry.ts";
 import { ExecutionError, withErrorFields } from "../executor/errors.ts";
@@ -106,6 +106,7 @@ const usageSession = (
   credential: CredentialSnapshot,
 ) => {
   const session = picked.session ?? routing?.usageSession;
+
   const baseUrl =
     (credential.attributes["base_url"] ?? "").trim() || stringOf(credential.metadata["base_url"]);
 
@@ -118,7 +119,8 @@ const usageSession = (
   };
 };
 
-const stringOf = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const stringOf = (value: Json | undefined): string =>
+  typeof value === "string" ? value.trim() : "";
 
 /** What the conductor needs to know about the request (built by `handlers/execute.ts`). */
 export interface Prepared {
@@ -183,7 +185,7 @@ export interface Attempt {
    */
   readonly finish: (
     error: ExecutionError | undefined,
-    headers?: Headers | undefined,
+    headers?: Headers,
   ) => Effect.Effect<RequestScopedAction | undefined, never, WorkerEnv>;
 }
 
@@ -291,10 +293,12 @@ export const conduct = <T, R>(
           credential.provider,
           parseSuffix(upstreamModel).modelName,
         );
+
         const { modelInfo, lookup } = yield* capabilities.thinking(
           parseSuffix(upstreamModel).modelName,
           credential,
         );
+
         const stateModel = route.pooled ? upstreamModel : undefined;
         // The report and the usage record of an attempt must survive a client disconnect (a cancelled streamed body
         // is finalised asynchronously, after the response): hold the invocation open until `finish` completed. A
@@ -460,7 +464,7 @@ export const conduct = <T, R>(
             while (true) {
               const candidate = yield* pickNext(excluded);
 
-              if (candidate._tag === "Failure") {
+              if (Result.isFailure(candidate)) {
                 creditsFailure = candidate.failure;
                 break;
               }
@@ -489,8 +493,8 @@ export const conduct = <T, R>(
           const next = creditsQueue.shift();
 
           return next === undefined
-            ? ({ _tag: "Failure", failure: creditsFailure ?? authNotFound() } as const)
-            : ({ _tag: "Success", success: next } as const);
+            ? Result.fail(creditsFailure ?? authNotFound())
+            : Result.succeed(next);
         });
 
         while (true) {
@@ -507,7 +511,7 @@ export const conduct = <T, R>(
 
           const pick = yield* credits ? nextCreditsPick : pickNext(tried);
 
-          if (pick._tag === "Failure") {
+          if (Result.isFailure(pick)) {
             // Without an earlier upstream error the selection failure itself is the answer.
             return failed(lastError === undefined ? pick.failure : preferred(lastError), false);
           }
@@ -556,7 +560,7 @@ export const conduct = <T, R>(
               ).pipe(Effect.onInterrupt(() => attempt.finish(lifecycleError()))),
             );
 
-            if (result._tag === "Success")
+            if (Result.isSuccess(result))
               return { ok: true, value: result.success } satisfies RoundOutcome<T>;
 
             const error = result.failure;
@@ -637,7 +641,7 @@ export const conduct = <T, R>(
       }
     }
 
-    const last = lastFailure as Extract<RoundOutcome<T>, { ok: false }>;
+    const last = lastFailure;
     // Stops return their own error; exhausted retries answer with the error of the last real upstream attempt.
     const error = last.stop ? last.error : (preferredUpstream ?? last.error);
 

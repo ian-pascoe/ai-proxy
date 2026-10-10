@@ -79,6 +79,7 @@ const listCredentials = Effect.gen(function* () {
   const entries = yield* controlPlane("listCredentialEntries", (stub) =>
     stub.listCredentialEntries(),
   );
+
   const now = yield* Clock.currentTimeMillis;
 
   const matching = entries
@@ -128,6 +129,7 @@ const storeUpload = (upload: Upload) =>
     if (!name.toLowerCase().endsWith(".json")) return "file must be .json";
 
     if (unsafeName(name)) return "invalid name";
+
     const result = yield* controlPlane("importAuthFile", (stub) =>
       stub.importAuthFile(name, upload.content),
     );
@@ -213,7 +215,13 @@ const uploadCredentials = Effect.gen(function* () {
 // --- delete ---------------------------------------------------------------------------------------------------------
 
 const unique = (names: ReadonlyArray<string>): string[] => [
-  ...new Set(names.map((name) => name.trim()).filter((name) => name !== "")),
+  ...new Set(
+    names.flatMap((name) => {
+      const trimmed = name.trim();
+
+      return trimmed === "" ? [] : [trimmed];
+    }),
+  ),
 ];
 
 const strings = (value: Json | undefined): string[] =>
@@ -230,6 +238,7 @@ const namesToDelete = (params: URLSearchParams) =>
     if (body === "") return [];
 
     const parsed = yield* Effect.try({
+      // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
       try: () => JSON.parse(body) as Json,
       catch: () => replyError(400, "invalid request body"),
     });
@@ -252,6 +261,7 @@ const deleteCredentials = Effect.gen(function* () {
     const entries = yield* controlPlane("listCredentialEntries", (stub) =>
       stub.listCredentialEntries(),
     );
+
     const ids = entries.map((entry) => text(entry.id));
     const removed = yield* controlPlane("removeCredentials", (stub) => stub.removeCredentials(ids));
 
@@ -304,6 +314,7 @@ const credentialModels = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name is required");
   const registry = yield* ModelRegistry;
+
   const snapshot = yield* registry.snapshot.pipe(
     Effect.mapError(() => replyError(502, "model registry unavailable")),
   );
@@ -337,6 +348,7 @@ const patchStatus = Effect.gen(function* () {
   if (typeof body.disabled !== "boolean") return yield* replyError(400, "disabled is required");
 
   const result = yield* controlPlane("setCredentialDisabledByRef", (stub) =>
+    // SAFETY: typeof body.disabled === "boolean" was checked above; the narrowing is lost inside the callback.
     stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean),
   );
 
@@ -358,6 +370,7 @@ const patchFields = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name is required");
   const { name: _name, ...fields } = body;
+
   const result = yield* controlPlane("patchCredentialFields", (stub) =>
     stub.patchCredentialFields({ name }, fields),
   );
@@ -375,6 +388,7 @@ const refreshCredentials = Effect.gen(function* () {
     raw === ""
       ? {}
       : yield* Effect.try({
+          // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
           try: () => JSON.parse(raw) as Json,
           catch: () => replyError(400, "invalid request body"),
         });
@@ -413,6 +427,7 @@ const resetCooldown = Effect.gen(function* () {
   const authIndex = text(body.auth_index);
 
   if (authIndex === "") return yield* replyError(400, "auth_index is required");
+
   const result = yield* controlPlane("resetCredentialCooldown", (stub) =>
     stub.resetCredentialCooldown({ authIndex }),
   );

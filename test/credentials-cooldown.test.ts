@@ -146,6 +146,7 @@ describe("deadlines (conductor_quota_clock_test.go, conductor_subsecond_cooldown
       "gpt-5",
       fail(429, "quota", { retryAfterMs: HOUR, credentialScoped: true }),
     );
+
     expect(state.nextRetryAfter).toBe(NOW + HOUR);
     expect(state.quota).toMatchObject({
       exceeded: true,
@@ -236,6 +237,7 @@ describe("monotonic deadlines (conductor_cooldown_monotonic_test.go)", () => {
       "claude-fable",
       fail(429, "usage credits required", { retryAfterMs: 8 * 24 * HOUR }),
     );
+
     expect(state.quota).toMatchObject({ reason: "quota", nextRecoverAt: NOW + 8 * 24 * HOUR });
     state = mark(
       state,
@@ -293,6 +295,7 @@ describe("error table (MarkResult)", () => {
       "m",
       fail(400, '{"error":{"message":"The requested model is not supported."}}'),
     );
+
     expect(state.modelStates.m?.nextRetryAfter).toBe(NOW + 12 * HOUR);
     expect(
       mark(emptyState(), "m", fail(422, "unsupported model", { retryAfterMs: 5 * MIN })).modelStates
@@ -315,6 +318,7 @@ describe("error table (MarkResult)", () => {
       "m",
       fail(403, "<html>Just a moment... Cloudflare challenge-platform</html>"),
     );
+
     expect(state.modelStates.m).toMatchObject({
       nextRetryAfter: NOW + 10_000,
       statusMessage: "cloudflare challenge",
@@ -364,10 +368,12 @@ describe("error table (MarkResult)", () => {
       nextRetryAfter: 0,
       unavailable: false,
     });
+
     const override = mark(emptyState(), "m", fail(429), {
       settings: global,
       metadata: { disable_cooling: false },
     });
+
     expect(override.modelStates.m?.nextRetryAfter).toBe(NOW + 1000);
     const off = mark(emptyState(), "m", fail(429), { metadata: { disable_cooling: true } });
     expect(off.modelStates.m).toMatchObject({ nextRetryAfter: 0, unavailable: false });
@@ -393,6 +399,7 @@ describe("error table (MarkResult)", () => {
       "m",
       fail(429, "shared", { retryAfterMs: HOUR, credentialScoped: true }),
     );
+
     state = mark(state, "other", { success: true }, { now: NOW + 1000 });
     expect(state.quota.reason).toBe("credential_quota");
     expect(blocked(state, "x", NOW + 2000)).toBe(true);
@@ -533,6 +540,7 @@ describe("passive quota signals and recent requests", () => {
       "m",
       fail(429, "q", { headers: { "retry-after": "30" }, retryAfterMs: 30_000 }),
     );
+
     expect(state.quota.signals).toEqual({ "Retry-After": "30" });
     expect(state.quota.observedAt).toBe(NOW);
     expect(state.modelStates.m?.quota.signals).toEqual({ "Retry-After": "30" });
@@ -540,11 +548,13 @@ describe("passive quota signals and recent requests", () => {
     expect(state.quota.signals).toEqual({ "Retry-After": "30" });
     state = mark(state, "m", { success: true, headers: { "retry-after": "0" } }, { now: NOW + 2 });
     expect(state.quota.signals).toEqual({ "Retry-After": "0" });
+
     const skipped = mark(state, "m", {
       success: true,
       skipQuotaObservation: true,
       headers: { "retry-after": "9" },
     });
+
     expect(skipped.quota.signals).toEqual({ "Retry-After": "0" });
   });
 

@@ -145,8 +145,10 @@ export const normalizeKimiToolMessageLinks = (body: Json): Json => {
         if (id !== "") message["tool_call_id"] = id;
       }
 
-      if (id === "" && pending.length === 1) {
-        id = pending[0] as string;
+      const onlyPending = pending[0];
+
+      if (id === "" && pending.length === 1 && onlyPending !== undefined) {
+        id = onlyPending;
         message["tool_call_id"] = id;
       }
 
@@ -158,7 +160,7 @@ export const normalizeKimiToolMessageLinks = (body: Json): Json => {
     }
   }
 
-  if (kept.length !== messages.length) (body as JsonObject)["messages"] = kept;
+  if (kept.length !== messages.length && isJsonObject(body)) body["messages"] = kept;
 
   return body;
 };
@@ -225,13 +227,13 @@ export const normalizeKimiTemperature = (body: Json): Json => {
   return body;
 };
 
-const isToolCall = (item: Json): boolean => {
+const isToolCall = (item: Json | undefined): boolean => {
   const type = asString(get(item, "type")).trim();
 
   return type === "function_call" || type === "custom_tool_call";
 };
 
-const isToolOutput = (item: Json): boolean => {
+const isToolOutput = (item: Json | undefined): boolean => {
   const type = asString(get(item, "type")).trim();
 
   return type === "function_call_output" || type === "custom_tool_call_output";
@@ -251,7 +253,9 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
   let i = 0;
 
   while (i < items.length) {
-    const first = items[i] as Json;
+    const first = items[i];
+
+    if (first === undefined) break;
 
     if (!isToolCall(first)) {
       result.push(first);
@@ -264,7 +268,7 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
     const callIds = new Map<string, number>();
     let callIdCount = 0;
 
-    while (endCalls < items.length && isToolCall(items[endCalls] as Json)) {
+    while (endCalls < items.length && isToolCall(items[endCalls])) {
       const callId = extractResponsesCallID(items[endCalls]);
 
       if (callId !== "") {
@@ -287,9 +291,9 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
     let lastMatching = -1;
 
     for (let j = endCalls; j < items.length && remaining > 0; j++) {
-      const item = items[j] as Json;
+      const item = items[j];
 
-      if (isToolCall(item)) break;
+      if (item === undefined || isToolCall(item)) break;
 
       if (isToolOutput(item)) {
         const callId = extractResponsesCallID(item);
@@ -308,7 +312,9 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
       const consumed = new Map(callIds);
 
       for (let j = endCalls; j <= lastMatching; j++) {
-        const item = items[j] as Json;
+        const item = items[j];
+
+        if (item === undefined) continue;
 
         if (isToolOutput(item)) {
           const callId = extractResponsesCallID(item);
@@ -331,7 +337,7 @@ export const normalizeKimiResponsesInput = (body: Json): Json => {
     }
   }
 
-  if (reordered) (body as JsonObject)["input"] = result;
+  if (reordered && isJsonObject(body)) body["input"] = result;
 
   return body;
 };

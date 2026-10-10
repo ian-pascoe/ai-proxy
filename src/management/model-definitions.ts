@@ -85,9 +85,11 @@ export const modelInfoWire = (model: ModelInfo): JsonObject => {
 const modelDefinitions = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const url = new URL(request.originalUrl, "http://localhost");
+
   const raw = url.pathname
     .slice("/v8/management/routing/model-definitions".length)
     .replace(/^\/+/, "");
+
   let channel = raw;
 
   try {
@@ -100,9 +102,11 @@ const modelDefinitions = Effect.gen(function* () {
 
   if (channel === "") return yield* replyError(400, "channel is required");
   const registry = yield* ModelRegistry;
+
   const snapshot = yield* registry.snapshot.pipe(
     Effect.mapError(() => replyError(502, "model registry unavailable")),
   );
+
   const models = staticModelsByChannel(snapshot.catalogs, channel);
 
   if (models === undefined) return yield* replyError(400, "unknown channel", { channel });

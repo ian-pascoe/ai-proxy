@@ -167,6 +167,12 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     executorOptions.modelHeaderOverrides?.(model) ??
     modelOverrideHeaders(request.modelLookup, model);
 
+  const overrideField = (request: ExecutorRequest, model: string) => {
+    const modelHeaderOverrides = overrides(request, model);
+
+    return modelHeaderOverrides !== undefined ? { modelHeaderOverrides } : {};
+  };
+
   const replayStore = executorOptions.replayStore ?? defaultReplayStore;
 
   const translatePair = (
@@ -258,6 +264,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     const from = options.sourceFormat;
     const to = mode.compact ? Formats.OpenAIResponse : Formats.Codex;
     const responseFormat = responseFormatOf(options);
+
     const pair = translatePair(
       context,
       request,
@@ -270,12 +277,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
 
     if (pair instanceof ExecutionError) return yield* pair;
     const { translated, original } = pair;
+
     const nativeOutput = isNativeCodexRequest(
       request.payload,
       options.headers,
       from,
       responseFormat,
     );
+
     const isCompat = resolveCodexModelIsCompat(
       context.config,
       context.credential,
@@ -334,12 +343,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     body = sanitizeReasoningEncryptedContent(body, isCompat, isCompat);
     body = normalizeParallelToolCalls(body, options.headers);
     body = normalizeCodexToolSchemas(body);
+
     const multiAgent = optimizeCodexMultiAgentV2RequestForAuth(
       options.headers,
       body,
       context.config,
       isCompat,
     );
+
     body = multiAgent.payload;
 
     const replayScope = mode.compact
@@ -391,9 +402,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
               ? { sessionId: options.metadata.sessionId }
               : {}),
             routingHint: true,
-            ...(overrides(request, baseModel) !== undefined
-              ? { modelHeaderOverrides: overrides(request, baseModel) as Record<string, string> }
-              : {}),
+            ...overrideField(request, baseModel),
           });
 
     const url = `${codexBaseUrl(context.credential)}${mode.compact ? "/responses/compact" : "/responses"}`;
@@ -504,6 +513,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     options: ExecutorOptions,
   ) {
     const prepared = yield* prepare(context, request, options, { stream: false, compact: false });
+
     const response = yield* send(
       context,
       prepared.url,
@@ -511,6 +521,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       prepared.body,
       prepared.replayScope,
     );
+
     const text = yield* response.text.pipe(Effect.mapError(transportError));
     const collector = new OutputItemCollector();
     let sawOutputDelta = false;
@@ -518,13 +529,16 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
 
     for (const line of text.split("\n")) {
       if (!line.startsWith("data:")) continue;
+
       const event = tryParseJson(
         restoreCodexMultiAgentV2Response(line.slice(5).trim(), prepared.multiAgentV2),
       );
+
       context.usage.observeResponseModel(responseModelOf(event));
       const eventType = asString(get(event, "type"));
 
       if (hasMeaningfulOutputDelta(event)) sawOutputDelta = true;
+
       const failure = codexTerminalFailure(event, {
         modelLevelCooling,
         nowMs: yield* Clock.currentTimeMillis,
@@ -748,9 +762,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       ...(options.metadata.sessionId !== undefined
         ? { sessionId: options.metadata.sessionId }
         : {}),
-      ...(overrides(request, model) !== undefined
-        ? { modelHeaderOverrides: overrides(request, model) as Record<string, string> }
-        : {}),
+      ...overrideField(request, model),
     });
 
     return { url: `${codexBaseUrl(context.credential)}${endpoint}`, headers, body, model };
@@ -762,6 +774,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
     options: ExecutorOptions,
   ) {
     const thinking = yield* Thinking;
+
     const prepared = prepareImageRequest(
       request.payload,
       request.model,
@@ -819,9 +832,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       ...(options.metadata.sessionId !== undefined
         ? { sessionId: options.metadata.sessionId }
         : {}),
-      ...(overrides(request, mainModel) !== undefined
-        ? { modelHeaderOverrides: overrides(request, mainModel) as Record<string, string> }
-        : {}),
+      ...overrideField(request, mainModel),
     });
 
     return { url: `${codexBaseUrl(context.credential)}/responses`, headers, body, image: prepared };
@@ -860,6 +871,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
 
         if (detail !== undefined) context.usage.publish(detail);
         publishCodexImageToolUsage(context.usage, tool.body, event);
+
         const extracted = extractImageResults(
           event,
           collector,
@@ -895,6 +907,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
 
     if (endpoint !== "") {
       const direct = prepareDirectImage(context, request, options, endpoint, true);
+
       const response = yield* send(
         context,
         direct.url,
@@ -903,12 +916,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
         undefined,
         "token-event",
       );
+
       const chunks = response.stream.pipe(Stream.decodeText, Stream.mapError(transportError));
 
       return { headers: new Headers(response.headers), chunks } satisfies StreamResult;
     }
 
     const tool = yield* prepareToolImage(context, request, options);
+
     const response = yield* send(
       context,
       tool.url,
@@ -917,7 +932,10 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
       undefined,
       "token-event",
     );
+
     const collector = new OutputItemCollector();
+
+    const emptyChunks = (): string[] => [];
 
     const chunks = splitLines(response.stream).pipe(
       Stream.mapError(transportError),
@@ -925,7 +943,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
         () => false,
         (done, line: string) =>
           Effect.gen(function* () {
-            if (done || !line.startsWith("data:")) return [done, [] as string[]] as const;
+            if (done || !line.startsWith("data:")) return [done, emptyChunks()] as const;
             const event = tryParseJson(line.slice(5).trim());
             context.usage.observeResponseModel(responseModelOf(event));
 
@@ -941,8 +959,10 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
                 collector.collect(event);
                 break;
               case "response.image_generation_call.partial_image": {
+                if (event === undefined) break;
+
                 const frame = imagePartialFrame(
-                  event as Json,
+                  event,
                   tool.image.responseFormat,
                   tool.image.streamPrefix,
                 );
@@ -951,13 +971,14 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
               }
 
               case "response.completed": {
+                if (event === undefined) break;
                 const detail = parseCodexUsage(event);
 
                 if (detail !== undefined) context.usage.publish(detail);
                 publishCodexImageToolUsage(context.usage, tool.body, event);
 
                 const extracted = extractImageResults(
-                  event as Json,
+                  event,
                   collector,
                   Math.floor((yield* Clock.currentTimeMillis) / 1000),
                 );
@@ -983,7 +1004,7 @@ export const makeCodexExecutor = (executorOptions: CodexExecutorOptions = {}): P
               }
             }
 
-            return [done, [] as string[]] as const;
+            return [done, emptyChunks()] as const;
           }),
       ),
       Stream.tapError((error) =>

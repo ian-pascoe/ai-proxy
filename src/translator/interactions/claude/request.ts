@@ -49,6 +49,7 @@ const convert = (
     model: firstNonBlankString(modelName, str(get(root, "model"))),
     input: [],
   };
+
   const streamValue = get(root, "stream");
 
   if (exists(streamValue)) out.stream = asBool(streamValue);

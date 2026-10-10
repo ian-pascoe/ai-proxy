@@ -38,15 +38,18 @@ const rows = async () =>
 describe("D1 usage sink", () => {
   it("persists the record through ctx.waitUntil without blocking the caller", async () => {
     const pending: Array<Promise<unknown>> = [];
+
     const ctx = {
       waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
     } as unknown as ExecutionContext;
+
     const record = sampleRecord({
       stream: true,
       ttftMs: 40,
       responseModel: "gpt-5-2025",
       reasoningEffort: "high",
     });
+
     await Effect.gen(function* () {
       const sink = yield* UsageSink;
       yield* sink.publish(record);
@@ -96,6 +99,7 @@ describe("D1 usage sink", () => {
       failed: true,
       fail: { statusCode: 429, body: "x".repeat(10_000) },
     });
+
     await insertUsageRecord(db, record);
     await insertUsageRecord(db, record);
     const stored = await rows();
@@ -111,15 +115,13 @@ describe("D1 usage sink", () => {
       Logger.make((options) => {
         warnings.push({
           message: options.message,
-          annotations: { ...options.fiber.getRef(References.CurrentLogAnnotations) } as Record<
-            string,
-            unknown
-          >,
+          annotations: { ...options.fiber.getRef(References.CurrentLogAnnotations) },
         });
       }),
     ]);
 
     const pending: Array<Promise<unknown>> = [];
+
     const ctx = {
       waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
     } as unknown as ExecutionContext;
@@ -198,9 +200,11 @@ describe("D1 usage sink", () => {
 
   it("derives a breakdown for records that only carry raw buckets", () => {
     const raw = { ...sampleRecord().detail, totalTokens: 0 };
+
     const row = recordToRow(
       sampleRecord({ provider: "gemini", executorType: "gemini", detail: raw }),
     );
+
     // Gemini: reasoning is separate from the candidates count, so it adds to the output.
     expect(row).toMatchObject({
       total_tokens: 142,
@@ -440,8 +444,11 @@ describe("usage session identity and base URL", () => {
       base_url: "https://api.example.test/v1",
     });
     // A non-UUID parent is projected to a deterministic UUIDv8, like `NormalizeToCanonicalUUID`.
-    expect(payload["parent_session_id"]).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    expect(payload).toHaveProperty(
+      "parent_session_id",
+      expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
     );
   });
 

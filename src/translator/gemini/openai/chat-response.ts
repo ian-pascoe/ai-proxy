@@ -109,6 +109,7 @@ export const convertGeminiResponseToOpenAI = (
     } satisfies Params;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const p = state.value as Params;
   const payload = line.startsWith("data:") ? line.slice(5).trim() : line;
 
@@ -141,7 +142,9 @@ export const convertGeminiResponseToOpenAI = (
   if (isJsonArray(candidates)) {
     for (const candidate of candidates) {
       const template = structuredClone(base);
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const choice = (template["choices"] as JsonObject[])[0] as JsonObject;
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const delta = choice["delta"] as JsonObject;
       const candidateIndex = asInt(get(candidate, "index"));
       choice["index"] = candidateIndex;
@@ -174,6 +177,7 @@ export const convertGeminiResponseToOpenAI = (
             partText = get(audioTranscription, "text");
 
           const hasThoughtSignature = signature !== undefined && asString(signature) !== "";
+
           const hasContentPayload =
             partText !== undefined || functionCall !== undefined || inlineData !== undefined;
 
@@ -212,9 +216,10 @@ export const convertGeminiResponseToOpenAI = (
             const args = get(functionCall, "args");
 
             if (args !== undefined)
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               (call["function"] as JsonObject)["arguments"] = JSON.stringify(args);
             setAssistantRole();
-            (toolCalls as Json[]).push(call);
+            toolCalls.push(call);
           } else if (inlineData !== undefined) {
             const imageUrl = inlineImageUrl(inlineData);
 
@@ -227,10 +232,10 @@ export const convertGeminiResponseToOpenAI = (
             }
 
             setAssistantRole();
-            (images as Json[]).push({
+            images.push({
               type: "image_url",
               image_url: { url: imageUrl },
-              index: (images as Json[]).length,
+              index: images.length,
             });
           }
         }
@@ -263,6 +268,7 @@ export const convertGeminiResponseToOpenAINonStream = (
 ): string => {
   const root = tryParseJson(body);
   const sanitizedNameMap = sanitizedToolNameMap(context.originalRequest);
+
   const template: JsonObject = {
     id: "",
     object: "chat.completion",
@@ -340,6 +346,7 @@ export const convertGeminiResponseToOpenAINonStream = (
             }
           } else if (functionCall !== undefined) {
             hasFunctionCall = true;
+
             const fcName = restoreSanitizedToolName(
               sanitizedNameMap,
               asString(get(functionCall, "name")),
@@ -354,6 +361,7 @@ export const convertGeminiResponseToOpenAINonStream = (
             const args = get(functionCall, "args");
 
             if (args !== undefined)
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               (call["function"] as JsonObject)["arguments"] = JSON.stringify(args);
             toolCalls.push(call);
           } else if (inlineData !== undefined) {

@@ -178,9 +178,11 @@ export const applyPayloadRules = (
   if (config === undefined) return { payload, touched };
 
   const root = request.root ?? "";
+
   const trackedPaths = (request.trackedPaths ?? [])
     .map((path) => path.trim())
     .filter((path) => path !== "");
+
   const rules = config.requests.payload;
 
   const hasPayloadRules =
@@ -304,8 +306,7 @@ export const applyPayloadRules = (
       if (fullPath === "") continue;
       const resolvedPaths = resolvePayloadRulePaths(out, fullPath);
 
-      for (let i = resolvedPaths.length - 1; i >= 0; i--) {
-        const resolvedPath = resolvedPaths[i] as string;
+      for (const resolvedPath of resolvedPaths.toReversed()) {
         const updated = delQuietly(out, resolvedPath);
 
         if (updated === undefined) continue;

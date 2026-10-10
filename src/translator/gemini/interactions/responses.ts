@@ -222,11 +222,13 @@ const appendGeminiPartToStream = (out: string[], st: StreamState, part: Json): v
 
   if (fr !== undefined) {
     ensureStep(out, st, "function_result", fr);
+
     const delta: JsonObject = {
       type: "function_result",
       name: asString(get(fr, "name")),
       result: {},
     };
+
     const response = get(fr, "response");
 
     if (response !== undefined) delta["result"] = response;
@@ -282,6 +284,7 @@ export const convertGeminiResponseToInteractions = (
     } satisfies StreamState;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as StreamState;
   const out: string[] = [];
 
@@ -466,9 +469,12 @@ const buildGeminiChunk = (
 ): Json => {
   const out: JsonObject = { candidates: [{ content: { parts: [], role: "model" }, index: 0 }] };
   const items = parts.length === 0 && includeEmptyPart ? [geminiTextPartJson("", false)] : parts;
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const candidate = (out["candidates"] as JsonObject[])[0] as JsonObject;
 
-  if (items.length > 0) (candidate["content"] as JsonObject)["parts"] = items;
+  if (items.length > 0)
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    (candidate["content"] as JsonObject)["parts"] = items;
 
   if (finishReason !== "") candidate["finishReason"] = finishReason;
   const model = firstNonBlankString(st.model, modelName);
@@ -761,6 +767,7 @@ export const convertInteractionsResponseToGemini = (
 ): ReadonlyArray<string> => {
   if (context.state.value === undefined) context.state.value = newToGeminiState(context.model);
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   return convertInteractionsEventToGemini(
     context.model,
     line,

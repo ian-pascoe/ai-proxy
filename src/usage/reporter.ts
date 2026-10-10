@@ -170,12 +170,14 @@ export class UsageReporter {
     if (this.#finished) return undefined;
     this.#finished = true;
     const { init } = this;
+
     // Go `normalizeUsageDetailTotal`: every record leaves with a valid v2 breakdown for its provider's semantics.
     const detail = ensureTokenBreakdown(
       this.#detail ?? emptyUsageDetail,
       init.provider,
       init.executorType,
     );
+
     const ttftAt = this.#ttftAt ?? this.#firstPacketAt;
 
     return {

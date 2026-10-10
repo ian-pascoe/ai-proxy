@@ -256,6 +256,7 @@ const insertMidConversationSystemBlocks = (
     role: "system",
     content: [forwardedBlock(block, explicit)],
   }));
+
   messages.splice(insertAt, 0, ...systemMessages);
 };
 
@@ -271,7 +272,9 @@ export const prependSystemReminderBlocks = (
   const firstUser = firstUserMessageIndex(body);
 
   if (firstUser < 0 || blocks.length === 0 || !isArr(body.messages)) return;
-  const message = body.messages[firstUser] as JsonObject;
+  const message = body.messages[firstUser];
+
+  if (!isObj(message)) return;
   const content = message.content;
 
   const reminder = (block: ForwardedBlock): JsonObject => {
@@ -322,7 +325,9 @@ export const injectCurrentDate = (body: JsonObject, date: string, explicit: bool
   const firstUser = firstUserMessageIndex(body);
 
   if (firstUser < 0 || !isArr(body.messages)) return;
-  const message = body.messages[firstUser] as JsonObject;
+  const message = body.messages[firstUser];
+
+  if (!isObj(message)) return;
   const content = message.content;
   const dateBlock = textBlock(currentDateReminder(date));
 
@@ -510,8 +515,13 @@ export const buildSensitiveWordMatcher = (
   words: readonly string[],
 ): SensitiveWordMatcher | undefined => {
   const valid = words
-    .map((word) => word.trim())
-    .filter((word) => [...word].length >= 2 && !word.includes(ZERO_WIDTH_SPACE))
+    .flatMap((word) => {
+      const trimmed = word.trim();
+
+      return Array.from(trimmed).length >= 2 && !trimmed.includes(ZERO_WIDTH_SPACE)
+        ? [trimmed]
+        : [];
+    })
     .toSorted((a, b) => new TextEncoder().encode(b).length - new TextEncoder().encode(a).length);
 
   if (valid.length === 0) return undefined;
@@ -524,7 +534,7 @@ export const buildSensitiveWordMatcher = (
     obfuscate: (text) =>
       text.replace(regex, (word) => {
         if (word.includes(ZERO_WIDTH_SPACE)) return word;
-        const first = [...word][0] as string;
+        const first = Array.from(word)[0] ?? word;
 
         return word.length <= first.length
           ? word
@@ -677,6 +687,7 @@ export const planContinuity = (
 /** `applyCloakingInternal`: mutates `body`; returns whether the request was cloaked. */
 export const applyCloaking = (request: CloakRequest): CloakResult => {
   const { body, policy, settings, config, credential } = request;
+
   const none: CloakResult = {
     cloaked: false,
     continuityKey: "",
@@ -778,7 +789,9 @@ export const applyThinkingDisplay = (body: JsonObject): void => {
   const type = str(get(body, "thinking.type")).trim().toLowerCase();
 
   if (type !== "adaptive" && type !== "enabled") return;
-  (body.thinking as JsonObject).display = "updates";
+  const thinking = body.thinking;
+
+  if (isObj(thinking)) thinking.display = "updates";
 };
 
 const credentialTimezone = (config: Config, credential: CredentialSnapshot): string => {

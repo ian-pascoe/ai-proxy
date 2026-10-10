@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
+import type { JsonObject } from "../src/json/index.ts";
 import {
   begin,
   iso,
@@ -86,6 +87,7 @@ describe("xai login", () => {
 
         const polls = () =>
           h.requests.filter((request) => request.url === "https://auth.x.ai/oauth2/token").length;
+
         assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" });
         expect(polls()).toBe(1);
         expect(h.requests[2]?.form()).toEqual({
@@ -164,7 +166,7 @@ describe("xai login", () => {
     Effect.gen(function* () {
       yield* startClock;
 
-      const make = (claims: Record<string, unknown>) =>
+      const make = (claims: JsonObject) =>
         makeOAuth(
           routes({
             [DISCOVERY]: discovery,
@@ -191,6 +193,7 @@ describe("xai login", () => {
           const h = makeOAuth(
             routes({ [DISCOVERY]: discovery, [DEVICE]: device(), [TOKEN]: reply }),
           );
+
           const started = yield* begin(h, "xai");
           const status = yield* statusOf(h, started.state);
           expect(h.files.size).toBe(0);
@@ -443,6 +446,7 @@ describe("meta login", () => {
       const h = makeOAuth(
         routes({ [DEVICE]: deviceReply, [TOKEN]: () => replies.shift() ?? metaPending }),
       );
+
       const started = yield* begin(h, "meta");
       yield* TestClock.adjust(5_000);
       assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "wait" });
@@ -561,11 +565,13 @@ describe("kimi login", () => {
 
       for (const input of [{ provider: "kimi-ai" }, { provider: "kimi", domain: "kimi.ai" }]) {
         const h = makeOAuth(routes({ [AI_DEVICE]: deviceReply, [AI_TOKEN]: tokens }));
+
         const started = yield* begin(
           h,
           input.provider,
           input.domain === undefined ? {} : { domain: input.domain },
         );
+
         expect(started.state).toMatch(/^kmi-ai-/);
         yield* TestClock.adjust(5_000);
         assert.deepStrictEqual(yield* statusOf(h, started.state), { status: "ok" });
@@ -593,6 +599,7 @@ describe("kimi login", () => {
       const h = makeOAuth(
         routes({ [COM_DEVICE]: deviceReply, [COM_TOKEN]: () => replies.shift() ?? pending }),
       );
+
       const started = yield* begin(h, "kimi");
 
       for (const _ of [1, 2]) {
@@ -658,6 +665,7 @@ describe("codex device login", () => {
   const USERCODE = "POST https://auth.openai.com/api/accounts/deviceauth/usercode";
   const POLL = "POST https://auth.openai.com/api/accounts/deviceauth/token";
   const TOKEN = "POST https://auth.openai.com/oauth/token";
+
   const idToken = jwt({
     email: "dev@x.com",
     "https://api.openai.com/auth": { chatgpt_account_id: "acct-123" },
@@ -727,9 +735,11 @@ describe("codex device login", () => {
     Effect.gen(function* () {
       yield* startClock;
       const usercode = { body: { device_auth_id: "dai", user_code: "UC" } };
+
       const failed = makeOAuth(
         routes({ [USERCODE]: usercode, [POLL]: { status: 500, body: "internal" } }),
       );
+
       const first = yield* begin(failed, "codex", { flow: "device" });
       yield* TestClock.adjust(5_000);
       assert.deepStrictEqual(yield* statusOf(failed, first.state), {
@@ -766,9 +776,11 @@ describe("codex device login", () => {
   it.effect("device sessions refuse pasted callbacks", () =>
     Effect.gen(function* () {
       yield* startClock;
+
       const h = makeOAuth(
         routes({ [USERCODE]: { body: { device_auth_id: "dai", user_code: "UC" } } }),
       );
+
       const started = yield* begin(h, "codex", { flow: "device" });
       assert.deepStrictEqual(
         yield* h.run(

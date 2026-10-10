@@ -35,7 +35,7 @@ export const isApplyPatchCustomTool = (tool: Json | undefined): boolean =>
   getStr(tool, "type") === "custom" && getStr(tool, "name").trim() === "apply_patch";
 
 /** `applypatch.Parameters`: an independent copy of the patch input schema. */
-export const applyPatchParameters = (): Json => JSON.parse(PARAMETERS) as Json;
+export const applyPatchParameters = (): Json => JSON.parse(PARAMETERS);
 
 /** `applypatch.Description`. */
 export const applyPatchDescription = (tool: Json | undefined): string => {
@@ -71,7 +71,7 @@ export const unwrapApplyPatchInput = (
   let parsed: Json;
 
   try {
-    parsed = JSON.parse(argumentsText) as Json;
+    parsed = JSON.parse(argumentsText);
   } catch (error) {
     return {
       error: `decode apply_patch arguments object: ${error instanceof Error ? error.message : String(error)}`,
@@ -121,6 +121,10 @@ const hexValue = (c: string): number | undefined => {
   return undefined;
 };
 
+interface ApplyPatchFailure {
+  readonly error: string;
+}
+
 /** Decodes the `input` string from streamed function arguments (`ApplyPatchInputDecoder`). One per call. */
 export class ApplyPatchInputDecoder {
   #phase: Phase = "beforeObject";
@@ -144,6 +148,7 @@ export class ApplyPatchInputDecoder {
     const start = this.#input.length;
 
     for (let i = 0; i < fragment.length; i++) {
+      // SAFETY: the loop condition keeps i < fragment.length.
       const c = fragment[i] as string;
 
       switch (this.#phase) {
@@ -180,7 +185,7 @@ export class ApplyPatchInputDecoder {
             let key: string;
 
             try {
-              key = JSON.parse(this.#keyRaw) as string;
+              key = JSON.parse(this.#keyRaw);
             } catch (error) {
               return this.#fail(
                 `decode apply_patch input key: ${error instanceof Error ? error.message : String(error)}`,
@@ -288,8 +293,11 @@ export class ApplyPatchInputDecoder {
       if (this.#escapeRaw.length < 6) return undefined;
       let code = 0;
 
-      for (const digit of this.#escapeRaw.slice(2))
+      for (const digit of this.#escapeRaw.slice(2)) {
+        // SAFETY: hexValue(c) was checked for every escape digit as it was appended to #escapeRaw.
         code = (code << 4) | (hexValue(digit) as number);
+      }
+
       this.#escapeRaw = "";
 
       if (this.#highSurrogate !== 0) {
@@ -355,7 +363,7 @@ export class ApplyPatchInputDecoder {
     return this.#input;
   }
 
-  #fail(message: string): { readonly error: string } {
+  #fail(message: string): ApplyPatchFailure {
     this.#error = message;
 
     return { error: message };

@@ -45,7 +45,7 @@ const SENSITIVE_VALUE =
 const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
 
 const truncate = (text: string, limit: number): string => {
-  const characters = [...text];
+  const characters = Array.from(text);
 
   return characters.length <= limit ? text : `${characters.slice(0, limit).join("")}…`;
 };
@@ -131,9 +131,12 @@ export const responsesStreamErrorText = (text: string, status: number): string =
     }
 
     if (isJsonObject(errorNode)) {
-      const out: Record<string, Json> = { error: sanitizeNode(errorNode) };
+      const sequenceNumber = root["sequence_number"];
 
-      if (root["sequence_number"] !== undefined) out["sequence_number"] = root["sequence_number"];
+      const out = {
+        error: sanitizeNode(errorNode),
+        ...(sequenceNumber === undefined ? {} : { sequence_number: sequenceNumber }),
+      };
 
       return JSON.stringify(out);
     }
@@ -381,9 +384,12 @@ export const responsesFramer = (options: ResponsesFramerOptions): StreamFramer =
     const items = [
       ...outputOrder.toSorted((a, b) => a - b).map((index) => outputItems.get(index) ?? ""),
       ...unindexed,
-    ]
-      .filter((item) => item !== "")
-      .map((item) => JSON.parse(item) as Json);
+    ].flatMap((item) => {
+      if (item === "") return [];
+      const parsed: Json = JSON.parse(item);
+
+      return [parsed];
+    });
 
     return set(payload, "response.output", items);
   };

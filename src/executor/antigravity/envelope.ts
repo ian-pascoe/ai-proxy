@@ -14,6 +14,7 @@ import {
   isJsonArray,
   isJsonObject,
   type Json,
+  type JsonObject,
   set,
 } from "../../json/index.ts";
 import { renameKey } from "../../translator/gemini/gemini/gemini.ts";
@@ -35,7 +36,7 @@ export const ANTIGRAVITY_COUNT_TOKENS_PATH = "/v1internal:countTokens";
 
 const attributeOrMetadata = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
   key: string,
 ): string => {
   const attribute = attributes[key]?.trim() ?? "";
@@ -49,25 +50,25 @@ const attributeOrMetadata = (
 /** `resolveCustomAntigravityBaseURL`: `base_url` attribute, then metadata (trailing slash trimmed). */
 export const customBaseUrl = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
 ): string => attributeOrMetadata(attributes, metadata, "base_url").replace(/\/+$/, "");
 
 /** `resolveAntigravityRequestBaseURL`: one endpoint, never a cross-tier fallback (daily by default). */
 export const requestBaseUrl = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
 ): string => customBaseUrl(attributes, metadata) || ANTIGRAVITY_BASE_URL_DAILY;
 
 /** `antigravityLoadCodeAssistBaseURL`: `loadCodeAssist` defaults to the prod endpoint. */
 export const loadCodeAssistBaseUrl = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
 ): string => customBaseUrl(attributes, metadata) || ANTIGRAVITY_BASE_URL_PROD;
 
 /** The configured per-credential user agent (`antigravityConfiguredUserAgent`). */
 export const configuredUserAgent = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
 ): string => attributeOrMetadata(attributes, metadata, "user_agent");
 
 const generateSessionId = (): string => {
@@ -241,13 +242,12 @@ export const sanitizeRequestSchemas = (payload: Json, useAntigravitySchema: bool
  * The model-dependent shaping of `buildRequest`: `maxOutputTokens` cap, schema cleaning, Claude `VALIDATED` function
  * calling (non-Claude models lose `maxOutputTokens`). The result still has to go through the payload rules.
  */
-export const shapeRequestPayload = (modelName: string, payload: Json): Json => {
+export const constrainRequestPayload = (modelName: string, payload: Json): Json => {
   const maxOut = get(payload, "request.generationConfig.maxOutputTokens");
 
   if (typeof maxOut === "number") {
-    const info = lookupModelInfo(modelName, "antigravity") as
-      | { readonly maxCompletionTokens?: number }
-      | undefined;
+    const info = lookupModelInfo(modelName, "antigravity");
+
     const limit = info?.maxCompletionTokens ?? 0;
 
     if (limit > 0 && Math.trunc(maxOut) > limit)

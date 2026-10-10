@@ -96,6 +96,7 @@ export class ClaudeMessageAccumulator {
 
   flush(): void {
     if (this.#role === "") return;
+
     const parts =
       this.#toolUseParts.length > 0 ? [...this.#content, ...this.#toolUseParts] : this.#content;
 
@@ -148,11 +149,13 @@ export function alignClaudeToolResults(
 
     if (matched < 0) return content;
     used[matched] = true;
+    // SAFETY: `matched >= 0` was checked above and indexes into `results`.
     reordered.push(results[matched] as Json);
   }
 
   const ordered = [...content];
   indices.forEach((slot, i) => {
+    // SAFETY: `reordered` was built with one entry per index in `indices`, so i is in range.
     ordered[slot] = reordered[i] as Json;
   });
 

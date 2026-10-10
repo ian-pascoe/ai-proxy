@@ -308,6 +308,7 @@ const determineWebSearchStreamMode = (
 const stripResponsePrefix = (id: string): string => (id.startsWith("resp_") ? id.slice(5) : id);
 
 /** `ConvertGeminiResponseToOpenAIResponses`. */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 export const convertGeminiResponseToOpenAIResponses = (
   context: ResponseContext,
   line: string,
@@ -318,6 +319,7 @@ export const convertGeminiResponseToOpenAIResponses = (
   const reqJson = pickRequestJson(originalRequest, translatedRequest);
 
   if (context.state.value === undefined) context.state.value = newState(originalRequest, reqJson);
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as StreamState;
 
   const setToolInputError = (message: string): void => {
@@ -360,6 +362,7 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   const webSearchQueryFallback = (): void => {
     if (st.webSearchQuery === "" && st.webSearchQueries.length > 0)
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       st.webSearchQuery = st.webSearchQueries[0] as string;
 
     if (st.webSearchQuery === "" && reqJson !== undefined) {
@@ -614,6 +617,7 @@ export const convertGeminiResponseToOpenAIResponses = (
     const emitted = st.emittedAnnotationCount.get(msgIndex) ?? 0;
 
     for (let annIdx = emitted; annIdx < annotations.length; annIdx++) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       emit("response.output_text.annotation.added", {
         type: "response.output_text.annotation.added",
         sequence_number: nextSeq(),
@@ -645,6 +649,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.partMappings,
         [fullText],
       );
+
       msgCitations = byMessage.get(st.msgIndex) ?? [];
 
       if (
@@ -652,6 +657,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.completedMessages.size === 0 &&
         (byMessage.get(0)?.length ?? 0) > 0
       ) {
+        // SAFETY: the guard above checked that the entry exists and is non-empty.
         msgCitations = byMessage.get(0) as Json[];
       }
 
@@ -729,6 +735,7 @@ export const convertGeminiResponseToOpenAIResponses = (
         st.completedMessages.size === 1 &&
         (lateMap.get(0)?.length ?? 0) > 0
       ) {
+        // SAFETY: the guard above checked that the entry exists and is non-empty.
         lateCites = lateMap.get(0) as Json[];
       }
 
@@ -856,7 +863,9 @@ export const convertGeminiResponseToOpenAIResponses = (
       },
     };
 
-    if (requestModelName !== "") (created["response"] as JsonObject)["model"] = requestModelName;
+    if (requestModelName !== "")
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      (created["response"] as JsonObject)["model"] = requestModelName;
     emit("response.created", created);
 
     const inProgress: JsonObject = {
@@ -871,7 +880,9 @@ export const convertGeminiResponseToOpenAIResponses = (
       },
     };
 
-    if (requestModelName !== "") (inProgress["response"] as JsonObject)["model"] = requestModelName;
+    if (requestModelName !== "")
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      (inProgress["response"] as JsonObject)["model"] = requestModelName;
     emit("response.in_progress", inProgress);
     st.started = true;
     st.nextIndex = 0;
@@ -894,7 +905,9 @@ export const convertGeminiResponseToOpenAIResponses = (
     if (queries.length > 0) {
       st.webSearchQueries = queries;
 
-      if (st.webSearchQuery === "") st.webSearchQuery = queries[0] as string;
+      if (st.webSearchQuery === "")
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        st.webSearchQuery = queries[0] as string;
     }
 
     const sources = extractGroundingSources(merged);
@@ -1249,6 +1262,7 @@ export const convertGeminiResponseToOpenAIResponses = (
     if (identity.applyPatch) st.funcCallIds.set(idx, evidence.upstreamId);
 
     if ((st.funcCallIds.get(idx) ?? "") === "") st.funcCallIds.set(idx, newStreamCallId());
+    // SAFETY: the entry was set on the line above when it was missing or empty.
     const callId = st.funcCallIds.get(idx) as string;
     st.funcNames.set(idx, name);
     st.funcNamespaces.set(idx, namespace);

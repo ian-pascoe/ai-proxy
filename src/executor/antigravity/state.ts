@@ -44,7 +44,7 @@ export interface AntigravityState {
   /** `markAntigravityCreditsPermanentlyDisabled`: balance `0 / min 1`. */
   markCreditsExhausted(authId: string, now: number): Promise<void>;
   /** Claims the per-credential balance probe slot (10 min); `false` when another probe ran recently. */
-  claimCreditsRefresh(authId: string, now: number): Promise<boolean>;
+  readonly claimCreditsRefresh: CreditsRefreshClaim;
 }
 
 const memoryCooldowns = new Map<string, number>();
@@ -145,6 +145,7 @@ export const makeKvAntigravityState = (
 
   const cooldownKey = (authId: string, model: string): string =>
     `ag:sc:${authId}:${hashModel(model)}`;
+
   const creditsKey = (authId: string): string => `ag:credits:${authId}`;
 
   const putCredits = (authId: string, record: CreditsRecord): Promise<void> =>
@@ -176,6 +177,7 @@ export const makeKvAntigravityState = (
       swallow(async () => {
         const raw = await kv.get(creditsKey(authId));
 
+        // SAFETY: only `putCredits` writes this key, always a serialised `CreditsRecord`.
         return raw === null ? undefined : (JSON.parse(raw) as CreditsRecord);
       }, undefined),
     setCredits: putCredits,

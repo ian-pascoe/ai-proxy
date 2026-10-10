@@ -132,11 +132,13 @@ export const hasUsageFields = (node: Json | undefined): node is Json =>
 export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
   const inputNode = first(node, "prompt_tokens", "input_tokens");
   const outputNode = first(node, "completion_tokens", "output_tokens");
+
   const cached = first(
     node,
     "prompt_tokens_details.cached_tokens",
     "input_tokens_details.cached_tokens",
   );
+
   const reasoning = first(
     node,
     "completion_tokens_details.reasoning_tokens",
@@ -198,8 +200,11 @@ export const parseOpenAIUsageNode = (node: Json): UsageDetail => {
 export const responseServiceTier = (payload: Json | undefined): string | undefined => {
   for (const path of ["response.service_tier", "service_tier", "interaction.service_tier"]) {
     const value = get(payload, path);
-    const tier =
-      typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "";
+
+    let tier = "";
+
+    if (typeof value === "string") tier = value.trim();
+    else if (typeof value === "number") tier = String(value);
 
     if (tier !== "") return tier;
   }

@@ -1,6 +1,7 @@
 // Authentication of one request: Access JWT -> principal -> (for management) admin check. New in the Workers port.
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { ConfigurationError, ForbiddenError, InternalError, UnauthorizedError } from "../errors.ts";
+import type { ConfigStoreError } from "../config/errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { type AdminLists, devBypass, isAdmin, loadAccessConfig } from "./config.ts";
 import type { AccessIdentity, Principal } from "./principal.ts";
@@ -14,7 +15,7 @@ export const ACCESS_JWT_HEADER = "cf-access-jwt-assertion";
 export type AccessError = UnauthorizedError | ForbiddenError | InternalError | ConfigurationError;
 
 /** Additional admin allow-lists (the config document's `access.admin-*`); a failure only denies, never errors. */
-export type ExtraAdmins = Effect.Effect<AdminLists, unknown, WorkerEnv>;
+export type ExtraAdmins = Effect.Effect<AdminLists, ConfigStoreError, WorkerEnv>;
 
 let devBypassRefusalLogged = false;
 
@@ -36,7 +37,7 @@ const isAdminPrincipal = (env: AdminLists, principal: Principal, extra: ExtraAdm
     if (extra === undefined) return false;
     const lists = yield* Effect.result(extra);
 
-    if (lists._tag === "Failure") {
+    if (Result.isFailure(lists)) {
       yield* Effect.logWarning("config admin allow-list unavailable; only ACCESS_ADMIN_* apply");
 
       return false;

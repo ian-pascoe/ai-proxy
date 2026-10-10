@@ -67,6 +67,7 @@ export const writeAtPath = (
   mode: WriteMode,
 ): JsonObject | "invalid_path" => {
   if (parts.length === 0)
+    // SAFETY: an empty path replaces or patches the root, which callers only pass as an object.
     return (mode === "patch" ? mergePatch(document, value) : structuredClone(value)) as JsonObject;
   const root = structuredClone(document);
   let parent: JsonObject = root;
@@ -85,6 +86,7 @@ export const writeAtPath = (
     }
   }
 
+  // SAFETY: parts is non-empty: the empty path returned above.
   const leaf = parts[parts.length - 1] as string;
   parent[leaf] = mode === "patch" ? mergePatch(parent[leaf], value) : structuredClone(value);
 
@@ -92,6 +94,7 @@ export const writeAtPath = (
 };
 
 const removeAt = (node: JsonObject, rest: ReadonlyArray<string>): boolean => {
+  // SAFETY: removeAt is only called with a non-empty path.
   const [head, ...tail] = rest as [string, ...string[]];
 
   if (!Object.hasOwn(node, head)) return false;

@@ -329,6 +329,7 @@ export const convertOpenAIResponseToInteractions = (
     } satisfies OpenAIToInteractionsState;
   }
 
+  // SAFETY: only this translator writes `state.value`, and it is set to an OpenAIToInteractionsState before this call.
   return convertOpenAIChatStreamToInteractions(
     context.model,
     line,

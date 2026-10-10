@@ -19,6 +19,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import { inlineLocalRefs } from "../helps/inline-refs.ts";
 import { parseSuffix } from "../suffix.ts";
@@ -102,7 +103,7 @@ export const supportsNativeImageGeneration = (model: string): boolean => {
   const match = /^(\d+)(?:\.(\d+))?/.exec(rest);
 
   if (match === null) return false;
-  const major = Number.parseInt(match[1] as string, 10);
+  const major = Number.parseInt(match[1] ?? "", 10);
   const minor = match[2] === undefined ? 0 : Number.parseInt(match[2], 10);
 
   return major !== 4 ? major > 4 : minor >= 6;
@@ -456,7 +457,7 @@ const normalizeTool = (
   }
 
   if (toolType === "function" && schemaParameters === undefined) {
-    copy["parameters"] = JSON.parse(EMPTY_OBJECT_SCHEMA) as Json;
+    copy["parameters"] = tryParseJson(EMPTY_OBJECT_SCHEMA) ?? {};
     changed = true;
   }
 
@@ -469,7 +470,7 @@ const normalizeTool = (
       namespaceName,
     )
   ) {
-    copy["parameters"] = JSON.parse(SAFE_FUNCTION_PARAMETERS) as Json;
+    copy["parameters"] = tryParseJson(SAFE_FUNCTION_PARAMETERS) ?? {};
 
     if (get(tool, "strict") === true) copy["strict"] = false;
     changed = true;

@@ -1,5 +1,5 @@
 // Helpers to run provider executors directly against a mocked upstream HttpClient.
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Predicate, Result, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { parseConfigYaml } from "../../src/config/codec.ts";
 import type { Config } from "../../src/config/schema.ts";
@@ -36,7 +36,9 @@ export const recordingClient = (
     HttpClient.HttpClient,
     HttpClient.make((request, url) =>
       Effect.promise(async () => {
-        const bytes = request.body._tag === "Uint8Array" ? request.body.body : new Uint8Array(0);
+        const bytes = Predicate.isTagged(request.body, "Uint8Array")
+          ? request.body.body
+          : new Uint8Array(0);
 
         const call: RecordedCall = {
           url: url.toString(),
@@ -116,7 +118,7 @@ export const harness = async (
 };
 
 export const run = <A, E, R>(effect: Effect.Effect<A, E, R>, layers: Layer.Layer<R>): Promise<A> =>
-  Effect.runPromise(effect.pipe(Effect.provide(layers)) as Effect.Effect<A>);
+  Effect.runPromise(effect.pipe(Effect.provide(layers)));
 
 export const runFail = async <A>(
   effect: Effect.Effect<A, ExecutionError, HttpClient.HttpClient | Thinking>,
@@ -124,7 +126,7 @@ export const runFail = async <A>(
 ): Promise<ExecutionError> => {
   const result = await Effect.runPromise(Effect.result(effect.pipe(Effect.provide(layers))));
 
-  if (result._tag === "Success") throw new Error("expected a failure");
+  if (Result.isSuccess(result)) throw new Error("expected a failure");
 
   return result.failure;
 };
@@ -154,7 +156,7 @@ export const collectStream = async (
     Effect.result(executor.executeStream(h.context, request, opts).pipe(Effect.provide(h.layers))),
   );
 
-  if (started._tag === "Failure") return { chunks: [], error: started.failure };
+  if (Result.isFailure(started)) return { chunks: [], error: started.failure };
   const chunks: string[] = [];
 
   const drained = await Effect.runPromise(
@@ -165,7 +167,7 @@ export const collectStream = async (
     ),
   );
 
-  return drained._tag === "Failure"
+  return Result.isFailure(drained)
     ? { chunks, error: drained.failure, result: started.success }
     : { chunks, result: started.success };
 };
@@ -183,4 +185,4 @@ export const credential = (
   ...overrides,
 });
 
-export const json = (value: unknown): Json => value as Json;
+export const json = (value: Json): Json => value;

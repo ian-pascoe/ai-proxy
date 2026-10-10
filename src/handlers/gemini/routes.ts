@@ -7,7 +7,7 @@
  * interactions_handlers.go (Interactions, parseInteractionsRequestTarget, prepareInteractionsExecutionTarget).
  * Authentication is the Access gate. Difference: a body that is not JSON answers `400 Invalid request`.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import type { ExecutionError } from "../../executor/errors.ts";
@@ -75,7 +75,7 @@ interface Context {
 const readContext = Effect.fnUntraced(function* (request: HttpServerRequest.HttpServerRequest) {
   const configResult = yield* Effect.result(currentConfig);
 
-  if (configResult._tag === "Failure") {
+  if (Result.isFailure(configResult)) {
     return {
       response: errorResponse("openai", configResult.failure, { passthroughHeaders: false }),
     };
@@ -84,7 +84,7 @@ const readContext = Effect.fnUntraced(function* (request: HttpServerRequest.Http
   const config = configResult.success;
   const read = yield* Effect.result(readRequestBody(request));
 
-  if (read._tag === "Failure")
+  if (Result.isFailure(read))
     return { response: badRequest(read.failure.message, read.failure.status) };
 
   if (read.success.json === undefined)
@@ -127,7 +127,7 @@ const run = (
     Effect.gen(function* () {
       const result = yield* Effect.result(executeNonStream(input));
 
-      return result._tag === "Failure"
+      return Result.isFailure(result)
         ? onError(result.failure)
         : jsonResponse(result.success.payload, result.success.headers);
     }),
@@ -148,6 +148,7 @@ const geminiAction = Effect.gen(function* () {
   if (read.response !== undefined) return read.response;
   const { context } = read;
   const alt = altOf(request);
+
   const input: ExecutionInput = {
     entryProtocol: Formats.Gemini,
     model: action.model,
@@ -159,7 +160,7 @@ const geminiAction = Effect.gen(function* () {
   if (action.method === "countTokens") {
     const result = yield* Effect.result(executeCountTokens(input));
 
-    return result._tag === "Failure"
+    return Result.isFailure(result)
       ? errorResponse("openai", result.failure, { passthroughHeaders: context.passthroughHeaders })
       : jsonResponse(result.success.payload, result.success.headers);
   }

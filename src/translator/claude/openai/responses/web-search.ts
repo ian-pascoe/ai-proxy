@@ -37,6 +37,7 @@ export const claudeWebSearchQuery = (input: string): string => {
   if (input === "") return "";
 
   try {
+    // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
     return str(get(JSON.parse(input) as Json, "query")).trim();
   } catch {
     return "";
@@ -85,17 +86,20 @@ export const convertResponsesWebSearchCallToClaudeBlocks = (item: Json): JsonObj
   const query = responsesWebSearchCallQuery(item);
 
   if (query !== "") input.query = query;
+
   const use: JsonObject = {
     type: "server_tool_use",
     id: toolUseID,
     name: CLAUDE_WEB_SEARCH_TOOL_NAME,
     input,
   };
+
   const result: JsonObject = {
     type: "web_search_tool_result",
     tool_use_id: toolUseID,
     content: [],
   };
+
   const content = responsesWebSearchResultsToClaude(get(item, "results"));
 
   if (content !== undefined) result.content = content;
@@ -140,6 +144,7 @@ export const attachClaudeCitations = (
   annotations: Json | undefined,
 ): JsonObject => {
   if (!isArr(annotations)) return textBlock;
+
   const citations = annotations.filter(
     (annotation) => str(get(annotation, "encrypted_index")).trim() !== "",
   );

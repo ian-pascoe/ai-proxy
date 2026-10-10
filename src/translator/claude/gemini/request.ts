@@ -251,6 +251,7 @@ export const convertGeminiRequestToClaude = (
                   ...pendingToolIds.slice(idx + 1),
                 ];
             } else if (pendingToolIds.length > 0) {
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               toolId = pendingToolIds[0] as string;
               pendingToolIds = pendingToolIds.slice(1);
             } else {
@@ -262,6 +263,7 @@ export const convertGeminiRequestToClaude = (
               tool_use_id: toolId,
               content: "",
             };
+
             const result = get(fr, "response.result");
 
             if (exists(result)) toolResult.content = str(result);
@@ -337,6 +339,7 @@ export const convertGeminiRequestToClaude = (
         if (exists(params)) anthropicTool.input_schema = normalizeClaudeToolSchema(params);
         lowercaseSchemaTypes(anthropicTool);
         // Go decodes the tool into a map, so the marshalled object has sorted keys.
+        // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
         anthropicTools.push(sortKeysDeep(anthropicTool) as JsonObject);
       }
     }
@@ -357,6 +360,7 @@ export const convertGeminiRequestToClaude = (
 
   const result =
     applyTranslatedSummaryToClaude(out, root, "gemini", modelName, lookupModelInfo) ?? out;
+
   const refusal = drops.err(result);
 
   if (refusal !== undefined) throw refusal;
@@ -368,6 +372,7 @@ const sortKeysDeep = (value: Json): Json => {
   if (isArr(value)) return value.map(sortKeysDeep);
 
   if (isObj(value)) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()
@@ -395,7 +400,7 @@ type Path = Array<string | number>;
 
 const collectTypePaths = (node: Json, path: Path, paths: Path[]): void => {
   const children: Array<[string | number, Json]> = isArr(node)
-    ? node.map((child, index) => [index, child] as [number, Json])
+    ? node.map((child, index): [number, Json] => [index, child])
     : isObj(node)
       ? Object.entries(node)
       : [];
@@ -421,30 +426,36 @@ const getAt = (root: Json, path: Path): Json | undefined => {
   return current;
 };
 
+const readChild = (holder: JsonObject | Json[], segment: string | number): Json | undefined => {
+  if (!isArr(holder)) return holder[String(segment)];
+
+  return typeof segment === "number" ? holder[segment] : undefined;
+};
+
+const writeChild = (holder: JsonObject | Json[], segment: string | number, value: Json): void => {
+  if (!isArr(holder)) holder[String(segment)] = value;
+  else if (typeof segment === "number") holder[segment] = value;
+};
+
 /** sjson-like set: a non-container parent along the path is replaced by an object. */
 const setAt = (root: JsonObject, path: Path, value: Json): void => {
   let current: JsonObject | Json[] = root;
 
-  for (let i = 0; i < path.length; i++) {
-    const segment = path[i] as string | number;
-    const last = i === path.length - 1;
-    const holder = current as Record<string, Json> & Json[];
-    const key = isArr(current) ? (segment as number) : String(segment);
-
-    if (last) {
-      holder[key as never] = value as never;
+  for (const [i, segment] of path.entries()) {
+    if (i === path.length - 1) {
+      writeChild(current, segment, value);
 
       return;
     }
 
-    let next = holder[key as never] as Json | undefined;
+    let next = readChild(current, segment);
 
     if (!isObj(next) && !isArr(next)) {
       next = {};
-      holder[key as never] = next as never;
+      writeChild(current, segment, next);
     }
 
-    current = next as JsonObject | Json[];
+    current = next;
   }
 };
 

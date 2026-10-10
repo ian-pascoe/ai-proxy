@@ -23,6 +23,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import { isValidGptReasoningSignature } from "../../signature/gpt.ts";
 import { sanitizeClaudeToolId } from "../../translator/common/tool-names.ts";
@@ -165,18 +166,20 @@ const normalizeItem = (item: Json): Json | undefined => {
 };
 
 const normalizeItems = (items: ReadonlyArray<Json>): Json[] =>
-  trimItems(items.map(normalizeItem).filter((item): item is Json => item !== undefined));
+  trimItems(
+    items.flatMap((item) => {
+      const normalized = normalizeItem(item);
+
+      return normalized === undefined ? [] : [normalized];
+    }),
+  );
 
 const parseItems = (text: string | undefined): Json[] | undefined => {
   if (text === undefined) return undefined;
 
-  try {
-    const parsed: unknown = JSON.parse(text);
+  const parsed = tryParseJson(text);
 
-    return Array.isArray(parsed) ? (parsed as Json[]) : undefined;
-  } catch {
-    return undefined;
-  }
+  return isJsonArray(parsed) ? parsed : undefined;
 };
 
 /** `CacheCodexReasoningReplayItems` merge: appends a normalised turn unless its turn id is cached already. */
@@ -224,6 +227,7 @@ export const makeSessionStateReplayStore = (
       undefined,
       Effect.gen(function* () {
         const state = yield* backend;
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           { op: "get", key: modelName.trim() },
         ]);
@@ -293,8 +297,7 @@ const prefixFingerprint = (items: readonly Json[], end: number): string => {
   if (end < 0 || end > items.length) return "";
   const hash = createHash("sha256");
 
-  for (let index = 0; index < end; index++)
-    hash.update("\u0000item\u0000").update(itemRaw(items[index] as Json));
+  for (const item of items.slice(0, end)) hash.update("\u0000item\u0000").update(itemRaw(item));
 
   return hash.digest("hex");
 };
@@ -315,22 +318,21 @@ class PrefixFingerprints {
 
     while (this.#sums.length <= end) {
       const next = this.#sums.length - 1;
-      this.#hash.update("\u0000item\u0000").update(itemRaw(this.#items[next] as Json));
+      const item = this.#items[next];
+
+      if (item === undefined) return "";
+      this.#hash.update("\u0000item\u0000").update(itemRaw(item));
       this.#sums.push(this.#hash.copy().digest("hex"));
     }
 
-    return this.#sums[end] as string;
+    return this.#sums[end] ?? "";
   }
 }
 
 const sessionKeyFromTurnMetadata = (turnMetadata: string): string => {
-  let parsed: Json | undefined;
+  const parsed = tryParseJson(turnMetadata);
 
-  try {
-    parsed = JSON.parse(turnMetadata) as Json;
-  } catch {
-    return "";
-  }
+  if (parsed === undefined) return "";
 
   const promptCacheKey = asString(get(parsed, "prompt_cache_key")).trim();
 
@@ -388,13 +390,9 @@ export const claudeCodeExecutionScope = (
     const userId = asString(get(payload, "metadata.user_id"));
     const match = /_session_([a-f0-9-]+)$/.exec(userId);
 
-    if (match !== null) sessionId = match[1] as string;
+    if (match !== null) sessionId = match[1] ?? "";
     else if (userId.startsWith("{")) {
-      try {
-        sessionId = asString(get(JSON.parse(userId) as Json, "session_id")).trim();
-      } catch {
-        sessionId = "";
-      }
+      sessionId = asString(get(tryParseJson(userId), "session_id")).trim();
     }
   }
 
@@ -538,6 +536,7 @@ const assistantMessageFingerprint = (item: Json): string => {
 
 const splitTurns = (items: ReadonlyArray<Json>): ReplayTurn[] => {
   const turns: ReplayTurn[] = [];
+
   let current: ReplayTurn = {
     marked: false,
     assistantFingerprint: "",
@@ -643,8 +642,7 @@ export const insertIndexFor = (
   }
 
   if (replayCallIds.size > 0) {
-    for (let index = 0; index < inputItems.length; index++) {
-      const item = inputItems[index] as Json;
+    for (const [index, item] of inputItems.entries()) {
       const type = asString(get(item, "type")).trim();
 
       if (type !== "function_call_output" && type !== "custom_tool_call_output") continue;
@@ -654,13 +652,12 @@ export const insertIndexFor = (
     }
   }
 
-  for (let index = inputItems.length - 1; index >= 0; index--) {
-    if (messageRole(inputItems[index] as Json) === "assistant") return index;
-  }
+  const lastAssistant = inputItems.findLastIndex((item) => messageRole(item) === "assistant");
 
-  for (let index = 0; index < inputItems.length; index++) {
-    if (shouldInsertBefore(inputItems[index] as Json)) return index;
-  }
+  if (lastAssistant >= 0) return lastAssistant;
+  const insertBefore = inputItems.findIndex((item) => shouldInsertBefore(item));
+
+  if (insertBefore >= 0) return insertBefore;
 
   return inputItems.length;
 };
@@ -797,7 +794,9 @@ const turnAnchorIndex = (
 
     for (let index = searchEnd; index >= 0; index--) {
       if (used.has(index) || !matchesPrefix(index)) continue;
-      const item = inputItems[index] as Json;
+      const item = inputItems[index];
+
+      if (item === undefined) continue;
       const type = asString(get(item, "type")).trim();
 
       if (
@@ -822,7 +821,12 @@ const turnAnchorIndex = (
     for (let index = searchEnd; index >= 0; index--) {
       if (used.has(index) || !matchesPrefix(index)) continue;
 
-      if (assistantMessageFingerprint(inputItems[index] as Json) === turn.assistantFingerprint)
+      const candidate = inputItems[index];
+
+      if (
+        candidate !== undefined &&
+        assistantMessageFingerprint(candidate) === turn.assistantFingerprint
+      )
         return index;
     }
   }
@@ -847,9 +851,9 @@ export const insertReplayTurns = (body: Json, replayItems: ReadonlyArray<Json>):
   let inserted = false;
 
   for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex--) {
-    const turn = turns[turnIndex] as ReplayTurn;
+    const turn = turns[turnIndex];
 
-    if (turn.items.length === 0) continue;
+    if (turn === undefined || turn.items.length === 0) continue;
 
     if (!turn.marked) {
       let items = filterItemsForInput(inputItems, turn.items);

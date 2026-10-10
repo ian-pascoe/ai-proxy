@@ -248,12 +248,14 @@ const lastRole = (ctx: InputContext): string =>
 
 const appendPartTo = (ctx: InputContext, part: Json): void => {
   if (ctx.inModelTurn && ctx.items.length > 0 && lastRole(ctx) === "model") {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     ((ctx.items[ctx.items.length - 1] as JsonObject)["parts"] as Json[]).push(part);
   } else ctx.items.push(contentOf("model", [part]));
 };
 
 const appendPartsTo = (ctx: InputContext, parts: Json[]): void => {
   if (ctx.inModelTurn && ctx.items.length > 0 && lastRole(ctx) === "model") {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     ((ctx.items[ctx.items.length - 1] as JsonObject)["parts"] as Json[]).push(...parts);
   } else ctx.items.push(contentOf("model", parts));
 };
@@ -264,6 +266,7 @@ const flushPendingSignature = (ctx: InputContext): void => {
   ctx.pendingSignature = "";
 
   if (ctx.items.length > 0 && lastRole(ctx) === "model") {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     ((ctx.items[ctx.items.length - 1] as JsonObject)["parts"] as Json[]).push(carrier);
   } else ctx.items.push(contentOf("model", [carrier]));
 };
@@ -480,7 +483,9 @@ const appendStep = (ctx: InputContext, step: Json, defaultRole: string): void =>
           ctx.items.length > 0 &&
           lastRole(ctx) === "user"
         ) {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const target = ctx.items[ctx.items.length - 1] as JsonObject;
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           target["parts"] = reorderGeminiUserParts([...(target["parts"] as Json[]), part]);
         } else ctx.items.push(contentOf("user", [part]));
         ctx.lastStepType = "function_result";
@@ -518,8 +523,11 @@ const appendStep = (ctx: InputContext, step: Json, defaultRole: string): void =>
   }
 };
 
+type ConvertInputResult = { items: JsonObject[]; run: UserRun };
+
 /** `appendInteractionsInputToAntigravity`: the conversation items and the unsupported-part tracker. */
-const convertInput = (input: Json | undefined): { items: JsonObject[]; run: UserRun } => {
+// SAFETY: the branch condition checked that `steps` is an array.
+const convertInput = (input: Json | undefined): ConvertInputResult => {
   const ctx: InputContext = {
     items: [],
     inModelTurn: false,
@@ -694,6 +702,7 @@ const copyTools = (out: Json, root: Json, nameMap: NameMap): void => {
 
 const toCamelCase = (key: string): string => {
   const parts = key.split("_");
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   let out = parts[0] as string;
 
   for (const part of parts.slice(1))

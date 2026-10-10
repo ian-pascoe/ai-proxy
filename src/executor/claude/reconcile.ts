@@ -10,7 +10,7 @@
  * before the request is sent (AGENTS.md), so nothing may rewrite the body afterwards. The functions are ported (and
  * tested against the Go cases) for callers that apply payload rules earlier.
  */
-import { cloneJson, get, type Json, type JsonObject } from "../../json/index.ts";
+import { cloneJson, get, type JsonObject } from "../../json/index.ts";
 import { isArr, isObj, str } from "../../translator/common/gjson.ts";
 import { textBlock } from "./cache-control.ts";
 import {
@@ -152,8 +152,13 @@ export const reconcileFableModelAfterPayload = (
     if (thinking !== undefined) {
       const type = str(get(thinking, "type"));
 
-      if (type === "adaptive" && get(thinking, "display") === undefined && !payloadTouchedDisplay) {
-        (thinking as JsonObject).display = "updates";
+      if (
+        type === "adaptive" &&
+        isObj(thinking) &&
+        get(thinking, "display") === undefined &&
+        !payloadTouchedDisplay
+      ) {
+        thinking.display = "updates";
       } else if (
         type !== "adaptive" &&
         state.injectedDisplay &&
@@ -232,7 +237,9 @@ export const captureSystemPlacement = (
   const insertedRaw: string[] = [];
 
   for (const [index, text] of texts.entries()) {
-    const message = afterMessages[insertAt + index] as Json;
+    const message = afterMessages[insertAt + index];
+
+    if (message === undefined) return NO_PLACEMENT;
 
     if (
       str(get(message, "role")) !== "system" ||

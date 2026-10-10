@@ -15,16 +15,21 @@ import {
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
 import { ExecutionError } from "../errors.ts";
+import type { Json } from "../../json/index.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import { DEVIN_DEFAULT_BASE_URL } from "./wire.ts";
 import { normalizeDevinUuid } from "./interactions.ts";
 
-const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
+
+export interface DevinCredentials {
+  readonly apiKey: string;
+  readonly baseUrl: string;
+  readonly deviceSeed: string;
+}
 
 /** `devinAuthCredentials`: session token (`api_key`, `session_token`, `token`), base URL and device seed. */
-export const devinCredentials = (
-  credential: CredentialSnapshot,
-): { readonly apiKey: string; readonly baseUrl: string; readonly deviceSeed: string } => {
+export const devinCredentials = (credential: CredentialSnapshot): DevinCredentials => {
   const { attributes, metadata } = credential;
 
   const apiKey =
@@ -95,12 +100,17 @@ export const resetSessionTurnIndex = (sessionId: string, callerScope = ""): void
   );
 };
 
+export interface DevinSessionIds {
+  readonly sessionId: string;
+  readonly cascadeId: string;
+}
+
 /** `resolveDevinSessionAndCascadeIDs`: the protocol session id (or a random one) as UUIDs. */
 export const resolveSessionIds = (
   sessionId: string,
   cascadeId: string,
   fallbackSessionId: string | undefined,
-): { readonly sessionId: string; readonly cascadeId: string } => {
+): DevinSessionIds => {
   const session = normalizeDevinUuid(sessionId !== "" ? sessionId : (fallbackSessionId ?? ""));
 
   return {

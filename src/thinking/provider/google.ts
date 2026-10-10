@@ -53,6 +53,7 @@ export const applyLevelFormat = (
   if (config.mode !== "none" && config.mode !== "level") return body;
 
   const include = readIncludeThoughts(body, prefix);
+
   let result = clearConflicting(body, prefix, [
     "thinkingBudget",
     "thinking_budget",
@@ -83,6 +84,7 @@ export const applyBudgetFormat = (
   ) => { readonly budget: number | "removed"; readonly body: Json | undefined },
 ): Json | undefined => {
   const include = readIncludeThoughts(body, prefix);
+
   let result = clearConflicting(body, prefix, [
     "thinkingLevel",
     "thinking_level",

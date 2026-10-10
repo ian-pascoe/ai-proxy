@@ -1,6 +1,6 @@
 // End-to-end tests (workerd) of the OpenAI-compatible upstream for every client protocol: Claude Messages, Responses,
 // Responses-shaped chat payloads, Gemini/Interactions through the executor, and the Images API.
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Predicate, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
@@ -87,7 +87,7 @@ const STREAM = [
   "data: [DONE]\n\n",
 ];
 
-const at = (value: unknown, path: string): unknown => get(value as Json, path);
+const at = (value: Json | undefined, path: string): Json | undefined => get(value, path);
 
 let config: Config;
 
@@ -115,7 +115,7 @@ describe("Claude Messages client -> OpenAI-compatible upstream", () => {
     );
 
     expect(response.status).toBe(200);
-    const upstream: unknown = JSON.parse(p.calls[0]!.body);
+    const upstream: Json = JSON.parse(p.calls[0]!.body);
     expect(p.calls[0]!.url).toBe("https://upstream.test/v1/chat/completions");
     expect(at(upstream, "model")).toBe("upstream-model");
     expect(at(upstream, "messages.0")).toEqual({
@@ -124,7 +124,7 @@ describe("Claude Messages client -> OpenAI-compatible upstream", () => {
     });
     expect(at(upstream, "tools.0.function.name")).toBe("lookup");
     expect(at(upstream, "metadata")).toEqual({ via: "payload-rule" });
-    const body: unknown = await response.json();
+    const body: Json = await response.json();
     expect(at(body, "type")).toBe("message");
     expect(at(body, "stop_reason")).toBe("tool_use");
     expect(at(body, "content.#.type")).toEqual(["text", "tool_use"]);
@@ -172,12 +172,12 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
     );
 
     expect(response.status).toBe(200);
-    const upstream: unknown = JSON.parse(p.calls[0]!.body);
+    const upstream: Json = JSON.parse(p.calls[0]!.body);
     expect(at(upstream, "messages")).toEqual([
       { role: "system", content: "sys" },
       { role: "user", content: "hi" },
     ]);
-    const body: unknown = await response.json();
+    const body: Json = await response.json();
     expect(at(body, "object")).toBe("response");
     expect(at(body, "output.#.type")).toEqual(["message", "function_call"]);
   });
@@ -185,10 +185,12 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
   it("translates /v1/responses streams and ends them with response.completed", async () => {
     const p = pipeline(() => sseResponse(STREAM));
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "alias-model", input: "hi", stream: true }),
     );
+
     const text = await response.text();
     expect(text).toContain("event: response.created");
     expect(text).toContain("event: response.output_text.delta");
@@ -226,7 +228,7 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
 
     expect(response.status).toBe(200);
     expect(p.calls[0]?.url).toBe("https://upstream.test/v1/responses/compact");
-    const upstream: unknown = JSON.parse(p.calls[0]!.body);
+    const upstream: Json = JSON.parse(p.calls[0]!.body);
     expect(at(upstream, "model")).toBe("upstream-model");
     expect(at(upstream, "stream")).toBeUndefined();
     expect(at(upstream, "messages")).toBeUndefined();
@@ -235,7 +237,7 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
     expect(at(upstream, "prompt_cache_key")).toBeUndefined();
     // Reasoning cleartext never reaches the upstream.
     expect(at(upstream, "input.1.content")).toEqual([]);
-    const body: unknown = await response.json();
+    const body: Json = await response.json();
     expect(at(body, "object")).toBe("response.compaction");
     expect(at(body, "output.0.encrypted_content")).toBe("opaque");
     expect(p.records[0]?.detail).toMatchObject({ inputTokens: 4, outputTokens: 1 });
@@ -251,7 +253,7 @@ describe("Responses client -> OpenAI-compatible upstream", () => {
     );
 
     expect(response.status).toBe(200);
-    const upstream: unknown = JSON.parse(p.calls[0]!.body);
+    const upstream: Json = JSON.parse(p.calls[0]!.body);
     expect(at(upstream, "messages")).toEqual([
       { role: "system", content: "sys" },
       { role: "user", content: "hi" },
@@ -290,13 +292,13 @@ describe("Gemini and Interactions clients through the executor", () => {
     stream: boolean,
     upstream: () => Response,
   ) => {
-    const bodies: unknown[] = [];
+    const bodies: Json[] = [];
 
     const client = Layer.succeed(
       HttpClient.HttpClient,
       HttpClient.make((request) =>
         Effect.sync(() => {
-          if (request.body._tag === "Uint8Array") {
+          if (Predicate.isTagged(request.body, "Uint8Array")) {
             bodies.push(JSON.parse(new TextDecoder().decode(request.body.body)));
           }
 
@@ -374,7 +376,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       role: "system",
       content: [{ type: "text", text: "sys" }],
     });
-    const body: unknown = JSON.parse((output as { payload: string }).payload);
+    const body: Json = JSON.parse((output as { payload: string }).payload);
     expect(JSON.stringify(at(body, "candidates.0.content.parts"))).toContain("functionCall");
     expect(at(body, "usageMetadata.totalTokenCount")).toBe(7);
   });
@@ -401,7 +403,7 @@ describe("Gemini and Interactions clients through the executor", () => {
     );
 
     expect(at(bodies[0], "messages.#.role")).toEqual(["system", "user"]);
-    const body: unknown = JSON.parse((output as { payload: string }).payload);
+    const body: Json = JSON.parse((output as { payload: string }).payload);
     expect(at(body, "object")).toBe("interaction");
     expect(at(body, "steps.#.type")).toEqual(["model_output", "function_call"]);
   });
@@ -439,6 +441,7 @@ describe("Gemini and Interactions clients through the executor", () => {
         false,
         () => new Response(JSON.stringify(COMPLETION)),
       );
+
       expect(at(bodies[0], "metadata"), format).toEqual({ via: "payload-rule" });
     }
   });
@@ -539,26 +542,32 @@ describe("Images API against an OpenAI-compatible image model", () => {
   it("rejects unknown image models and surfaces upstream failures", async () => {
     const p = pipeline(() => jsonResponse({ error: { message: "no" } }, { status: 429 }));
     afterAll(p.dispose);
+
     const unknown = await p.call(
       "/v1/images/generations",
       postJson({ model: "not-an-image", prompt: "x" }),
     );
+
     expect(unknown.status).toBe(400);
     expect(p.calls).toHaveLength(0);
+
     const failed = await p.call(
       "/v1/images/generations",
       postJson({ model: "image-model", prompt: "x" }),
     );
+
     expect(failed.status).toBe(429);
   });
 
   it("answers 502 when the upstream returns no image output", async () => {
     const p = pipeline(() => jsonResponse({ data: [] }));
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ model: "image-model", prompt: "x" }),
     );
+
     expect(response.status).toBe(502);
   });
 });

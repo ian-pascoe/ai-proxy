@@ -5,7 +5,7 @@
  */
 import { Effect } from "effect";
 import { HttpClient, type HttpClientRequest } from "effect/http";
-import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
 import { refreshError, type RefreshError } from "./error.ts";
 
 export interface HttpReply {
@@ -54,25 +54,20 @@ export const send = (
   );
 
 export const parseJsonObject = (text: string): JsonObject | undefined => {
-  try {
-    const parsed: unknown = JSON.parse(text);
+  const parsed = tryParseJson(text);
 
-    return isJsonObject(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  return isJsonObject(parsed) ? parsed : undefined;
 };
 
-export const str = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+export const str = (value: Json | undefined): string =>
+  typeof value === "string" ? value.trim() : "";
 
 /** Seconds field of a token response (number or numeric string); `0` when absent or invalid. */
-export const seconds = (value: unknown): number => {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value.trim())
-        : Number.NaN;
+export const seconds = (value: Json | undefined): number => {
+  let parsed = Number.NaN;
+
+  if (typeof value === "number") parsed = value;
+  else if (typeof value === "string") parsed = Number(value.trim());
 
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };

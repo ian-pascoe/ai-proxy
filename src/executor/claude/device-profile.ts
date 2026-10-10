@@ -12,6 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
+import { isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
 import type { Config } from "../../config/schema.ts";
 import {
   type BackendResolver,
@@ -56,7 +57,7 @@ const parseVersion = (userAgent: string): Version | undefined => {
 
 const compareVersions = (left: Version, right: Version): number => {
   for (let index = 0; index < 3; index += 1) {
-    const difference = (left[index] as number) - (right[index] as number);
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
 
     if (difference !== 0) return difference > 0 ? 1 : -1;
   }
@@ -154,6 +155,7 @@ export const deviceProfileStabilizationEnabled = (config: Config): boolean =>
 /** `claudeDeviceProfileSubclientScope`: distinct first-party clients never replace each other's stored profile. */
 const subclientScope = (profile: DeviceProfile | undefined): string => {
   if (profile === undefined) return "";
+
   const entrypoint = (USER_AGENT_DETAILS.exec(profile.userAgent.trim())?.[1] ?? "")
     .trim()
     .toLowerCase();
@@ -188,17 +190,20 @@ const parseStored = (text: string | undefined): DeviceProfile | undefined => {
   if (text === undefined) return undefined;
 
   try {
-    const parsed = JSON.parse(text) as Partial<Record<keyof DeviceProfile, unknown>> | null;
+    const parsed = tryParseJson(text);
 
-    if (parsed === null || typeof parsed !== "object") return undefined;
-    const field = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+    if (parsed === undefined || parsed === null || typeof parsed !== "object") return undefined;
+    const record = isJsonObject(parsed) ? parsed : {};
+
+    const field = (value: Json | undefined): string =>
+      typeof value === "string" ? value.trim() : "";
 
     const profile: DeviceProfile = {
-      userAgent: field(parsed.userAgent),
-      packageVersion: field(parsed.packageVersion),
-      runtimeVersion: field(parsed.runtimeVersion),
-      os: field(parsed.os),
-      arch: field(parsed.arch),
+      userAgent: field(record.userAgent),
+      packageVersion: field(record.packageVersion),
+      runtimeVersion: field(record.runtimeVersion),
+      os: field(record.os),
+      arch: field(record.arch),
     };
 
     return profile.userAgent === "" ? undefined : profile;

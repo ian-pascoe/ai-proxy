@@ -7,16 +7,16 @@
  */
 import type { Config } from "./schema.ts";
 
-const UNITS: Readonly<Record<string, number>> = {
-  ns: 1e-6,
-  us: 1e-3,
-  µs: 1e-3,
-  μs: 1e-3,
-  ms: 1,
-  s: 1000,
-  m: 60_000,
-  h: 3_600_000,
-};
+const UNITS = new Map<string, number>([
+  ["ns", 1e-6],
+  ["us", 1e-3],
+  ["µs", 1e-3],
+  ["μs", 1e-3],
+  ["ms", 1],
+  ["s", 1000],
+  ["m", 60_000],
+  ["h", 3_600_000],
+]);
 
 /** Go `time.ParseDuration` in milliseconds (`1h30m`, `1.5s`, `300ms`, `0`); `undefined` when invalid. */
 export const parseGoDuration = (input: string): number | undefined => {
@@ -30,10 +30,11 @@ export const parseGoDuration = (input: string): number | undefined => {
   let total = 0;
 
   for (const part of text.replace(/^[+-]/, "").matchAll(/(\d+\.?\d*|\.\d+)([a-zµμ]+)/g)) {
-    const unit = UNITS[part[2] as string];
+    const [, amount = "", unitName = ""] = part;
+    const unit = UNITS.get(unitName);
 
     if (unit === undefined) return undefined;
-    total += Number.parseFloat(part[1] as string) * unit;
+    total += Number.parseFloat(amount) * unit;
   }
 
   return sign * total;

@@ -91,7 +91,9 @@ export const normalizeToCanonicalUuid = (rawId: string): string => {
   }
 
   const sum = createHash("sha256").update(`cpa:canonical-uuid:v1\0${clean}`).digest();
+  // SAFETY: a SHA-256 digest has 32 bytes, so index 6 exists.
   sum[6] = ((sum[6] as number) & 0x0f) | 0x80;
+  // SAFETY: a SHA-256 digest has 32 bytes, so index 8 exists.
   sum[8] = ((sum[8] as number) & 0x3f) | 0x80;
   const hex = sum.subarray(0, 16).toString("hex");
 
@@ -241,7 +243,11 @@ const firstField = (
   object: JsonObject,
   ...keys: string[]
 ): { readonly value: Json } | undefined => {
-  for (const key of keys) if (Object.hasOwn(object, key)) return { value: object[key] as Json };
+  for (const key of keys) {
+    const value = object[key];
+
+    if (Object.hasOwn(object, key) && value !== undefined) return { value };
+  }
 
   return undefined;
 };
@@ -313,6 +319,7 @@ const appendParts = (parts: DerivedPart[], value: Json | undefined): void => {
   if (Object.hasOwn(value, "parts")) return appendParts(parts, value["parts"]);
 
   if (Object.hasOwn(value, "image_url"))
+    // SAFETY: hasOwn("image_url") was checked and JsonObject values are Json.
     return appendMediaPart(parts, "image", value["image_url"] as Json, "");
   const inline = firstField(value, "inlineData", "inline_data");
 
@@ -325,6 +332,7 @@ const appendParts = (parts: DerivedPart[], value: Json | undefined): void => {
     return appendMediaPart(
       parts,
       normalizedString(value["type"]),
+      // SAFETY: hasOwn("source") was checked and JsonObject values are Json.
       value["source"] as Json,
       normalizedString(value["media_type"]),
     );
@@ -641,9 +649,12 @@ const asText = (value: Json | undefined): string => (typeof value === "string" ?
  * `extractMessageHashIDs`: FNV hash of the first system/user/assistant messages. `primary` covers all three,
  * `fallback` only system + user (the earlier binding of the same conversation).
  */
-export const messageHashIds = (
-  payload: Json | undefined,
-): { primary: string; fallback: string } => {
+export interface MessageHashIds {
+  readonly primary: string;
+  readonly fallback: string;
+}
+
+export const messageHashIds = (payload: Json | undefined): MessageHashIds => {
   const none = { primary: "", fallback: "" };
 
   if (payload === undefined || !isJsonObject(payload)) return none;

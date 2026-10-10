@@ -46,7 +46,9 @@ import {
 const sorted = (value: JsonObject): JsonObject => {
   const out: JsonObject = {};
 
-  for (const key of Object.keys(value).toSorted()) out[key] = value[key] as Json;
+  for (const key of Object.keys(value).toSorted())
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    out[key] = value[key] as Json;
 
   return out;
 };
@@ -229,6 +231,7 @@ export const convertGeminiRequestToInteractions = (
 
       const currentStepType =
         asBool(get(part, "thought")) && role === "model" ? "thought" : stepType;
+
       inputItems.push({ type: currentStepType, content: [item] });
       sendable++;
     }
@@ -487,12 +490,14 @@ const copyInteractionsTools = (out: Json, root: Json): void => {
               ["web_search", "googleSearch"],
             ] as const) {
               if (Object.hasOwn(rawMap, from)) {
+                // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
                 rawMap[to] = rawMap[from] as Json;
                 delete rawMap[from];
               }
             }
           }
 
+          // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
           entry = sortKeysDeep(rawMap) as JsonObject;
         } else {
           entry = undefined;
@@ -881,6 +886,7 @@ const appendStepToGemini = (ctx: InputContext, item: Json, defaultRole: string):
 };
 
 /** `appendInteractionsInput`; throws the refusal for an emptied user turn. */
+// SAFETY: the branch condition checked that `steps` is an array.
 const appendInteractionsInput = (
   items: JsonObject[],
   input: Json | undefined,

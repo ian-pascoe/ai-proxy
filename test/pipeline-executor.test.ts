@@ -362,9 +362,11 @@ api-keys:
 
         assert.strictEqual(none.code, "auth_not_found");
         assert.strictEqual(none.status, 503);
+
         const empty = yield* Effect.flip(
           picker.pick({ providers: [], model: "m", callerScope: "s" }),
         );
+
         assert.strictEqual(empty.code, "provider_not_found");
         const lease = (yield* picker.pick({ providers, model: "m", callerScope: "s" })).lease;
         yield* picker.report(lease, { success: false, httpStatus: 500 });

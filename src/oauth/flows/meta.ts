@@ -82,8 +82,10 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       const reply = yield* call(
         formPost(META_DEVICE_AUTHORIZATION_URL, { client_id: META_CLIENT_ID }),
       );
+
       const device =
         reply.status >= 200 && reply.status < 300 ? parseJsonObject(reply.text) : undefined;
+
       const deviceCode = str(device?.device_code);
       const userCode = str(device?.user_code);
 
@@ -173,6 +175,7 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
         auth_kind: "oauth",
         access_token: apiKey === "" ? dcaToken : apiKey,
       };
+
       metadata.dca_token = dcaToken;
 
       if (apiKey !== "") metadata.api_key = apiKey;

@@ -7,6 +7,7 @@
  * answers this question because it owns the cooldown state of every credential.
  */
 import { Schema } from "effect";
+import type { Json } from "../../json/index.ts";
 import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts";
 import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts";
 import {
@@ -51,7 +52,7 @@ export type RetryPlan =
   | { readonly retry: false; readonly retryAfterMs?: number }
   | { readonly retry: true; readonly waitMs: number };
 
-const parseIntAny = (value: unknown): number | undefined => {
+const parseIntAny = (value: Json | undefined): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
 
   if (typeof value === "string" && /^\s*-?\d+\s*$/.test(value)) return Number(value.trim());
@@ -84,6 +85,11 @@ const retryRoundStateEligible = (
 ): boolean =>
   error === undefined ? quotaExceeded : isCredentialRetryRoundStatus(error.httpStatus ?? 0);
 
+export interface RetryAvailability {
+  readonly eligible: boolean;
+  readonly next: number;
+}
+
 /**
  * `retryRoundAvailabilityForAuth`: a blocked credential is retry-eligible only with a known future recovery whose
  * last error opens retry rounds (or a quota flag without any error).
@@ -93,7 +99,7 @@ export const retryRoundAvailability = (
   credential: Credential,
   model: string,
   now: number,
-): { readonly eligible: boolean; readonly next: number } => {
+): RetryAvailability => {
   const block = isBlockedForModel(credential, state, model, now);
 
   if (!block.blocked) return { eligible: true, next: 0 };
@@ -192,6 +198,7 @@ export interface RetryPlanInput {
 /** `shouldRetryAfterErrorWithAttempted` steps 3-5 (the caller has already checked the error class). */
 export const planRetry = (input: RetryPlanInput): RetryPlan => {
   const { query, now } = input;
+
   const providers = new Set(
     query.providers.map((provider) => provider.trim().toLowerCase()).filter(Boolean),
   );
@@ -222,6 +229,7 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
     }
 
     if (!providers.has(executorKey(credential))) continue;
+
     const route =
       query.model === "" ? undefined : resolveModelRoute(credential, query.model, input.routing);
 

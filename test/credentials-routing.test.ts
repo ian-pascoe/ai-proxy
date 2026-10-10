@@ -90,11 +90,13 @@ describe("prefixes", () => {
 
   it("selection routes prefixed requests only to matching credentials", () => {
     const h = new Harness({ ...defaultSettings, forceModelPrefix: true });
+
     const pool = [
       entry(cred("a", { prefix: "team" })),
       entry(cred("b")),
       entry(cred("c", { prefix: "other" })),
     ];
+
     expect(h.ids(pool, 3, { model: "team/m" })).toEqual(["a", "a", "a"]);
     expect(h.id(pool, { model: "m" })).toBe("b");
     const route = h.select(pool, { model: "other/m(8192)" });
@@ -138,11 +140,13 @@ describe("OAuth aliases", () => {
 
   it("maps the alias to the upstream name and keeps the thinking suffix", () => {
     const credential = cred("a", { provider: "claude" });
+
     const route = resolveModelRoute(
       credential,
       "Sonnet(8192)",
       context({ oauthModelAlias: global }),
     );
+
     expect(route).toMatchObject({
       requestedModel: "Sonnet(8192)",
       upstreamModel: "claude-sonnet-4-5(8192)",
@@ -163,6 +167,7 @@ describe("OAuth aliases", () => {
       provider: "claude",
       modelAliases: [{ name: "mine", alias: "sonnet" }],
     });
+
     expect(
       resolveModelRoute(account, "sonnet", context({ oauthModelAlias: global }))?.upstreamModel,
     ).toBe("mine");
@@ -184,9 +189,11 @@ describe("OAuth aliases", () => {
       upstreamModel: "same",
       forceMapping: false,
     });
+
     const forced = context({
       oauthModelAlias: { claude: [{ name: "same", alias: "SAME", "force-mapping": true }] },
     });
+
     expect(resolveModelRoute(credential, "same", forced)).toMatchObject({
       forceMapping: true,
       originalAlias: "SAME",

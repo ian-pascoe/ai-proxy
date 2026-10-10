@@ -8,6 +8,7 @@ import {
   makeHarness,
   resetControlPlane,
 } from "./support/management.ts";
+import type { Json } from "../src/json/index.ts";
 
 // The ControlPlane runs in the test isolate and refreshes through Effect's FetchHttpClient, which resolves
 // `globalThis.fetch` once: install one stable fetch that delegates to the current test's upstream.
@@ -23,8 +24,8 @@ const realFetch = globalThis.fetch;
 const harness = makeHarness();
 
 beforeAll(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL) =>
-    upstream(input instanceof Request ? input.url : String(input))) as typeof fetch;
+  globalThis.fetch = async (input: RequestInfo | URL) =>
+    upstream(input instanceof Request ? input.url : String(input));
 });
 
 afterAll(async () => {
@@ -39,7 +40,7 @@ beforeEach(async () => {
 
 const { call, json } = harness;
 
-const upload = async (name: string, content: unknown) =>
+const upload = async (name: string, content: Json) =>
   await json(`/v8/management/credentials?name=${encodeURIComponent(name)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -383,10 +384,12 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
         headers: { "X-A": "", "X-C": "3" },
       }),
     ).toMatchObject({ status: 200, body: { status: "ok" } });
+
     const file = (await json("/v8/management/credentials/download?name=x.json")).body as Record<
       string,
       unknown
     >;
+
     expect(file).toMatchObject({
       priority: 7,
       note: "hello",
@@ -410,10 +413,12 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect((await patch({ note: null, request_retry: null, "nested.value": null })).status).toBe(
       200,
     );
+
     const after = (await json("/v8/management/credentials/download?name=x.json")).body as Record<
       string,
       unknown
     >;
+
     expect(after).not.toHaveProperty("note");
     expect(after).not.toHaveProperty("request_retry");
     expect(after.nested).toEqual({});
@@ -464,6 +469,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       "/v8/management/credentials/refresh",
       jsonInit("POST", { name: "x.json" }),
     );
+
     expect(one.status).toBe(200);
     expect(one.body).toMatchObject({ ok: true, auth: { name: "x.json" } });
     expect(JSON.stringify(one.body)).not.toContain("new-access");
@@ -472,12 +478,15 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     const viaQuery = await json("/v8/management/credentials/refresh?name=y.json", {
       method: "POST",
     });
+
     expect(viaQuery.status).toBe(200);
 
     const all = await json("/v8/management/credentials/refresh", jsonInit("POST", { all: true }));
     expect(all.status).toBe(200);
+
     const results = (all.body as { ok: boolean; results: Array<{ id: string; success: boolean }> })
       .results;
+
     expect(results.map((result) => result.id).toSorted()).toEqual(["x.json", "y.json"]);
     expect(results.every((result) => result.success)).toBe(true);
     expect(
@@ -502,10 +511,12 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
   it("reports a failed refresh without leaking tokens", async () => {
     await upload("x.json", claudeFile());
     upstream = () => Response.json({ error: "invalid_request" }, { status: 400 });
+
     const result = await json(
       "/v8/management/credentials/refresh",
       jsonInit("POST", { name: "x.json" }),
     );
+
     expect(result.status).toBe(500);
     expect(JSON.stringify(result.body)).not.toContain("secret-refresh");
     const all = await json("/v8/management/credentials/refresh", jsonInit("POST", { all: true }));

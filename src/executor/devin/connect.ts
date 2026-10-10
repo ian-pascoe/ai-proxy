@@ -32,7 +32,9 @@ export class ConnectFrameParser {
   }
 
   #flatten(): Uint8Array {
-    if (this.#chunks.length === 1) return this.#chunks[0] as Uint8Array;
+    const [only] = this.#chunks;
+
+    if (this.#chunks.length === 1 && only !== undefined) return only;
     const out = new Uint8Array(this.#size);
     let offset = 0;
 
@@ -56,7 +58,7 @@ export class ConnectFrameParser {
 
     while (this.#size >= 5) {
       const buffer = this.#flatten();
-      const flag = buffer[0] as number;
+      const flag = buffer[0] ?? 0;
 
       if (flag !== 0 && flag !== 1 && flag !== 2 && flag !== 3) {
         throw new ConnectFrameError(

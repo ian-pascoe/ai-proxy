@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
 import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {
   jsonResponse,
@@ -60,7 +61,7 @@ const harness = (
     models,
   });
 
-const upstream = (parts: unknown[], extra: Record<string, unknown> = {}) => ({
+const upstream = (parts: Json[], extra: JsonObject = {}) => ({
   response: {
     candidates: [{ content: { role: "model", parts }, finishReason: "STOP", index: 0 }],
     usageMetadata: {
@@ -76,7 +77,7 @@ const upstream = (parts: unknown[], extra: Record<string, unknown> = {}) => ({
   traceId: "t1",
 });
 
-const sse = (events: unknown[]) =>
+const sse = (events: Json[]) =>
   sseResponse(events.map((event) => `data: ${JSON.stringify(event)}\n\n`));
 
 describe("antigravity executor: non-stream", () => {
@@ -200,10 +201,12 @@ describe("antigravity executor: non-stream", () => {
     );
 
     expect(response.status).toBe(200);
+
     const message = (await response.json()) as {
       content: Array<{ type: string; text?: string }>;
       stop_reason: string;
     };
+
     expect(message.content.find((block) => block.type === "text")?.text).toBe("Hi there");
     expect(message.stop_reason).toBe("end_turn");
 
@@ -279,6 +282,7 @@ describe("antigravity executor: stream", () => {
     const h = harness(() =>
       sse([{ error: { code: 429, message: "slow down", status: "RESOURCE_EXHAUSTED" } }]),
     );
+
     afterAll(h.dispose);
 
     const response = await h.call(
@@ -313,15 +317,19 @@ describe("antigravity executor: errors", () => {
 
   it("records a short cooldown for a rate limit under five minutes and answers the next call without upstream", async () => {
     resetMemoryAntigravityState();
+
     // KV state outlives a test: a unique credential id keeps the cooldown of this test to itself.
     const h = harness(() => jsonResponse(rateLimit("30.000s"), { status: 429 }), {
       credential: unique("cooldown"),
     });
+
     afterAll(h.dispose);
+
     const payload = postJson({
       model: "gemini-2.5-flash",
       messages: [{ role: "user", content: "hi" }],
     });
+
     const first = await h.call("/v1/chat/completions", payload);
     expect(first.status).toBe(429);
     const upstreamCalls = h.calls.length;

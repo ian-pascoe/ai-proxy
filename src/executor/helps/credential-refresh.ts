@@ -10,7 +10,7 @@
  * The conductor wraps every attempt with {@link withCredentialRefresh}, so executors normally do not call it; executors
  * with their own transport paths (WebSocket) can use it directly with their `ExecutionContext`.
  */
-import { Clock, Context, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer, Result } from "effect";
 import { accessTokenExpiry } from "../../credentials/expiry.ts";
 import type { RefreshResult } from "../../credentials/refresh/index.ts";
 import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
@@ -49,7 +49,7 @@ export class CredentialRefresher extends Context.Service<
 
         return yield* Effect.tryPromise({
           try: async () => await run(api(env)),
-          catch: (cause) => cause,
+          catch: () => "unavailable" as const,
         }).pipe(
           Effect.orElseSucceed((): RefreshResult => ({
             ok: false,
@@ -93,7 +93,7 @@ export class CredentialRefresher extends Context.Service<
   );
 }
 
-const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string => {
+const accessTokenOf = (metadata: JsonObject): string => {
   const token = metadata["access_token"];
 
   return typeof token === "string" ? token.trim() : "";
@@ -112,12 +112,12 @@ export const needsPreparation = (credential: CredentialSnapshot, now: number): b
       // Pick injects a cached service-account token; without one it has to be minted.
       return accessTokenOf(metadata) === "";
     case "meta":
-      return metaNeedsMint(metadata as JsonObject);
+      return metaNeedsMint(metadata);
     default: {
       const token = accessTokenOf(metadata);
 
       if (token === "") return true;
-      const expiry = accessTokenExpiry(metadata as JsonObject);
+      const expiry = accessTokenExpiry(metadata);
       const safety = credential.provider === "antigravity" ? ANTIGRAVITY_REQUEST_SAFETY_MS : 0;
 
       return expiry !== undefined && expiry <= now + safety;
@@ -177,12 +177,13 @@ export const withCredentialRefresh = <A, R>(
 
     const first = yield* Effect.result(use(current));
 
-    if (first._tag === "Success") return first.success;
+    if (Result.isSuccess(first)) return first.success;
     const error = first.failure;
 
     if (error.status !== 401) return yield* error;
 
     const rejected = accessTokenOf(current.credential.metadata);
+
     const refreshed = yield* refresher.refreshNow(
       current.credential.id,
       rejected === "" ? undefined : rejected,
@@ -196,6 +197,7 @@ export const withCredentialRefresh = <A, R>(
 
     // The token did not change: repeating the request would only repeat the rejection.
     if (rejected !== "" && accessTokenOf(snapshot.metadata) === rejected) return yield* error;
+
     const next =
       hooks.retry === undefined
         ? { ...current, credential: snapshot }

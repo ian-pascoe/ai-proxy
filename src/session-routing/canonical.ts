@@ -204,6 +204,7 @@ const limitParts = (parts: CanonicalPart[], addedInput: CanonicalPart[]): Canoni
   let added = addedInput;
   let existingDropped = 0;
   let hasAddedMarker = false;
+  // SAFETY: added is non-empty at this point (a part was just appended).
   const lastAdded = added[added.length - 1] as CanonicalPart;
 
   if (truncatedMarker(lastAdded)) {
@@ -536,7 +537,9 @@ const normalizeTurn = (input: CanonicalTurn): CanonicalTurn => {
     const sorted = toolParts.toSorted(
       (a, b) => compareUtf8(a.value, b.value) || compareUtf8(a.digest, b.digest),
     );
+
     toolIndexes.forEach((partIndex, index) => {
+      // SAFETY: sorted is a permutation of toolParts, which has one entry per toolIndexes element.
       parts[partIndex] = sorted[index] as CanonicalPart;
     });
   }

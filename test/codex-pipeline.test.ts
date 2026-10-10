@@ -18,6 +18,7 @@ import {
   type UpstreamResponder,
 } from "./support/pipeline.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { Json } from "../src/json/index.ts";
 
 const YAML = `
 requests:
@@ -46,8 +47,8 @@ const created = (model = "gpt-5.4") => ({
 });
 
 const completed = (
-  output: unknown[] = [],
-  usage: unknown = { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+  output: Json[] = [],
+  usage: Json = { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
 ) => ({
   type: "response.completed",
   response: {
@@ -60,7 +61,7 @@ const completed = (
   },
 });
 
-const frame = (event: unknown): string => {
+const frame = (event: Json): string => {
   const type = (event as { type: string }).type;
 
   return `event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -135,11 +136,13 @@ describe("POST /v1/responses (non-stream)", () => {
     );
 
     expect(response.status).toBe(200);
+
     const body = (await response.json()) as {
       id: string;
       output: unknown[];
       usage: Record<string, unknown>;
     };
+
     expect(body.id).toBe("resp_1");
     // The output was empty in response.completed and is rebuilt from output_item.done.
     expect(body.output).toEqual([MESSAGE_ITEM]);
@@ -193,25 +196,31 @@ describe("POST /v1/responses (non-stream)", () => {
     );
 
     expect(response.status).toBe(200);
+
     const body = (await response.json()) as {
       choices: Array<{ message: { content: string }; finish_reason: string }>;
     };
+
     expect(body.choices[0]?.message.content).toBe("Hello!");
     expect(body.choices[0]?.finish_reason).toBe("stop");
+
     const upstream = JSON.parse(p.calls[0]!.body) as {
       input: Array<{ role: string }>;
       reasoning: { effort: string };
     };
+
     expect(upstream.input.map((item) => item.role)).toEqual(["developer", "user"]);
     expect(upstream.reasoning.effort).toBe("medium");
   });
 
   it("serves the /backend-api/codex alias and accepts an API-key credential with a custom base URL", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), { credentials: [apiKeyCredential()] });
+
     const response = await p.call(
       "/backend-api/codex/responses",
       postJson({ model: "gpt-5.4", input: "hi" }),
     );
+
     expect(response.status).toBe(200);
     const call = p.calls[0]!;
     expect(call.url).toBe("https://codex.example.test/v1/responses");
@@ -236,9 +245,11 @@ describe("payload rules are the final mutation", () => {
     );
 
     expect(response.status).toBe(200);
+
     const body = JSON.parse(p.calls[0]!.body) as Record<string, unknown> & {
       input: Array<{ id: string }>;
     };
+
     // Built-ins force store=false/parallel_tool_calls=true, the override rule has the last word.
     expect(body["store"]).toBe(true);
     expect(body["parallel_tool_calls"]).toBe(false);
@@ -257,10 +268,12 @@ describe("POST /v1/responses (stream)", () => {
     const joined = TEXT_STREAM.join("");
     const pieces = [joined.slice(0, 37), joined.slice(37, 400), joined.slice(400)];
     const p = pipeline(() => sseResponse(pieces));
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi", stream: true }),
     );
+
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     const text = await response.text();
@@ -331,10 +344,12 @@ describe("POST /v1/responses (stream)", () => {
 
   it("turns an upstream failure before the first payload into an HTTP error", async () => {
     const p = pipeline(() => sseResponse([]));
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi", stream: true }),
     );
+
     expect(response.status).toBe(502);
     expect(JSON.stringify(await response.json())).toContain(
       "upstream stream closed before first payload",
@@ -369,10 +384,12 @@ describe("POST /v1/responses (stream)", () => {
     const p = pipeline(() =>
       sseResponse([frame(created()), frame({ type: "response.output_text.delta", delta: "x" })]),
     );
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi", stream: true }),
     );
+
     const text = await response.text();
     expect(text).toContain("event: error");
     expect(text).toContain("stream disconnected before completion");
@@ -390,10 +407,12 @@ describe("POST /v1/responses (stream)", () => {
     };
 
     const p = pipeline(() => sseResponse([frame(created()), frame(incomplete)]));
+
     const response = await p.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi", stream: true }),
     );
+
     expect(await response.text()).toContain("incomplete empty response (0 tokens)");
   });
 });
@@ -419,10 +438,12 @@ describe("upstream error classification", () => {
 
   it("rewrites 401 and context-length bodies and keeps the status", async () => {
     const unauthorized = pipeline(() => new Response("nope", { status: 401 }));
+
     const r401 = await unauthorized.call(
       "/v1/responses",
       postJson({ model: "gpt-5.4", input: "hi" }),
     );
+
     expect(r401.status).toBe(401);
     expect(await r401.text()).toContain("auth_unavailable");
     expect(unauthorized.log.reports[0]?.result).toMatchObject({ success: false, httpStatus: 401 });
@@ -496,10 +517,12 @@ describe("POST /v1/responses/compact", () => {
     };
 
     const p = pipeline(() => jsonResponse(compaction));
+
     const response = await p.call(
       "/v1/responses/compact",
       postJson({ model: "gpt-5.4", input: "hi", stream: false }),
     );
+
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(compaction);
     const call = p.calls[0]!;
@@ -589,11 +612,14 @@ describe("images", () => {
   it("streams direct image events and validates the request", async () => {
     const sse =
       'event: image_generation.partial_image\ndata: {"type":"image_generation.partial_image"}\n\n';
+
     const p = pipeline(() => sseResponse([sse]));
+
     const response = await p.call(
       "/v1/images/generations",
       postJson({ prompt: "x", stream: true }),
     );
+
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("image_generation.partial_image");
     expect(JSON.parse(p.calls[0]!.body)).toEqual({
@@ -656,6 +682,7 @@ describe("POST /v1/alpha/search", () => {
       "/backend-api/codex/alpha/search",
       postJson({ model: "gpt-5.4", query: "q" }),
     );
+
     expect(response.status).toBe(200);
     expect(p.calls[0]!.url).toBe("https://s.test/v1/alpha/search");
     expect(p.calls[0]!.headers["authorization"]).toBe("Bearer k");

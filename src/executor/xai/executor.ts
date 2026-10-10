@@ -620,6 +620,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       stream: false,
       to: Formats.OpenAIResponse,
     });
+
     let body = prepared.body;
 
     for (const field of ["stream", "tools"]) body = del(body, field);
@@ -673,6 +674,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
 
     if (prepared.applyPatch.active) {
       const parsed = tryParseJson(text);
+
       const bridged =
         parsed === undefined ? undefined : prepared.applyPatch.bridge.transformNonStream(parsed);
 
@@ -810,6 +812,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
         status: 502,
         message: "xai websocket compaction returned invalid JSON",
       });
+
       context.usage.fail(error.status, error.message);
 
       return yield* error;
@@ -931,6 +934,7 @@ export const makeXaiExecutor = (executorOptions: XaiExecutorOptions = {}): Provi
       stream: false,
       to: Formats.Codex,
     });
+
     finalizePrepared(context, request, options, prepared);
     const count = countXaiInputTokens(getCodec("o200k_base"), prepared.body);
 

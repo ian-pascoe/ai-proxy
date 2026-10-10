@@ -116,17 +116,17 @@ const SHARED_KEY_FIELDS = [
   "request-scoped-errors",
 ] as const;
 
-const ROUTING_STRATEGY_ALIASES: Readonly<Record<string, string>> = {
-  "round-robin": "round-robin",
-  roundrobin: "round-robin",
-  rr: "round-robin",
-  "weighted-round-robin": "weighted-round-robin",
-  weightedroundrobin: "weighted-round-robin",
-  wrr: "weighted-round-robin",
-  "fill-first": "fill-first",
-  fillfirst: "fill-first",
-  ff: "fill-first",
-};
+const ROUTING_STRATEGY_ALIASES = new Map<string, string>([
+  ["round-robin", "round-robin"],
+  ["roundrobin", "round-robin"],
+  ["rr", "round-robin"],
+  ["weighted-round-robin", "weighted-round-robin"],
+  ["weightedroundrobin", "weighted-round-robin"],
+  ["wrr", "weighted-round-robin"],
+  ["fill-first", "fill-first"],
+  ["fillfirst", "fill-first"],
+  ["ff", "fill-first"],
+]);
 
 /** Moves `from` to `to`; an existing target wins, object values merge key by key. */
 const moveMerge = (doc: JsonObject, from: string, to: string): void => {
@@ -162,7 +162,7 @@ const groupLegacyKeys = (entries: readonly Json[], family: string): Json[] =>
     const key: JsonObject = {};
 
     for (const [field, value] of Object.entries(entry)) {
-      if (field === "base-url" || (SHARED_KEY_FIELDS as readonly string[]).includes(field))
+      if (field === "base-url" || SHARED_KEY_FIELDS.some((shared) => shared === field))
         group[field] = value;
       else key[field] = value;
     }
@@ -295,7 +295,7 @@ const validateApiKeys = (apiKeys: Json | undefined): void => {
  * Converts any supported raw document (parsed YAML or JSON) into the canonical v8 shape expected by the schema.
  * The input is not modified. Throws {@link ConfigValidationError}.
  */
-export const prepareDocument = (raw: unknown): JsonObject => {
+export const prepareDocument = (raw: Json): JsonObject => {
   if (!isJsonObject(raw)) throw new ConfigValidationError({ message: "config must be a mapping" });
   const doc = structuredClone(raw);
 
@@ -334,7 +334,7 @@ export const prepareDocument = (raw: unknown): JsonObject => {
   const strategy = get(out, "routing.strategy");
 
   if (typeof strategy === "string") {
-    const canonical = ROUTING_STRATEGY_ALIASES[strategy.trim().toLowerCase()];
+    const canonical = ROUTING_STRATEGY_ALIASES.get(strategy.trim().toLowerCase());
     // Like Go, an unrecognised strategy falls back to round-robin.
     set(out, "routing.strategy", canonical ?? "round-robin");
   }

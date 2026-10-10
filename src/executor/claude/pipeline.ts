@@ -15,7 +15,7 @@ import {
 import { Effect } from "effect";
 import { applyPayloadRules } from "../../config/payload/index.ts";
 import type { Config } from "../../config/schema.ts";
-import { cloneJson, get, type Json, type JsonObject } from "../../json/index.ts";
+import { cloneJson, get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
 import { isArr, isObj, str } from "../../translator/common/gjson.ts";
 import { Formats } from "../../translator/formats.ts";
 import { lookupModelInfo, withModelInfoLookup } from "../../translator/model-info.ts";
@@ -176,6 +176,7 @@ const disableThinkingIfToolChoiceForced = (body: JsonObject): void => {
 /** `normalizeClaudeSamplingForUpstream`. */
 const normalizeSampling = (body: JsonObject, nativeOwned: boolean): void => {
   const thinkingType = str(get(body, "thinking.type")).trim().toLowerCase();
+
   const thinkingActive =
     thinkingType === "enabled" || thinkingType === "adaptive" || thinkingType === "auto";
 
@@ -246,23 +247,30 @@ const modelIsCompat = (
 const aliasSecret = (options: ExecutorOptions): string =>
   options.metadata.callerScope.trim() || DEFAULT_ALIAS_SECRET;
 
+/** Payload rules keep an object body an object; anything else is a pipeline bug. */
+const payloadBody = (payload: Json): JsonObject => {
+  if (!isJsonObject(payload)) throw new Error("payload rules produced a non-object body");
+
+  return payload;
+};
+
 /** Maps a thrown pipeline failure to an `ExecutionError`. */
-const toExecutionError = (error: unknown): ExecutionError => {
-  if (error instanceof ExecutionError) return error;
+const toExecutionError = (cause: unknown): ExecutionError => {
+  if (cause instanceof ExecutionError) return cause;
 
-  if (error instanceof CloakError) return requestScoped(error.status, error.message);
+  if (cause instanceof CloakError) return requestScoped(cause.status, cause.message);
 
-  if (error instanceof TokenCountValidationError) return requestScoped(400, error.message);
+  if (cause instanceof TokenCountValidationError) return requestScoped(400, cause.message);
 
-  if (error instanceof IdentityError) return requestScoped(400, error.message);
+  if (cause instanceof IdentityError) return requestScoped(400, cause.message);
 
-  if (error instanceof CchSigningError)
-    return new ExecutionError({ status: 500, message: `sign Claude CCH: ${error.message}` });
+  if (cause instanceof CchSigningError)
+    return new ExecutionError({ status: 500, message: `sign Claude CCH: ${cause.message}` });
 
   return new ExecutionError({
     status: 500,
-    message: error instanceof Error ? error.message : "claude request preparation failed",
-    cause: error,
+    message: cause instanceof Error ? cause.message : "claude request preparation failed",
+    cause,
   });
 };
 
@@ -328,6 +336,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   const { services, config, credential, request, options, upstreamStream } = input;
   const thinking = yield* Thinking;
   const c = yield* attempt(() => commonContext(input, "/v1/messages", false));
+
   const {
     baseModel,
     apiKey,
@@ -338,13 +347,16 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     originalPayload,
     parsedUrl,
   } = c;
+
   const from = options.sourceFormat;
   const to = Formats.Claude;
+
   const cchSigning = cchSigningEnabled(
     apiKey,
     fingerprint.profileClaudeCodeCLI,
     parsedUrl.toString(),
   );
+
   const isCompat = modelIsCompat(config, credential, request);
 
   const replayEnabled =
@@ -371,6 +383,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       family !== "" && sessionKey !== ""
         ? yield* services.replay.get(family, sessionKey)
         : undefined;
+
     let applied = false;
 
     if (stored !== undefined) {
@@ -407,6 +420,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
 
   if (translated.error !== undefined)
     return yield* requestScoped(translated.error.status, translated.error.message);
+
   const originalTranslated =
     options.originalRequest === undefined ? translated : translate(options.originalRequest);
 
@@ -454,6 +468,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   // Session continuity is started (one store round trip) before the synchronous request shaping.
   const wire = yield* attempt(() => resolveWirePolicy(config, credential, apiKey, confirmed));
   const now = services.now();
+
   const plan = yield* attempt(() =>
     planContinuity({ config, credential, body, policy: wire.policy, sessionId, now }),
   );
@@ -544,7 +559,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     if (!explicitCacheMode) normalizeCacheControlTTL(body);
     body.stream = upstreamStream;
 
-    const translatedRequest = cloneJson(body) as JsonObject;
+    const translatedRequest = cloneJson(body);
     let reverseMap: ReadonlyMap<string, string> = new Map();
 
     if (fingerprint.mcpAlias && cloaked) {
@@ -611,7 +626,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       body,
     );
 
-    const finalBody = rules.payload as JsonObject;
+    const finalBody = payloadBody(rules.payload);
     const extraBetas = extractAndRemoveBetas(finalBody);
     stripPromptCacheOptions(finalBody);
     const midSystemError = validateMidSystemMessageModel(finalBody, confirmed, firstParty);
@@ -666,6 +681,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
   const { services, config, credential, request, options } = input;
   const thinking = yield* Thinking;
   const c = yield* attempt(() => commonContext(input, "/v1/messages/count_tokens", true));
+
   const {
     baseModel,
     apiKey,
@@ -676,6 +692,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
     originalPayload,
     parsedUrl,
   } = c;
+
   const from = options.sourceFormat;
   const to = Formats.Claude;
   const isCompat = modelIsCompat(config, credential, request);
@@ -697,6 +714,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
 
   if (translated.error !== undefined)
     return yield* requestScoped(translated.error.status, translated.error.message);
+
   const originalTranslated =
     options.originalRequest === undefined ? translated : translate(options.originalRequest);
 
@@ -770,23 +788,26 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
     const midSystemError = validateMidSystemMessageModel(body, confirmed, firstParty);
 
     if (midSystemError !== undefined) throw midSystemError;
+
     // User payload rules last (final barrier), then the final removal of cache options.
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 
-    const finalBody = applyPayloadRules(
-      config,
-      {
-        model: baseModel,
-        requestedModel,
-        protocol: to,
-        fromProtocol: from,
-        requestPath: options.metadata.requestPath,
-        headers: options.headers,
-        original: originalTranslated.body,
-      },
-      body,
-    ).payload as JsonObject;
+    const finalBody = payloadBody(
+      applyPayloadRules(
+        config,
+        {
+          model: baseModel,
+          requestedModel,
+          protocol: to,
+          fromProtocol: from,
+          requestPath: options.metadata.requestPath,
+          headers: options.headers,
+          original: originalTranslated.body,
+        },
+        body,
+      ).payload,
+    );
 
     stripPromptCacheOptions(finalBody);
 
@@ -870,6 +891,7 @@ export const prepareLocalCountBody = Effect.fnUntraced(function* (input: Prepare
 
   if (translated.error !== undefined)
     return yield* requestScoped(translated.error.status, translated.error.message);
+
   const originalTranslated =
     options.originalRequest === undefined ? translated : translate(options.originalRequest);
 
@@ -892,22 +914,25 @@ export const prepareLocalCountBody = Effect.fnUntraced(function* (input: Prepare
     if (rebuildMidSystemEnabled(config, credential))
       rebuildMidSystemMessagesToTopLevel(thinkingBody);
     sanitizeForClaudeUpstream(thinkingBody, baseModel, isCompat);
+
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 
-    const finalBody = applyPayloadRules(
-      config,
-      {
-        model: baseModel,
-        requestedModel,
-        protocol: to,
-        fromProtocol: from,
-        requestPath: options.metadata.requestPath,
-        headers: options.headers,
-        original: originalTranslated.body,
-      },
-      thinkingBody,
-    ).payload as JsonObject;
+    const finalBody = payloadBody(
+      applyPayloadRules(
+        config,
+        {
+          model: baseModel,
+          requestedModel,
+          protocol: to,
+          fromProtocol: from,
+          requestPath: options.metadata.requestPath,
+          headers: options.headers,
+          original: originalTranslated.body,
+        },
+        thinkingBody,
+      ).payload,
+    );
 
     stripPromptCacheOptions(finalBody);
     validateTokenCountRequest(finalBody);

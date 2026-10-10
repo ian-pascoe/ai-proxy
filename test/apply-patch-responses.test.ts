@@ -6,7 +6,6 @@ import {
   ApplyPatchResponsesState,
 } from "../src/executor/helps/apply-patch-responses.ts";
 import { type Json, tryParseJson } from "../src/json/index.ts";
-import type { Format } from "../src/translator/formats.ts";
 import fixtures from "./fixtures/applypatch.json";
 
 /** Key-order-sensitive form of an output: JSON values are re-serialised, SSE data lines keep their prefix. */
@@ -54,7 +53,7 @@ describe("ApplyPatchResponsesState scenarios (Go parity)", () => {
       const declarations = scenario.declarations ?? scenario.original;
 
       const state = new ApplyPatchResponsesState(
-        scenario.source as Format,
+        scenario.source,
         parse(scenario.original),
         parse(declarations),
       );
@@ -67,6 +66,7 @@ describe("ApplyPatchResponsesState scenarios (Go parity)", () => {
         const label = `${scenario.name} #${index} ${op.op}`;
         let events: string[] = [];
         let error: Error | undefined;
+
         const asText = (event: Json): string =>
           typeof event === "string" ? event : JSON.stringify(event);
 

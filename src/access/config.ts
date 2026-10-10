@@ -1,6 +1,6 @@
 // Configuration of Cloudflare Access verification, read from the Worker env (vars/secrets).
 // New in the Workers port (Go used `access.api-keys`); see docs/ARCHITECTURE.md "Authentication".
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import { ConfigurationError } from "../errors.ts";
 import type { Config } from "../config/schema.ts";
 import type { Principal } from "./principal.ts";
@@ -99,10 +99,14 @@ type DevBypassEnv = Pick<Env, "ACCESS_DEV_BYPASS"> &
   Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD">>;
 
 /** Outcome of the dev bypass check: `undefined` when `ACCESS_DEV_BYPASS` is unset or the host is not loopback. */
-export type DevBypass =
-  | { readonly _tag: "Active"; readonly email: string }
-  | { readonly _tag: "Refused" }
-  | undefined;
+export type DevBypass = DevBypassOutcome | undefined;
+
+type DevBypassOutcome = Data.TaggedEnum<{
+  Active: { readonly email: string };
+  Refused: {};
+}>;
+
+const { Active, Refused } = Data.taggedEnum<DevBypassOutcome>();
 
 /**
  * `ACCESS_DEV_BYPASS` is honoured only when the request itself targets a loopback host, which is only the case under
@@ -116,7 +120,7 @@ export const devBypass = (env: DevBypassEnv, requestUrl: string): DevBypass => {
   if (value === "") return undefined;
 
   if ((env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "")
-    return { _tag: "Refused" };
+    return Refused();
   let hostname: string;
 
   try {
@@ -127,7 +131,7 @@ export const devBypass = (env: DevBypassEnv, requestUrl: string): DevBypass => {
 
   if (!LOOPBACK_HOSTS.has(hostname)) return undefined;
 
-  return { _tag: "Active", email: /^(1|true|yes)$/i.test(value) ? DEFAULT_DEV_EMAIL : value };
+  return Active({ email: /^(1|true|yes)$/i.test(value) ? DEFAULT_DEV_EMAIL : value });
 };
 
 /** The dev bypass email, or undefined when the bypass does not apply (see {@link devBypass}). */

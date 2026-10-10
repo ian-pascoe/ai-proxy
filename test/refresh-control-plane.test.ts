@@ -30,7 +30,7 @@ let currentUpstream: UpstreamHandler = () =>
 const realFetch = globalThis.fetch;
 
 beforeAll(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const body =
       init?.body instanceof Uint8Array
         ? new TextDecoder().decode(init.body)
@@ -39,7 +39,7 @@ beforeAll(() => {
           : "";
 
     return currentUpstream(input instanceof Request ? input.url : String(input), body);
-  }) as typeof fetch;
+  };
 });
 
 afterAll(() => {
@@ -106,6 +106,7 @@ describe("ControlPlane token refresh", () => {
     const calls = upstream.requests.filter((request) =>
       request.url.includes("platform.claude.com"),
     );
+
     expect(calls).toHaveLength(1);
     expect(JSON.parse(calls[0]?.body ?? "{}")).toMatchObject({
       grant_type: "refresh_token",
@@ -194,7 +195,7 @@ describe("ControlPlane token refresh", () => {
     await runInDurableObject(global, (_instance, state) => state.storage.deleteAlarm());
     const ctx = createExecutionContext();
     await worker.scheduled?.(
-      { cron: "0 */3 * * *", scheduledTime: Date.now(), noRetry() {} } as ScheduledController,
+      { cron: "0 */3 * * *", scheduledTime: Date.now(), noRetry() {} },
       env,
       ctx,
     );

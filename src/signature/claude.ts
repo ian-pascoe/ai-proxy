@@ -199,7 +199,7 @@ export const inspectClaudeSignaturePayload = (
 
   if (payload[0] !== 0x12) {
     throw new SignatureError(
-      `invalid Claude signature: expected first byte 0x12, got 0x${(payload[0] as number).toString(16).padStart(2, "0")}`,
+      `invalid Claude signature: expected first byte 0x12, got 0x${(payload[0] ?? 0).toString(16).padStart(2, "0")}`,
     );
   }
 
@@ -565,6 +565,7 @@ export const normalizeClaudeProviderNativeThinkingSignature = (
       return sig;
     case "R": {
       validateDoubleLayer(sig, options.strict === true);
+      // SAFETY: validateDoubleLayer above already decoded sig with the same decoder, so it cannot be undefined.
       const decoded = decodeBase64Std(sig) as Uint8Array;
 
       return bytesToBinaryString(decoded);
@@ -656,7 +657,7 @@ export const validateClaudeThinkingSignatures = (
       try {
         normalizeClaudeThinkingSignature(raw, options);
       } catch (error) {
-        return `messages[${i}].content[${j}]: ${(error as Error).message}`;
+        return `messages[${i}].content[${j}]: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
   }
@@ -754,6 +755,7 @@ export const stripInvalidClaudeThinkingBlocksAndEmptyMessages = (
   });
 
   if (!changed) return payload;
+  // SAFETY: get(payload, "messages") returned an array above, so payload is a JSON object.
   const root = payload as Record<string, Json>;
   root["messages"] = messages.filter((message) => {
     const content = get(message, "content");
@@ -785,7 +787,7 @@ export const isClaudeProviderSignature = (raw: string): boolean => {
     );
   }
 
-  if (!"CEQRg".includes(sig[0] as string)) return false;
+  if (!"CEQRg".includes(sig.charAt(0))) return false;
 
   return isValidClaudeCaisSignature(sig) || isValidClaudeThinkingSignature(sig, { strict: true });
 };

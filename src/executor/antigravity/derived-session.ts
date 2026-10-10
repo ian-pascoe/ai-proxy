@@ -8,6 +8,7 @@ export const derivedAntigravitySessionId = (derivedId: string): string => {
   const id = derivedId.trim();
 
   if (id === "") return "";
+
   const sum = createHash("sha256")
     .update(`cli-proxy-api:antigravity:derived-session\0${id}`)
     .digest();

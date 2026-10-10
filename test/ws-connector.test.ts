@@ -1,5 +1,6 @@
 // The default upstream connector: `fetch` with `Upgrade: websocket`, URL scheme conversion, handshake rejections.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Frames } from "./support/upstream-message.ts";
 import { Effect, Queue } from "effect";
 import {
   fetchConnector,
@@ -33,9 +34,7 @@ describe("fetchConnector", () => {
       const pair = new WebSocketPair();
       upstream = pair[1];
       upstream.accept();
-      upstream.addEventListener("message", (event) =>
-        upstream?.send(`echo:${String((event as MessageEvent).data)}`),
-      );
+      upstream.addEventListener("message", (event) => upstream?.send(`echo:${String(event.data)}`));
 
       return Promise.resolve(
         new Response(null, { status: 101, webSocket: pair[0], headers: { "x-upstream": "1" } }),
@@ -55,15 +54,13 @@ describe("fetchConnector", () => {
     expect(socket.headers.get("x-upstream")).toBe("1");
 
     await Effect.runPromise(socket.send("hello"));
-    expect(await Effect.runPromise(Queue.take(socket.messages))).toEqual({
-      _tag: "text",
-      data: "echo:hello",
-    });
+    expect(await Effect.runPromise(Queue.take(socket.messages))).toEqual(
+      Frames.text({ data: "echo:hello" }),
+    );
     upstream?.close(1000, "bye");
-    expect(await Effect.runPromise(Queue.take(socket.messages))).toMatchObject({
-      _tag: "close",
-      code: 1000,
-    });
+    expect(await Effect.runPromise(Queue.take(socket.messages))).toMatchObject(
+      Frames.close({ code: 1000, reason: "bye" }),
+    );
     expect(socket.isOpen()).toBe(false);
   });
 
@@ -88,9 +85,11 @@ describe("fetchConnector", () => {
 
   it("reports a failed dial as a status-0 handshake error", async () => {
     vi.stubGlobal("fetch", () => Promise.reject(new Error("dns failure")));
+
     const error = await Effect.runPromise(
       Effect.flip(fetchConnector().connect({ url: "wss://x.test/y", headers: {} })),
     );
+
     expect(error).toMatchObject({ status: 0, message: "dns failure" });
   });
 });

@@ -109,14 +109,13 @@ export const replayToolSchemasFromRequests = (
 };
 
 /** `antigravityReplayJSONValue`: string arguments hold JSON text. */
-const replayJsonValue = (value: Json | undefined): { ok: boolean; value?: Json } => {
-  if (value === undefined) return { ok: false };
+const replayJsonValue = (value: Json | undefined): Json | undefined => {
+  if (value === undefined) return undefined;
   const text = typeof value === "string" ? value : JSON.stringify(value);
 
-  if (text.trim() === "") return { ok: false };
-  const parsed = tryParseJson(text);
+  if (text.trim() === "") return undefined;
 
-  return parsed === undefined ? { ok: false } : { ok: true, value: parsed };
+  return tryParseJson(text);
 };
 
 /** `antigravityNormalizeReplayToolValue`. */
@@ -130,14 +129,14 @@ const normalizeToolValue = (value: Json, schema: Json | undefined): Json => {
 
     for (const [key, child] of Object.entries(value)) {
       const childSchema = properties?.[key];
-      const normalizedChild = normalizeToolValue(child as Json, childSchema);
+      const normalizedChild = normalizeToolValue(child, childSchema);
 
       if (isJsonObject(childSchema) && Object.hasOwn(childSchema, "default")) {
+        const defaultValue = childSchema["default"];
+
         if (
-          jsonEquals(
-            normalizedChild,
-            normalizeToolValue(childSchema["default"] as Json, childSchema),
-          )
+          defaultValue !== undefined &&
+          jsonEquals(normalizedChild, normalizeToolValue(defaultValue, childSchema))
         )
           continue;
       }
@@ -178,11 +177,11 @@ const functionCallMatchesItem = (
   const currentValue = replayJsonValue(current);
   const nativeValue = replayJsonValue(native);
 
-  if (!currentValue.ok || !nativeValue.ok) return false;
+  if (currentValue === undefined || nativeValue === undefined) return false;
 
   return jsonEquals(
-    normalizeToolValue(currentValue.value as Json, schema),
-    normalizeToolValue(nativeValue.value as Json, schema),
+    normalizeToolValue(currentValue, schema),
+    normalizeToolValue(nativeValue, schema),
   );
 };
 
@@ -263,12 +262,12 @@ const functionCallPartLocation = (
 
     const wanted = asInt(targetOccurrence);
     let occurrence = 0;
-    const parts = (index.contents[cachedContentIndex] as { parts: ReadonlyArray<Json> }).parts;
+    const parts = index.contents[cachedContentIndex]?.parts ?? [];
 
-    for (let partIndex = 0; partIndex < parts.length; partIndex++) {
-      const part = parts[partIndex] as Json;
+    for (const [partIndex, part] of parts.entries()) {
       const functionCall = get(part, "functionCall");
       const functionCallId = asString(get(functionCall, "id"));
+
       const mismatchedOpaqueId =
         isGeminiClaudeToolUseID(functionCallId) && functionCallId !== stableId;
 
@@ -294,6 +293,7 @@ const functionCallPartLocation = (
     content.parts.forEach((part, partIndex) => {
       const functionCall = get(part, "functionCall");
       const functionCallId = asString(get(functionCall, "id"));
+
       const mismatchedOpaqueId =
         isGeminiClaudeToolUseID(functionCallId) && functionCallId !== stableId;
 
@@ -305,7 +305,7 @@ const functionCallPartLocation = (
     });
   });
 
-  return matches.length === 1 ? (matches[0] as IndexedPart) : undefined;
+  return matches.length === 1 ? matches[0] : undefined;
 };
 
 /** `functionCallProvenanceLocation`: an exact opaque-ID match without the context check. */
@@ -337,9 +337,9 @@ const thoughtSignaturePartIndex = (
   const contentIndex = asInt(get(item, "contentIndex"));
 
   if (contentIndex < 0 || contentIndex >= index.contents.length) return undefined;
-  const content = index.contents[contentIndex] as { content: Json; parts: ReadonlyArray<Json> };
+  const content = index.contents[contentIndex];
 
-  if (!isModelRole(content.content)) return undefined;
+  if (content === undefined || !isModelRole(content.content)) return undefined;
   const parts = content.parts;
   const targetKind = asString(get(item, "targetKind")).trim();
   const targetHash = asString(get(item, "targetHash")).trim();
@@ -459,9 +459,8 @@ export const itemIsEligible = (index: RequestIndex, item: Json, schemas: ToolSch
       const located = thoughtSignaturePartIndex(index, item);
 
       if (located === undefined) return true;
-      const part = (index.contents[located.contentIndex] as { parts: ReadonlyArray<Json> }).parts[
-        located.partIndex
-      ];
+
+      const part = index.contents[located.contentIndex]?.parts[located.partIndex];
 
       return !hasNativeThoughtSignature(asString(get(part, "thoughtSignature")));
     }
@@ -604,6 +603,7 @@ const restoreNativeFunctionCall = (
   const currentId = asString(get(currentCall, "id")).trim();
   const nativeId = asString(get(item, "call_id")).trim();
   const nativeName = asString(get(item, "name")).trim();
+
   const restoreIdentity =
     currentId === nativeId || isGeminiClaudeToolUseID(currentId) || allowLegacyIdRestore;
 
@@ -795,8 +795,10 @@ const mergeFunctionCallPart = (
   const partIndex = asInt(get(item, "partIndex"));
   const content = contents[cached];
   const parts = get(content, "parts");
+
   const existing =
     isJsonArray(parts) && partIndex >= 0 && partIndex < parts.length ? parts[partIndex] : undefined;
+
   const functionCallArgs = typeof args === "string" ? args : cloneJson(args);
 
   if (existing === undefined || existing === null) {

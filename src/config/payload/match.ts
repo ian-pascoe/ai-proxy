@@ -52,12 +52,23 @@ export const matchModelPattern = (rawPattern: string, rawModel: string): boolean
 };
 
 /** Mirrors thinking.ParseSuffix: `name(value)` -> base name and whether a suffix was present. */
-const parseThinkingSuffix = (model: string): { modelName: string; hasSuffix: boolean } => {
+interface ThinkingSuffix {
+  readonly modelName: string;
+  readonly hasSuffix: boolean;
+}
+
+const parseThinkingSuffix = (model: string): ThinkingSuffix => {
   const lastOpen = model.lastIndexOf("(");
 
-  if (lastOpen === -1 || !model.endsWith(")")) return { modelName: model, hasSuffix: false };
+  if (lastOpen === -1 || !model.endsWith(")")) {
+    const plain: ThinkingSuffix = { modelName: model, hasSuffix: false };
 
-  return { modelName: model.slice(0, lastOpen), hasSuffix: true };
+    return plain;
+  }
+
+  const suffixed: ThinkingSuffix = { modelName: model.slice(0, lastOpen), hasSuffix: true };
+
+  return suffixed;
 };
 
 /** `[upstream model, base of requested model, requested model with suffix]`, deduplicated case-insensitively. */

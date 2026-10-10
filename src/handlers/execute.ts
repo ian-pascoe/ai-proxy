@@ -14,7 +14,7 @@ import type { HttpServerRequest } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { ConfigReader } from "../config/reader.ts";
 import type { Config } from "../config/schema.ts";
-import { ExecutionError } from "../executor/errors.ts";
+import { ExecutionError, withErrorFields } from "../executor/errors.ts";
 import type { CredentialSnapshot } from "../executor/picker.ts";
 import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../executor/types.ts";
 import { filterUpstreamHeaders } from "../http/headers.ts";
@@ -93,6 +93,7 @@ export const executionMetadata = (
   derivedSessionId?: string,
 ): ExecutionMetadata => {
   const idempotencyKey = headers.get("idempotency-key") ?? undefined;
+
   const reasoningEffort =
     stringField(input.body, "reasoning_effort") ?? stringField(input.body, "reasoning.effort");
 
@@ -126,7 +127,7 @@ export const enrichSelectionError = (
     message += "; check Claude auth/key session and cooldown state via /v0/management/auth-files";
   }
 
-  return new ExecutionError({ ...error, message, status: error.status > 0 ? error.status : 503 });
+  return withErrorFields(error, { message, status: error.status > 0 ? error.status : 503 });
 };
 
 const toExecutionError = (cause: Cause.Cause<ExecutionError>): ExecutionError | undefined => {
@@ -158,7 +159,7 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
         });
 
   const url = new URL(input.request.url, "http://localhost");
-  const headers = new Headers(input.request.headers as Record<string, string>);
+  const headers = new Headers(input.request.headers);
   const originalRequest = input.originalRequest ?? input.body;
   const sessionInfo = extractSessionInfo(headers, originalRequest);
 
@@ -257,6 +258,8 @@ export const executeNonStream = Effect.fnUntraced(function* (input: ExecutionInp
   return result.value;
 });
 
+const NO_CHUNKS: ReadonlyArray<string> = [];
+
 /** Reads until the first non-empty chunk (`readStreamBootstrap`). `closed` = the stream ended. */
 const readBootstrap = (pull: Pull.Pull<ReadonlyArray<string>, ExecutionError>) =>
   Effect.gen(function* () {
@@ -266,9 +269,7 @@ const readBootstrap = (pull: Pull.Pull<ReadonlyArray<string>, ExecutionError>) =
     while (true) {
       const next = yield* pull.pipe(
         Effect.map((chunk) => ({ closed: false, chunk }) as const),
-        Pull.catchDone(() =>
-          Effect.succeed({ closed: true, chunk: [] as ReadonlyArray<string> } as const),
-        ),
+        Pull.catchDone(() => Effect.succeed({ closed: true, chunk: NO_CHUNKS } as const)),
       );
 
       if (next.closed) return { buffered, closed: true, received };

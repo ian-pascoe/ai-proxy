@@ -23,12 +23,16 @@ const parseArgs = (argv: ReadonlyArray<string>) => {
   const flags = new Set<string>();
 
   for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index] as string;
+    const arg = argv[index];
+    const next = argv[index + 1];
+
+    if (arg === undefined) continue;
 
     if (arg === "--allow-unverified") flags.add("allow-unverified");
-    else if (arg.startsWith("--") && index + 1 < argv.length)
-      values.set(arg.slice(2), argv[(index += 1)] as string);
-    else throw new PanelSyncError("invalid_repository", `unknown argument: ${arg}`);
+    else if (arg.startsWith("--") && next !== undefined) {
+      values.set(arg.slice(2), next);
+      index += 1;
+    } else throw new PanelSyncError("invalid_repository", `unknown argument: ${arg}`);
   }
 
   return { values, flags };
@@ -72,9 +76,9 @@ const main = async (): Promise<void> => {
   );
 };
 
-main().catch((error: unknown) => {
+main().catch((cause: unknown) => {
   process.stderr.write(
-    `panel:sync failed: ${error instanceof Error ? error.message : String(error)}\n`,
+    `panel:sync failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
   );
   process.exitCode = 1;
 });

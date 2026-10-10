@@ -113,5 +113,6 @@ export const goMarshal = (value: Json): string => {
   if (Array.isArray(value)) return `[${value.map((item) => goMarshal(item)).join(",")}]`;
   const keys = Object.keys(value).toSorted(compareUtf8);
 
+  // SAFETY: key comes from Object.keys(value).
   return `{${keys.map((key) => `${escapeString(key)}:${goMarshal(value[key] as Json)}`).join(",")}}`;
 };

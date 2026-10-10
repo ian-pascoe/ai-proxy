@@ -10,6 +10,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
+import type { Json } from "../src/json/index.ts";
 
 const YAML = `
 requests:
@@ -133,6 +134,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
     const h = harness(() =>
       jsonResponse({ error: { code: 401, message: "API key not valid" } }, { status: 401 }),
     );
+
     afterAll(h.dispose);
 
     const response = await h.call(
@@ -153,10 +155,12 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
     expect(unknown.status).toBe(404);
     const noAction = await h.call("/v1beta/models/gemini-2.5-pro", postJson({}));
     expect(noAction.status).toBe(404);
+
     const invalid = await h.call(
       "/v1beta/models/gemini-2.5-pro:generateContent",
       postJson("not json"),
     );
+
     expect(invalid.status).toBe(400);
     expect(h.calls).toHaveLength(0);
   });
@@ -164,16 +168,18 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
   it("answers 400 for models without a provider", async () => {
     const h = harness(() => jsonResponse(GEMINI_RESPONSE));
     afterAll(h.dispose);
+
     const response = await h.call(
       "/v1beta/models/unknown-model:generateContent",
       postJson({ contents: [] }),
     );
+
     expect(response.status).toBe(400);
   });
 });
 
 describe("POST /v1beta/models/{model}:streamGenerateContent", () => {
-  const line = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;
+  const line = (value: Json) => `data: ${JSON.stringify(value)}\n\n`;
 
   it("frames chunks as SSE, hides intermediate usage and publishes the final usage", async () => {
     const h = harness(() =>
@@ -378,10 +384,12 @@ describe("OpenAI Responses client -> Gemini credential", () => {
     );
 
     afterAll(h.dispose);
+
     const response = await h.call(
       "/v1/responses",
       postJson({ model: "gemini-2.5-pro", stream: true, input: "hi" }),
     );
+
     expect(response.status).toBe(200);
     const text = await response.text();
     expect(text).toContain("event: response.created");

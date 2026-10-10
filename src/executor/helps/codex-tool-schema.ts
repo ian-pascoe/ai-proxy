@@ -10,7 +10,15 @@
  *    tools; part of the payload barrier for Codex clients targeting non-Codex executors (see `payload.ts`).
  */
 import { sortKeys } from "../../http/json-text.ts";
-import { asString, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
+import {
+  asString,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  set,
+} from "../../json/index.ts";
 import type { HeaderInput } from "../../config/payload/index.ts";
 import {
   hasUnsupportedUnicodePropertyEscape,
@@ -183,21 +191,22 @@ const normalizePropertySchema = (prop: Json): boolean => {
 };
 
 /** `normalizeCodexParameters`: true when `params` changed. */
-const normalizeParameters = (params: Json, owner: { parameters: Json }): boolean => {
+const normalizeParameters = (params: Json, owner: JsonObject): boolean => {
   let changed = false;
 
   if (stripIncompatiblePatterns(params)) {
     // Go re-encodes the schema through a map: keys come out sorted.
-    owner.parameters = sortKeys(params) as Json;
-    params = owner.parameters;
+    const sorted = sortKeys(params);
+    owner["parameters"] = sorted;
+    params = sorted;
     changed = true;
   }
 
   const properties = get(params, "properties");
 
   if (isJsonObject(properties)) {
-    for (const name of Object.keys(properties)) {
-      if (normalizePropertySchema(properties[name] as Json)) changed = true;
+    for (const property of Object.values(properties)) {
+      if (normalizePropertySchema(property)) changed = true;
     }
   }
 
@@ -221,9 +230,8 @@ const normalizeToolList = (tools: Json | undefined): boolean => {
     const params = tool["parameters"];
 
     if (!isJsonObject(params)) continue;
-    const owner = tool as { parameters: Json };
 
-    if (normalizeParameters(params, owner)) changed = true;
+    if (normalizeParameters(params, tool)) changed = true;
   }
 
   return changed;
@@ -241,49 +249,51 @@ export const normalizeCodexToolSchemas = <T extends Json>(body: T): T => {
 // ---------------------------------------------------------------------------------------------------------------
 
 /** Explicit schema paths relative to `parameters.properties`, not recursive field names. */
-const CODEX_CLIENT_TOOL_INTEGER_FIELDS: Readonly<Record<string, readonly string[]>> = {
-  exec_command: ["yield_time_ms", "max_output_tokens", "timeout_ms"],
-  write_stdin: ["session_id", "yield_time_ms", "max_output_tokens"],
-  sleep: ["duration_ms"],
-  wait_agent: ["timeout_ms"],
-  wait: ["yield_time_ms", "max_tokens"],
-  tool_search: ["limit"],
-  test_sync_tool: [
-    "sleep_before_ms",
-    "sleep_after_ms",
-    "participants",
-    "timeout_ms",
-    "barrier.properties.participants",
-    "barrier.properties.timeout_ms",
-  ],
-  create_goal: ["token_budget"],
-  get_channels: ["limit"],
-  list_threads: ["limit", "max_chars_per_post"],
-  search_posts: ["limit", "max_chars_per_post"],
-  read_thread: ["limit", "max_chars_per_post"],
-  read_post: ["offset_chars", "limit_chars"],
-  memories__list: ["max_results"],
-  memories__read: ["line_offset", "max_lines"],
-  memories__search: ["context_lines", "max_results"],
-  history__list_windows: ["limit"],
-  history__list_items: ["limit", "max_chars_per_item"],
-  history__read_item: ["offset_chars", "limit_chars"],
-  history__search_contents: ["limit"],
-  notes__list_files_by_prefix: ["max_results"],
-  // Codex declares signed line numbers in the first nullable union branch.
-  notes__read_file: ["start_line", "stop_line", "start_line.anyOf.0", "stop_line.anyOf.0"],
-  notes__search_contents: ["max_matches_per_file", "max_files"],
-  image_gen__imagegen: ["num_last_images_to_include"],
-  web__run: [
-    "search_query.items.properties.recency",
-    "image_query.items.properties.recency",
-    "open.items.properties.lineno",
-    "click.items.properties.id",
-    "screenshot.items.properties.pageno",
-    "weather.items.properties.duration",
-    "sports.items.properties.num_games",
-  ],
-};
+const CODEX_CLIENT_TOOL_INTEGER_FIELDS = new Map<string, readonly string[]>(
+  Object.entries({
+    exec_command: ["yield_time_ms", "max_output_tokens", "timeout_ms"],
+    write_stdin: ["session_id", "yield_time_ms", "max_output_tokens"],
+    sleep: ["duration_ms"],
+    wait_agent: ["timeout_ms"],
+    wait: ["yield_time_ms", "max_tokens"],
+    tool_search: ["limit"],
+    test_sync_tool: [
+      "sleep_before_ms",
+      "sleep_after_ms",
+      "participants",
+      "timeout_ms",
+      "barrier.properties.participants",
+      "barrier.properties.timeout_ms",
+    ],
+    create_goal: ["token_budget"],
+    get_channels: ["limit"],
+    list_threads: ["limit", "max_chars_per_post"],
+    search_posts: ["limit", "max_chars_per_post"],
+    read_thread: ["limit", "max_chars_per_post"],
+    read_post: ["offset_chars", "limit_chars"],
+    memories__list: ["max_results"],
+    memories__read: ["line_offset", "max_lines"],
+    memories__search: ["context_lines", "max_results"],
+    history__list_windows: ["limit"],
+    history__list_items: ["limit", "max_chars_per_item"],
+    history__read_item: ["offset_chars", "limit_chars"],
+    history__search_contents: ["limit"],
+    notes__list_files_by_prefix: ["max_results"],
+    // Codex declares signed line numbers in the first nullable union branch.
+    notes__read_file: ["start_line", "stop_line", "start_line.anyOf.0", "stop_line.anyOf.0"],
+    notes__search_contents: ["max_matches_per_file", "max_files"],
+    image_gen__imagegen: ["num_last_images_to_include"],
+    web__run: [
+      "search_query.items.properties.recency",
+      "image_query.items.properties.recency",
+      "open.items.properties.lineno",
+      "click.items.properties.id",
+      "screenshot.items.properties.pageno",
+      "weather.items.properties.duration",
+      "sports.items.properties.num_games",
+    ],
+  }),
+);
 
 const matchCodexTargetTool = (toolName: string): readonly string[] => {
   let base = toolName.trim();
@@ -305,7 +315,7 @@ const matchCodexTargetTool = (toolName: string): readonly string[] => {
       break;
   }
 
-  return CODEX_CLIENT_TOOL_INTEGER_FIELDS[base] ?? [];
+  return CODEX_CLIENT_TOOL_INTEGER_FIELDS.get(base) ?? [];
 };
 
 const normalizeFieldTypes = (params: Json, fields: readonly string[]): boolean => {

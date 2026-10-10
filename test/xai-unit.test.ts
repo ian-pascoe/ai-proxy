@@ -110,13 +110,17 @@ describe("credential routing", () => {
     expect(xaiChatBaseUrl(oauth)).toBe("https://cli-chat-proxy.grok.com/v1");
     expect(xaiCompactBaseUrl(oauth)).toBe("https://api.x.ai/v1");
     expect(xaiSpeechUrl(oauth)).toBe("https://api.x.ai/v1/tts");
+
     const defaultApi = credential({
       attributes: { auth_kind: "oauth", base_url: "https://api.x.ai/v1/" },
     });
+
     expect(xaiChatBaseUrl(defaultApi)).toBe("https://cli-chat-proxy.grok.com/v1");
+
     const proxied = credential({
       attributes: { using_api: "true", base_url: "https://cli-chat-proxy.grok.com/v1" },
     });
+
     expect(xaiChatBaseUrl(proxied)).toBe("https://cli-chat-proxy.grok.com/v1");
     expect(xaiCompactBaseUrl(proxied)).toBe("https://api.x.ai/v1");
     const custom = credential({ attributes: { api_key: "k", base_url: "https://x.test/v1" } });
@@ -622,10 +626,12 @@ describe("response events", () => {
     collector.collect({ type: "response.output_item.done", output_index: 1, item: { id: "b" } });
     collector.collect({ type: "response.output_item.done", output_index: 0, item: { id: "a" } });
     collector.collect({ type: "response.output_item.done", item: { id: "c" } });
+
     const event = {
       type: "response.completed",
       response: { output: [], usage: { input_tokens: 1 } },
     };
+
     patchCompletedOutput(event, collector);
     expect(event.response.output).toEqual([{ id: "a" }, { id: "b" }, { id: "c" }]);
     expect(event.response.usage).toMatchObject({ output_tokens_details: { reasoning_tokens: 0 } });
@@ -684,6 +690,7 @@ describe("response events", () => {
       true,
       new Set(["\u0000x_keyword_search\u0000function"]),
     );
+
     const trace = { type: "custom_tool_call", name: "x_keyword_search", call_id: "k" };
     expect(
       filter.apply({ type: "response.output_item.added", output_index: 0, item: trace }),
@@ -842,6 +849,7 @@ describe("inlineLocalRefs", () => {
     const out = inlineLocalRefs(cyclic) as {
       properties: { next: { properties: { next: Record<string, unknown> } } };
     };
+
     expect(out.properties.next.properties.next).toEqual({
       type: "object",
       description: "a node (See: Node)",

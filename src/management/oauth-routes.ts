@@ -10,14 +10,15 @@
  */
 import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { isJsonObject } from "../json/index.ts";
+import { isJsonObject, type Json } from "../json/index.ts";
 import { isValidOAuthState } from "../oauth/names.ts";
 import { bodyJson, controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { oauthImportRoutes } from "./oauth-import.ts";
 
 const BASE = "/v8/management/oauth";
 
-const trimmed = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+const trimmed = (value: Json | undefined): string =>
+  typeof value === "string" ? value.trim() : "";
 
 const startLogin = Effect.gen(function* () {
   const params = yield* queryParams;

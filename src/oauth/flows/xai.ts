@@ -76,6 +76,7 @@ export const xaiFlow = (): DeviceFlow => ({
       const reply = yield* call(
         formPost(deviceEndpoint, { client_id: XAI_CLIENT_ID, scope: XAI_SCOPE }),
       );
+
       const device = reply.status === 200 ? parseJsonObject(reply.text) : undefined;
       const deviceCode = str(device?.device_code);
       const userCode = str(device?.user_code);

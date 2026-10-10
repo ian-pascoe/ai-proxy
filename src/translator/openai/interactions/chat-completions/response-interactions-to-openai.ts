@@ -55,8 +55,12 @@ const baseChunk = (st: InteractionsToOpenAIChatState): JsonObject => {
   return chunk;
 };
 
+// SAFETY: baseChunk builds every chunk with exactly one choice object, and its delta is an object.
 const choiceOf = (chunk: JsonObject): JsonObject =>
   (chunk.choices as JsonObject[])[0] as JsonObject;
+
+// SAFETY: baseChunk always sets `delta` on the single choice to an object literal.
+const deltaOf = (chunk: JsonObject): JsonObject => choiceOf(chunk).delta as JsonObject;
 
 const deltaChunk = (
   st: InteractionsToOpenAIChatState,
@@ -65,7 +69,7 @@ const deltaChunk = (
 ): JsonObject => {
   const chunk = baseChunk(st);
 
-  (choiceOf(chunk).delta as JsonObject)[field] = value;
+  deltaOf(chunk)[field] = value;
 
   return chunk;
 };
@@ -75,7 +79,7 @@ const ensureStarted = (out: JsonObject[], st: InteractionsToOpenAIChatState): vo
 
   const chunk = baseChunk(st);
 
-  (choiceOf(chunk).delta as JsonObject).role = "assistant";
+  deltaOf(chunk).role = "assistant";
   st.started = true;
   out.push(chunk);
 };
@@ -88,7 +92,7 @@ const toolCallStartChunk = (st: InteractionsToOpenAIChatState, index: number): J
 
   const toolCallIndex = toolCallIndexOf(st, index);
 
-  (choiceOf(chunk).delta as JsonObject).tool_calls = [
+  deltaOf(chunk).tool_calls = [
     {
       index: toolCallIndex,
       id: firstNonEmpty(st.toolIds.get(index) ?? "", `call_${toolCallIndex}`),
@@ -107,7 +111,7 @@ const toolCallArgumentsChunk = (
 ): JsonObject => {
   const chunk = baseChunk(st);
 
-  (choiceOf(chunk).delta as JsonObject).tool_calls = [
+  deltaOf(chunk).tool_calls = [
     { index: toolCallIndexOf(st, index), function: { arguments: args } },
   ];
 
@@ -202,6 +206,7 @@ const appendCompleted = (
   let finishReason = st.sawToolCall ? "tool_calls" : "stop";
   const interaction = get(root, "interaction");
   const status = firstNonEmpty(getStr(interaction, "status"), getStr(root, "status"));
+
   const interactionFinishReason = firstNonEmpty(
     getStr(interaction, "finish_reason"),
     getStr(root, "finish_reason"),
@@ -342,6 +347,7 @@ export const convertInteractionsResponseToOpenAI = (
   const modelName = context.model;
 
   if (context.state.value === undefined) context.state.value = newState(modelName);
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a InteractionsToOpenAIChatState before this read.
   const st = context.state.value as InteractionsToOpenAIChatState;
   st.model = firstNonEmpty(st.model, modelName);
 
@@ -438,9 +444,11 @@ export const convertInteractionsResponseToOpenAINonStream = (
           break;
         case "function_call": {
           sawToolCall = true;
+
           const forAntigravity = isAntigravityModel(
             firstNonEmpty(getStr(interaction, "model"), modelName),
           );
+
           toolCalls.push(openAIChatToolCallFromInteractions(step, forAntigravity));
           break;
         }
@@ -460,6 +468,7 @@ export const convertInteractionsResponseToOpenAINonStream = (
   }
 
   const status = firstNonEmpty(getStr(interaction, "status"), getStr(root, "status"));
+
   const interactionFinishReason = firstNonEmpty(
     getStr(interaction, "finish_reason"),
     getStr(root, "finish_reason"),

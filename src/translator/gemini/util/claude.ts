@@ -11,6 +11,7 @@ import { asString, get, isJsonArray, isJsonObject, type Json } from "../../../js
 export const sanitizeFunctionName = (name: string): string => {
   if (name === "") return "";
   let sanitized = name.replace(/[^a-zA-Z0-9_.:-]/g, "_");
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const first = sanitized[0] as string;
 
   if (!/[a-zA-Z_]/.test(first)) {
@@ -62,7 +63,9 @@ export const convertClaudeToolResultContent = (content: Json | undefined): Claud
       nonImage.push(block);
     }
 
-    if (nonImage.length === 1) return { result: nonImage[0] as Json, resultIsRaw: true, images };
+    if (nonImage.length === 1)
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      return { result: nonImage[0] as Json, resultIsRaw: true, images };
 
     if (nonImage.length > 1) return { result: nonImage, resultIsRaw: true, images };
 

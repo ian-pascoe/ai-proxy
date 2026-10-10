@@ -261,6 +261,7 @@ export const convertInteractionsRequestToOpenAI = (
       const converted = openAIToolFromInteractionsTool(tool, forAntigravity);
 
       if (converted !== undefined) toolItems.push(converted);
+
       const decls = firstExisting(
         get(tool, "function_declarations"),
         get(tool, "functionDeclarations"),
@@ -303,6 +304,7 @@ export const convertInteractionsRequestToOpenAI = (
     "n",
     firstExisting(get(gen, "candidate_count"), get(gen, "candidateCount"), get(root, "n")),
   );
+
   const stop = firstExisting(
     get(gen, "stop_sequences"),
     get(gen, "stopSequences"),
@@ -327,12 +329,14 @@ export const convertInteractionsRequestToOpenAI = (
   const serviceTier = get(root, "service_tier");
 
   if (typeof serviceTier === "string") out.service_tier = serviceTier;
+
   const previous = firstNonEmpty(
     getStr(root, "previous_interaction_id"),
     getStr(root, "previous_response_id"),
   );
 
   if (previous !== "") out.previous_response_id = previous;
+
   const environmentId = firstNonEmpty(
     getStr(root, "environment_id"),
     getStr(root, "environment.id"),

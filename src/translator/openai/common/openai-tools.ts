@@ -96,6 +96,7 @@ export const alignOpenAIToolCallMessages = (
         break;
       }
 
+      // SAFETY: the check above `continue`s unless indices.length === 1.
       const toolIdx = indices[0] as number;
 
       if (toolIdx <= ast.msgIndex) {
@@ -108,6 +109,7 @@ export const alignOpenAIToolCallMessages = (
 
     if (!eligible) continue;
     matched.sort((a, b) => a - b);
+
     const alreadyAdjacent = matched.every(
       (toolIdx, offset) => toolIdx === ast.msgIndex + offset + 1,
     );
@@ -128,6 +130,7 @@ export const alignOpenAIToolCallMessages = (
 
     for (const idx of g.toolIndices) {
       moved.add(idx);
+      // SAFETY: toolIndices only holds positions recorded while scanning `messages`.
       list.push(messages[idx] as Json);
     }
 

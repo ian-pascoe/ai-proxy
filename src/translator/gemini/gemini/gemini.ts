@@ -41,6 +41,7 @@ const normalizeTools = (body: Json): void => {
     if (!isJsonObject(tool)) continue;
 
     if (exists(tool, "functionDeclarations")) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       tool["function_declarations"] = tool["functionDeclarations"] as Json;
       delete tool["functionDeclarations"];
     }
@@ -51,6 +52,7 @@ const normalizeTools = (body: Json): void => {
 
     for (const declaration of declarations) {
       if (isJsonObject(declaration) && exists(declaration, "parameters")) {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         declaration["parametersJsonSchema"] = declaration["parameters"] as Json;
         delete declaration["parameters"];
       }
@@ -88,6 +90,7 @@ export const backfillEmptyFunctionResponseNames = (body: Json): Json => {
           asString(get(part, "functionResponse.name")).trim() === "" &&
           responseIndex < pending.length
         ) {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           set(part, "functionResponse.name", pending[responseIndex] as string);
         }
 

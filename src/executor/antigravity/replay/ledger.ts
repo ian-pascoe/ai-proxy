@@ -191,9 +191,9 @@ const parseEntry = (text: string | undefined): Json[] | undefined => {
   try {
     const parsed: unknown = JSON.parse(text);
 
-    if (!isJsonArray(parsed as Json)) return undefined;
+    if (!isJsonArray(parsed)) return undefined;
 
-    return parsed as Json[];
+    return parsed;
   } catch {
     return undefined;
   }
@@ -215,6 +215,7 @@ export const makeSessionStateReplayLedger = (
       { items: undefined, snapshot: UNLOADED_SNAPSHOT } satisfies LedgerRead,
       Effect.gen(function* () {
         const state = yield* backend;
+
         const [result] = yield* state.run(addressOf(sessionKey), [
           { op: "get", key, extendTtlMs: REPLAY_TTL_MS },
         ]);

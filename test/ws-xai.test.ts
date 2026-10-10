@@ -75,6 +75,7 @@ const setup = (
   });
 
   afterAll(p.dispose);
+
   const connect = async () =>
     connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }));
 
@@ -263,9 +264,11 @@ describe("Responses WebSocket over an upstream WebSocket (xAI)", () => {
     });
 
     afterAll(p.dispose);
+
     const client = connectClient(
       await p.call("/v1/responses", { headers: { upgrade: "websocket" } }),
     );
+
     client.send({
       type: "response.create",
       model: "grok-4.3",
@@ -435,10 +438,12 @@ describe("compaction_trigger over the xAI socket", () => {
     const done = await client.until("response.completed");
     const compactCall = s.calls.find((call) => call.url.endsWith("/responses/compact"));
     expect(compactCall).toBeDefined();
+
     const body = JSON.parse(compactCall?.body ?? "{}") as {
       input: unknown[];
       previous_response_id?: string;
     };
+
     // The recorded socket transcript (request input + response output of turn one) is what gets compacted.
     expect(body.input).toEqual([{ type: "message", role: "user", content: "one" }, ITEM]);
     expect(body.previous_response_id).toBeUndefined();
@@ -456,6 +461,7 @@ describe("compaction_trigger over the xAI socket", () => {
     const s = setup({}, [wsCredential()], undefined, () =>
       jsonResponse({ id: "x", output: [{ type: "message" }] }),
     );
+
     const client = await s.connect();
     client.send({
       type: "response.create",

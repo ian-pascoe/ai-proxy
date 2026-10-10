@@ -43,10 +43,12 @@ export interface SessionRoutingInput {
 }
 
 /** The identity of a session for usage records: bounded, parent only when it differs. */
-export const usageIdentity = (
-  id: string,
-  parentId: string | undefined,
-): { readonly id: string; readonly parentId?: string } => {
+export interface UsageIdentity {
+  readonly id: string;
+  readonly parentId?: string;
+}
+
+export const usageIdentity = (id: string, parentId: string | undefined): UsageIdentity => {
   const bounded = boundSessionIdentity(id);
   const parent = parentId === undefined || parentId === "" ? "" : boundSessionIdentity(parentId);
 

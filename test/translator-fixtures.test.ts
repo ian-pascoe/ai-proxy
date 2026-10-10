@@ -56,7 +56,7 @@ const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>(
 );
 
 /** Wall-clock fields the Go translators stamp with `time.Now()`; their values cannot match across runs. */
-const normalizeClock = (value: unknown): unknown => {
+const normalizeClock = (value: Json): Json => {
   if (Array.isArray(value)) return value.map(normalizeClock);
 
   if (typeof value === "object" && value !== null) {
@@ -171,6 +171,7 @@ describe("translator golden fixtures", () => {
               context,
               c.responseBodyText,
             );
+
             expect(out === undefined ? undefined : normalizeChunk(out)).toEqual(
               c.nonStreamOutput === undefined ? undefined : normalizeChunk(c.nonStreamOutput),
             );

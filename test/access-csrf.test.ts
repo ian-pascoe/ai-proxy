@@ -43,6 +43,7 @@ describe("crossSiteRejection", () => {
       "sec-fetch-site": "same-origin",
       "content-type": "application/json",
     };
+
     expect(check("POST", "/v1/chat/completions", sameOrigin)).toBeUndefined();
     expect(
       check("POST", "/v8/management/requests/api-call", sameOrigin, "management"),
@@ -66,6 +67,7 @@ describe("crossSiteRejection", () => {
     for (const zone of ["protected", "management"] as const) {
       const path =
         zone === "protected" ? "/v1/chat/completions" : "/v8/management/requests/api-call";
+
       const json = { "content-type": "application/json" };
       expect(check("POST", path, { ...json, origin: "https://evil.test" }, zone)).toBe(403);
       expect(check("POST", path, { ...json, origin: "null" }, zone)).toBe(403);
@@ -102,12 +104,14 @@ describe("crossSiteRejection", () => {
     expect(
       check("GET", "/v8/management/config", { "sec-fetch-site": "cross-site" }, "management"),
     ).toBe(403);
+
     // `queue` pops records on GET: an <img> from another site must not reach it.
     const image = {
       "sec-fetch-site": "cross-site",
       "sec-fetch-mode": "no-cors",
       "sec-fetch-dest": "image",
     };
+
     expect(check("GET", "/v8/management/observability/usage/queue", image, "management")).toBe(403);
     const link = { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" };
     expect(check("GET", "/management.html", link, "management")).toBeUndefined();
@@ -184,6 +188,7 @@ describe("Worker entry point: cross-site protections", () => {
       "sec-fetch-site": "same-origin",
       "sec-fetch-mode": "cors",
     };
+
     const config = await worker("/v8/management/config", { headers: panelHeaders });
     expect(config.status).toBe(200);
     expect(config.headers.get("access-control-allow-origin")).toBeNull();
@@ -295,6 +300,7 @@ describe("Worker entry point: cross-site protections", () => {
       const hijack = await worker(path, {
         headers: { upgrade: "websocket", origin: "https://evil.test" },
       });
+
       expect(hijack.status).toBe(403);
       expect(hijack.webSocket).toBeNull();
       expect(await errorOf(hijack)).toBe("Cross-origin WebSocket rejected");

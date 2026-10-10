@@ -19,11 +19,14 @@ import { Context, Data, Duration, Effect, Layer, Queue } from "effect";
 export const HANDSHAKE_TIMEOUT = Duration.seconds(30);
 
 /** A frame (or lifecycle event) read from an upstream socket. */
-export type UpstreamMessage =
-  | { readonly _tag: "text"; readonly data: string }
-  | { readonly _tag: "binary" }
-  | { readonly _tag: "close"; readonly code: number; readonly reason: string }
-  | { readonly _tag: "error"; readonly message: string };
+export type UpstreamMessage = Data.TaggedEnum<{
+  text: { readonly data: string };
+  binary: {};
+  close: { readonly code: number; readonly reason: string };
+  error: { readonly message: string };
+}>;
+
+export const UpstreamMessage = Data.taggedEnum<UpstreamMessage>();
 
 /** The upgrade was rejected (`status` > 0, with the response body) or the dial failed (`status` 0). */
 export class HandshakeError extends Data.TaggedError("HandshakeError")<{
@@ -124,16 +127,14 @@ export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket =
   };
 
   ws.addEventListener("message", (event) => {
-    const data = (event as MessageEvent).data;
+    const data = event.data;
     Queue.offerUnsafe(
       messages,
-      typeof data === "string" ? { _tag: "text", data } : { _tag: "binary" },
+      typeof data === "string" ? UpstreamMessage.text({ data }) : UpstreamMessage.binary(),
     );
   });
-  ws.addEventListener("close", (event) =>
-    end({ _tag: "close", ...closeReasonOf(event as CloseEvent) }),
-  );
-  ws.addEventListener("error", () => end({ _tag: "error", message: "websocket error" }));
+  ws.addEventListener("close", (event) => end(UpstreamMessage.close(closeReasonOf(event))));
+  ws.addEventListener("error", () => end(UpstreamMessage.error({ message: "websocket error" })));
 
   return {
     headers,
@@ -173,16 +174,18 @@ export const wrapWebSocket = (ws: WebSocket, headers: Headers): UpstreamSocket =
 };
 
 /** The default connector: `fetch` with `Upgrade: websocket`. */
-export function fetchConnector(): Context.Service.Shape<typeof UpstreamWebSocketConnector> {
+export function fetchConnector(): typeof UpstreamWebSocketConnector.Service {
   return {
     connect: (request) =>
       Effect.tryPromise({
         try: async () => {
           const url = request.url.replace(/^ws(s?):/i, "http$1:");
+
           const response = await fetch(url, {
             headers: { ...request.headers, upgrade: "websocket" },
           });
-          const ws = (response as Response & { webSocket?: WebSocket | null }).webSocket;
+
+          const ws = response.webSocket;
 
           if (ws === undefined || ws === null) {
             const body = await response.text().catch(() => "");

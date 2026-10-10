@@ -64,6 +64,7 @@ export const convertInteractionsResponseToClaude = (
   line: string,
 ): ReadonlyArray<string> => {
   context.state.value ??= newState(context.model);
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a State before this read.
   const st = context.state.value as State;
   st.model = firstNonEmpty(st.model, context.model);
 
@@ -109,12 +110,14 @@ export const convertInteractionsResponseToClaudeNonStream = (
         break;
       case "function_call": {
         sawToolCall = true;
+
         const block: JsonObject = {
           type: "tool_use",
           id: toolId(step),
           name: str(get(step, "name")),
           input: {},
         };
+
         const signature = stepSignature(step);
 
         if (signature !== "") block.signature = signature;
@@ -143,6 +146,7 @@ export const convertInteractionsResponseToClaudeNonStream = (
 /** `status == "incomplete"` or a length finish reason on the interaction or the root. */
 const isMaxTokens = (interaction: Json | undefined, root: Json | undefined): boolean => {
   const status = firstNonEmpty(str(get(interaction, "status")), str(get(root, "status")));
+
   const finishReason = firstNonEmpty(
     str(get(interaction, "finish_reason")),
     str(get(root, "finish_reason")),
@@ -359,10 +363,12 @@ const appendContentDelta = (
 
 const appendContentBlockStop = (out: string[], st: State): string[] => {
   if (!st.activeBlock) return out;
+
   const next = [
     ...out,
     event("content_block_stop", { type: "content_block_stop", index: st.blockIndex }),
   ];
+
   st.activeBlock = false;
   st.activeBlockType = "";
   st.blockIndex++;

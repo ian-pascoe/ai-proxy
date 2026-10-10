@@ -5,7 +5,7 @@
  * `geminiModelsHandler`, `geminiGetHandler`), sdk/api/handlers/handlers_interceptors.go (`WriteModelListResponse`
  * with `ModelDetailIDContextKey`).
  */
-import type { Json, JsonObject } from "../json/index.ts";
+import { isJsonArray, type Json, type JsonObject } from "../json/index.ts";
 import {
   claudeList,
   geminiDetail,
@@ -69,9 +69,10 @@ const selectDetail = (
   render: (value: Json) => string,
 ): ModelsReply => {
   const entries = [
-    ...((payload.data as Json[] | undefined) ?? []),
-    ...((payload.models as Json[] | undefined) ?? []),
+    ...(isJsonArray(payload.data) ? payload.data : []),
+    ...(isJsonArray(payload.models) ? payload.models : []),
   ];
+
   const found = entries.find((entry) => entryId(entry) !== "" && entryId(entry) === id);
 
   return found === undefined ? { status: 404, body: MODEL_NOT_FOUND } : ok(render(found));

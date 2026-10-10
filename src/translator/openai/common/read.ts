@@ -23,8 +23,7 @@ export const present = (value: Json | undefined): value is Exclude<Json, null> =
 export const eachEntry = (value: Json | undefined): Array<[string, Json]> => {
   if (isJsonObject(value)) return Object.entries(value);
 
-  if (isJsonArray(value))
-    return value.map((item, index) => [String(index), item] as [string, Json]);
+  if (isJsonArray(value)) return value.map((item, index): [string, Json] => [String(index), item]);
 
   return [];
 };

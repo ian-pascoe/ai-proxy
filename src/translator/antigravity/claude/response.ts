@@ -193,6 +193,7 @@ const paramsOf = (context: ResponseContext): Params => {
     context.state.value = fresh;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   return context.state.value as Params;
 };
 
@@ -389,8 +390,10 @@ export const convertAntigravityResponseToClaude = (
     for (const part of parts) {
       const text = get(part, "text");
       const functionCall = get(part, "functionCall");
+
       const thoughtSignatureResult =
         get(part, "thoughtSignature") ?? get(part, "thought_signature");
+
       const thoughtSignature = asString(thoughtSignatureResult);
 
       const hasThoughtSignature =
@@ -503,6 +506,7 @@ export const convertAntigravityResponseToClaude = (
         if (getModelGroup(modelName) !== "claude")
           appendPartSignature(toolSignature, CarrierDirection.Next, CarrierKind.Function);
         params.hasToolUse = true;
+
         const fcName = restoreSanitizedToolName(
           params.toolNameMap,
           asString(get(functionCall, "name")),
@@ -644,6 +648,7 @@ export const convertAntigravityResponseToClaudeNonStream = (
     usage: { input_tokens: promptTokens, output_tokens: outputTokens },
   };
 
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const usage = responseJson["usage"] as JsonObject;
 
   if (cachedTokens > 0) usage["cache_read_input_tokens"] = cachedTokens;

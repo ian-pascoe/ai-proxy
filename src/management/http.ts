@@ -19,7 +19,10 @@ export const MANAGEMENT_HEADERS = {
   "cache-control": "no-store",
 } as const;
 
-export const jsonReply = (status: number, body: unknown): HttpServerResponse.HttpServerResponse =>
+export const jsonReply = <Body>(
+  status: number,
+  body: Body,
+): HttpServerResponse.HttpServerResponse =>
   HttpServerResponse.text(JSON.stringify(body), { status, contentType: JSON_CONTENT_TYPE });
 
 /** An early exit with a ready response (the Effect failure channel of every management handler). */
@@ -43,12 +46,12 @@ export const controlPlane = <R>(
     return yield* Effect.tryPromise({
       // RPC results are promise-pipelining stubs; `await` yields the plain data.
       try: async (): Promise<Awaited<R>> => await call(env.CONTROL_PLANE.getByName("global")),
-      catch: (cause) => cause,
+      catch: (cause) => (cause instanceof Error ? cause.message : "unknown error"),
     }).pipe(
-      Effect.catch((cause) =>
-        Effect.logError(
-          `management ${label} failed: ${cause instanceof Error ? cause.message : "unknown error"}`,
-        ).pipe(Effect.andThen(Effect.fail(replyError(502, "control plane unavailable")))),
+      Effect.catch((message) =>
+        Effect.logError(`management ${label} failed: ${message}`).pipe(
+          Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),
+        ),
       ),
     );
   });
@@ -56,6 +59,7 @@ export const controlPlane = <R>(
 /** Request body as text; `invalid body` (400) when it cannot be read. */
 export const bodyText = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
+
   // `arrayBuffer` instead of `text`: workerd warns when `.text()` reads a non-text type such as application/yaml.
   const buffer = yield* request.arrayBuffer.pipe(
     Effect.mapError(() => replyError(400, "invalid body")),
@@ -69,6 +73,7 @@ export const bodyJson = Effect.gen(function* () {
   const text = yield* bodyText;
 
   return yield* Effect.try({
+    // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(400, "invalid body"),
   });

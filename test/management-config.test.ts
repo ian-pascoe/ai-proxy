@@ -63,6 +63,7 @@ describe("management config", () => {
       "/v8/management/config",
       jsonInit("PUT", { routing: { strategy: "fill-first" } }),
     );
+
     expect(put.status).toBe(200);
     expect((await json("/v8/management/config/routing/strategy")).body).toBe("fill-first");
 
@@ -132,10 +133,12 @@ describe("management config", () => {
         )
       ).status,
     ).toBe(200);
+
     const retry = (await json("/v8/management/config/routing/retry")).body as Record<
       string,
       unknown
     >;
+
     expect(retry).toMatchObject({ "request-retry": 5, "max-retry-interval": 20 });
 
     // DELETE removes the key; the default shows again.
@@ -224,19 +227,24 @@ describe("management config", () => {
     // The same handles address the credentials: cooldown reset knows them.
     const reset = await json(
       "/v8/management/routing/cooldown/reset",
-      jsonInit("POST", { auth_index: indexes[0] }),
+      jsonInit("POST", { auth_index: indexes[0] ?? "" }),
     );
-    expect(reset.body).toMatchObject({ status: "ok", auth_index: indexes[0] });
+
+    expect(reset.body).toMatchObject({ status: "ok", auth_index: indexes[0] ?? "" });
 
     // Writing the document back (with auth_index) does not persist the derived field.
     expect((await json("/v8/management/config", jsonInit("PUT", config))).status).toBe(200);
+
     const stored = JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
       "api-keys": unknown;
     };
+
     expect(JSON.stringify(stored["api-keys"])).not.toContain("auth_index");
+
     const exported = new TextDecoder().decode(
       await (await call("/v8/management/config.yaml")).arrayBuffer(),
     );
+
     expect(exported).not.toContain("auth_index");
   });
 

@@ -59,11 +59,13 @@ const openAIChatParseDataUrl = (value: string): { mimeType: string; data: string
 
 const openAIChatImagePartToInteractions = (part: Json): JsonObject => {
   const out: JsonObject = { type: "image" };
+
   const imageUrl = firstNonEmpty(
     getStr(part, "image_url.url"),
     getStr(part, "image_url"),
     getStr(part, "url"),
   );
+
   const parsed = openAIChatParseDataUrl(imageUrl);
 
   if (parsed !== undefined) {
@@ -131,11 +133,13 @@ const openAIChatContentPartToInteractions = (part: Json): JsonObject | undefined
         getStr(part, "file_data"),
         getStr(part, "data"),
       );
+
       const fileUrl = firstNonEmpty(
         getStr(file, "file_url"),
         getStr(part, "file_url"),
         getStr(part, "url"),
       );
+
       const out: JsonObject = { type: "document" };
 
       if (filename !== "") out.filename = filename;
@@ -339,12 +343,14 @@ export const convertOpenAIRequestToInteractions = (
 
   if (streamValue !== undefined) out.stream = asBool(streamValue);
   else if (stream) out.stream = true;
+
   const previous = firstNonEmpty(
     getStr(root, "previous_response_id"),
     getStr(root, "previous_interaction_id"),
   );
 
   if (previous !== "") out.previous_interaction_id = previous;
+
   const environmentId = firstNonEmpty(
     getStr(root, "environment_id"),
     getStr(root, "environment.id"),

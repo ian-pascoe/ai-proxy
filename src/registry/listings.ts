@@ -24,8 +24,8 @@ const sortKeys = (value: Json): Json => {
   if (value !== null && typeof value === "object") {
     const out: JsonObject = {};
 
-    for (const key of Object.keys(value).toSorted(compareStrings))
-      out[key] = sortKeys(value[key] as Json);
+    for (const [key, child] of Object.entries(value).toSorted(([a], [b]) => compareStrings(a, b)))
+      out[key] = sortKeys(child);
 
     return out;
   }
@@ -33,16 +33,16 @@ const sortKeys = (value: Json): Json => {
   return value;
 };
 
-const GO_ESCAPES: Readonly<Record<string, string>> = {
-  "<": "\\u003c",
-  ">": "\\u003e",
-  "&": "\\u0026",
-  "\u2028": "\\u2028",
-  "\u2029": "\\u2029",
-};
+const GO_ESCAPES = new Map<string, string>([
+  ["<", "\\u003c"],
+  [">", "\\u003e"],
+  ["&", "\\u0026"],
+  ["\u2028", "\\u2028"],
+  ["\u2029", "\\u2029"],
+]);
 
 const escapeLikeGo = (json: string): string =>
-  json.replace(/[<>&\u2028\u2029]/g, (char) => GO_ESCAPES[char] as string);
+  json.replace(/[<>&\u2028\u2029]/g, (char) => GO_ESCAPES.get(char) ?? char);
 
 /** `json.Marshal` of a Go map tree: sorted keys, HTML-safe escaping, compact. */
 export const goJson = (value: Json): string => escapeLikeGo(JSON.stringify(sortKeys(value)));
@@ -52,7 +52,10 @@ export const goJson = (value: Json): string => escapeLikeGo(JSON.stringify(sortK
  * disabled (so `<`, `>` and `&` stay literal; U+2028/U+2029 are still escaped).
  */
 export const goCompactJson = (value: Json): string =>
-  JSON.stringify(sortKeys(value)).replace(/[\u2028\u2029]/g, (char) => GO_ESCAPES[char] as string);
+  JSON.stringify(sortKeys(value)).replace(
+    /[\u2028\u2029]/g,
+    (char) => GO_ESCAPES.get(char) ?? char,
+  );
 
 /** `json.Marshal` of a Go struct tree: keys keep their declaration order (insertion order here). */
 export const goStructJson = (value: Json): string => escapeLikeGo(JSON.stringify(value));
@@ -114,13 +117,13 @@ export const geminiEntry = (model: ModelInfo): JsonObject => ({
   ...(positive(model.inputTokenLimit) ? { inputTokenLimit: model.inputTokenLimit } : {}),
   ...(positive(model.outputTokenLimit) ? { outputTokenLimit: model.outputTokenLimit } : {}),
   ...((model.supportedGenerationMethods ?? []).length > 0
-    ? { supportedGenerationMethods: [...(model.supportedGenerationMethods as readonly string[])] }
+    ? { supportedGenerationMethods: [...(model.supportedGenerationMethods ?? [])] }
     : {}),
   ...((model.supportedInputModalities ?? []).length > 0
-    ? { supportedInputModalities: [...(model.supportedInputModalities as readonly string[])] }
+    ? { supportedInputModalities: [...(model.supportedInputModalities ?? [])] }
     : {}),
   ...((model.supportedOutputModalities ?? []).length > 0
-    ? { supportedOutputModalities: [...(model.supportedOutputModalities as readonly string[])] }
+    ? { supportedOutputModalities: [...(model.supportedOutputModalities ?? [])] }
     : {}),
 });
 
@@ -152,7 +155,7 @@ export const resolveClaudeModelIdPrefix = (id: string): string => {
 };
 
 const text = (entry: JsonObject, key: string): string =>
-  typeof entry[key] === "string" ? (entry[key] as string) : "";
+  typeof entry[key] === "string" ? entry[key] : "";
 
 /** `claudemodels.BuildResponse`. */
 export const claudeList = (
@@ -171,11 +174,14 @@ export const claudeList = (
       compareStrings(text(a, "id"), text(b, "id")),
   );
 
+  const first = sorted.at(0);
+  const last = sorted.at(-1);
+
   return {
     data: sorted,
     has_more: false,
-    first_id: sorted.length > 0 ? text(sorted[0] as JsonObject, "id") : "",
-    last_id: sorted.length > 0 ? text(sorted[sorted.length - 1] as JsonObject, "id") : "",
+    first_id: first === undefined ? "" : text(first, "id"),
+    last_id: last === undefined ? "" : text(last, "id"),
   };
 };
 
@@ -185,7 +191,7 @@ export const claudeList = (
 export const geminiList = (models: ReadonlyArray<ModelInfo>): JsonObject => ({
   models: models.map((model) => {
     const entry = { ...geminiEntry(model) };
-    const name = entry.name as string;
+    const name = text(entry, "name");
 
     if (name !== "") {
       if (!name.startsWith("models/")) entry.name = `models/${name}`;
@@ -211,7 +217,7 @@ export const geminiDetail = (
 ): JsonObject | undefined => {
   for (const model of models) {
     const entry = geminiEntry(model);
-    const name = entry.name as string;
+    const name = text(entry, "name");
 
     if (name !== action && name !== `models/${action}`) continue;
 

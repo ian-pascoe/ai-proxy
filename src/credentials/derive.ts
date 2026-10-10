@@ -33,7 +33,7 @@ export const normalizePrefix = (raw: string | undefined): string | undefined => 
 };
 
 /** `ExtractCustomHeadersFromMetadata`: non-empty string values with trimmed names. */
-export const extractHeaders = (raw: Json | undefined): Record<string, string> => {
+export const extractHeaders = (raw: Json | undefined) => {
   const out: Record<string, string> = {};
 
   if (!isJsonObject(raw)) return out;
@@ -161,11 +161,11 @@ export const deriveFileCredential = (
   options: DeriveOptions,
 ): Credential => {
   const { metadata, provider } = stored;
-  const attributes: Record<string, string> = {
-    source: stored.id,
-    path: stored.id,
-    source_backend: "file",
-  };
+
+  const attributes: Record<string, string> = {};
+  attributes.source = stored.id;
+  attributes.path = stored.id;
+  attributes.source_backend = "file";
 
   const priority = parsePriority(metadata.priority);
 

@@ -67,7 +67,9 @@ const trimSpace = (text: string): string => {
 
 const unescapeJsonString = (text: string): string => {
   try {
-    return JSON.parse(`"${text}"`) as string;
+    const parsed: string = JSON.parse(`"${text}"`);
+
+    return parsed;
   } catch {
     return text;
   }
@@ -149,6 +151,7 @@ const parseObjectPath = (path: string): ObjectPath => {
         i++;
 
         for (; i < path.length; i++) {
+          // SAFETY: i is bounded by the enclosing loop condition i < path.length.
           const d = path[i] as string;
 
           if (d === "\\") {
@@ -201,6 +204,7 @@ const parseQuery = (query: string): ParsedQuery | undefined => {
   let vesc = false;
 
   for (; i < query.length; i++) {
+    // SAFETY: i is bounded by the enclosing loop condition i < query.length.
     const c = query[i] as string;
 
     if (depth === 1 && j === 0 && (c === "!" || c === "=" || c === "<" || c === ">" || c === "%")) {
@@ -612,7 +616,7 @@ const squash = (text: string): string => {
 const reverseObject = (object: JsonObject): JsonObject => {
   const out: JsonObject = {};
 
-  for (const key of Object.keys(object).toReversed()) out[key] = object[key] as Json;
+  for (const [key, entry] of Object.entries(object).toReversed()) out[key] = entry;
 
   return out;
 };
@@ -654,7 +658,7 @@ const applyModifier = (name: string, value: Json, arg: string): Json => {
 
       if (arg !== "") {
         try {
-          const parsed = JSON.parse(arg) as unknown;
+          const parsed: unknown = JSON.parse(arg);
           deep = isJsonObject(parsed) && parsed.deep === true;
         } catch {
           deep = false;
@@ -731,6 +735,7 @@ const getObject = (object: JsonObject, path: string): Hit | undefined => {
     const matched = rp.wild ? wildcardMatch(key, rp.part) : key === rp.part;
 
     if (!matched) continue;
+    // SAFETY: key comes from Object.keys(object), so it is an own key of object.
     const value = object[key] as Json;
 
     if (!rp.more) return { value: rp.piped ? get(value, rp.pipe) : value };
@@ -752,6 +757,7 @@ const getObject = (object: JsonObject, path: string): Hit | undefined => {
 const getArray = (array: JsonArray, path: string): Hit | undefined => {
   const rp = parseArrayPath(path);
   let pipe: string | undefined = !rp.more && rp.piped ? rp.pipe : undefined;
+
   const finish = (value: Json | undefined): Hit => ({
     value: pipe !== undefined ? get(value, pipe) : value,
   });
@@ -819,6 +825,7 @@ const getArray = (array: JsonArray, path: string): Hit | undefined => {
   const index = parseUint(rp.part);
 
   if (index === undefined || index >= array.length) return undefined;
+  // SAFETY: index is checked against array.length on the previous line.
   const element = array[index] as Json;
 
   if (!rp.more) return finish(element);

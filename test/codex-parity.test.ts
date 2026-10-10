@@ -6,6 +6,7 @@ import { modelOverrideHeaders } from "../src/executor/helps/model-headers.ts";
 import type { ThinkingModelInfo } from "../src/thinking/index.ts";
 import { apiKeyCredential } from "./support/codex.ts";
 import { execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
+import type { Json } from "../src/json/index.ts";
 
 const compatYaml = `
 api-keys:
@@ -120,7 +121,7 @@ describe("models.json override_header", () => {
 });
 
 describe("image tool usage (PublishAdditionalModel)", () => {
-  const completed = (toolUsage: unknown) =>
+  const completed = (toolUsage: Json | undefined) =>
     `data: ${JSON.stringify({
       type: "response.completed",
       response: {
@@ -132,11 +133,12 @@ describe("image tool usage (PublishAdditionalModel)", () => {
       },
     })}\n\n`;
 
-  const run = async (toolUsage: unknown, tools: unknown[]) => {
+  const run = async (toolUsage: Json | undefined, tools: Json[]) => {
     const h = await harness(
       apiKeyCredential(),
       () => new Response(completed(toolUsage), { status: 200 }),
     );
+
     await execute(
       makeCodexExecutor(),
       h,

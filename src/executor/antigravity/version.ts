@@ -8,6 +8,7 @@
  */
 import { Effect } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
+import { isJsonObject, tryParseJson } from "../../json/index.ts";
 import { WorkerEnv } from "../../platform/env.ts";
 
 export const ANTIGRAVITY_FALLBACK_VERSION = "2.9.1";
@@ -40,7 +41,7 @@ export const parseManifestVersion = (manifest: string): string | undefined => {
     const match = /^version:\s*(.*?)\s*$/.exec(line);
 
     if (match === null) continue;
-    const version = (match[1] as string).replace(/^(["'])(.*)\1$/, "$2").trim();
+    const version = (match[1] ?? "").replace(/^(["'])(.*)\1$/, "$2").trim();
 
     return isValidAntigravityVersion(version) ? version : undefined;
   }
@@ -99,19 +100,19 @@ interface StoredVersion {
 export const resolveStoredVersion = (raw: string | null, now: number): string => {
   if (raw === null) return ANTIGRAVITY_FALLBACK_VERSION;
 
-  try {
-    const stored = JSON.parse(raw) as Partial<StoredVersion>;
+  const stored = tryParseJson(raw);
+
+  if (isJsonObject(stored)) {
+    const { version, fetchedAt } = stored;
 
     if (
-      typeof stored.version === "string" &&
-      typeof stored.fetchedAt === "number" &&
-      isValidAntigravityVersion(stored.version) &&
-      now < stored.fetchedAt + ANTIGRAVITY_VERSION_TTL_MS
+      typeof version === "string" &&
+      typeof fetchedAt === "number" &&
+      isValidAntigravityVersion(version) &&
+      now < fetchedAt + ANTIGRAVITY_VERSION_TTL_MS
     ) {
-      return stored.version;
+      return version;
     }
-  } catch {
-    // fall through to the fallback
   }
 
   return ANTIGRAVITY_FALLBACK_VERSION;
@@ -133,9 +134,11 @@ export const currentAntigravityVersion = (
     if (kv === undefined) return ANTIGRAVITY_FALLBACK_VERSION;
 
     if (readCache !== undefined && now - readCache.at < READ_CACHE_MS) return readCache.version;
+
     const raw = yield* Effect.tryPromise(() => kv.get(ANTIGRAVITY_VERSION_KEY)).pipe(
       Effect.orElseSucceed(() => null),
     );
+
     const version = resolveStoredVersion(raw, now);
     readCache = { version, at: now };
 

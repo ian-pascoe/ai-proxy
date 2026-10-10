@@ -17,13 +17,14 @@ export const mergeRefreshedMetadata = (
   current: Readonly<JsonObject>,
   updated: Readonly<JsonObject>,
 ): JsonObject => {
-  const merged: JsonObject = structuredClone(current) as JsonObject;
+  const merged: JsonObject = structuredClone(current);
 
   for (const [key, value] of Object.entries(updated)) {
     if (key.trim().toLowerCase() === SKIPPED_KEY) continue;
     const hadInBase = Object.hasOwn(base, key);
     const hadInCurrent = Object.hasOwn(current, key);
     const changedByExecutor = !hadInBase || !jsonEquals(base[key], value);
+
     const changedByUser =
       hadInBase !== hadInCurrent || (hadInBase && !jsonEquals(base[key], current[key]));
 

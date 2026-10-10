@@ -42,13 +42,16 @@ interface CapabilityInfo {
 }
 
 /** `antigravitySupportsNativeResponsesWebSearch`: the envelope's model info first, then the Antigravity registry record. */
-const supportsNativeWebSearch = (model: string, modelInfo: unknown): boolean => {
-  const explicit = (modelInfo as CapabilityInfo | undefined)?.nativeCapabilities?.webSearch;
+const supportsNativeWebSearch = (model: string, envelope: RequestEnvelope): boolean => {
+  // SAFETY: the envelope's modelInfo is the registry ModelInfo record (src/registry/model-info.ts) when set, which has the CapabilityInfo fields.
+  const explicit = (envelope.modelInfo as CapabilityInfo | undefined)?.nativeCapabilities
+    ?.webSearch;
 
   if (typeof explicit === "boolean") return explicit;
   const base = parseSuffix(model.trim()).modelName.trim();
 
   if (base === "") return false;
+  // SAFETY: the registry lookup returns the full ModelInfo record at runtime; ThinkingModelInfo only types the thinking subset of it.
   const local = lookupModelInfo(base, "antigravity") as CapabilityInfo | undefined;
 
   if (local === undefined) return false;
@@ -239,12 +242,10 @@ const ensureWebSearchSystemInstruction = (payload: Json): void => {
   set(payload, "request.systemInstruction.parts", parts);
 };
 
+type ToGeminiResult = { body: Json; error?: TranslationError };
+
 /** Runs the Gemini conversion, keeping a refusal's partial body like Go's `(body, err)` pair. */
-const toGemini = (
-  model: string,
-  body: Json,
-  stream: boolean,
-): { body: Json; error?: TranslationError } => {
+const toGemini = (model: string, body: Json, stream: boolean): ToGeminiResult => {
   try {
     return { body: convertOpenAIResponsesRequestToGemini(model, body, stream) };
   } catch (error) {
@@ -263,7 +264,7 @@ export const convertOpenAIResponsesRequestEnvelopeToAntigravity = (
 
   const webSearch =
     hasOnlyResponsesWebSearchTools(input) &&
-    supportsNativeWebSearch(model, envelope.modelInfo) &&
+    supportsNativeWebSearch(model, envelope) &&
     allowsResponsesWebSearchToolChoice(input);
 
   if (webSearch) {

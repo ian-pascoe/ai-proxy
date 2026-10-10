@@ -6,7 +6,7 @@
  * Writes are read-modify-write with the stored version as `expectedVersion` (retried on a concurrent write), and the
  * ControlPlane validates and normalises the result: invalid documents answer `422 invalid_config`.
  */
-import { Effect } from "effect";
+import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { parseConfigYaml, stringifyConfigYaml } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
@@ -35,6 +35,7 @@ const storedDocument = Effect.gen(function* () {
   const wire = yield* controlPlane("getConfig", (stub) => stub.getConfig());
   const text = wire.document ?? "{}";
 
+  // SAFETY: the stored config document is always a serialized JSON object (writes reject non-objects).
   return { version: wire.version, text, document: JSON.parse(text) as JsonObject };
 });
 
@@ -117,6 +118,7 @@ const jsonValue = Effect.gen(function* () {
   const text = yield* bodyText;
 
   return yield* Effect.try({
+    // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
     try: () => JSON.parse(text) as Json,
     catch: () => replyError(400, "invalid_json"),
   });
@@ -129,7 +131,7 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
       // Validate before storing so a malformed document answers the same way as a bad JSON write.
       const parsed = yield* Effect.result(parseConfigYaml(text));
 
-      if (parsed._tag === "Failure")
+      if (Result.isFailure(parsed))
         return yield* replyError(422, "invalid_config", { message: parsed.failure.message });
       const outcome = yield* store(text, undefined);
 
@@ -144,6 +146,7 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
 
     if (parts.length === 0 && mode === "put") {
       const outcome = yield* store(
+        // SAFETY: the branch above returned unless value is a JSON object when parts is empty.
         JSON.stringify(stripAuthIndexes(value as JsonObject)),
         undefined,
       );
@@ -172,14 +175,13 @@ const routes = (
   methods: ReadonlyArray<"GET" | "PUT" | "PATCH" | "DELETE">,
 ) =>
   methods.map((method) => {
-    const handler =
-      method === "GET"
-        ? getConfig(yaml)
-        : method === "PUT"
-          ? writeConfig("put", yaml)
-          : method === "PATCH"
-            ? writeConfig("patch", yaml)
-            : deleteConfig;
+    const handler = Match.value(method).pipe(
+      Match.when("GET", () => getConfig(yaml)),
+      Match.when("PUT", () => writeConfig("put", yaml)),
+      Match.when("PATCH", () => writeConfig("patch", yaml)),
+      Match.when("DELETE", () => deleteConfig),
+      Match.exhaustive,
+    );
 
     return HttpRouter.route(method, path, handled(handler));
   });

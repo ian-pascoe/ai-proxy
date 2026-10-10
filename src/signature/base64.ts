@@ -7,7 +7,9 @@
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-const VALUES = new Map<string, number>([...ALPHABET].map((char, index) => [char, index]));
+const VALUES = new Map<string, number>(
+  Array.from(ALPHABET, (char, index): [string, number] => [char, index]),
+);
 
 /** `base64.StdEncoding[.Strict()].DecodeString`; `undefined` on any decoding error. */
 export const decodeBase64Std = (input: string, strict = false): Uint8Array | undefined => {
@@ -26,7 +28,7 @@ export const decodeBase64Std = (input: string, strict = false): Uint8Array | und
   let bits = 0;
 
   for (let i = 0; i < bodyLength; i++) {
-    const value = VALUES.get(text[i] as string);
+    const value = VALUES.get(text.charAt(i));
 
     if (value === undefined) return undefined;
     buffer = (buffer << 6) | value;

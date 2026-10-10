@@ -76,7 +76,9 @@ export const upgradeCacheControlTTL = (body: JsonObject, ttl: string): JsonObjec
     if (!isObj(cc) || Object.hasOwn(cc, "ttl") || typeof cc.type !== "string") continue;
     const upgraded: JsonObject = { type: cc.type, ttl };
 
-    if (Object.hasOwn(cc, "scope")) upgraded.scope = cc.scope as Json;
+    const scope = cc.scope;
+
+    if (Object.hasOwn(cc, "scope") && scope !== undefined) upgraded.scope = scope;
     block.cache_control = upgraded;
   }
 
@@ -215,16 +217,19 @@ const injectMessagesCacheControl = (body: JsonObject): void => {
   const finalContent = get(final, "content");
 
   if (
+    isObj(final) &&
     str(get(final, "role")) === "system" &&
     typeof finalContent === "string" &&
     finalContent.trim() !== ""
   ) {
-    (final as JsonObject).content = [textBlock(finalContent, ephemeral())];
+    final.content = [textBlock(finalContent, ephemeral())];
 
     return;
   }
 
-  const target = messages[lastEligible] as JsonObject;
+  const target = messages[lastEligible];
+
+  if (!isObj(target)) return;
   const content = target.content;
 
   if (isArr(content)) {
@@ -249,7 +254,9 @@ const injectToolsCacheControl = (body: JsonObject): void => {
     if (get(tool, "defer_loading") !== true) lastEligible = index;
   }
 
-  if (lastEligible >= 0) (tools[lastEligible] as JsonObject).cache_control = ephemeral();
+  const lastTool = tools[lastEligible];
+
+  if (lastEligible >= 0 && isObj(lastTool)) lastTool.cache_control = ephemeral();
 };
 
 const injectSystemCacheControl = (body: JsonObject): void => {

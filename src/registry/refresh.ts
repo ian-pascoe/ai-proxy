@@ -9,9 +9,10 @@
  * Differences: no file-path sources and no ticker (the cron trigger runs this every 3 hours); there is no refresh
  * callback because registrations are derived on demand from the stored catalogs.
  */
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { HttpClient } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
+import { isJsonObject, type Json } from "../json/index.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { detectChangedProviders, embeddedModelsDocument, parseModelsCatalog } from "./catalog.ts";
 import {
@@ -104,7 +105,7 @@ const fetchValid = (
         Effect.option,
       );
 
-      if (text._tag === "None") continue;
+      if (Option.isNone(text)) continue;
 
       if (new TextEncoder().encode(text.value).length > MAX_CATALOG_BYTES) continue;
 
@@ -116,19 +117,19 @@ const fetchValid = (
 
 /** `publishCatalogBytes`: a catalog without `meta` keeps the previous one. Returns the text to store. */
 const carryOverMeta = (text: string, previousText: string | undefined): string => {
-  const next = JSON.parse(text) as Record<string, unknown>;
+  const next: Json = JSON.parse(text);
+  const nextMeta = isJsonObject(next) ? next.meta : undefined;
 
-  if (Array.isArray(next.meta) && next.meta.length > 0) return text;
+  if (Array.isArray(nextMeta) && nextMeta.length > 0) return text;
 
-  const previous = (
-    previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText)
-  ) as {
-    readonly meta?: unknown;
-  };
+  const previous: Json =
+    previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText);
 
-  if (!Array.isArray(previous.meta) || previous.meta.length === 0) return text;
+  const previousMeta = isJsonObject(previous) ? previous.meta : undefined;
 
-  return JSON.stringify({ ...next, meta: previous.meta });
+  if (!Array.isArray(previousMeta) || previousMeta.length === 0) return text;
+
+  return JSON.stringify({ ...(isJsonObject(next) ? next : {}), meta: previousMeta });
 };
 
 const changedProvidersOf = (
@@ -138,6 +139,7 @@ const changedProvidersOf = (
   const previous = parseModelsCatalog(
     previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText),
   );
+
   const next = parseModelsCatalog(JSON.parse(nextText));
 
   return previous.ok && next.ok ? detectChangedProviders(previous.value, next.value) : [];
@@ -165,9 +167,7 @@ export const refreshCatalogs: Effect.Effect<
     ),
   );
 
-  const current: CatalogTexts = yield* store.stored.pipe(
-    Effect.catch(() => Effect.succeed({} as CatalogTexts)),
-  );
+  const current: CatalogTexts = yield* store.stored.pipe(Effect.catch(() => Effect.succeed({})));
 
   const refreshOne = (name: CatalogName): Effect.Effect<RefreshOutcome> =>
     Effect.gen(function* () {

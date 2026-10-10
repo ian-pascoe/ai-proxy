@@ -11,7 +11,7 @@
  * so a cancel racing with an exchange cannot store a credential.
  * Replies carry statuses/messages only; flow secrets stay in the session row and tokens never reach logs or replies.
  */
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Predicate, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { antigravityFlow } from "./flows/antigravity.ts";
 import { claudeFlow } from "./flows/claude.ts";
@@ -73,6 +73,8 @@ export interface OAuthServiceOptions {
   readonly metaMintUrl?: string | undefined;
 }
 
+const FINISH_OUTCOMES = { ok: "completed", wait: "cancelled", error: "failed" } as const;
+
 const newDeviceState = (prefix: string, now: number): string => `${prefix}-${now}-${randomHex(4)}`;
 
 const callbackFlows: Readonly<Partial<Record<OAuthProvider, () => CallbackFlow>>> = {
@@ -114,7 +116,7 @@ export const makeOAuthService = ({
       const state = generateState();
       const started = yield* flow.start({ state }).pipe(Effect.result);
 
-      if (started._tag === "Failure") {
+      if (Result.isFailure(started)) {
         yield* Effect.logError(`oauth ${flow.provider}: failed to build the authorization URL`);
 
         return { ok: false, status: 500, error: "failed to generate authorization url" } as const;
@@ -142,7 +144,7 @@ export const makeOAuthService = ({
     Effect.gen(function* () {
       const started = yield* flow.start().pipe(Effect.result);
 
-      if (started._tag === "Failure") {
+      if (Result.isFailure(started)) {
         yield* Effect.logError(
           `oauth ${flow.provider}: failed to start the device flow: ${started.failure.message}`,
         );
@@ -227,14 +229,14 @@ export const makeOAuthService = ({
 
         const after = yield* Clock.currentTimeMillis;
 
-        if (outcome._tag === "Failure") {
+        if (Result.isFailure(outcome)) {
           sessions.setError(session.state, outcome.failure.message, after);
           yield* Effect.logWarning(`oauth ${session.provider}: device login failed`);
 
           return { status: "error", error: outcome.failure.message } as const;
         }
 
-        if (outcome.success._tag === "pending") {
+        if (Predicate.isTagged(outcome.success, "pending")) {
           const intervalMs = outcome.success.intervalMs ?? session.intervalMs;
           sessions.release(session.state, after, { nextPollAt: now + intervalMs, intervalMs });
 
@@ -379,9 +381,10 @@ export const makeOAuthService = ({
           const exchanged = yield* flow
             .complete({ state, code, data: found.data, now })
             .pipe(Effect.result);
+
           const after = yield* Clock.currentTimeMillis;
 
-          if (exchanged._tag === "Failure") {
+          if (Result.isFailure(exchanged)) {
             sessions.setError(state, exchanged.failure.message, after);
             yield* Effect.logWarning(`oauth ${flow.provider}: authorization code exchange failed`);
 
@@ -392,12 +395,7 @@ export const makeOAuthService = ({
 
           return {
             ok: true,
-            outcome:
-              finished.status === "ok"
-                ? "completed"
-                : finished.status === "wait"
-                  ? "cancelled"
-                  : "failed",
+            outcome: FINISH_OUTCOMES[finished.status],
           } as const;
         }).pipe(Effect.ensuring(Effect.sync(() => sessions.release(state, now))));
       }),

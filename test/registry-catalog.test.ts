@@ -194,9 +194,11 @@ describe("Devin catalog", () => {
 
   it("accepts envelopes and bare arrays, namespaces ids and rejects bad payloads", () => {
     const fromDevin = parseDevinCatalog({ devin: [wire("Model-A")] });
+
     const fromModels = parseDevinCatalog({
       models: [wire("devin/model-a-high"), wire("devin/model-a")],
     });
+
     const fromArray = parseDevinCatalog([wire("model-a")]);
 
     for (const parsed of [fromDevin, fromModels, fromArray]) {

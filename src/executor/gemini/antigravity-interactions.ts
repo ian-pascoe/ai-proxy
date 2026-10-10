@@ -61,9 +61,7 @@ export interface ContinuationStore {
 export const interactionsCallKey = (ids: ReadonlyArray<string>): string => {
   const sorted = [...ids].toSorted();
 
-  for (let index = 0; index < sorted.length; index++) {
-    const id = sorted[index] as string;
-
+  for (const [index, id] of sorted.entries()) {
     if (id === "" || id.includes("\u0000") || (index > 0 && sorted[index - 1] === id)) return "";
   }
 
@@ -87,6 +85,7 @@ export const makeSessionStateContinuationStore = (
       undefined,
       Effect.gen(function* () {
         const state = yield* backend;
+
         const [result] = yield* state.run(addressOf(conversationKey), [
           { op: "get", key: entryKey(callKey) },
         ]);

@@ -47,7 +47,7 @@ export const setJsonValue = (
 
   if (typeof value === "string") {
     try {
-      set(out, path, JSON.parse(value) as Json);
+      set(out, path, JSON.parse(value));
     } catch {
       set(out, path, value);
     }
@@ -251,6 +251,7 @@ export const responsesFunctionCallToInteractions = (
     name: qualifiedItemName(item, forAntigravity),
     arguments: {},
   };
+
   const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"));
 
   if (callId !== "") out.call_id = callId;
@@ -269,6 +270,7 @@ export const responsesCustomToolCallToInteractions = (
     name: qualifiedItemName(item, forAntigravity),
     arguments: {},
   };
+
   const callId = firstNonEmpty(getStr(item, "call_id"), getStr(item, "id"));
 
   if (callId !== "") out.call_id = callId;

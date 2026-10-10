@@ -68,6 +68,7 @@ describe("Responses frame assembler", () => {
     const payload = JSON.parse(out.split("data: ")[1] as string) as {
       response: { output: Array<{ id: string }> };
     };
+
     expect(payload.response.output.map((item) => item.id)).toEqual(["a", "b"]);
     expect(framer.chunk('event: response.created\ndata: {"type":"response.created"}\n\n')).toBe("");
     expect(framer.closeError()).toBeUndefined();
@@ -105,7 +106,7 @@ describe("tool schema normalisation", () => {
     Array.from({ length: count }, (_, i) => ({ const: `v${i}`, description: `d${i}` }));
 
   it("collapses pure constant unions of 8+ branches into enum and strips unsupported patterns", () => {
-    const body = {
+    const body: Json = {
       tools: [
         {
           type: "function",
@@ -122,28 +123,24 @@ describe("tool schema normalisation", () => {
           },
         },
       ],
-    } as unknown as Json;
+    };
 
     normalizeCodexToolSchemas(body);
 
-    const properties = (
-      body as {
-        tools: Array<{ parameters: { properties: Record<string, Record<string, unknown>> } }>;
-      }
-    ).tools[0]!.parameters.properties;
+    const properties = get(body, "tools.0.parameters.properties");
 
-    expect(properties["mode"]).toEqual({
+    expect(get(properties, "mode")).toEqual({
       description: "m",
       enum: Array.from({ length: 8 }, (_, i) => `v${i}`),
     });
-    expect(properties["short"]!["oneOf"]).toHaveLength(7);
-    expect(properties["mixed"]!["anyOf"]).toHaveLength(9);
-    expect(properties["dup"]!["oneOf"]).toHaveLength(8);
-    expect(properties["name"]).toEqual({ type: "string" });
+    expect(get(properties, "short.oneOf")).toHaveLength(7);
+    expect(get(properties, "mixed.anyOf")).toHaveLength(9);
+    expect(get(properties, "dup.oneOf")).toHaveLength(8);
+    expect(get(properties, "name")).toEqual({ type: "string" });
   });
 
   it("drops the union when an identical enum already exists", () => {
-    const body = {
+    const body: Json = {
       tools: [
         {
           type: "function",
@@ -155,41 +152,40 @@ describe("tool schema normalisation", () => {
           },
         },
       ],
-    } as unknown as Json;
+    };
 
     normalizeCodexToolSchemas(body);
     expect(JSON.stringify(body)).not.toContain("oneOf");
   });
 
   it("rewrites number to integer for Codex CLI tools, only for Codex clients", () => {
-    const make = (): Json =>
-      ({
-        tools: [
-          {
-            type: "function",
-            name: "exec_command",
-            parameters: {
-              properties: { timeout_ms: { type: "number" }, other: { type: "number" } },
-            },
+    const make = (): Json => ({
+      tools: [
+        {
+          type: "function",
+          name: "exec_command",
+          parameters: {
+            properties: { timeout_ms: { type: "number" }, other: { type: "number" } },
           },
-          {
-            type: "namespace",
-            name: "notes",
-            tools: [
-              {
-                type: "function",
-                name: "read_file",
-                parameters: {
-                  properties: {
-                    start_line: { type: ["number", "null"], anyOf: [{ type: "number" }] },
-                  },
+        },
+        {
+          type: "namespace",
+          name: "notes",
+          tools: [
+            {
+              type: "function",
+              name: "read_file",
+              parameters: {
+                properties: {
+                  start_line: { type: ["number", "null"], anyOf: [{ type: "number" }] },
                 },
               },
-            ],
-          },
-          { name: "wait_agent", input_schema: { properties: { timeout_ms: { type: "number" } } } },
-        ],
-      }) as unknown as Json;
+            },
+          ],
+        },
+        { name: "wait_agent", input_schema: { properties: { timeout_ms: { type: "number" } } } },
+      ],
+    });
 
     const untouched = make();
     normalizeCodexToolIntegerTypes(untouched, new Headers({ "user-agent": "curl/8" }));
@@ -208,22 +204,22 @@ describe("tool schema normalisation", () => {
   it("only normalises integers in the payload barrier of non-Codex targets", async () => {
     const config = await loadConfig("requests: {}");
 
-    const make = (): Json =>
-      ({
-        tools: [
-          {
-            type: "function",
-            name: "sleep",
-            parameters: { properties: { duration_ms: { type: "number" } } },
-          },
-        ],
-      }) as unknown as Json;
+    const make = (): Json => ({
+      tools: [
+        {
+          type: "function",
+          name: "sleep",
+          parameters: { properties: { duration_ms: { type: "number" } } },
+        },
+      ],
+    });
 
     const request = {
       model: "m",
       protocol: "openai",
       headers: new Headers({ "user-agent": "codex-tui/1" }),
     };
+
     const forOpenAI = finalizePayload(config, "openai-compatible-x", request, make());
     expect(JSON.stringify(forOpenAI)).toContain('"integer"');
     const forCodex = finalizePayload(config, "codex", request, make());
@@ -334,14 +330,17 @@ describe("interactions terminal event", () => {
   it("completes with the created time and a fixed update time", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-03T04:05:06Z"));
+
     const context = {
       model: "gpt-5.4",
       originalRequest: {},
       translatedRequest: {},
       state: makeTranslationState(),
     };
+
     const translate = (line: string) =>
       builtinTranslators.translateStream("interactions", "codex", context, line);
+
     translate(
       'data: {"type":"response.created","response":{"id":"resp_1","created_at":1767225600,"model":"gpt-5.4"}}',
     );
@@ -354,9 +353,11 @@ describe("interactions terminal event", () => {
       "event: interaction.completed",
       "event: done",
     ]);
+
     const completed = JSON.parse(chunks[0]!.split("data: ")[1]!) as {
       interaction: Record<string, unknown>;
     };
+
     expect(completed.interaction).toMatchObject({
       id: "resp_1",
       created: "2026-01-01T00:00:00Z",
@@ -396,15 +397,15 @@ describe("reasoning replay", () => {
     );
     const items = await Effect.runPromise(store.get("gpt-5.4", "claude:s:agent:main"));
 
-    const body = {
+    const body: Json = {
       input: [
         { type: "message", role: "user", content: [{ type: "input_text", text: "go" }] },
         { type: "function_call_output", call_id: "call_1", output: "ok" },
       ],
-    } as unknown as Json;
+    };
 
     expect(insertReplayTurns(body, items ?? [])).toBe(true);
-    expect((body as { input: Array<{ type: string }> }).input.map((item) => item.type)).toEqual([
+    expect(get(body, "input.#.type")).toEqual([
       "message",
       "reasoning",
       "function_call",
@@ -516,10 +517,11 @@ describe("Codex executor replay round trip (Claude source)", () => {
       max_tokens: 10,
       messages: [{ role: "user", content: "read it" }],
     };
+
     const layers = Layer.mergeAll(client, Thinking.live);
     await Effect.runPromise(
       executor
-        .execute(context, { model: "gpt-5.4", payload: first as unknown as Json }, options)
+        .execute(context, { model: "gpt-5.4", payload: first }, options)
         .pipe(Effect.provide(layers)),
     );
 
@@ -542,7 +544,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
     respondWith = new Response(stream, { status: 200 });
     await Effect.runPromise(
       executor
-        .execute(context, { model: "gpt-5.4", payload: second as unknown as Json }, options)
+        .execute(context, { model: "gpt-5.4", payload: second }, options)
         .pipe(Effect.provide(layers)),
     );
     const input = bodies[1]!["input"] as Array<{ type: string; encrypted_content?: string }>;
@@ -566,7 +568,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
     const failed = await Effect.runPromise(
       Effect.flip(
         executor
-          .execute(context, { model: "gpt-5.4", payload: second as unknown as Json }, options)
+          .execute(context, { model: "gpt-5.4", payload: second }, options)
           .pipe(Effect.provide(layers)),
       ),
     );

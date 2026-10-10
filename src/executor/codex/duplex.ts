@@ -20,7 +20,17 @@
  * record per response); `WebsocketDuplex.authEnabled` defaults to true (no live credential lookup); the replay-required check
  * against a changed upstream URL is moot (the credential and so the URL are fixed for the socket).
  */
-import { type Cause, Clock, Deferred, Effect, Queue, type Scope, Stream } from "effect";
+import {
+  type Cause,
+  Clock,
+  Data,
+  Deferred,
+  Effect,
+  Queue,
+  Result,
+  type Scope,
+  Stream,
+} from "effect";
 import { goMarshal } from "../../http/json-text.ts";
 import {
   asString,
@@ -112,11 +122,14 @@ const snapshotOf = (settings: Settings): Settings => ({
   originalInstructions: undefined,
 });
 
-type Inbox =
-  | { readonly _tag: "wake" }
-  | { readonly _tag: "frame"; readonly text: string }
-  | { readonly _tag: "end" }
-  | { readonly _tag: "error"; readonly error: ExecutionError };
+type Inbox = Data.TaggedEnum<{
+  wake: {};
+  frame: { readonly text: string };
+  end: {};
+  error: { readonly error: ExecutionError };
+}>;
+
+const InboxEvent = Data.taggedEnum<Inbox>();
 
 const addUsage = (total: UsageDetail | undefined, next: UsageDetail): UsageDetail => {
   const base = total ?? emptyUsageDetail;
@@ -192,7 +205,7 @@ export const startCodexDuplex = (
 
     const wake = (): void => {
       Queue.offerUnsafe(changed, undefined);
-      Queue.offerUnsafe(inbox, { _tag: "wake" });
+      Queue.offerUnsafe(inbox, InboxEvent.wake());
     };
 
     const finish = (error: ExecutionError | undefined): Effect.Effect<void> =>
@@ -249,7 +262,7 @@ export const startCodexDuplex = (
 
         const sent = yield* Effect.result(turn.send(frame));
 
-        if (sent._tag === "Failure") {
+        if (Result.isFailure(sent)) {
           yield* finish(duplexConnectionError(sent.failure));
 
           return false;
@@ -309,7 +322,7 @@ export const startCodexDuplex = (
           ),
         );
 
-        if (prepared._tag === "Failure") {
+        if (Result.isFailure(prepared)) {
           yield* finish(duplexConnectionError(prepared.failure));
 
           return false;
@@ -331,7 +344,9 @@ export const startCodexDuplex = (
     const flushPendingCreates = (): Effect.Effect<boolean, never, Thinking> =>
       Effect.gen(function* () {
         while (pendingCreates.length > 0 && readyForCreate()) {
-          const next = pendingCreates.shift() as string;
+          const next = pendingCreates.shift();
+
+          if (next === undefined) return true;
 
           if (!(yield* processCreate(next))) return false;
         }
@@ -429,11 +444,11 @@ export const startCodexDuplex = (
             while (true) {
               const next = yield* Effect.result(duplex.next);
 
-              if (next._tag === "Failure")
-                return Queue.offerUnsafe(inbox, { _tag: "error", error: next.failure });
+              if (Result.isFailure(next))
+                return Queue.offerUnsafe(inbox, InboxEvent.error({ error: next.failure }));
 
-              if (next.success === undefined) return Queue.offerUnsafe(inbox, { _tag: "end" });
-              Queue.offerUnsafe(inbox, { _tag: "frame", text: next.success });
+              if (next.success === undefined) return Queue.offerUnsafe(inbox, InboxEvent.end());
+              Queue.offerUnsafe(inbox, InboxEvent.frame({ text: next.success }));
             }
           }),
         );
@@ -442,11 +457,11 @@ export const startCodexDuplex = (
           if (!(yield* flushPendingCreates())) return;
           const item = yield* Queue.take(inbox);
 
-          if (item._tag === "wake") continue;
+          if (InboxEvent.$is("wake")(item)) continue;
 
-          if (item._tag === "end") return yield* finish(undefined);
+          if (InboxEvent.$is("end")(item)) return yield* finish(undefined);
 
-          if (item._tag === "error") return yield* finish(item.error);
+          if (InboxEvent.$is("error")(item)) return yield* finish(item.error);
 
           if (!(yield* handleFrame(item.text))) return;
         }
@@ -463,7 +478,7 @@ export const startCodexDuplex = (
         while (true) {
           const read = yield* Effect.result(turn.read);
 
-          if (read._tag === "Failure") {
+          if (Result.isFailure(read)) {
             if (!finished) yield* finish(duplexConnectionError(read.failure));
 
             return;
@@ -498,15 +513,19 @@ export const startCodexDuplex = (
             waitingParent = "";
             automaticActive = !firstResponse && pending.length === 0;
 
-            if (pending.length > 0) current = pending.shift() as Settings;
+            const nextSettings = pending.length > 0 ? pending.shift() : undefined;
+
+            if (nextSettings !== undefined) current = nextSettings;
             responseId = asString(get(event, "response.id"));
             // Retain response settings, not request history or authorization headers. In-flight steering pins its
             // parent's settings independently of this window.
             responseSettings.set(responseId, snapshotOf(current));
             responseOrder.push(responseId);
 
-            if (responseOrder.length > MAX_OUTSTANDING)
-              responseSettings.delete(responseOrder.shift() as string);
+            const oldestResponse =
+              responseOrder.length > MAX_OUTSTANDING ? responseOrder.shift() : undefined;
+
+            if (oldestResponse !== undefined) responseSettings.delete(oldestResponse);
             releaseSteeringSettings(parent);
             wake();
 
@@ -602,8 +621,11 @@ export const startCodexDuplex = (
               failedId === "" &&
               ((pending.length > 0 && responseActive) || unacknowledgedSteers.length > 0);
 
-            if (pending.length > 0 && !currentFailure && !ambiguous) {
-              eventSettings = pending.shift() as Settings;
+            const queuedSettings =
+              pending.length > 0 && !currentFailure && !ambiguous ? pending.shift() : undefined;
+
+            if (queuedSettings !== undefined) {
+              eventSettings = queuedSettings;
             } else if (!ambiguous) {
               responseActive = false;
               automaticActive = false;

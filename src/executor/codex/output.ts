@@ -15,6 +15,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import {
   emptyUsageDetail,
@@ -80,11 +81,10 @@ export const patchCodexCompletedOutput = (
   }
 
   if (collector.count === 0) return;
-  const indexes = [...collector.byIndex.keys()].toSorted((a, b) => a - b);
-  const items = [
-    ...indexes.map((index) => collector.byIndex.get(index) as Json),
-    ...collector.fallback,
-  ];
+  const indexed = [...collector.byIndex.entries()].toSorted((a, b) => a[0] - b[0]);
+
+  const items = [...indexed.map(([, item]) => item), ...collector.fallback];
+
   set(event, "response.output", items);
 };
 
@@ -228,13 +228,7 @@ export const ensureUsageDetailsInEvent = (event: JsonObject): void => {
 };
 
 const ensureDetailsInJson = (text: string): string | undefined => {
-  let parsed: Json;
-
-  try {
-    parsed = JSON.parse(text) as Json;
-  } catch {
-    return undefined;
-  }
+  const parsed = tryParseJson(text);
 
   if (!isJsonObject(parsed) || asString(parsed["object"]) === "response.compaction")
     return undefined;

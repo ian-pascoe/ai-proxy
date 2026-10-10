@@ -154,9 +154,11 @@ api-keys:
         - { api-key: key-1, weight: 1 }
         - { api-key: key-2 }
 `);
+
     const first = picked(
       await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
     );
+
     expect(first.credential).toMatchObject({
       source: "config",
       authKind: "apikey",
@@ -185,9 +187,11 @@ api-keys:
       models: [{ name: gpt-4o, alias: smart }]
       keys: [{ api-key: key-3 }]
 `);
+
     const second = picked(
       await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
     );
+
     expect(second.credential.attributes.api_key).toBe("key-3");
     expect(second.credential.id).not.toBe(first.credential.id);
   });
@@ -208,6 +212,7 @@ api-keys:
       const result = picked(
         await stub.pick({ providers: ["openai-compatible-pool"], model: "shared" }),
       );
+
       expect(result.route.upstreamModels.toSorted()).toEqual(["m-a", "m-b"]);
       firsts.push(result.route.upstreamModel);
     }
@@ -346,6 +351,7 @@ api-keys:
 
   it("reports unknown credentials and requests without providers", async () => {
     const stub = plane();
+
     const lease = {
       id: "l",
       credentialId: "gone",
@@ -354,6 +360,7 @@ api-keys:
       model: "m",
       issuedAt: 0,
     };
+
     expect(await stub.report(lease, { success: true })).toEqual({
       ok: false,
       error: "unknown_credential",

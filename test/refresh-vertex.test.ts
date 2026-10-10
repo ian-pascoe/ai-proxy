@@ -99,9 +99,11 @@ describe("mintVertexToken", () => {
     const broken = await mint({ service_account: sa.account("garbage") }).result;
     expect(broken).toMatchObject({ ok: false });
     expect(JSON.stringify(broken)).not.toContain("garbage");
+
     const insecure = await mint({
       service_account: sa.account(sa.pem.pkcs8, { token_uri: "http://x/token" }),
     }).result;
+
     expect(insecure).toMatchObject({ ok: false });
 
     const denied = await mint(

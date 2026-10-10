@@ -15,7 +15,7 @@ const splitPayloadRulePath = (path: string): string[] => {
   let escaped = false;
 
   for (let i = 0; i < path.length; i++) {
-    const ch = path[i] as string;
+    const ch = path.charAt(i);
 
     if (escaped) {
       escaped = false;
@@ -64,7 +64,7 @@ const findPayloadQueryClose = (part: string): number => {
   let depth = 1;
 
   for (let i = 2; i < part.length; i++) {
-    const ch = part[i] as string;
+    const ch = part.charAt(i);
 
     if (escaped) {
       escaped = false;
@@ -133,7 +133,7 @@ const splitPayloadLogical = (query: string, operator: string): string[] => {
   let escaped = false;
 
   for (let i = 0; i < query.length; i++) {
-    const ch = query[i] as string;
+    const ch = query.charAt(i);
 
     if (escaped) {
       escaped = false;

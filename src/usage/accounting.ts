@@ -76,6 +76,7 @@ export const isValidTokenBreakdown = (b: TokenBreakdown | undefined): b is Token
     !validQuality(b.quality)
   )
     return false;
+
   const inputSum = nonNegativeSum(
     b.input.uncachedTokens,
     b.input.cacheReadTokens,

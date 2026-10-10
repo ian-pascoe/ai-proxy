@@ -11,6 +11,15 @@
  * quadratic merge loop would take seconds) use an equivalent heap-based merge.
  */
 
+/**
+ * Element `index` of a numeric list the caller has already bounds-checked, typed without `undefined`
+ * (the merge loops index in hot paths and only ever read positions they have written).
+ */
+const at = (list: ArrayLike<number>, index: number): number => {
+  // SAFETY: every caller passes an index below the list length (loop bounds or indices stored in the list itself).
+  return list[index] as number;
+};
+
 const NO_RANK = Number.POSITIVE_INFINITY;
 
 /** Pieces up to this many bytes use the Go-identical merge loop; longer ones the heap variant. */
@@ -26,14 +35,8 @@ const parseVocabulary = (data: ArrayBuffer): Map<string, number> => {
   let offset = 4;
 
   for (let rank = 0; rank < count; rank++) {
-    const length = bytes[offset++] as number;
-    vocab.set(
-      String.fromCharCode.apply(
-        null,
-        bytes.subarray(offset, offset + length) as unknown as number[],
-      ),
-      rank,
-    );
+    const length = at(bytes, offset++);
+    vocab.set(String.fromCharCode(...bytes.subarray(offset, offset + length)), rank);
     offset += length;
   }
 
@@ -56,7 +59,7 @@ const toBinaryString = (piece: string): string => {
   let out = "";
 
   for (let i = 0; i < bytes.length; i += 4096) {
-    out += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096) as unknown as number[]);
+    out += String.fromCharCode(...bytes.subarray(i, i + 4096));
   }
 
   return out;
@@ -74,9 +77,7 @@ const mergeCountNaive = (vocab: Map<string, number>, piece: string): number => {
 
   const rankAt = (index: number, skip: number): number => {
     if (index + skip + 2 < offsets.length) {
-      const rank = vocab.get(
-        piece.slice(offsets[index] as number, offsets[index + skip + 2] as number),
-      );
+      const rank = vocab.get(piece.slice(at(offsets, index), at(offsets, index + skip + 2)));
 
       if (rank !== undefined) return rank;
     }
@@ -92,7 +93,7 @@ const mergeCountNaive = (vocab: Map<string, number>, piece: string): number => {
     let minIndex = 0;
 
     for (let i = 0; i < offsets.length - 1; i++) {
-      const rank = ranks[i] as number;
+      const rank = at(ranks, i);
 
       if (rank < minRank) {
         minRank = rank;
@@ -111,6 +112,17 @@ const mergeCountNaive = (vocab: Map<string, number>, piece: string): number => {
   return offsets.length - 1;
 };
 
+interface MergeEntry {
+  readonly rank: number;
+  readonly index: number;
+  readonly stamp: number;
+}
+
+interface MergeCounts {
+  readonly naive: number;
+  readonly heap: number;
+}
+
 /** Min-heap of `(rank, index, stamp)` ordered by rank, then index (leftmost first). */
 class MergeHeap {
   readonly #ranks: number[] = [];
@@ -122,16 +134,16 @@ class MergeHeap {
   }
 
   #less(a: number, b: number): boolean {
-    const ra = this.#ranks[a] as number;
-    const rb = this.#ranks[b] as number;
+    const ra = at(this.#ranks, a);
+    const rb = at(this.#ranks, b);
 
-    return ra < rb || (ra === rb && (this.#indexes[a] as number) < (this.#indexes[b] as number));
+    return ra < rb || (ra === rb && at(this.#indexes, a) < at(this.#indexes, b));
   }
 
   #swap(a: number, b: number): void {
     for (const list of [this.#ranks, this.#indexes, this.#stamps]) {
-      const tmp = list[a] as number;
-      list[a] = list[b] as number;
+      const tmp = at(list, a);
+      list[a] = at(list, b);
       list[b] = tmp;
     }
   }
@@ -152,12 +164,13 @@ class MergeHeap {
   }
 
   /** Removes the smallest entry and returns it. */
-  pop(): { rank: number; index: number; stamp: number } {
-    const top = {
-      rank: this.#ranks[0] as number,
-      index: this.#indexes[0] as number,
-      stamp: this.#stamps[0] as number,
+  pop(): MergeEntry {
+    const top: MergeEntry = {
+      rank: at(this.#ranks, 0),
+      index: at(this.#indexes, 0),
+      stamp: at(this.#stamps, 0),
     };
+
     const last = this.#ranks.length - 1;
     this.#swap(0, last);
     this.#ranks.pop();
@@ -195,18 +208,18 @@ const mergeCountHeap = (vocab: Map<string, number>, piece: string): number => {
 
   // Rank of joining part `i` with its successor, or NO_RANK when it has none.
   const pairRank = (i: number): number => {
-    const successor = next[i] as number;
+    const successor = at(next, i);
 
     if (successor >= n) return NO_RANK;
 
-    return vocab.get(piece.slice(i, next[successor] as number)) ?? NO_RANK;
+    return vocab.get(piece.slice(i, at(next, successor))) ?? NO_RANK;
   };
 
   const schedule = (i: number): void => {
-    stamp[i] = (stamp[i] as number) + 1;
+    stamp[i] = at(stamp, i) + 1;
     const rank = pairRank(i);
 
-    if (rank !== NO_RANK) heap.push(rank, i, stamp[i] as number);
+    if (rank !== NO_RANK) heap.push(rank, i, at(stamp, i));
   };
 
   for (let i = 0; i < n - 1; i++) schedule(i);
@@ -218,14 +231,14 @@ const mergeCountHeap = (vocab: Map<string, number>, piece: string): number => {
 
     if (!alive[top.index] || stamp[top.index] !== top.stamp) continue;
     const i = top.index;
-    const removed = next[i] as number;
+    const removed = at(next, i);
     alive[removed] = false;
-    next[i] = next[removed] as number;
+    next[i] = at(next, removed);
 
-    if ((next[i] as number) < n) prev[next[i] as number] = i;
+    if (at(next, i) < n) prev[at(next, i)] = i;
     parts--;
     schedule(i);
-    const before = prev[i] as number;
+    const before = at(prev, i);
 
     if (before >= 0) schedule(before);
   }
@@ -280,10 +293,15 @@ export class BpeCodec {
   }
 
   /** Test hook: the merge loops must agree. */
-  mergeCounts(piece: string): { naive: number; heap: number } {
+  mergeCounts(piece: string): MergeCounts {
     const vocab = this.#vocab();
     const binary = toBinaryString(piece);
 
-    return { naive: mergeCountNaive(vocab, binary), heap: mergeCountHeap(vocab, binary) };
+    const counts: MergeCounts = {
+      naive: mergeCountNaive(vocab, binary),
+      heap: mergeCountHeap(vocab, binary),
+    };
+
+    return counts;
   }
 }

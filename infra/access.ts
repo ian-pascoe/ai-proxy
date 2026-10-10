@@ -32,10 +32,11 @@ const ApplicationSettings = Alchemy.Action(
     readonly serviceTokenHeader: string;
   }) {
     // The GET response is a union over every application type; only the fields Alchemy manages are copied back.
+    // SAFETY: every member of the response union has these fields with these types (all optional, read-only here).
     const app = (yield* zeroTrust.getAccessApplicationForAccount({
       accountId: input.accountId,
       appId: input.applicationId,
-    })) as unknown as {
+    })) as {
       readonly domain?: string;
       readonly type?: string;
       readonly name?: string;
@@ -91,7 +92,7 @@ const WriteServiceTokens = Alchemy.Action(
     readonly tokens: ReadonlyArray<{
       readonly name: string;
       readonly clientId: string;
-      readonly clientSecret: Redacted.Redacted<string> | undefined;
+      readonly clientSecret: Redacted.Redacted | undefined;
     }>;
   }) {
     const path = resolve(SERVICE_TOKENS_FILE);
@@ -156,6 +157,7 @@ export const provisionAccess = (settings: Settings) =>
         decision: "allow",
         include: people,
       });
+
       policies.push(allow.policyId);
     }
 
@@ -195,17 +197,26 @@ export const provisionAccess = (settings: Settings) =>
     // Admin service tokens may be named by their stack token name or given as a Client ID.
     const clientIds = Object.fromEntries(tokens.map(({ name, token }) => [name, token.clientId]));
     const named = settings.adminServiceTokens.some((entry) => clientIds[entry] !== undefined);
+
     const adminIds = settings.adminServiceTokens.map((entry) =>
       Output.asOutput(clientIds[entry] ?? entry),
     );
-    // `Output.all` over an array resolves to the array of values (its static type only covers tuples).
-    const allAdminIds = Output.all(...adminIds) as unknown as Output.Output<ReadonlyArray<string>>;
+
+    // `Output.all` only types tuples, so the Client IDs are joined pairwise ("a,b,c" as `ids.join(",")` would).
+    const joinedAdminIds = adminIds.reduce<Output.Output<string> | undefined>(
+      (joined, id) =>
+        joined === undefined
+          ? id
+          : Output.all(joined, id).pipe(Output.map(([left, right]) => `${left},${right}`)),
+      undefined,
+    );
 
     const wiring: AccessWiring = {
       aud: app.aud,
-      adminServiceTokens: named
-        ? allAdminIds.pipe(Output.map((ids: ReadonlyArray<string>) => ids.join(",")))
-        : settings.adminServiceTokens.join(","),
+      adminServiceTokens:
+        named && joinedAdminIds !== undefined
+          ? joinedAdminIds
+          : settings.adminServiceTokens.join(","),
       serviceTokenClientIds: clientIds,
     };
 

@@ -110,6 +110,7 @@ export const convertClaudeResponseToGemini = (
 ): ReadonlyArray<string> => {
   const state = context.state;
   state.value ??= newParams(context.model);
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const params = state.value as Params;
 
   if (!line.startsWith("data:")) return [];
@@ -231,7 +232,9 @@ export const convertClaudeResponseToGemini = (
 
       const usage = get(root, "usage");
 
-      if (exists(usage)) usageMetadata(usage, out.usageMetadata as JsonObject);
+      if (exists(usage))
+        // SAFETY: the candidate/usageMetadata object was created as an object earlier in this function.
+        usageMetadata(usage, out.usageMetadata as JsonObject);
       candidate.finishReason = "STOP";
 
       return [JSON.stringify(out)];
@@ -395,7 +398,9 @@ export const convertClaudeResponseToGeminiNonStream = (
   if (createdAt > 0) out.createTime = formatCreateTime(createdAt);
   const consolidated = consolidateParts(allParts);
 
-  if (consolidated.length > 0) (candidate.content as JsonObject).parts = consolidated;
+  if (consolidated.length > 0)
+    // SAFETY: the candidate/usageMetadata object was created as an object earlier in this function.
+    (candidate.content as JsonObject).parts = consolidated;
 
   if (finalUsage !== undefined) out.usageMetadata = finalUsage;
 

@@ -75,7 +75,7 @@ describe("thinking golden fixtures", () => {
       ),
     );
 
-    expect([...codes].toSorted()).toEqual([
+    expect([...codes].toSorted((a, b) => (a ?? "").localeCompare(b ?? ""))).toEqual([
       "BUDGET_OUT_OF_RANGE",
       "LEVEL_NOT_SUPPORTED",
       "THINKING_NOT_SUPPORTED",
@@ -237,6 +237,7 @@ describe("thinking golden fixtures", () => {
             decodeFullConfig(c.config),
             resolveApplierModel(c.model),
           );
+
           const expected = expectedKey(c.same === true ? c.body : (c.out ?? ""));
 
           return bodyKey(out) === expected

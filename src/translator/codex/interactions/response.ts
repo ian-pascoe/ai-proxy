@@ -252,6 +252,7 @@ const appendStepStart = (
   st.stepIndex++;
   st.activeStepOpen = true;
   st.activeStepType = stepType;
+
   let stepStart: Json = {
     index: st.activeStepIndex,
     step: { type: stepType },
@@ -401,6 +402,7 @@ export const convertCodexResponseToInteractions = (
     context.state.value = initial;
   }
 
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a StreamState before this read.
   const st = context.state.value as StreamState;
   let payload = line.trim();
 
@@ -503,6 +505,7 @@ const buildFunctionCallStep = (item: Json | undefined): Json => {
     name: asString(get(item, "name")),
     arguments: {},
   };
+
   const callId = itemCallId(item);
 
   if (callId !== "") step["call_id"] = callId;

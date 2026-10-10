@@ -272,6 +272,7 @@ describe("GetChatMessageRequest encoding", () => {
     const go = fromHex(
       fixtures.scenarios.find((s) => s.name === "history-tools-images")?.requests[0]?.bodyHex ?? "",
     );
+
     const view = devinPayloadView(go);
     expect(Object.keys(view)).toEqual(
       ["completion_config", "model", "prompts", "system_prompt", "tools", "cascade_id"].toSorted(),
@@ -293,9 +294,9 @@ describe("GetChatMessageRequest encoding", () => {
     expect(reread["tools"]).toEqual(view["tools"]);
 
     const opaque = (wire: Uint8Array): string[] =>
-      [...readFields(wire)]
-        .filter((field) => [1, 7, 15, 20].includes(field.num))
-        .map((field) => toHex(field.encoded));
+      [...readFields(wire)].flatMap((field) =>
+        [1, 7, 15, 20].includes(field.num) ? [toHex(field.encoded)] : [],
+      );
 
     expect(opaque(changed.wire).toSorted()).toEqual(opaque(go).toSorted());
   });

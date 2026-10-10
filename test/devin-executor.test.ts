@@ -1,7 +1,7 @@
 // Devin executor against a mocked Connect-RPC upstream. The scenarios come from the real Go executor
 // (`go run ./tools/fixturegen/devin`): the TypeScript executor must send the same request business fields and
 // produce the same Interactions events / aggregate / errors from the same response frames.
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { describe, expect, it } from "vitest";
 import { resetSessionTurnIndex } from "../src/executor/devin/credentials.ts";
 import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
@@ -181,7 +181,7 @@ describe("Devin executor parity with the Go executor", () => {
 
         expect(result._tag).toBe("Failure");
 
-        if (result._tag === "Failure") {
+        if (Result.isFailure(result)) {
           expect(result.failure.message).toContain(scenario.nonStream.error);
 
           if (scenario.nonStream.status !== undefined)
@@ -197,6 +197,7 @@ describe("Devin executor parity with the Go executor", () => {
         request(scenario.model, scenario.payload),
         interactionsOptions(false),
       );
+
       expect(
         tryParseJson(response.payload.replace(/interaction_[0-9a-f-]{12}/g, "interaction_ID")),
       ).toEqual(tryParseJson(scenario.nonStream.payload ?? ""));
@@ -210,11 +211,13 @@ describe("Devin executor behaviour", () => {
 
   it("applies payload rules to the protobuf business fields as the last mutation", async () => {
     const yaml = `payload:\n  override:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        system_prompt: OVERRIDDEN\n        completion_config.temperature: 0.25\n  default:\n    - models: [{ name: "swe-2*", protocol: devin }]\n      params:\n        completion_config.top_k: 7\n`;
+
     const h = await harness(
       devinCredential(),
       () => framesResponse([{ flag: 2, hex: "7b7d" }]),
       yaml,
     );
+
     await execute(executor, h, request("swe-2", hi), interactionsOptions(false));
 
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
@@ -232,6 +235,7 @@ describe("Devin executor behaviour", () => {
   it("clamps max tokens to the catalog's completion limit", async () => {
     const payload =
       '{"generation_config":{"max_output_tokens":9999999},"input":[{"type":"user_input","content":"hi"}]}';
+
     const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]));
     await execute(executor, h, request("claude-opus-4-6", payload), interactionsOptions(false));
 
@@ -241,9 +245,11 @@ describe("Devin executor behaviour", () => {
 
     expect(view.completion_config.max_tokens).toBeGreaterThan(0);
     expect(view.completion_config.max_tokens).toBeLessThan(9_999_999);
+
     const unclamped = await harness(devinCredential(), () =>
       framesResponse([{ flag: 2, hex: "7b7d" }]),
     );
+
     await execute(
       makeDevinExecutor(),
       unclamped,
@@ -301,6 +307,7 @@ describe("Devin executor behaviour", () => {
   it("refuses a user turn that only carried media Devin cannot send", async () => {
     const payload =
       '{"input":[{"type":"user_input","content":[{"type":"image","uri":"https://example.test/a.png"}]}]}';
+
     const h = await harness(devinCredential(), () => new Response(""));
 
     const error = await Effect.runPromise(
@@ -333,9 +340,11 @@ describe("Devin executor behaviour", () => {
     const payload = '{"session_id":"conv:abc","input":[{"type":"user_input","content":"hi"}]}';
     const h = await harness(devinCredential(), () => framesResponse([{ flag: 2, hex: "7b7d" }]));
     await execute(executor, h, request("swe-2", payload), interactionsOptions(false));
+
     const view = devinPayloadView((h.calls[0] as { bytes: Uint8Array }).bytes.subarray(5)) as {
       cascade_id: string;
     };
+
     expect(view.cascade_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );

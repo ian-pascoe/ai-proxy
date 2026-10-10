@@ -344,11 +344,13 @@ export const responsesCustomToolNames = (request: Json | undefined): Set<string>
   return names;
 };
 
+export type SplitResponsesQualifiedFunctionCallResult = { name: string; namespace: string };
+
 /** `splitResponsesQualifiedFunctionCallFromRequest`. */
 export const splitResponsesQualifiedFunctionCall = (
   request: Json | undefined,
   qualifiedName: string,
-): { name: string; namespace: string } => {
+): SplitResponsesQualifiedFunctionCallResult => {
   qualifiedName = qualifiedName.trim();
 
   if (qualifiedName === "") return { name: "", namespace: "" };
@@ -371,6 +373,7 @@ export const unwrapCustomToolInput = (args: string): string => {
   const trimmed = args.trim();
 
   try {
+    // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
     const parsed = JSON.parse(trimmed) as Json;
     const value = get(parsed, "input");
 
@@ -393,6 +396,7 @@ export const unwrapCustomToolInput = (args: string): string => {
   let inEscape = false;
 
   for (let i = 0; i < content.length; i++) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const c = content[i] as string;
 
     if (inEscape) {

@@ -30,7 +30,7 @@ import {
 import { replaySessionKey } from "../src/executor/antigravity/replay/scope.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
 import type { ExecutorRequest } from "../src/executor/types.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 import { geminiClaudeToolUseID } from "../src/translator/common/claude-util.ts";
 import { options } from "./support/executor-run.ts";
 
@@ -46,12 +46,7 @@ const clone = <T>(value: T): T => structuredClone(value);
 
 const user = (text: string) => ({ role: "user", parts: [{ text }] });
 
-const modelCall = (
-  name: string,
-  args: unknown,
-  extra: Record<string, unknown> = {},
-  signature?: string,
-) => ({
+const modelCall = (name: string, args: Json, extra: JsonObject = {}, signature?: string) => ({
   role: "model",
   parts: [
     {
@@ -74,10 +69,9 @@ const antigravityRequest = (contents: unknown[]): Json =>
     request: { contents, systemInstruction: { parts: [{ text: "sys" }] } },
   }) as unknown as Json;
 
-const upstream = (parts: unknown[], finishReason = "STOP"): Json =>
-  ({
-    response: { candidates: [{ content: { role: "model", parts }, finishReason }] },
-  }) as unknown as Json;
+const upstream = (parts: Json[], finishReason = "STOP"): Json => ({
+  response: { candidates: [{ content: { role: "model", parts }, finishReason }] },
+});
 
 const scopeOf = (sessionKey: string, snapshot = UNLOADED_SNAPSHOT): ReplayScope => ({
   modelName: MODEL,
@@ -224,9 +218,11 @@ describe("accumulator -> ledger -> request restore", () => {
     expect(key).toMatch(/^caller:[0-9a-f]{16}:responses:client-1$/);
 
     const first = antigravityRequest([user("read a")]);
+
     const prepared1 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(first), execOptions(headers), first),
     );
+
     expect(prepared1.scope.sessionKey).toBe(key);
     const accumulator = new ReplayAccumulator(prepared1.scope, first);
     accumulator.observePayload(
@@ -243,6 +239,7 @@ describe("accumulator -> ledger -> request restore", () => {
     const prepared2 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions(headers), second),
     );
+
     expect(contentsOf(prepared2.payload)[1]?.parts[0]).toMatchObject({ thoughtSignature: SIG });
     // The input is never mutated.
     expect(contentsOf(second)[1]?.parts[0]?.["thoughtSignature"]).toBeUndefined();
@@ -270,9 +267,11 @@ describe("accumulator -> ledger -> request restore", () => {
     const ledger = makeInMemoryReplayLedger(() => 5_000_000);
     const headers = { "Session-Id": "text-1" };
     const first = antigravityRequest([user("hi")]);
+
     const prepared1 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(first), execOptions(headers), first),
     );
+
     const accumulator = new ReplayAccumulator(prepared1.scope, first);
     accumulator.observePayload(upstream([{ text: "Hello " }]));
     accumulator.observePayload(upstream([{ text: "there", thoughtSignature: SIG }]));
@@ -287,9 +286,11 @@ describe("accumulator -> ledger -> request restore", () => {
       { role: "model", parts: [{ text: "Hello there" }] },
       user("next"),
     ]);
+
     const prepared2 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions(headers), second),
     );
+
     expect(contentsOf(prepared2.payload)[1]?.parts[0]).toEqual({
       text: "Hello there",
       thoughtSignature: SIG,
@@ -312,7 +313,7 @@ describe("accumulator -> ledger -> request restore", () => {
           },
         ],
       },
-    } as unknown as Json);
+    });
     await run(truncated.commit(ledger));
     expect((await run(ledger.get(MODEL, "s"))).items).toEqual(seed);
 
@@ -353,9 +354,11 @@ describe("accumulator -> ledger -> request restore", () => {
     const ledger = makeInMemoryReplayLedger(() => 5_000_000);
     const headers = { "Session-Id": "claude-1" };
     const first = antigravityRequest([user("read")]);
+
     const prepared1 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(first), execOptions(headers), first),
     );
+
     const accumulator = new ReplayAccumulator(prepared1.scope, first);
     accumulator.observePayload(
       upstream([
@@ -375,6 +378,7 @@ describe("accumulator -> ledger -> request restore", () => {
     const prepared2 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(second), execOptions(headers), second),
     );
+
     const contents = contentsOf(prepared2.payload);
     expect(contents[1]?.parts[0]).toMatchObject({
       functionCall: { id: "native-1", name: "read" },
@@ -390,9 +394,11 @@ describe("accumulator -> ledger -> request restore", () => {
     const ledger = makeInMemoryReplayLedger(() => 5_000_000);
     const headers = { "Session-Id": "claude-2" };
     const first = antigravityRequest([user("read")]);
+
     const prepared1 = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(first), execOptions(headers), first),
     );
+
     const accumulator = new ReplayAccumulator(prepared1.scope, first);
     accumulator.observePayload(
       upstream([
@@ -404,9 +410,11 @@ describe("accumulator -> ledger -> request restore", () => {
     // The client dropped the model turn entirely and only sends the (opaque id) response.
     const opaque = geminiClaudeToolUseID("native-2", "read", JSON.stringify({ p: "b" }));
     const dropped = antigravityRequest([user("read"), toolResult("read", "native-2")]);
+
     const inserted = await run(
       prepareReplayPayload(ledger, MODEL, execRequest(dropped), execOptions(headers), dropped),
     );
+
     expect(contentsOf(inserted.payload).map((content) => content.role)).toEqual([
       "user",
       "model",
@@ -590,14 +598,14 @@ describe("Interactions continuation sessions", () => {
       prepareAntigravityInteractions(
         store,
         overrides.credential ?? credential(),
-        { model: MODEL_NAME, payload: {} as Json },
+        { model: MODEL_NAME, payload: {} },
         options({ metadata: { ...options().metadata, callerScope: overrides.caller ?? "caller" } }),
         overrides.model ?? MODEL_NAME,
         clone(body) as unknown as Json,
       ),
     );
 
-  const response = (extra: Record<string, unknown> = {}) =>
+  const response = (extra: JsonObject = {}) =>
     ({
       id: "interaction_1",
       environment_id: "env_1",
@@ -723,19 +731,19 @@ describe("Interactions continuation sessions", () => {
       first.state.observe({
         event_type: "interaction.created",
         interaction: { id: "int_s", environment_id: "env_s" },
-      } as unknown as Json),
+      }),
     );
     await run(
       first.state.observe({
         event_type: "step.start",
         step: { type: "function_call", id: "call_1" },
-      } as unknown as Json),
+      }),
     );
     await run(
       first.state.observe({
         event_type: "interaction.completed",
         interaction: { status: "requires_action" },
-      } as unknown as Json),
+      }),
     );
     const prepared = await prepare(store, continued());
     expect((prepared.body as unknown as Record<string, unknown>)["previous_interaction_id"]).toBe(

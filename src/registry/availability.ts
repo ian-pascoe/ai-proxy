@@ -62,6 +62,7 @@ export const projectModel = (
 
   if (model.metadataModelId !== undefined && model.metadataModelId !== "")
     keys.push(canonicalModelKey(model.metadataModelId));
+
   const modelState = keys
     .map((key) => state.modelStates[key])
     .find((candidate) => candidate !== undefined);

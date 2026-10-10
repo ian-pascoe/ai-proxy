@@ -27,12 +27,15 @@ const SKIPPABLE_MAGIC = 0x184d2a50;
 
 class Truncated extends Error {}
 
+/** The byte at `at`; callers check the bounds first, so the fallback is never used. */
+const byteAt = (data: Uint8Array, at: number): number => data[at] ?? 0;
+
 const u32 = (data: Uint8Array, at: number): number => {
   if (at + 4 > data.length) throw new Truncated();
 
   return (
-    ((data[at] as number) | ((data[at + 1] as number) << 8) | ((data[at + 2] as number) << 16)) +
-    (data[at + 3] as number) * 0x1000000
+    (byteAt(data, at) | (byteAt(data, at + 1) << 8) | (byteAt(data, at + 2) << 16)) +
+    byteAt(data, at + 3) * 0x1000000
   );
 };
 
@@ -41,8 +44,7 @@ const uint = (data: Uint8Array, at: number, size: number): number => {
   if (at + size > data.length) throw new Truncated();
   let value = 0;
 
-  for (let index = size - 1; index >= 0; index--)
-    value = value * 256 + (data[at + index] as number);
+  for (let index = size - 1; index >= 0; index--) value = value * 256 + byteAt(data, at + index);
 
   return Number.isSafeInteger(value) ? value : Number.POSITIVE_INFINITY;
 };
@@ -71,7 +73,7 @@ const checkFrameHeaders = (data: Uint8Array, limit: number): void => {
       if (descriptor === undefined) return;
       const singleSegment = (descriptor >> 5) & 1;
       const contentSizeFlag = descriptor >> 6;
-      const dictionaryBytes = [0, 1, 2, 4][descriptor & 3] as number;
+      const dictionaryBytes = [0, 1, 2, 4][descriptor & 3] ?? 0;
       let cursor = at + 5;
       let windowSize = 0;
 

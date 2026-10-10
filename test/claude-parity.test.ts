@@ -19,10 +19,10 @@ import {
   threadContinuationNeedsAliasState,
   threadNotFoundError,
 } from "../src/executor/claude/thread.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import { asString, type Json, type JsonObject } from "../src/json/index.ts";
 import { credential, execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
 
-const obj = (value: unknown): JsonObject => value as JsonObject;
+const obj = (value: Json): JsonObject => value as JsonObject;
 
 const ok = (extra: JsonObject = {}) =>
   Response.json({
@@ -122,6 +122,7 @@ describe("rebuild-mid-system-message (TestClaudeExecutor_RebuildMidSystemMessage
       claudeKeyConfig("rebuild-mid-system-message: true"),
       obj(payload("Top rule")),
     );
+
     const system = body.system as JsonObject[];
     expect(system.map((block) => block.text)).toEqual([
       "Top rule",
@@ -240,8 +241,10 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
 
   it("a confirmed client's profile is pinned to the configured platform and kept for the credential", async () => {
     const store = makeMemoryDeviceProfileStore();
+
     const resolve = (...args: Parameters<typeof store.resolve>) =>
       Effect.runPromise(store.resolve(...args));
+
     const config = await loadConfig(STABLE + claudeKeyConfig());
     const baseline = await resolve({ id: "c1" }, "k", new Headers(), config);
     expect(baseline).toEqual({
@@ -274,8 +277,10 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
 
   it("candidates that differ from the baseline software tuple are ignored", async () => {
     const store = makeMemoryDeviceProfileStore();
+
     const resolve = (...args: Parameters<typeof store.resolve>) =>
       Effect.runPromise(store.resolve(...args));
+
     const config = await loadConfig(STABLE);
 
     for (const headers of [
@@ -291,8 +296,10 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
 
   it("invalid Stainless versions fall back to the baseline tuple", async () => {
     const store = makeMemoryDeviceProfileStore();
+
     const resolve = (...args: Parameters<typeof store.resolve>) =>
       Effect.runPromise(store.resolve(...args));
+
     const config = await loadConfig(STABLE);
 
     const resolved = await resolve(
@@ -351,6 +358,7 @@ describe("device profile stabiliser (stabilize-device-profile)", () => {
 
   it("honours a configured baseline", async () => {
     const store = makeMemoryDeviceProfileStore();
+
     const resolve = (...args: Parameters<typeof store.resolve>) =>
       Effect.runPromise(store.resolve(...args));
 
@@ -389,9 +397,11 @@ describe("device profile stabiliser (Go parity, helps.ResolveClaudeDeviceProfile
 
       for (const step of scenario.steps) {
         const headers = new Headers((step.headers ?? {}) as Record<string, string>);
+
         const resolved = await Effect.runPromise(
           store.resolve({ id: step.authId }, step.apiKey, headers, config),
         );
+
         results.push(resolved);
       }
 
@@ -416,7 +426,7 @@ describe("Thread continuation alias state", () => {
     expect(threadAliasKeys(obj({ thread: { type: "create" } }), "msg-2")).toEqual([
       "message:msg-2",
     ]);
-    const needs = (body: unknown) => threadContinuationNeedsAliasState(obj(body));
+    const needs = (body: Json) => threadContinuationNeedsAliasState(obj(body));
     expect(needs({ thread: { type: "continue", previous_message_id: "m" } })).toBe(true);
     expect(needs({ thread: { type: "continue", previous_message_id: "m" }, tools: [] })).toBe(true);
     expect(
@@ -481,7 +491,7 @@ describe("Thread continuation alias state", () => {
       const sent = JSON.parse(call.text) as JsonObject;
       const tools = sent.tools as JsonObject[] | undefined;
 
-      if (tools !== undefined && tools.length > 0) upstreamAlias = String(tools[0]?.name);
+      if (tools !== undefined && tools.length > 0) upstreamAlias = asString(tools[0]?.name);
 
       return ok({
         id: `msg_${h.calls.length === 1 ? "one" : "two"}`,
@@ -491,17 +501,19 @@ describe("Thread continuation alias state", () => {
 
     const opts = () =>
       options({ sourceFormat: "claude", headers: new Headers({ "user-agent": "my-app/1.0" }) });
+
     const first = await execute(
       executor,
       h,
       { model: "claude-sonnet-4-5", payload: json(createBody) },
       opts(),
     );
+
     expect(upstreamAlias).not.toBe("");
     expect(upstreamAlias).not.toBe("Read");
     expect(JSON.parse(h.calls[0]?.text ?? "{}")).toMatchObject({ thread: { type: "create" } });
     expect(await Effect.runPromise(toolAliases.load("scope", ["message:msg_one"]))).toBeDefined();
-    expect(JSON.parse(first.payload as string)).toMatchObject({
+    expect(JSON.parse(first.payload)).toMatchObject({
       content: [{ type: "tool_use", name: "Read" }],
     });
 
@@ -528,7 +540,7 @@ describe("Thread continuation alias state", () => {
     expect(h.calls).toHaveLength(2);
     // The continuation declares no tools, so no remap happened and the saved aliases restored the name.
     expect((JSON.parse(h.calls[1]?.text ?? "{}") as JsonObject).tools).toBeUndefined();
-    expect(JSON.parse(second.payload as string)).toMatchObject({
+    expect(JSON.parse(second.payload)).toMatchObject({
       content: [{ type: "tool_use", name: "Read" }],
     });
   });
@@ -557,7 +569,7 @@ describe("Thread continuation alias state", () => {
       options({ sourceFormat: "claude", headers: new Headers({ "user-agent": "my-app/1.0" }) }),
     ).then(
       () => undefined,
-      (error: unknown) => error,
+      (error: Json) => error,
     );
 
     expect(failure).toMatchObject({ status: 404, requestScoped: true });
@@ -676,6 +688,7 @@ describe("Fable / Opus-5.5 reconcilers (TestClaudeOpus55FallbackReconcilesAfterM
         model: "claude-opus-4-8",
         thinking: { type: "adaptive", display: "updates" },
       });
+
       reconcileFableModelAfterPayload(
         body,
         { injectedFallbacks: false, injectedDisplay: true, injectedReporting: false },
@@ -691,6 +704,7 @@ describe("Fable / Opus-5.5 reconcilers (TestClaudeOpus55FallbackReconcilesAfterM
   it("moves the reporting block with the model (Fable adds it, anything else drops an injected one)", () => {
     const reporting = (body: JsonObject): boolean =>
       JSON.stringify(body.system ?? "").includes("# Reporting outcomes");
+
     const fable = obj({ model: "claude-fable-5-1", system: "Caller prompt" });
     reconcileFableModelAfterPayload(
       fable,

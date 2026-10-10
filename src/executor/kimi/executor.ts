@@ -13,7 +13,7 @@
  * ControlPlane (credentials/refresh/kimi.ts); 401 recovery is done by the conductor.
  */
 import { translateRequestForExecutor } from "../helps/translate.ts";
-import { Clock, Effect, Stream } from "effect";
+import { Clock, Effect, Result, Stream } from "effect";
 import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http";
 import { splitLines } from "../../http/sse.ts";
 import { asString, cloneJson, get, type Json, set, tryParseJson } from "../../json/index.ts";
@@ -221,8 +221,10 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     body = normalizeKimiToolMessageLinks(body);
     body = normalizeKimiTools(body);
     body = normalizeKimiTemperature(body);
+
     const effort =
       asString(get(body, "reasoning_effort")) || asString(get(body, "thinking.effort"));
+
     context.usage.setReasoningEffort(effort !== "" ? effort : undefined);
     const translatedForResponse = cloneJson(body);
     body = finalizePayload(
@@ -380,8 +382,10 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     body = normalizeKimiResponsesInput(body);
     body = normalizeKimiTools(body);
     body = normalizeKimiTemperature(body);
+
     const effort =
       asString(get(body, "reasoning.effort")) || asString(get(body, "thinking.effort"));
+
     context.usage.setReasoningEffort(effort !== "" ? effort : undefined);
     const translated = cloneJson(body);
     body = finalizePayload(
@@ -483,6 +487,7 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     /** `emitTranslatedLine`: Responses clients get the line as is, others the translated chunks. */
     const emit = (line: string): StepResult => {
       if (responseFormat === Formats.OpenAIResponse) return { chunks: [`${line}\n`] };
+
       const chunks = [
         ...registry.translateStream(responseFormat, Formats.OpenAIResponse, state, line),
       ];
@@ -577,11 +582,12 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     options: ExecutorOptions,
   ) {
     const replay = yield* prepareKimiReplay(replayStore, request, options);
+
     const result = yield* Effect.result(
       claude.execute(claudeContext(context), replay.request, options),
     );
 
-    if (result._tag === "Failure") {
+    if (Result.isFailure(result)) {
       if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
         yield* clearReplay(replayStore, replay.scope);
 
@@ -601,11 +607,12 @@ export const makeKimiExecutor = (executorOptions: KimiExecutorOptions = {}): Pro
     options: ExecutorOptions,
   ) {
     const replay = yield* prepareKimiReplay(replayStore, request, options);
+
     const result = yield* Effect.result(
       claude.executeStream(claudeContext(context), replay.request, options),
     );
 
-    if (result._tag === "Failure") {
+    if (Result.isFailure(result)) {
       if (replay.scope.replayApplied && shouldClearAfterError(result.failure))
         yield* clearReplay(replayStore, replay.scope);
 

@@ -8,9 +8,16 @@
  * `ModelsRefreshInterval`), so a backoff only matters for manual runs. Registry snapshots read the KV records
  * (`withAntigravityHints`).
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
-import { asString, isJsonObject, tryParseJson } from "../../json/index.ts";
+import {
+  asString,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  tryParseJson,
+} from "../../json/index.ts";
 import { WorkerEnv } from "../../platform/env.ts";
 import {
   type AntigravityModelHints,
@@ -58,9 +65,9 @@ export const parseModelHints = (body: string): AntigravityModelHints | undefined
 
   if (!isJsonObject(root)) return undefined;
 
-  const ids = (list: unknown): string[] =>
-    Array.isArray(list)
-      ? list.map((id) => normalizeFetchedModelId(asString(id as never))).filter((id) => id !== "")
+  const ids = (list: Json | undefined): string[] =>
+    isJsonArray(list)
+      ? list.map((id) => normalizeFetchedModelId(asString(id))).filter((id) => id !== "")
       : [];
 
   const models = root["models"];
@@ -81,14 +88,16 @@ export const parseModelHints = (body: string): AntigravityModelHints | undefined
 /** `antigravityModelBaseURLs` (first only): `base_urls`, then `base_url`, else daily. */
 export const modelsBaseUrl = (
   attributes: Readonly<Record<string, string>>,
-  metadata: Readonly<Record<string, unknown>>,
+  metadata: JsonObject,
 ): string => {
   const list = (attributes["base_urls"] ?? "")
     .split(",")
     .map((url) => url.trim().replace(/\/+$/, ""))
     .filter((url) => url !== "");
 
-  if (list.length > 0) return list[0] as string;
+  const [firstUrl] = list;
+
+  if (firstUrl !== undefined) return firstUrl;
 
   const single =
     (attributes["base_url"] ?? "").trim() ||
@@ -140,6 +149,7 @@ export const nextFailure = (
 ): FailureState => {
   let count =
     previous === undefined || now - previous.lastFailureAt > FAILURE_RESET_MS ? 0 : previous.count;
+
   count = Math.min(count + 1, MAX_FAILURES);
   const window = Math.min(BASE_BACKOFF_MS * 2 ** (count - 1), MAX_BACKOFF_MS);
   const half = window / 2;
@@ -154,6 +164,7 @@ const readRecord = async (
   try {
     const raw = await kv.get(modelsKey(credentialId));
 
+    // SAFETY: the cron task only stores `ModelsRecord` values under this key (see `writeRecord`).
     return raw === null ? undefined : (JSON.parse(raw) as ModelsRecord);
   } catch {
     return undefined;
@@ -184,9 +195,9 @@ export const withAntigravityHints = async (
   kv: KVNamespace | undefined,
   sources: ReadonlyArray<ModelSource>,
 ): Promise<ReadonlyArray<ModelSource>> => {
-  const ids = sources
-    .filter((source) => source.provider.trim().toLowerCase() === "antigravity")
-    .map((source) => source.id);
+  const ids = sources.flatMap((source) =>
+    source.provider.trim().toLowerCase() === "antigravity" ? [source.id] : [],
+  );
 
   if (ids.length === 0) return sources;
   const hints = await loadAntigravityHints(kv, ids);
@@ -224,12 +235,15 @@ export const refreshAntigravityModels = Effect.gen(function* () {
     const prepared = yield* Effect.tryPromise(async () => await plane.ensureFresh(source.id)).pipe(
       Effect.option,
     );
+
     const credential =
-      prepared._tag === "Some" && prepared.value.ok ? prepared.value.credential : undefined;
+      Option.isSome(prepared) && prepared.value.ok ? prepared.value.credential : undefined;
+
     const token =
       typeof credential?.metadata["access_token"] === "string"
         ? credential.metadata["access_token"]
         : "";
+
     const project =
       typeof credential?.metadata["project_id"] === "string"
         ? credential.metadata["project_id"]

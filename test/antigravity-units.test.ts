@@ -26,7 +26,7 @@ import {
   geminiToAntigravity,
   requestBaseUrl,
   sanitizeRequestSchemas,
-  shapeRequestPayload,
+  constrainRequestPayload,
   stableSessionId,
 } from "../src/executor/antigravity/envelope.ts";
 import {
@@ -55,7 +55,7 @@ import {
   resetAntigravityVersionCache,
   resolveStoredVersion,
 } from "../src/executor/antigravity/version.ts";
-import { get, type Json } from "../src/json/index.ts";
+import { asString, get, type Json } from "../src/json/index.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import { applyAntigravityHints } from "../src/registry/antigravity-hints.ts";
 import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
@@ -187,7 +187,7 @@ describe("envelope", () => {
     expect(get(payload, "request.safetySettings")).toBeUndefined();
     expect(get(payload, "request.toolConfig.functionCallingConfig.mode")).toBe("AUTO");
     expect(get(payload, "toolConfig")).toBeUndefined();
-    expect(String(get(payload, "requestId"))).toMatch(/^agent-[0-9a-f-]{36}$/);
+    expect(asString(get(payload, "requestId"))).toMatch(/^agent-[0-9a-f-]{36}$/);
   });
 
   it("keeps explicit and derived session ids, skips them for image and web search requests", () => {
@@ -200,7 +200,7 @@ describe("envelope", () => {
     const image: Json = { request: { contents: [] } };
     geminiToAntigravity("gemini-3.1-flash-image", image, "p", "", 5);
     expect(get(image, "requestType")).toBe("image_gen");
-    expect(String(get(image, "requestId"))).toMatch(/^image_gen\/5\/[0-9a-f-]{36}\/12$/);
+    expect(asString(get(image, "requestId"))).toMatch(/^image_gen\/5\/[0-9a-f-]{36}\/12$/);
     expect(get(image, "request.sessionId")).toBeUndefined();
     const search: Json = { requestType: "web_search", request: { contents: [] } };
     geminiToAntigravity("gemini-3-pro", search, "p");
@@ -250,9 +250,9 @@ describe("envelope", () => {
       title: "keep",
       format: "keep",
     });
-    const gemini = shapeRequestPayload("gemini-2.5-flash", structuredClone(payload));
+    const gemini = constrainRequestPayload("gemini-2.5-flash", structuredClone(payload));
     expect(get(gemini, "request.generationConfig.maxOutputTokens")).toBeUndefined();
-    const claude = shapeRequestPayload("claude-sonnet-4-5", structuredClone(payload));
+    const claude = constrainRequestPayload("claude-sonnet-4-5", structuredClone(payload));
     expect(get(claude, "request.toolConfig.functionCallingConfig.mode")).toBe("VALIDATED");
   });
 });
@@ -296,13 +296,15 @@ describe("content fixes", () => {
 });
 
 describe("SSE handling", () => {
-  const data = (value: unknown) => `data: ${JSON.stringify(value)}`;
+  const data = (value: Json) => `data: ${JSON.stringify(value)}`;
 
   it("renames usage on non-terminal chunks and lets the follow-up usage of a stop chunk through", () => {
     const filter = new UsageFilter();
+
     const partial = filter.filter(
       data({ response: { candidates: [{}], usageMetadata: { a: 1 } }, traceId: "t" }),
     );
+
     expect(partial).toContain("cpaUsageMetadata");
     expect(partial).not.toContain('"usageMetadata"');
     const stop = data({ response: { candidates: [{ finishReason: "STOP" }] }, traceId: "t" });
@@ -311,9 +313,11 @@ describe("SSE handling", () => {
     expect(filter.filter(usage)).toBe(usage);
     // Only once: the next non-terminal usage is renamed again.
     expect(filter.filter(usage)).toContain("cpaUsageMetadata");
+
     const terminal = data({
       response: { candidates: [{ finishReason: "STOP" }], usageMetadata: { a: 3 } },
     });
+
     expect(filter.filter(terminal)).toBe(terminal);
   });
 
@@ -749,12 +753,14 @@ describe("claude web search grounding", () => {
   it("emits the same blocks as stream events and finalises after usage", () => {
     const state = makeTranslationState();
     const context = { model: "m", originalRequest: original, translatedRequest: translated, state };
+
     const first = builtinTranslators.translateStream(
       "claude",
       "antigravity",
       context,
       JSON.stringify(reply),
     );
+
     expect(first.join("")).toContain('"type":"server_tool_use"');
     expect(first.join("")).toContain('"type":"citations_delta"');
 

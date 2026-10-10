@@ -110,6 +110,7 @@ export const summarizeCredential = (
   }
 
   const expiresAt = accessTokenExpiry(credential.metadata, state.rejectedAccessToken);
+
   const modelStates: Record<
     string,
     { unavailable: boolean; nextRetryAfter: number; statusMessage?: string }

@@ -80,6 +80,7 @@ export const normalizeResponsesToolCallOutputs = (items: readonly Json[]): Json[
         });
 
         pendingCallIDs.forEach((pendingID, pendingIdx) => {
+          // SAFETY: `matched` has one slot per entry of pendingCallIDs, so pendingIdx is in range.
           if ((matched[pendingIdx] as number) >= 0 || reserved(pendingID)) return;
           const expectedName = pendingCallNames.get(pendingID) ?? "";
 
@@ -100,6 +101,7 @@ export const normalizeResponsesToolCallOutputs = (items: readonly Json[]): Json[
         });
 
         pendingCallIDs.forEach((pendingID, pendingIdx) => {
+          // SAFETY: `matched` has one slot per entry of pendingCallIDs, so pendingIdx is in range.
           if ((matched[pendingIdx] as number) >= 0 || reserved(pendingID)) return;
           const expectedName = pendingCallNames.get(pendingID) ?? "";
 
@@ -118,6 +120,7 @@ export const normalizeResponsesToolCallOutputs = (items: readonly Json[]): Json[
 
         const remaining: string[] = [];
         pendingCallIDs.forEach((pendingID, pendingIdx) => {
+          // SAFETY: `matched` has one slot per entry of pendingCallIDs, so pendingIdx is in range.
           const outIdx = matched[pendingIdx] as number;
 
           if (outIdx < 0) {

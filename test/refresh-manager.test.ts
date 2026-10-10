@@ -226,6 +226,7 @@ describe("concurrent refresh dedupe", () => {
     const late = ok(
       await fixture.manager.refreshNow("claude-a.json", { rejectedAccessToken: "at-1" }),
     );
+
     expect(late.refreshed).toBe(false);
     expect(late.credential.metadata).toMatchObject({ access_token: "at-2" });
     expect(tokenCalls(fixture)).toHaveLength(1);
@@ -404,9 +405,11 @@ describe("failure back-off", () => {
   it("a rejected token whose refresh token is invalid is terminal until a new login", async () => {
     const fixture = makeFixture(failing({ status: 400, body: '{"error":"invalid_grant"}' }));
     fixture.add("claude-a.json", claudeFile()); // token still valid per `expired`
+
     const result = bad(
       await fixture.manager.refreshNow("claude-a.json", { rejectedAccessToken: "at-1" }),
     );
+
     expect(result.terminal).toBe(true);
     expect(result.error.code).toBe("unauthorized");
     expect(fixture.pool.refreshTarget("claude-a.json")?.state).toMatchObject({
@@ -586,9 +589,11 @@ describe("ensureFresh (request-time preparation)", () => {
     });
     expect(ok(await fixture.manager.ensureFresh("meta-a.json")).refreshed).toBe(false);
     expect(minted).toBe(1);
+
     const again = ok(
       await fixture.manager.refreshNow("meta-a.json", { rejectedAccessToken: "meta-key-1" }),
     );
+
     expect(again.credential.metadata).toMatchObject({ api_key: "meta-key-2" });
   });
 });
@@ -622,9 +627,11 @@ describe("vertex access tokens", () => {
   it("mints once for concurrent callers, caches until exp - 60 s, then mints again", async () => {
     const counter = { n: 0 };
     const fixture = vertexFixture(counter);
+
     const results = await Promise.all(
       Array.from({ length: 6 }, () => fixture.manager.ensureFresh("vertex-a.json")),
     );
+
     expect(counter.n).toBe(1);
 
     for (const result of results) {

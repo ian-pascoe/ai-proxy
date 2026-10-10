@@ -82,10 +82,12 @@ describe("Devin apply_patch guards", () => {
       body(textFrame("partial")), // no EOS trailer
     ]) {
       const h = await harness(devinCredential(), () => response.clone());
+
       const error = await runFail(
         executor.execute(h.context, request(true), responsesOptions(false)),
         h.layers,
       );
+
       expect(error.status).toBe(502);
       expect(error.message).toBe(message);
     }
@@ -99,6 +101,7 @@ describe("Devin apply_patch guards", () => {
       executor.execute(h.context, request(false), responsesOptions(false)),
       h.layers,
     );
+
     expect(plain.status).toBe(429);
     expect(plain.message).toContain("quota secret");
   });
@@ -107,16 +110,20 @@ describe("Devin apply_patch guards", () => {
     const h = await harness(devinCredential(), () =>
       body(toolFrame("{not json", true), trailer("{}")),
     );
+
     const error = await runFail(
       executor.execute(h.context, request(true), responsesOptions(false)),
       h.layers,
     );
+
     expect(error.status).toBe(502);
     expect(error.message).toBe("Invalid apply_patch tool arguments received from upstream.");
+
     // A non-patch tool with the same shape is delivered.
     const ok = await harness(devinCredential(), () =>
       body(toolFrame("{not json", true), trailer("{}")),
     );
+
     const response = await execute(executor, ok, request(false), responsesOptions(false));
     expect(response.payload).toContain("function_call");
   });
@@ -164,6 +171,7 @@ describe("Devin catalog from the registry snapshot", () => {
       undefined,
       true,
     );
+
     await collectStream(
       executor,
       h,

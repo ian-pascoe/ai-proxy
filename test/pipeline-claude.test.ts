@@ -14,7 +14,7 @@ import {
   type AttemptResult,
   type CredentialSnapshot,
 } from "../src/executor/picker.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import { asString, type JsonObject } from "../src/json/index.ts";
 import { setModelInfoLookup } from "../src/translator/model-info.ts";
 import {
   jsonResponse,
@@ -294,6 +294,7 @@ describe("API key credential (caller-owned mode)", () => {
       config: apiKeyConfig,
       respond: () => sseResponse(sse(streamEvents())),
     });
+
     afterAll(p.dispose);
 
     const response = await p.call(
@@ -320,6 +321,7 @@ describe("API key credential (caller-owned mode)", () => {
       config: apiKeyConfig,
       respond: () => sseResponse(sse(streamEvents("get_weather"))),
     });
+
     afterAll(p.dispose);
 
     const response = await p.call(
@@ -382,6 +384,7 @@ describe("API key credential (caller-owned mode)", () => {
       config: apiKeyConfig,
       respond: () => sseResponse(sse(streamEvents())),
     });
+
     afterAll(p.dispose);
 
     const response = await p.call(
@@ -464,7 +467,7 @@ describe("API key credential (caller-owned mode)", () => {
         name: "apply_patch",
         input_schema: { type: "object", required: ["input"], additionalProperties: false },
       });
-      expect(String(upstreamTool?.description)).toContain("*** Begin Patch");
+      expect(asString(upstreamTool?.description)).toContain("*** Begin Patch");
       const text = await response.text();
 
       const deltas = [
@@ -707,21 +710,26 @@ describe("OAuth credential (Claude Code cloaking)", () => {
     );
 
     afterAll(nonStream.pipeline.dispose);
+
     const json = (await (
       await nonStream.pipeline.call("/v1/messages", request())
     ).json()) as JsonObject;
+
     expect((json.content as JsonObject[])[0]?.name).toBe("get_weather");
 
     const streamed = oauthPipeline(
       () => sseResponse(sse(streamEvents(alias))),
       await loadConfig(""),
     );
+
     afterAll(streamed.pipeline.dispose);
     const body = JSON.parse(request().body as string) as JsonObject;
+
     const response = await streamed.pipeline.call(
       "/v1/messages",
       postJson({ ...body, stream: true }),
     );
+
     const text = await response.text();
     expect(text).toContain('"name":"get_weather"');
     expect(text).not.toContain(alias);
@@ -789,6 +797,7 @@ describe("POST /v1/messages/count_tokens", () => {
       config: apiKeyConfig,
       respond: () => jsonResponse({ input_tokens: 42 }),
     });
+
     afterAll(p.dispose);
 
     const response = await p.call(
@@ -836,10 +845,12 @@ api-keys:
     const count = ((await ok.json()) as { input_tokens: number }).input_tokens;
     expect(count).toBeGreaterThan(3);
     expect(p.calls).toHaveLength(0);
+
     const bad = await p.call(
       "/v1/messages/count_tokens",
       postJson({ model: "claude-sonnet-4-5", messages: [] }),
     );
+
     expect(bad.status).toBe(400);
   });
 });

@@ -80,6 +80,7 @@ describe("model routes with a fixed registry", () => {
     ModelRegistry,
     ModelRegistry.of({ snapshot: Effect.succeed(snapshot) }),
   );
+
   const handler = makeHandler(registry);
   afterAll(handler.dispose);
   const call = caller(handler);
@@ -295,9 +296,11 @@ oauth:
     try {
       const response = await caller(handler)("/v1/models");
       expect(response.status).toBe(200);
+
       const ids = ((await response.json()) as { data: Array<{ id: string }> }).data.map(
         (model) => model.id,
       );
+
       expect(ids).toEqual(
         expect.arrayContaining([
           "team/sonnet",

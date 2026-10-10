@@ -17,10 +17,12 @@ describe("inflateZstd", () => {
   it("decodes raw and RLE blocks, several frames and skippable frames", () => {
     const first = zstdFrame([{ raw: '{"model":"' }, { rle: 5, byte: "x" }, { raw: '",' }]);
     const second = zstdFrame([{ raw: '"n":1}' }]);
+
     const decoded = inflateZstd(
       concatBytes(first, zstdSkippable(Uint8Array.of(1, 2, 3)), second),
       1024,
     );
+
     expect(text(decoded)).toBe('{"model":"xxxxx","n":1}');
   });
 

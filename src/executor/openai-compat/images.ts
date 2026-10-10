@@ -47,12 +47,12 @@ export const wantsMultipartEdit = (endpoint: string, contentType: string): boole
   endpoint === IMAGES_EDITS_PATH &&
   !contentType.trim().toLowerCase().startsWith("application/json");
 
-const EXTENSIONS: Readonly<Record<string, string>> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/gif": "gif",
-};
+const EXTENSIONS = new Map([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/webp", "webp"],
+  ["image/gif", "gif"],
+]);
 
 const dataUrlBlob = (
   value: string,
@@ -72,7 +72,7 @@ const dataUrlBlob = (
 
     return {
       blob: new Blob([bytes], { type: mime }),
-      filename: `image-${index}.${EXTENSIONS[mime] ?? "bin"}`,
+      filename: `image-${index}.${EXTENSIONS.get(mime) ?? "bin"}`,
     };
   } catch {
     return undefined;

@@ -7,7 +7,7 @@
  * {@link StateEngine}, so the semantics (TTL, compare-and-swap, bounds) are identical.
  */
 import { createHash } from "node:crypto";
-import { Clock, Effect, Option, Schema } from "effect";
+import { Clock, Data, Effect, Option, Schema } from "effect";
 import { WorkerEnv } from "../platform/env.ts";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
@@ -132,16 +132,19 @@ export interface EntryOptions {
   readonly known?: { readonly generation: number; readonly value: string | undefined };
 }
 
-export type Update =
-  | { readonly _tag: "put"; readonly value: string }
-  | { readonly _tag: "delete" }
-  | { readonly _tag: "keep" };
+export type Update = Data.TaggedEnum<{
+  put: { readonly value: string };
+  delete: {};
+  keep: {};
+}>;
 
-export const putValue = (value: string): Update => ({ _tag: "put", value });
+const Update = Data.taggedEnum<Update>();
 
-export const deleteValue: Update = { _tag: "delete" };
+export const putValue = (value: string): Update => Update.put({ value });
 
-export const keepValue: Update = { _tag: "keep" };
+export const deleteValue: Update = Update.delete();
+
+export const keepValue: Update = Update.keep();
 
 export interface UpdateOutcome {
   /** True when the decided write or delete was applied (false for `keep`, after exhausting the attempts, rejections). */
@@ -183,19 +186,18 @@ export const updateEntry = (
     for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
       const update = decide(current);
 
-      if (update._tag === "keep") return { applied: false, generation };
+      if (Update.$is("keep")(update)) return { applied: false, generation };
 
-      const op: StateOp =
-        update._tag === "put"
-          ? {
-              op: "put",
-              key,
-              value: update.value,
-              ttlMs: options.ttlMs,
-              ifGeneration: generation,
-              ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
-            }
-          : { op: "delete", key, ifGeneration: generation };
+      const op: StateOp = Update.$is("put")(update)
+        ? {
+            op: "put",
+            key,
+            value: update.value,
+            ttlMs: options.ttlMs,
+            ifGeneration: generation,
+            ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
+          }
+        : { op: "delete", key, ifGeneration: generation };
 
       const result = (yield* backend.run(address, [op]))[0];
 

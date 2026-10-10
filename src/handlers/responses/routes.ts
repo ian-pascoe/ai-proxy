@@ -6,7 +6,7 @@
  * handleStreamingResponse), internal/api/server_routes.go (route table). The websocket variants (`GET /v1/responses`,
  * `GET /backend-api/codex/responses`) are in websocket/. Codex multi-agent-v2 tool preparation and orphan delegation rewriting run in `codex-prepare.ts`.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import type { ExecutionError } from "../../executor/errors.ts";
@@ -28,7 +28,7 @@ const handle = (compact: boolean) =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     const configResult = yield* Effect.result(currentConfig);
 
-    if (configResult._tag === "Failure")
+    if (Result.isFailure(configResult))
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false });
     const config = configResult.success;
 
@@ -39,13 +39,13 @@ const handle = (compact: boolean) =>
 
     const read = yield* Effect.result(readRequestBody(request));
 
-    if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status);
+    if (Result.isFailure(read)) return badRequest(read.failure.message, read.failure.status);
     let body: Json | undefined = read.success.json;
 
     if (body === undefined) return badRequest("request body is not valid JSON");
 
     // Official Codex clients: collaboration tools (not for compaction) and orphan delegations.
-    yield* prepareCodexResponsesRequest(body, request.headers as Record<string, string>, !compact);
+    yield* prepareCodexResponsesRequest(body, request.headers, !compact);
     const streamField = get(body, "stream");
 
     if (compact) {
@@ -75,9 +75,7 @@ const handle = (compact: boolean) =>
     if (!compact && streamField === true) {
       return yield* streamResponse(executeStream(input), {
         framer: responsesFramer({
-          codexClient: isCodexResponsesClient(
-            new Headers(request.headers as Record<string, string>),
-          ),
+          codexClient: isCodexResponsesClient(new Headers(request.headers)),
         }),
         onError,
         keepAliveSeconds: config.requests.streaming["keepalive-seconds"],
@@ -86,7 +84,7 @@ const handle = (compact: boolean) =>
 
     const result = yield* Effect.result(executeNonStream(input));
 
-    if (result._tag === "Failure") return onError(result.failure);
+    if (Result.isFailure(result)) return onError(result.failure);
 
     return jsonResponse(result.success.payload, result.success.headers);
   });

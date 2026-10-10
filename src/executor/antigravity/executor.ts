@@ -15,7 +15,7 @@
  */
 import { derivedAntigravitySessionId } from "./derived-session.ts";
 import { translateRequestForExecutor } from "../helps/translate.ts";
-import { Clock, Effect, Option, Stream } from "effect";
+import { Clock, Effect, Option, Result, Stream } from "effect";
 import {
   HttpClient,
   type HttpClientError,
@@ -109,7 +109,7 @@ import {
   configuredUserAgent,
   geminiToAntigravity,
   requestBaseUrl,
-  shapeRequestPayload,
+  constrainRequestPayload,
 } from "./envelope.ts";
 import {
   antigravityStatusError,
@@ -202,7 +202,7 @@ export const makeAntigravityExecutor = (
 
     const accessToken =
       typeof context.credential.metadata["access_token"] === "string"
-        ? (context.credential.metadata["access_token"] as string).trim()
+        ? context.credential.metadata["access_token"].trim()
         : "";
 
     if (accessToken === "") {
@@ -216,14 +216,14 @@ export const makeAntigravityExecutor = (
     // `PrepareRequestAuth`: a credential without `project_id` (discovery failed at login) is completed here.
     let project =
       typeof context.credential.metadata["project_id"] === "string"
-        ? (context.credential.metadata["project_id"] as string).trim()
+        ? context.credential.metadata["project_id"].trim()
         : "";
 
     if (project === "") {
       const discovered = yield* fetchProjectId(accessToken).pipe(Effect.result);
 
-      if (discovered._tag === "Failure" || discovered.success.trim() === "") {
-        const cause = discovered._tag === "Failure" ? `: ${discovered.failure.message}` : "";
+      if (Result.isFailure(discovered) || discovered.success.trim() === "") {
+        const cause = Result.isFailure(discovered) ? `: ${discovered.failure.message}` : "";
 
         return yield* new ExecutionError({
           status: 400,
@@ -299,9 +299,9 @@ export const makeAntigravityExecutor = (
       );
     });
 
-  const headersFor = (attempt: Attempt, agent: string): Record<string, string> => {
+  const headersFor = (attempt: Attempt, agent: string) => {
     // Whitelist: only the headers the native client sends (plus the credential's own `header:*` attributes).
-    const headers: Record<string, string> = {
+    const headers = {
       "content-type": "application/json",
       authorization: `Bearer ${attempt.accessToken}`,
       "user-agent": agent,
@@ -327,6 +327,7 @@ export const makeAntigravityExecutor = (
 
       if (bypass) return;
       const now = yield* Clock.currentTimeMillis;
+
       const remaining = yield* Effect.promise(() =>
         state.shortCooldownRemaining(context.credential.id, baseModel, now),
       );
@@ -385,14 +386,11 @@ export const makeAntigravityExecutor = (
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
         : [];
 
-    if (texts.length > 0 && attempt.kv !== undefined) {
+    const { kv } = attempt;
+
+    if (texts.length > 0 && kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(
-          attempt.signatures,
-          makeKvSignatureStore(attempt.kv as KVNamespace),
-          baseModel,
-          texts,
-        ),
+        prefetchSignatures(attempt.signatures, makeKvSignatureStore(kv), baseModel, texts),
       );
     }
 
@@ -459,7 +457,7 @@ export const makeAntigravityExecutor = (
       yield* Clock.currentTimeMillis,
     );
     const translatedForResponse = structuredClone(body);
-    body = shapeRequestPayload(baseModel, body);
+    body = constrainRequestPayload(baseModel, body);
 
     const alt = options.alt === "responses/compact" ? "" : options.alt;
     const base = requestBaseUrl(context.credential.attributes, context.credential.metadata);
@@ -528,18 +526,15 @@ export const makeAntigravityExecutor = (
       const decision = decideAntigravity429(text);
       const now = yield* Clock.currentTimeMillis;
 
+      const retryAfterMs = decision.retryAfterMs ?? 0;
+
       if (
         decision.kind === "short_cooldown_switch_auth" &&
-        (decision.retryAfterMs ?? 0) > 0 &&
+        retryAfterMs > 0 &&
         !coolingDisabled(context)
       ) {
         yield* Effect.promise(() =>
-          state.markShortCooldown(
-            context.credential.id,
-            prepared.baseModel,
-            decision.retryAfterMs as number,
-            now,
-          ),
+          state.markShortCooldown(context.credential.id, prepared.baseModel, retryAfterMs, now),
         );
       } else if (
         decision.kind === "full_quota_exhausted" &&
@@ -599,9 +594,11 @@ export const makeAntigravityExecutor = (
       context.usage.observeResponseModel(responseModelOf(parsed));
       const responseFormat = responseFormatOf(options);
       const ctx = responseContext(attempt, prepared, options.alt);
+
       const out = translating(attempt, () =>
         registry.translateNonStream(responseFormat, to, ctx, text),
       );
+
       yield* persistSignatures(attempt);
 
       if (out === undefined || out === "") {
@@ -646,10 +643,12 @@ export const makeAntigravityExecutor = (
 
     // Claude, Gemini 3 Pro and image models only stream upstream: the SSE is merged into one response.
     const filter = new UsageFilter();
+
     const lines = yield* splitLines(response.stream).pipe(
       Stream.mapError(transportError),
       Stream.runCollect,
     );
+
     const payloads: string[] = [];
 
     for (const line of lines) {
@@ -686,11 +685,13 @@ export const makeAntigravityExecutor = (
         }),
     });
 
+    const { originalRequest } = options;
+
     const original =
-      options.originalRequest === undefined
+      originalRequest === undefined
         ? undefined
         : yield* Effect.promise(() =>
-            expandCompactionCapsules(options.originalRequest as Json).catch(() => payload),
+            expandCompactionCapsules(originalRequest).catch(() => payload),
           );
 
     return {
@@ -736,14 +737,14 @@ export const makeAntigravityExecutor = (
     };
 
     const summary = yield* executeGenerate(context, summaryRequest, summaryOptions);
-    const parsed = tryParseJson(summary.payload);
+    const parsed = tryParseJson(summary.payload) ?? null;
 
     const text = yield* Effect.try({
-      try: () => extractSummaryText(parsed as Json),
+      try: () => extractSummaryText(parsed),
       catch: (error) =>
         new ExecutionError({
           status: 500,
-          message: `extract summary: ${(error as Error).message}`,
+          message: `extract summary: ${error instanceof Error ? error.message : String(error)}`,
         }),
     });
 
@@ -753,7 +754,7 @@ export const makeAntigravityExecutor = (
         new ExecutionError({ status: 500, message: `seal compaction capsule: ${String(error)}` }),
     });
 
-    const usage = responsesSummaryUsage(parsed as Json, summary.payload);
+    const usage = responsesSummaryUsage(parsed, summary.payload);
 
     return { baseModel, capsule, usage, headers: summary.headers };
   });
@@ -938,14 +939,11 @@ export const makeAntigravityExecutor = (
         ? translating(attempt, () => thinkingTextsNeedingCachedSignatures(baseModel, original))
         : [];
 
-    if (texts.length > 0 && attempt.kv !== undefined) {
+    const { kv } = attempt;
+
+    if (texts.length > 0 && kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(
-          attempt.signatures,
-          makeKvSignatureStore(attempt.kv as KVNamespace),
-          baseModel,
-          texts,
-        ),
+        prefetchSignatures(attempt.signatures, makeKvSignatureStore(kv), baseModel, texts),
       );
     }
 
@@ -1001,8 +999,10 @@ export const makeAntigravityExecutor = (
 
     const alt = options.alt;
     const base = requestBaseUrl(context.credential.attributes, context.credential.metadata);
+
     const url =
       base + ANTIGRAVITY_COUNT_TOKENS_PATH + (alt !== "" ? `?$alt=${encodeURIComponent(alt)}` : "");
+
     const requestedModel =
       options.metadata.requestedModel !== "" ? options.metadata.requestedModel : request.model;
 

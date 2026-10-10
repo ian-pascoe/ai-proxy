@@ -18,11 +18,13 @@ describe("refresh timing", () => {
   it.effect("Codex sleeps 1 s and 2 s between its three attempts", () =>
     Effect.gen(function* () {
       const http = mockHttp(() => ({ status: 400, body: "nope" }));
+
       const fiber = yield* refreshCodex(context).pipe(
         Effect.provide(http.layer),
         Effect.flip,
         Effect.forkChild,
       );
+
       yield* TestClock.adjust(0);
       assert.strictEqual(http.requests.length, 1);
       yield* TestClock.adjust(999);

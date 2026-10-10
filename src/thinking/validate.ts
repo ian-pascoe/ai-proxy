@@ -71,7 +71,7 @@ export const clampLevel = (level: string, modelInfo: ThinkingModelInfo | undefin
     }
   }
 
-  return bestIndex >= 0 ? (STANDARD_LEVEL_ORDER[bestIndex] as string) : level;
+  return bestIndex >= 0 ? (STANDARD_LEVEL_ORDER[bestIndex] ?? level) : level;
 };
 
 /** Clamps a budget to the model range; -1 (auto) passes through. */
@@ -119,6 +119,13 @@ const convertAutoToMidRange = (
   return { ...config, mode: "budget", budget: mid };
 };
 
+/** Mutable copy of a {@link ThinkingConfig} that {@link validateConfig} edits step by step. */
+interface WorkingConfig {
+  mode: ThinkingConfig["mode"];
+  budget: number;
+  level: string;
+}
+
 /** Result of {@link validateConfig}: the normalised config or the validation error. */
 export type ValidateResult =
   | { readonly config: ThinkingConfig; readonly error?: undefined }
@@ -139,7 +146,7 @@ export const validateConfig = (
   const toFormat = normalize(toFormatRaw);
   const model = modelInfo !== undefined && modelInfo.id !== "" ? modelInfo.id : "unknown";
   const support = modelInfo?.thinking;
-  let config: { mode: ThinkingConfig["mode"]; budget: number; level: string } = { ...input };
+  let config: WorkingConfig = { ...input };
 
   if (support === undefined) {
     if (config.mode !== "none") {
@@ -287,7 +294,7 @@ export const validateConfig = (
       levels.length > 0 &&
       (config.budget > 0 || cannotDisableLevelModel)
     ) {
-      config.level = levels[0] as string;
+      config.level = levels[0] ?? config.level;
     }
   }
 

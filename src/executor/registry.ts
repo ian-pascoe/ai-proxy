@@ -38,32 +38,30 @@ const isOpenAICompatProvider = (provider: string): boolean =>
   provider === "openai-compatibility" || provider.startsWith("openai-compatible-");
 
 /** Fixed provider keys (one executor each). */
-const FIXED_EXECUTORS: Readonly<Record<string, () => ProviderExecutor>> = {
-  antigravity: makeAntigravityExecutor,
-  codex: makeCodexExecutor,
-  xai: makeXaiExecutor,
-  claude: makeClaudeExecutor,
-  gemini: makeGeminiExecutor,
-  "gemini-interactions": makeGeminiInteractionsExecutor,
-  vertex: makeVertexExecutor,
-  devin: makeDevinExecutor,
-  meta: makeMetaExecutor,
-  kimi: makeKimiExecutor,
-  "kimi-ai": makeKimiExecutor,
-};
+const FIXED_EXECUTORS = new Map<string, () => ProviderExecutor>([
+  ["antigravity", makeAntigravityExecutor],
+  ["codex", makeCodexExecutor],
+  ["xai", makeXaiExecutor],
+  ["claude", makeClaudeExecutor],
+  ["gemini", makeGeminiExecutor],
+  ["gemini-interactions", makeGeminiInteractionsExecutor],
+  ["vertex", makeVertexExecutor],
+  ["devin", makeDevinExecutor],
+  ["meta", makeMetaExecutor],
+  ["kimi", makeKimiExecutor],
+  ["kimi-ai", makeKimiExecutor],
+]);
 
-export const makeExecutorRegistry = (): {
-  readonly get: (provider: string) => ProviderExecutor | undefined;
-} => {
+export const makeExecutorRegistry = () => {
   const cache = new Map<string, ProviderExecutor>();
 
   return {
-    get: (provider) => {
+    get: (provider: string): ProviderExecutor | undefined => {
       const key = provider.trim().toLowerCase();
       const cached = cache.get(key);
 
       if (cached !== undefined) return cached;
-      const fixed = Object.hasOwn(FIXED_EXECUTORS, key) ? FIXED_EXECUTORS[key] : undefined;
+      const fixed = FIXED_EXECUTORS.get(key);
 
       if (fixed === undefined && !isOpenAICompatProvider(key)) return undefined;
       const executor = fixed === undefined ? makeOpenAICompatExecutor(key) : fixed();

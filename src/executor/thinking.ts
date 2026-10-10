@@ -8,7 +8,7 @@
  * rules. {@link Thinking.live} runs the real pipeline (parse suffix -> canonical config -> validate -> provider
  * applier); {@link Thinking.noop} passes bodies through (tests that do not care about thinking).
  */
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Predicate } from "effect";
 import { type Json, cloneJson } from "../json/index.ts";
 import type { Format } from "../translator/formats.ts";
 import { noopSummaryHooks, type SummaryHooks, TranslatorRegistry } from "../translator/registry.ts";
@@ -63,6 +63,7 @@ const translatedSummaryConfig = (
 ): SummaryConfig => {
   const from = lowerFormat(request.from);
   const to = lowerFormat(request.to);
+
   const target =
     from === to
       ? extractSummaryConfig(request.body, to)
@@ -85,11 +86,19 @@ const translatedSummaryConfig = (
   return current;
 };
 
+const isSummaryConfig = (value: unknown): value is SummaryConfig =>
+  Predicate.hasProperty(value, "mode") && Predicate.hasProperty(value, "detail");
+
 /** Summary hooks run by the translator registry around request transforms (`sdk/translator/registry.go`). */
 export const summaryHooks: SummaryHooks = {
   extract: (body, client, provider) => extractTranslatedSummaryConfig(body, client, provider),
   apply: (body, provider, model, summary) =>
-    applySummaryConfigForModel(body, provider, model, summary as SummaryConfig) ?? body,
+    applySummaryConfigForModel(
+      body,
+      provider,
+      model,
+      isSummaryConfig(summary) ? summary : UNSPECIFIED_SUMMARY,
+    ) ?? body,
 };
 
 export class Thinking extends Context.Service<

@@ -11,11 +11,16 @@ import { parseSuffix } from "../suffix.ts";
 const normalizeName = (model: string | undefined): string =>
   parseSuffix((model ?? "").trim()).modelName.trim();
 
+export interface CompatModelMatch {
+  readonly entry: ModelEntry | undefined;
+  readonly matched: boolean;
+}
+
 /** The configured model entry for `model`: first by upstream `name`, then by `alias`. */
 export const findCompatModel = (
   models: ReadonlyArray<ModelEntry>,
   model: string,
-): { readonly entry: ModelEntry | undefined; readonly matched: boolean } => {
+): CompatModelMatch => {
   const name = normalizeName(model).toLowerCase();
 
   if (name === "") return { entry: undefined, matched: false };
@@ -55,7 +60,11 @@ export const normalizeOpenAIMaxTokens = (payload: Json, useMaxCompletionTokens: 
 
   let out = payload;
 
-  if (exists(out, from) && !exists(out, to)) out = set(out, to, get(out, from) as Json);
+  if (exists(out, from) && !exists(out, to)) {
+    const moved = get(out, from);
+
+    if (moved !== undefined) out = set(out, to, moved);
+  }
 
   if (exists(out, from)) out = del(out, from);
 

@@ -1,6 +1,6 @@
 // Upstream execution sessions (retained sockets, locking, idle deadline, redial) with in-memory sockets and TestClock.
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Exit, Fiber, Layer, Queue, Scope } from "effect";
+import { Effect, Exit, Fiber, Layer, Predicate, Queue, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { ExecutionError } from "../src/executor/errors.ts";
 import {
@@ -15,6 +15,7 @@ import {
   type OpenTurnInput,
   UpstreamSessionStore,
 } from "../src/executor/websocket/session.ts";
+import { Frames } from "./support/upstream-message.ts";
 
 interface FakeSocket {
   readonly socket: UpstreamSocket;
@@ -28,25 +29,9 @@ const fakeSocket = (): FakeSocket => {
   const messages = Effect.runSync(Queue.unbounded<UpstreamMessage>());
   const listeners = new Set<(message: UpstreamMessage) => void>();
 
-  const fake: FakeSocket = {
-    sent: [],
-    closed: undefined,
-    failNextSend: false,
-    push: (message) => {
-      Queue.offerUnsafe(messages, message);
-
-      if (message._tag === "close" || message._tag === "error") {
-        open = false;
-
-        for (const listener of listeners) listener(message);
-      }
-    },
-    socket: undefined as unknown as UpstreamSocket,
-  };
-
   let open = true;
 
-  (fake as { socket: UpstreamSocket }).socket = {
+  const socket: UpstreamSocket = {
     headers: new Headers(),
     send: (text) =>
       Effect.suspend(() => {
@@ -72,6 +57,22 @@ const fakeSocket = (): FakeSocket => {
 
       return () => void listeners.delete(listener);
     },
+  };
+
+  const fake: FakeSocket = {
+    sent: [],
+    closed: undefined,
+    failNextSend: false,
+    push: (message) => {
+      Queue.offerUnsafe(messages, message);
+
+      if (Predicate.isTagged(message, "close") || Predicate.isTagged(message, "error")) {
+        open = false;
+
+        for (const listener of listeners) listener(message);
+      }
+    },
+    socket,
   };
 
   return fake;
@@ -121,7 +122,7 @@ const input = (
   ...overrides,
 });
 
-const text = (data: string): UpstreamMessage => ({ _tag: "text", data });
+const text = (data: string): UpstreamMessage => Frames.text({ data });
 
 describe("upstream execution sessions", () => {
   it.effect(
@@ -291,13 +292,13 @@ describe("upstream execution sessions", () => {
             ).pipe(Effect.provide(connector([socket])));
           });
 
-        const tooBig = yield* read({ _tag: "close", code: 1009, reason: "too big" });
+        const tooBig = yield* read(Frames.close({ code: 1009, reason: "too big" }));
         assert.strictEqual(tooBig.status, 413);
         assert.isTrue(tooBig.requestScoped);
         assert.include(tooBig.message, "message_too_big");
-        const binary = yield* read({ _tag: "binary" });
+        const binary = yield* read(Frames.binary());
         assert.include(binary.message, "unexpected binary message");
-        const dropped = yield* read({ _tag: "close", code: 1006, reason: "" });
+        const dropped = yield* read(Frames.close({ code: 1006, reason: "" }));
         assert.strictEqual(dropped.code, "transient_transport");
       }),
   );
@@ -305,10 +306,12 @@ describe("upstream execution sessions", () => {
   it.effect("classifies a rejected upgrade and reports transport failures as transient", () =>
     Effect.gen(function* () {
       const store = new UpstreamSessionStore();
+
       const rejected = yield* Effect.scoped(openTurn(input(store))).pipe(
         Effect.provide(connector([])),
         Effect.flip,
       );
+
       assert.strictEqual(rejected.status, 503);
       assert.strictEqual(rejected.message, "classified:busy");
 
@@ -355,7 +358,7 @@ describe("upstream execution sessions", () => {
             turn.complete();
           }),
         ).pipe(Effect.provide(layer));
-        socket.push({ _tag: "close", code: 1001, reason: "bye" });
+        socket.push(Frames.close({ code: 1001, reason: "bye" }));
         assert.lengthOf(drops, 1);
         assert.isUndefined(store.peek("session-1")?.socket);
       }),
@@ -371,10 +374,12 @@ describe("upstream execution sessions", () => {
         Effect.provideService(Scope.Scope, scope),
         Effect.provide(layer),
       );
+
       const second = yield* Effect.scoped(openTurn(input(store))).pipe(
         Effect.provide(layer),
         Effect.forkChild,
       );
+
       yield* TestClock.adjust(1000);
       assert.isUndefined(second.pollUnsafe());
       yield* Scope.close(scope, Exit.void);

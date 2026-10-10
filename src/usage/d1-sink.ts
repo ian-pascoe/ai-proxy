@@ -10,15 +10,15 @@ import { insertUsageRecord } from "./d1.ts";
 import type { UsageRecord } from "./record.ts";
 import { UsageSink } from "./sink.ts";
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 /** Writes `record` and logs (request id and error message only, never the record) instead of failing. */
 export const writeUsageRecord = (db: D1Database, record: UsageRecord): Effect.Effect<void> =>
-  Effect.tryPromise({ try: () => insertUsageRecord(db, record), catch: (error) => error }).pipe(
-    Effect.catch((error) =>
+  Effect.tryPromise({ try: () => insertUsageRecord(db, record), catch: errorMessage }).pipe(
+    Effect.catch((message) =>
       Effect.logWarning("usage record write failed").pipe(
-        Effect.annotateLogs({ requestId: record.requestId, error: errorMessage(error) }),
+        Effect.annotateLogs({ requestId: record.requestId, error: message }),
       ),
     ),
   );

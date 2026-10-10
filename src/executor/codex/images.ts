@@ -304,8 +304,8 @@ export const extractImageResults = (
   if (isJsonArray(output) && output.length > 0) {
     for (const item of output) append(item);
   } else {
-    for (const index of [...collector.byIndex.keys()].toSorted((a, b) => a - b))
-      append(collector.byIndex.get(index) as Json);
+    for (const [, item] of [...collector.byIndex.entries()].toSorted((a, b) => a[0] - b[0]))
+      append(item);
 
     for (const item of collector.fallback) append(item);
   }
@@ -375,6 +375,7 @@ export const imagePartialFrame = (
 
   if (b64 === "") return undefined;
   const eventName = `${streamPrefix.trim()}.partial_image`;
+
   const data: JsonObject = {
     type: eventName,
     partial_image_index: asInt(get(payload, "partial_image_index")),

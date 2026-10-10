@@ -122,7 +122,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
       if (isJsonArray(content)) {
         if (originalRole === "user") content = alignClaudeToolResults(content, precedingToolUseIds);
 
-        for (const block of content as Json[]) {
+        for (const block of content) {
           switch (asString(get(block, "type"))) {
             case "text": {
               const text = asString(get(block, "text"));
@@ -181,6 +181,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
                 functionResponse: { name: "", response: { result: "" }, id: toolCallId },
               };
 
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               (part["functionResponse"] as JsonObject)["name"] = funcName;
 
               if (toolResult.resultIsRaw) {
@@ -190,6 +191,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
                   toolResult.result,
                 );
               } else {
+                // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
                 ((part["functionResponse"] as JsonObject)["response"] as JsonObject)["result"] =
                   toolResult.result;
               }

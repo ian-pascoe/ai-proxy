@@ -104,6 +104,7 @@ api-keys:
   it("changes the identity when a hashed field changes", () => {
     const yaml = (extra: string) =>
       `claude-api-key:\n  - api-key: k\n    base-url: https://a.example\n${extra}`;
+
     const id = (extra: string) => synthesizeConfigCredentials(config(yaml(extra)), 0)[0]!.id;
     expect(id("")).toBe(id(""));
     expect(id("    prefix: p\n")).not.toBe(id(""));
@@ -256,6 +257,7 @@ describe("metadata merge (credentials.md §11)", () => {
       { type: "claude", access_token: "new", priority: 9 },
       existing,
     );
+
     expect(merged).toEqual({
       type: "claude",
       access_token: "new",
@@ -290,7 +292,7 @@ describe("metadata merge (credentials.md §11)", () => {
 });
 
 describe("access token expiry", () => {
-  const jwt = (claims: object) =>
+  const jwt = (claims: JsonObject) =>
     `h.${btoa(JSON.stringify(claims)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")}.s`;
 
   const NOW_S = 1_800_000_000;
@@ -355,6 +357,6 @@ describe("redaction", () => {
       expect(text).not.toContain(secret);
     }
 
-    expect([...redactSecrets("x".repeat(1000))].length).toBe(256);
+    expect(redactSecrets("x".repeat(1000)).length).toBe(256);
   });
 });

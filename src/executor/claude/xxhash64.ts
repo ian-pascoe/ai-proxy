@@ -71,7 +71,7 @@ export const xxh64 = (input: Uint8Array, seed: bigint): bigint => {
   }
 
   while (offset < length) {
-    hash ^= mul(BigInt(input[offset] as number), P5);
+    hash ^= mul(BigInt(input[offset] ?? 0), P5);
     hash = mul(rotl(hash, 11n), P1);
     offset += 1;
   }

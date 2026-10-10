@@ -42,7 +42,7 @@ const decodeBase64UrlHead = (
 
   return {
     length,
-    first: (base64Value(sig[0] as string) << 2) | (base64Value(sig[1] as string) >> 4),
+    first: (base64Value(sig.charAt(0)) << 2) | (base64Value(sig.charAt(1)) >> 4),
   };
 };
 

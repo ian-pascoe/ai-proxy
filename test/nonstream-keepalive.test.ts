@@ -1,7 +1,7 @@
 // `requests.nonstream-keepalive-interval` (sdk/api/handlers/handlers.go StartNonStreamingKeepAlive): blank lines while a
 // non-stream execution is pending, nothing committed before the first interval.
 import { it } from "@effect/vitest";
-import { Effect, Fiber, Stream } from "effect";
+import { Effect, Fiber, Predicate, Stream } from "effect";
 import { HttpServerResponse } from "effect/http";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
@@ -21,9 +21,12 @@ const collect = (response: HttpServerResponse.HttpServerResponse) =>
   Effect.gen(function* () {
     const body = response.body;
 
-    if (body._tag !== "Stream") return yield* Effect.die(`unexpected body ${body._tag}`);
+    if (!Predicate.isTagged(body, "Stream"))
+      return yield* Effect.die(`unexpected body ${body._tag}`);
 
-    return (yield* Stream.runCollect(body.stream)).map((chunk) => new TextDecoder().decode(chunk));
+    return (yield* Stream.runCollect(Stream.orDie(body.stream))).map((chunk) =>
+      new TextDecoder().decode(chunk),
+    );
   });
 
 it.effect(

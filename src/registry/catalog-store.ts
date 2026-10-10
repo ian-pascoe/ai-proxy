@@ -5,7 +5,8 @@
  * Go counterpart: the `modelsCatalogStore` / `codexClientCatalogStore` / `devinCatalogStore` globals that the catalog
  * updaters (internal/registry/catalog_sources.go) publish into. Here the "published" catalog is the KV entry.
  */
-import { Clock, Context, Effect, Layer, Ref } from "effect";
+import { Clock, Context, Effect, Layer, Ref, Result } from "effect";
+import type { Json } from "../json/index.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import {
   embeddedCatalogs,
@@ -34,13 +35,24 @@ export const CATALOG_CACHE_TTL_MS = 60_000;
 
 const tryParse = (
   text: string,
-):
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly error: string } => {
+): { readonly ok: true; readonly value: Json } | { readonly ok: false; readonly error: string } => {
   try {
-    return { ok: true, value: JSON.parse(text) as unknown };
+    const value: Json = JSON.parse(text);
+
+    return { ok: true, value };
   } catch (cause) {
     return { ok: false, error: cause instanceof Error ? cause.message : "invalid JSON" };
+  }
+};
+
+const parseCatalog = (name: CatalogName, value: Json) => {
+  switch (name) {
+    case "models":
+      return parseModelsCatalog(value);
+    case "devin":
+      return parseDevinCatalog(value);
+    default:
+      return validateCodexClientModels(value);
   }
 };
 
@@ -50,25 +62,23 @@ export const validateCatalogText = (name: CatalogName, text: string): string | u
 
   if (!parsed.ok) return parsed.error;
 
-  const result =
-    name === "models"
-      ? parseModelsCatalog(parsed.value)
-      : name === "devin"
-        ? parseDevinCatalog(parsed.value)
-        : validateCodexClientModels(parsed.value);
+  const result = parseCatalog(name, parsed.value);
 
   return result.ok ? undefined : result.error;
 };
 
+export interface CatalogsFromTexts {
+  readonly catalogs: ModelCatalogs;
+  readonly warnings: ReadonlyArray<string>;
+}
+
 /** Builds the catalogs from KV texts; invalid texts are reported in `warnings` and replaced by the embedded copy. */
-export const catalogsFromTexts = (
-  texts: CatalogTexts,
-): { readonly catalogs: ModelCatalogs; readonly warnings: ReadonlyArray<string> } => {
+export const catalogsFromTexts = (texts: CatalogTexts): CatalogsFromTexts => {
   const base = embeddedCatalogs();
   const warnings: string[] = [];
   let { models, devin, codexClient } = base;
 
-  const usable = (name: CatalogName): unknown => {
+  const usable = (name: CatalogName): Json | undefined => {
     const text = texts[name];
 
     if (text === undefined || text === null) return undefined;
@@ -168,7 +178,7 @@ export class CatalogStore extends Context.Service<
           return cached.catalogs;
         const texts = yield* stored.pipe(Effect.result);
 
-        if (texts._tag === "Failure") {
+        if (Result.isFailure(texts)) {
           yield* Effect.logWarning(
             `catalog KV read failed, keeping the previous catalogs: ${texts.failure.message}`,
           );

@@ -1,8 +1,8 @@
 // Test helpers for the request pipeline: a Worker handler with a fake Access JWKS, a static config, an in-memory
 // usage sink and a mocked upstream HttpClient.
 import { env } from "cloudflare:workers";
-import { Effect, Layer } from "effect";
-import { HttpClient, HttpClientResponse, HttpRouter } from "effect/http";
+import { Effect, Layer, Match } from "effect";
+import { type HttpBody, HttpClient, HttpClientResponse, HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
 import { parseConfigYaml } from "../../src/config/codec.ts";
 import { ConfigReader } from "../../src/config/reader.ts";
@@ -20,6 +20,7 @@ import { requestContext } from "../../src/platform/env.ts";
 import type { UsageRecord } from "../../src/usage/record.ts";
 import { UsageSink } from "../../src/usage/sink.ts";
 import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
+import type { Json } from "../../src/json/index.ts";
 
 export interface UpstreamCall {
   readonly url: string;
@@ -30,6 +31,23 @@ export interface UpstreamCall {
 
 export type UpstreamResponder = (call: UpstreamCall) => Response | Promise<Response>;
 
+/** Request body as recorded text; multipart bodies become `[name, value | {filename,type,size}]` pairs. */
+export const requestBodyText = (body: HttpBody.HttpBody): string =>
+  Match.value(body).pipe(
+    Match.tag("Uint8Array", (b) => new TextDecoder().decode(b.body)),
+    Match.tag("FormData", (b) =>
+      JSON.stringify(
+        Array.from(b.formData.entries(), ([name, value]) => [
+          name,
+          typeof value === "string"
+            ? value
+            : { filename: value.name, type: value.type, size: value.size },
+        ]),
+      ),
+    ),
+    Match.orElse(() => ""),
+  );
+
 /** HttpClient that records every request and answers with `respond`. */
 export const mockHttpClient = (
   calls: Array<UpstreamCall>,
@@ -39,20 +57,7 @@ export const mockHttpClient = (
     HttpClient.HttpClient,
     HttpClient.make((request, url) =>
       Effect.promise(async () => {
-        const body =
-          request.body._tag === "Uint8Array"
-            ? new TextDecoder().decode(request.body.body)
-            : request.body._tag === "FormData"
-              ? // Multipart bodies are recorded as `[name, value | {filename,type,size}]` pairs.
-                JSON.stringify(
-                  Array.from(request.body.formData.entries(), ([name, value]) => [
-                    name,
-                    typeof value === "string"
-                      ? value
-                      : { filename: value.name, type: value.type, size: value.size },
-                  ]),
-                )
-              : "";
+        const body = requestBodyText(request.body);
 
         const call: UpstreamCall = {
           url: url.toString(),
@@ -95,7 +100,7 @@ export const sseResponse = (pieces: ReadonlyArray<string>, init: ResponseInit = 
   });
 };
 
-export const jsonResponse = (body: unknown, init: ResponseInit = {}): Response =>
+export const jsonResponse = (body: Json, init: ResponseInit = {}): Response =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -174,6 +179,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
       now: Math.floor(Date.now() / 1000),
       claims: userClaims("dev@example.com"),
     });
+
     const headers = new Headers(init.headers);
     headers.set("Cf-Access-Jwt-Assertion", token);
 
@@ -187,7 +193,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
 };
 
 /** POST JSON helper. */
-export const postJson = (body: unknown, headers: Record<string, string> = {}): RequestInit => ({
+export const postJson = (body: Json, headers: Record<string, string> = {}): RequestInit => ({
   method: "POST",
   headers: { "content-type": "application/json", ...headers },
   body: typeof body === "string" ? body : JSON.stringify(body),

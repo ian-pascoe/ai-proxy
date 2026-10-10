@@ -14,7 +14,7 @@ export const sortKeysDeep = (value: Json): Json => {
     const out: JsonObject = {};
 
     for (const key of Object.keys(value).toSorted())
-      setOwn(out, key, sortKeysDeep(value[key] as Json));
+      setOwn(out, key, sortKeysDeep(value[key] ?? null));
 
     return out;
   }

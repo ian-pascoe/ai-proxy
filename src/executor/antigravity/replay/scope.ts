@@ -32,7 +32,7 @@ const stripCacheControl = (value: Json): Json => {
 
     for (const [key, child] of Object.entries(value)) {
       if (key.trim().toLowerCase() === "cache_control") continue;
-      out[key] = stripCacheControl(child as Json);
+      out[key] = stripCacheControl(child);
     }
 
     return out;

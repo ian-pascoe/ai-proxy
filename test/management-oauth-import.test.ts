@@ -5,6 +5,7 @@ import { normalizePrivateKey } from "../src/credentials/refresh/vertex.ts";
 import fixtures from "./fixtures/session.json";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
 import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts";
+import type { Json } from "../src/json/index.ts";
 
 const harness = makeHarness();
 
@@ -26,7 +27,7 @@ beforeEach(async () => {
 
 const IMPORT = "/v8/management/oauth/import";
 
-const upload = (account: unknown, fields: Record<string, string> = {}, name = "sa.json") => {
+const upload = (account: Json, fields: Record<string, string> = {}, name = "sa.json") => {
   const body = new FormData();
   body.append(
     "file",
@@ -113,10 +114,12 @@ describe("POST /v8/management/oauth/import", () => {
       location: "us-central1",
       label: "my proj/1 (sa@proj-1.iam.gserviceaccount.com)",
     });
+
     const serviceAccount = (stored as Record<string, unknown>).service_account as Record<
       string,
       unknown
     >;
+
     // The key is re-encoded as PKCS#1 like Go, the rest of the file is kept.
     expect(serviceAccount.private_key).toBe(
       ((await normalizePrivateKey(sa.pem.pkcs8)) as { pem: string }).pem,
@@ -132,6 +135,7 @@ describe("POST /v8/management/oauth/import", () => {
       `${IMPORT}?provider=vertex&location=europe-west4`,
       upload(sa.account(sa.pem.pkcs1)),
     );
+
     expect(fromQuery.body).toMatchObject({ location: "europe-west4" });
     const name = (fromQuery.body as { "auth-file": string })["auth-file"];
     await controlPlane().patchCredentialFields({ name }, { priority: 7 });

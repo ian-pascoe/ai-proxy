@@ -9,28 +9,25 @@
  * Gemini and Interactions handlers reuse the OpenAI-shaped body.
  */
 import { compactJson, goMarshal, goMarshalSorted, isValidJson } from "./json-text.ts";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { statusText } from "./status.ts";
 
-type JsonRecord = Record<string, unknown>;
+type JsonRecord = JsonObject;
 
 const parseObject = (text: string): JsonRecord | undefined => {
   try {
-    const value: unknown = JSON.parse(text);
+    const value: Json = JSON.parse(text);
 
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as JsonRecord)
-      : undefined;
+    return isJsonObject(value) ? value : undefined;
   } catch {
     return undefined;
   }
 };
 
-const asRecord = (value: unknown): JsonRecord | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : undefined;
+const asRecord = (value: Json | undefined): JsonRecord | undefined =>
+  isJsonObject(value) ? value : undefined;
 
-const nonBlank = (value: unknown): string | undefined =>
+const nonBlank = (value: Json | undefined): string | undefined =>
   typeof value === "string" && value.trim() !== "" ? value : undefined;
 
 // --- OpenAI-compatible ------------------------------------------------------------------------------------------
@@ -40,7 +37,12 @@ export interface OpenAIErrorOptions {
   readonly terminalAuth?: boolean;
 }
 
-const openAIErrorClass = (status: number): { type: string; code?: string } => {
+interface OpenAIErrorClass {
+  readonly type: string;
+  readonly code?: string;
+}
+
+const openAIErrorClass = (status: number): OpenAIErrorClass => {
   switch (status) {
     case 401:
       return { type: "authentication_error", code: "invalid_api_key" };
@@ -129,11 +131,13 @@ export const claudeErrorTypeFromStatus = (status: number): string => {
   }
 };
 
+export interface ClaudeErrorDetail {
+  readonly type: string;
+  readonly message: string;
+}
+
 /** `claudeErrorDetailFromText`: JSON error text may override the derived type and message. */
-export const claudeErrorDetailFromText = (
-  status: number,
-  text: string,
-): { type: string; message: string } => {
+export const claudeErrorDetailFromText = (status: number, text: string): ClaudeErrorDetail => {
   let message = text.trim() === "" ? statusText(status) : text.trim();
   let type = claudeErrorTypeFromStatus(status);
   const payload = parseObject(message);
@@ -205,7 +209,12 @@ export const claudeErrorBody = (status: number, text: string): string => {
 
 // --- OpenAI Responses (streaming) -------------------------------------------------------------------------------
 
-const responsesErrorClass = (status: number): { code: string; type: string } => {
+interface ResponsesErrorClass {
+  readonly code: string;
+  readonly type: string;
+}
+
+const responsesErrorClass = (status: number): ResponsesErrorClass => {
   switch (status) {
     case 401:
       return { code: "invalid_api_key", type: "invalid_request_error" };
@@ -225,6 +234,10 @@ const responsesErrorClass = (status: number): { code: string; type: string } => 
       return { code: "unknown_error", type: "invalid_request_error" };
   }
 };
+
+/** Go `fmt.Sprint`-style text of a non-string JSON value. */
+const jsonText = (value: Json): string =>
+  typeof value === "object" ? JSON.stringify(value) : String(value);
 
 const responsesErrorDetail = (
   status: number,
@@ -250,17 +263,17 @@ const responsesErrorDetail = (
     const c = payload["code"];
 
     if (c !== undefined && c !== null)
-      code = typeof c === "string" && c.trim() !== "" ? c.trim() : String(c).trim();
+      code = typeof c === "string" && c.trim() !== "" ? c.trim() : jsonText(c).trim();
   }
 
-  const detail: JsonRecord = { type: responsesErrorClass(status).type, code, message, param: null };
+  const detail: JsonObject = { type: responsesErrorClass(status).type, code, message, param: null };
 
   if (payload !== undefined) {
     const t = nonBlank(payload["type"]);
 
     if (t !== undefined && t.trim() !== "error") detail["type"] = t.trim();
 
-    if (Object.hasOwn(payload, "param")) detail["param"] = payload["param"];
+    if (Object.hasOwn(payload, "param")) detail["param"] = payload["param"] ?? null;
   }
 
   return detail;

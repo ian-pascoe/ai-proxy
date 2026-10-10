@@ -213,6 +213,7 @@ const convertMessages = (
   let hasEncounteredConversation = false;
 
   for (let i = 0; i < messages.length; i++) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const m = messages[i] as Json;
     const role = asString(get(m, "role"));
     const content = get(m, "content");
@@ -355,6 +356,7 @@ const convertMessages = (
 
           while (usedIds.has(functionId)) functionId = `${baseId}_${suffix++}`;
           usedIds.add(functionId);
+
           const functionName = mapSanitizedFunctionName(
             nameMap,
             asString(get(tc, "function.name")),

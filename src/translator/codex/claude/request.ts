@@ -224,7 +224,7 @@ export const normalizeToolParameters = (schema: Json | undefined): Json => {
   if (isObject && (root["properties"] === undefined || root["properties"] === null))
     root["properties"] = {};
 
-  return sortKeys(root) as Json;
+  return sortKeys(root);
 };
 
 /** `codexSchemaMissesRequired`: a declared property missing from its sibling `required` list (recursively). */
@@ -703,7 +703,7 @@ const convertClaudeRequest = (
       type: "json_schema",
       name: customName !== "" ? customName : "cli_proxy_structured_output",
       strict,
-      schema: cloneJson(schema as Json),
+      schema: cloneJson(schema ?? null),
     });
   }
 

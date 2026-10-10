@@ -9,7 +9,7 @@
  * `grok-imagine-image*` models (`xai-images.ts`). Multipart edits are converted to the JSON form (`images[].image_url`,
  * `mask.image_url`) before execution (Go does the same in the executor, `codexRewriteOpenAIImageEditMultipartToJSON`).
  */
-import { Clock, Effect, Stream } from "effect";
+import { Clock, Effect, Result, Stream } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import {
@@ -24,6 +24,7 @@ import {
   asString,
   get,
   isJsonArray,
+  isJsonObject,
   type Json,
   type JsonObject,
   tryParseJson,
@@ -172,6 +173,14 @@ const fileDataUrl = async (file: File): Promise<string> => {
   return `data:${type};base64,${btoa(binary)}`;
 };
 
+const MASK_FIELD_PATHS = new Map([
+  ["mask[file_id]", "mask.file_id"],
+  ["mask[image_url]", "mask.image_url"],
+]);
+
+/** A form field as text: file parts count as absent. */
+const formText = (entry: string | File | null): string => (typeof entry === "string" ? entry : "");
+
 const INTEGER_FORM_FIELDS = new Set(["n", "output_compression", "partial_images"]);
 
 /** `codexRewriteOpenAIImageEditMultipartToJSON`: form fields and uploads as the JSON edit request. */
@@ -191,12 +200,9 @@ const multipartEditToJson = async (form: FormData): Promise<JsonObject> => {
     }
 
     if (name === "" || name === "model" || name === "stream") continue;
-    const path =
-      name === "mask[file_id]"
-        ? "mask.file_id"
-        : name === "mask[image_url]"
-          ? "mask.image_url"
-          : name;
+
+    const path = MASK_FIELD_PATHS.get(name) ?? name;
+
     const trimmed = value.trim();
 
     const parsed =
@@ -307,7 +313,7 @@ const handleXai = (input: XaiImagesInput) =>
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(execution));
 
-        if (result._tag === "Failure") return onError(result.failure);
+        if (Result.isFailure(result)) return onError(result.failure);
         const out = buildXaiImagesApiResponse(result.success.payload, responseFormat, nowSeconds);
 
         if (out instanceof ExecutionError) return onError(out);
@@ -322,7 +328,7 @@ const handle = (edits: boolean) =>
     const request = yield* HttpServerRequest.HttpServerRequest;
     const configResult = yield* Effect.result(currentConfig);
 
-    if (configResult._tag === "Failure")
+    if (Result.isFailure(configResult))
       return errorResponse("openai", configResult.failure, { passthroughHeaders: false });
     const config = configResult.success;
 
@@ -342,7 +348,7 @@ const handle = (edits: boolean) =>
     if (edits && (contentType.startsWith("multipart/form-data") || contentType === "")) {
       const raw = yield* Effect.result(request.arrayBuffer);
 
-      if (raw._tag === "Failure") return badRequest(raw.failure.message);
+      if (Result.isFailure(raw)) return badRequest(raw.failure.message);
 
       const formResult = yield* Effect.result(
         Effect.tryPromise({
@@ -353,11 +359,9 @@ const handle = (edits: boolean) =>
               body: new Uint8Array(raw.success),
             }).formData();
 
-            formModel = String(form.get("model") ?? "").trim();
+            formModel = formText(form.get("model")).trim();
             formStream = ["1", "t", "true"].includes(
-              String(form.get("stream") ?? "")
-                .trim()
-                .toLowerCase(),
+              formText(form.get("stream")).trim().toLowerCase(),
             );
 
             return await multipartEditToJson(form);
@@ -366,12 +370,12 @@ const handle = (edits: boolean) =>
         }),
       );
 
-      if (formResult._tag === "Failure") return badRequest(formResult.failure);
+      if (Result.isFailure(formResult)) return badRequest(formResult.failure);
       body = formResult.success;
     } else if (!edits || contentType.startsWith("application/json")) {
       const read = yield* Effect.result(readRequestBody(request));
 
-      if (read._tag === "Failure") return badRequest(read.failure.message, read.failure.status);
+      if (Result.isFailure(read)) return badRequest(read.failure.message, read.failure.status);
 
       if (read.success.json === undefined) return badRequest("body must be valid JSON");
       body = read.success.json;
@@ -404,7 +408,7 @@ const handle = (edits: boolean) =>
     if (xai) return yield* handleXai({ edits, body, model, stream, request, config, onError });
 
     // `buildOpenAICompatImagesJSONRequest`: model set, `stream: true` or removed.
-    const payload: JsonObject = { ...(body as JsonObject), model };
+    const payload: JsonObject = { ...(isJsonObject(body) ? body : {}), model };
 
     if (stream) payload["stream"] = true;
     else delete payload["stream"];
@@ -433,7 +437,7 @@ const handle = (edits: boolean) =>
       Effect.gen(function* () {
         const result = yield* Effect.result(executeNonStream(input));
 
-        if (result._tag === "Failure") return onError(result.failure);
+        if (Result.isFailure(result)) return onError(result.failure);
 
         if (!compat)
           return HttpServerResponse.text(result.success.payload, {

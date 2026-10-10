@@ -8,8 +8,8 @@ export const compareStrings = (a: string, b: string): number => {
   const length = Math.min(left.length, right.length);
 
   for (let index = 0; index < length; index += 1) {
-    const x = (left[index] as string).codePointAt(0) as number;
-    const y = (right[index] as string).codePointAt(0) as number;
+    const x = left[index]?.codePointAt(0) ?? 0;
+    const y = right[index]?.codePointAt(0) ?? 0;
 
     if (x !== y) return x < y ? -1 : 1;
   }

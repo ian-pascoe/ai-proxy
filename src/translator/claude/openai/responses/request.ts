@@ -208,6 +208,7 @@ const convertRequest = (
       }
 
       if (exists(get(item, "cache_control")) && systemBlocks.length > startIdx) {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const last = systemBlocks[systemBlocks.length - 1] as JsonObject;
 
         if (!exists(last.cache_control)) attachCacheControl(last, item);
@@ -265,6 +266,7 @@ const convertRequest = (
     pendingToolUseParts.push(toolUse);
   };
 
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const appendReasoning = (reasoningPart: JsonObject | undefined): void => {
     if (reasoningPart === undefined) return;
 
@@ -409,6 +411,7 @@ const convertRequest = (
         }
 
         if (partsJSON.length > 0) {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const last = partsJSON[partsJSON.length - 1] as JsonObject;
 
           if (!exists(last.cache_control)) attachCacheControl(last, item);
@@ -441,6 +444,7 @@ const convertRequest = (
         const namespaceName = str(get(item, "namespace")).trim();
 
         if (namespaceName !== "") name = qualifyResponsesNamespaceToolName(namespaceName, name);
+
         const toolUse: JsonObject = {
           type: "tool_use",
           id: callID,
@@ -455,6 +459,7 @@ const convertRequest = (
 
           if (argsStr !== "") {
             try {
+              // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
               const parsed = JSON.parse(argsStr) as Json;
 
               if (isObj(parsed)) toolUse.input = parsed;
@@ -496,6 +501,7 @@ const convertRequest = (
           tool_use_id: sanitizeClaudeToolId(rawID),
           content: "",
         };
+
         applyToolResultContent(toolResult, output);
         appendParts("user", [toolResult]);
         break;
@@ -584,6 +590,7 @@ const convertRequest = (
 
   const result =
     applyTranslatedSummaryToClaude(out, root, "openai-response", modelName, lookupModelInfo) ?? out;
+
   const refusal = drops.err(result);
 
   if (refusal !== undefined) throw refusal;
@@ -594,6 +601,7 @@ const convertRequest = (
 /** A single plain text block collapses to a string content. */
 const collapseSingleText = (parts: JsonObject[]): Json => {
   if (parts.length === 1) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const part = parts[0] as JsonObject;
 
     if (str(part.type) === "text" && !exists(part.cache_control) && !exists(part.citations))
@@ -624,7 +632,9 @@ const isSystemLevelRole = (role: string): boolean => {
   return normalized === "system" || normalized === "developer";
 };
 
-const parseDataUrl = (url: string): { mediaType: string; data: string } => {
+type ParseDataUrlResult = { mediaType: string; data: string };
+
+const parseDataUrl = (url: string): ParseDataUrlResult => {
   const trimmed = url.slice("data:".length);
   const at = trimmed.indexOf(";base64,");
   let mediaType = "application/octet-stream";
@@ -674,6 +684,7 @@ const systemUnsupportedBlock = (part: Json | undefined): JsonObject | undefined 
 
 const dropUnsupportedAssistantPrefill = (modelName: string, messages: Message[]): Message[] => {
   if (!modelRejectsAssistantPrefill(modelName) || messages.length === 0) return messages;
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const last = messages[messages.length - 1] as Message;
 
   if (str(last.role).trim().toLowerCase() !== "assistant") return messages;
@@ -684,6 +695,7 @@ const dropUnsupportedAssistantPrefill = (modelName: string, messages: Message[])
 const stripTrailingThinkingBlocks = (messages: Message[]): Message[] => {
   if (messages.length === 0) return messages;
   const lastIdx = messages.length - 1;
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const last = messages[lastIdx] as Message;
 
   if (str(last.role).trim().toLowerCase() !== "assistant") return messages;
@@ -702,6 +714,7 @@ const stripTrailingThinkingBlocks = (messages: Message[]): Message[] => {
   if (end === content.length) return messages;
 
   if (end === 0) return messages.slice(0, lastIdx);
+  // SAFETY: only the elements before `end` are kept; the slice of a JsonObject[] list stays JsonObject[].
   const remaining = content.slice(0, end) as JsonObject[];
   messages[lastIdx] = { ...last, content: collapseSingleText(remaining) };
 
@@ -780,6 +793,7 @@ const reasoningPartsText = (parts: Json | undefined): string => {
   return out;
 };
 
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const thinkingSeparatorForToolUse = (parts: JsonObject[]): JsonObject | undefined => {
   if (parts.length === 0) return undefined;
 
@@ -817,6 +831,7 @@ const applyToolResultContent = (toolResult: JsonObject, output: Json | undefined
     }
 
     if (partsJSON.length === 1 && !hasImage && !hasFile) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const textPart = partsJSON[0] as JsonObject;
 
       if (textPart.type === "text") {
@@ -939,11 +954,13 @@ const functionToolToClaude = (tool: Json, overrideName: string): JsonObject | un
   if (name === "") name = sanitizeClaudeFunctionName(responsesToolName(tool));
 
   if (name === "") return undefined;
+
   const out: JsonObject = {
     name,
     description: "",
     input_schema: { type: "object", properties: {} },
   };
+
   const description = toolDescription(tool);
 
   if (description !== "") out.description = description;
@@ -1021,6 +1038,7 @@ const repairToolPairing = (messages: Message[]): Message[] => {
   const out: Message[] = [];
 
   for (let i = 0; i < messages.length; i++) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     let msg = messages[i] as Message;
     const role = str(msg.role);
 
@@ -1168,9 +1186,9 @@ const normalizeCodexAgentMessages = (root: Json): Json => {
   if (!isArr(input) || !isObj(root)) return root;
 
   if (!input.some((item) => str(get(item, "type")).trim() === "agent_message")) return root;
-  const updated = structuredClone(root) as JsonObject;
+  const updated = structuredClone(root);
 
-  for (const item of updated.input as Json[]) {
+  for (const item of isArr(updated.input) ? updated.input : []) {
     if (!isObj(item) || str(item.type).trim() !== "agent_message") continue;
 
     if (isArr(item.content)) {

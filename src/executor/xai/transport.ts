@@ -44,6 +44,7 @@ export const sendUpstream = Effect.fnUntraced(function* (
   request: UpstreamRequest,
 ) {
   const client = yield* HttpClient.HttpClient;
+
   const base =
     request.method === "GET"
       ? HttpClientRequest.get(request.url)
@@ -68,11 +69,13 @@ export const sendUpstream = Effect.fnUntraced(function* (
 
   if (response.status < 200 || response.status >= 300) {
     const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+
     const error = request.classify(
       response.status,
       text,
       headersRecord(new Headers(response.headers)),
     );
+
     context.usage.fail(error.status, error.message);
 
     return yield* error;

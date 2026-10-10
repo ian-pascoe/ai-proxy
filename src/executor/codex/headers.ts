@@ -22,9 +22,7 @@ export const CODEX_DEFAULT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 const ROUTING_HINT_HEADER = "x-codex-routing-hint";
 
 /** `codexCreds`: API key (or OAuth access token) and the configured base URL. */
-export const codexCreds = (
-  credential: CredentialSnapshot,
-): { readonly apiKey: string; readonly baseURL: string } => {
+export const codexCreds = (credential: CredentialSnapshot) => {
   let apiKey = credential.attributes["api_key"] ?? "";
 
   if (apiKey === "") {
@@ -51,6 +49,7 @@ export const codexBaseUrl = (credential: CredentialSnapshot): string => {
 export const isCodexResponsesLiteRequest = (body: Json | undefined, headers: Headers): boolean => {
   if ((headers.get("x-openai-internal-codex-responses-lite") ?? "").trim().toLowerCase() === "true")
     return true;
+
   const value = get(
     body,
     "client_metadata.ws_request_header_x_openai_internal_codex_responses_lite",
@@ -111,11 +110,12 @@ export interface CodexHeaderInput {
 }
 
 /** `applyCodexHeadersFromSources` + routing hint + model overrides. Names are lower case. */
-export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, string> => {
+export const buildCodexHeaders = (input: CodexHeaderInput) => {
   const { credential, config, clientHeaders } = input;
   const { apiKey } = codexCreds(credential);
   const isApiKey = codexUsesApiKey(credential);
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {};
+  headers["content-type"] = "application/json";
 
   if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`;
 
@@ -146,8 +146,10 @@ export const buildCodexHeaders = (input: CodexHeaderInput): Record<string, strin
   const configUserAgent = isApiKey
     ? ""
     : config.oauth.providers.codex["header-defaults"]["user-agent"].trim();
+
   const clientUserAgent =
     input.omitClientUserAgent === true ? "" : clientHeader(clientHeaders, "user-agent");
+
   headers["user-agent"] =
     configUserAgent !== ""
       ? configUserAgent
@@ -253,9 +255,7 @@ const SESSION_HEADERS = ["session-id", "session_id"];
  * `applyCodexWebsocketHeaders` + routing hint + model overrides (Go `codex_websockets_request.go`). Names are lower
  * case. The handshake carries no `Content-Type`/`Accept`; the beta header selects the Responses WebSocket protocol.
  */
-export const buildCodexWebsocketHeaders = (
-  input: CodexWebsocketHeaderInput,
-): Record<string, string> => {
+export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => {
   const { credential, config, clientHeaders } = input;
   const { apiKey } = codexCreds(credential);
   const isApiKey = codexUsesApiKey(credential);

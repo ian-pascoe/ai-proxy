@@ -325,10 +325,12 @@ const appendFunctionCallBufferedArguments = (
     return "";
 
   if (call.emittedArgumentsLength >= call.argumentsText.length) return "";
+
   const out = appendFunctionCallArgumentDelta(
     call.argumentsText.slice(call.emittedArgumentsLength),
     call.blockIndex,
   );
+
   call.emittedArgumentsLength = call.argumentsText.length;
 
   return out;
@@ -357,6 +359,7 @@ const appendFunctionCallQueue = (
       if (at >= 0) p.functionCallQueue.splice(at, 1);
     }
 
+    // SAFETY: the first loop condition checks the queue is non-empty, so index 0 exists.
     while (
       p.functionCallQueue.length > 0 &&
       (p.functionCallQueue[0] as CodexFunctionCallStream).closed
@@ -768,6 +771,7 @@ export const convertCodexResponseToClaude = (
   line: string,
 ): ReadonlyArray<string> => {
   if (context.state.value === undefined) context.state.value = newParams();
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a ConvertCodexResponseToClaudeParams before this read.
   const p = context.state.value as ConvertCodexResponseToClaudeParams;
 
   if (!line.startsWith("data:")) return [];
@@ -1043,9 +1047,11 @@ export const convertCodexResponseToClaudeNonStream = (
 
   out = set(out, "id", asString(get(responseData, "id")));
   out = set(out, "model", asString(get(responseData, "model")));
+
   const [inputTokens, outputTokens, cachedTokens, cacheWriteTokens] = extractResponsesUsage(
     get(responseData, "usage"),
   );
+
   out = set(out, "usage.input_tokens", inputTokens);
   out = set(out, "usage.output_tokens", outputTokens);
 

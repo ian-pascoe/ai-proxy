@@ -8,21 +8,21 @@ const MAX_SUMMARY_CHARS = 300;
 export const redactUrls = (text: string): string =>
   text.replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/gi, "$1?…");
 
-const describe = (value: unknown): string => {
-  if (value instanceof Error) {
-    const tag = (value as { readonly _tag?: unknown })._tag;
+const describe = (cause: unknown): string => {
+  if (cause instanceof Error) {
+    const tag: unknown = "_tag" in cause ? cause._tag : undefined;
 
-    return `${typeof tag === "string" ? tag : value.name}: ${value.message}`;
+    return `${typeof tag === "string" ? tag : cause.name}: ${cause.message}`;
   }
 
-  if (typeof value === "object" && value !== null) {
-    const tag = (value as { readonly _tag?: unknown })._tag;
-    const message = (value as { readonly message?: unknown }).message;
+  if (typeof cause === "object" && cause !== null) {
+    const tag: unknown = "_tag" in cause ? cause._tag : undefined;
+    const message: unknown = "message" in cause ? cause.message : undefined;
 
     if (typeof tag === "string") return typeof message === "string" ? `${tag}: ${message}` : tag;
   }
 
-  return String(value);
+  return String(cause);
 };
 
 /** One line for logs: the error tag and message (no stack), URLs without query, at most 300 characters. */

@@ -82,7 +82,7 @@ export const defaultDeviceProfile = (config: Config): DeviceProfile => {
 export const cachedSessionId = (apiKey: string): string => {
   const hex = createHash("sha256").update(`cpa-claude-session|${apiKey}`).digest("hex");
 
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${"89ab"[Number.parseInt(hex[16] as string, 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${"89ab"[Number.parseInt(hex.charAt(16), 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
 
 export interface HeaderInput {
@@ -142,9 +142,10 @@ const copyCallerFingerprintHeaders = (
 };
 
 /** Builds the headers for a Messages / count_tokens request. */
-export const buildClaudeHeaders = (input: HeaderInput): Record<string, string> => {
+export const buildClaudeHeaders = (input: HeaderInput) => {
   const { config, credential, apiKey, body, incoming, confirmedClaudeCode, countTokens, stream } =
     input;
+
   const headers: Record<string, string> = {};
   const isAnthropicBase = isAnthropicUpstreamURL(input.url);
   const useAPIKey = !claudeCredentialUsesOAuth(credential, apiKey);

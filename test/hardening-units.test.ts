@@ -1,6 +1,6 @@
 // Small hardening helpers: config keys that do nothing on Workers, log-safe cause summaries, shared hashing.
 import { createHash } from "node:crypto";
-import { Cause } from "effect";
+import { Cause, Data } from "effect";
 import { describe, expect, it } from "vitest";
 import { notAppliedSettings } from "../src/config/not-applied.ts";
 import { ConfigStore } from "../src/config/store.ts";
@@ -8,6 +8,8 @@ import { sha256Hex } from "../src/hash.ts";
 import { causeSummary, redactUrls } from "../src/observability/cause.ts";
 import { sha256Hex as oauthSha256Hex } from "../src/oauth/encoding.ts";
 import { loadConfig } from "./support/pipeline.ts";
+
+class CatalogError extends Data.TaggedError("CatalogError")<{ readonly message: string }> {}
 
 const GO_CONFIG = `
 access:
@@ -69,11 +71,12 @@ describe("causeSummary", () => {
     const error = new Error(
       "GET https://cloudcode-pa.googleapis.com/v1:fetch?key=SECRET&alt=json failed",
     );
+
     const summary = causeSummary(Cause.fail(error));
     expect(summary).toBe("Error: GET https://cloudcode-pa.googleapis.com/v1:fetch?… failed");
     expect(summary).not.toContain("SECRET");
     expect(summary).not.toContain("at ");
-    expect(causeSummary(Cause.fail({ _tag: "CatalogError", message: "bad" }))).toBe(
+    expect(causeSummary(Cause.fail(new CatalogError({ message: "bad" })))).toBe(
       "CatalogError: bad",
     );
     expect(causeSummary(Cause.interrupt())).toBe("interrupted");

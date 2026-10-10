@@ -357,6 +357,7 @@ export const convertGeminiRequestToOpenAI = (
                 if (i >= 0) queue.splice(i, 1);
               }
             } else if (queue !== undefined && queue.length > 0) {
+              // SAFETY: the branch condition checked queue.length > 0, so shift() returns an id.
               toolMsg.tool_call_id = queue.shift() as string;
             } else {
               toolMsg.tool_call_id = deterministicToolCallId(
@@ -404,6 +405,7 @@ export const convertGeminiRequestToOpenAI = (
           name: getStr(funcDecl, "name"),
           description: getStr(funcDecl, "description"),
         };
+
         const parameters = get(funcDecl, "parameters") ?? get(funcDecl, "parametersJsonSchema");
 
         if (parameters !== undefined) fn.parameters = cloneJson(parameters);

@@ -10,7 +10,7 @@
  * served by a non-Claude upstream: the first `message_start` without a non-zero `input_tokens` gets the estimate of
  * the client's original request, so every executor behaves like Go's `TranslateStreamWithClaudeInputTokens`.
  */
-import { asInt, get, type Json, type JsonObject, set } from "../json/index.ts";
+import { asInt, get, type Json, type JsonObject, set, tryParseJson } from "../json/index.ts";
 import { isArr, isObj, str } from "../translator/common/gjson.ts";
 import { getCodec } from "./encodings.ts";
 import { goTrimSpace } from "./text.ts";
@@ -170,7 +170,12 @@ const isSpaceOrTab = (ch: string | undefined): boolean => ch === " " || ch === "
  * `applyChunk`: patches the first `data:` line carrying a `message_start` event. Returns `found` once such an event
  * was seen (patched or deliberately left alone) so later chunks are not inspected.
  */
-const patchChunk = (chunk: string, estimate: () => number): { chunk: string; found: boolean } => {
+interface PatchedChunk {
+  readonly chunk: string;
+  readonly found: boolean;
+}
+
+const patchChunk = (chunk: string, estimate: () => number): PatchedChunk => {
   for (let lineStart = 0; lineStart < chunk.length;) {
     let lineEnd = chunk.indexOf("\n", lineStart);
 
@@ -191,13 +196,7 @@ const patchChunk = (chunk: string, estimate: () => number): { chunk: string; fou
 
       while (payloadEnd > payloadOffset && isSpaceOrTab(line[payloadEnd - 1])) payloadEnd--;
       const payload = line.slice(payloadOffset, payloadEnd);
-      let event: Json | undefined;
-
-      try {
-        event = JSON.parse(payload) as Json;
-      } catch {
-        event = undefined;
-      }
+      const event = tryParseJson(payload);
 
       if (str(get(event, "type")) === "message_start") {
         const existing = get(event, "message.usage.input_tokens");
@@ -206,7 +205,7 @@ const patchChunk = (chunk: string, estimate: () => number): { chunk: string; fou
         const count = estimate();
 
         if (count === 0) return { chunk, found: true };
-        const updated = JSON.stringify(set(event as Json, "message.usage.input_tokens", count));
+        const updated = JSON.stringify(set(event, "message.usage.input_tokens", count));
 
         return {
           chunk:
@@ -247,8 +246,8 @@ export const applyClaudeInputTokens = (
 
   const out = [...chunks];
 
-  for (let i = 0; i < out.length; i++) {
-    const result = patchChunk(out[i] as string, estimate);
+  for (const [i, original] of chunks.entries()) {
+    const result = patchChunk(original, estimate);
 
     if (!result.found) continue;
     state.claudeInputTokensHandled = true;

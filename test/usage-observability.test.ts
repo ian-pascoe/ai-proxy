@@ -45,10 +45,7 @@ const capture = Logger.layer([
     logs.push({
       level: options.logLevel,
       message: options.message,
-      annotations: { ...options.fiber.getRef(References.CurrentLogAnnotations) } as Record<
-        string,
-        unknown
-      >,
+      annotations: { ...options.fiber.getRef(References.CurrentLogAnnotations) },
     });
   }),
 ]);
@@ -111,10 +108,12 @@ describe("X-CPA-TRACE-ID", () => {
 
   it("falls back to the bare request id when no credential was selected, and skips health probes", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION));
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ ...chat, model: "no-such-model" }),
     );
+
     expect(response.status).toBeGreaterThanOrEqual(400);
     expect(response.headers.get("x-cpa-trace-id")).toMatch(/^[0-9a-f-]{36}$/);
     expect(p.records).toHaveLength(0);
@@ -148,9 +147,11 @@ describe("structured request log", () => {
     );
 
     expect(response.status).toBe(200);
+
     const lines = logs.filter(
       (line) => Array.isArray(line.message) && line.message[0] === "request",
     );
+
     expect(lines).toHaveLength(1);
     const line = lines[0]!;
     expect(line.level).toBe("Info");
@@ -184,9 +185,11 @@ describe("structured request log", () => {
     logs.length = 0;
     const response = await p.call("/v1/chat/completions", postJson(chat));
     expect(response.status).toBe(503);
+
     const line = logs.find(
       (entry) => Array.isArray(entry.message) && entry.message[0] === "request",
     );
+
     expect(line).toMatchObject({ level: "Error", annotations: { status: 503 } });
     expect(p.records.length).toBeGreaterThanOrEqual(1);
     expect(p.records.every((record) => record.failed && record.fail?.statusCode === 503)).toBe(

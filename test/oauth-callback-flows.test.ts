@@ -3,7 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import { asString, type JsonObject } from "../src/json/index.ts";
 import { CALLBACK_WINDOW_MS } from "../src/oauth/service.ts";
 import { SESSION_TTL_MS } from "../src/oauth/session-store.ts";
 import {
@@ -85,7 +85,7 @@ describe("claude login", () => {
       expect(started.state).toMatch(/^[0-9a-f]{32}$/);
 
       const session = h.table.get(started.state);
-      const verifier = String(session?.data.code_verifier);
+      const verifier = asString(session?.data.code_verifier);
       expect(verifier).toHaveLength(128);
       expect(parts.code_challenge).toBe(yield* Effect.promise(() => s256(verifier)));
       // The verifier is never part of the response.
@@ -99,7 +99,7 @@ describe("claude login", () => {
       yield* startClock;
       const h = makeOAuth(claudeUpstream());
       const started = yield* begin(h, "claude");
-      const verifier = String(h.table.get(started.state)?.data.code_verifier);
+      const verifier = asString(h.table.get(started.state)?.data.code_verifier);
 
       const result = yield* h.run(
         h.service.callback({
@@ -210,6 +210,7 @@ describe("claude login", () => {
     () =>
       Effect.gen(function* () {
         yield* startClock;
+
         const base = {
           type: "claude",
           email: "me@x.com",
@@ -217,6 +218,7 @@ describe("claude login", () => {
           access_token: "old",
           priority: 9,
         };
+
         const predecessor = makeOAuth(claudeUpstream(), { "claude-a586ca04-me@x.com.json": base });
         const first = yield* begin(predecessor, "claude");
         yield* predecessor.run(
@@ -278,9 +280,11 @@ describe("claude login", () => {
       );
 
       const started = yield* begin(h, "claude");
+
       const result = yield* h.run(
         h.service.callback({ state: started.state, code: "bad-code", error: "" }),
       );
+
       // Like Go: the callback is accepted, the failure shows in the status.
       assert.deepStrictEqual(result, { ok: true, outcome: "failed" });
       const status = yield* statusOf(h, started.state);
@@ -289,10 +293,12 @@ describe("claude login", () => {
         error: "Failed to exchange authorization code for tokens",
       });
       expect(h.files.size).toBe(0);
+
       // The session stays failed: a retry of the same state is a conflict.
       const retry = yield* h.run(
         h.service.callback({ state: started.state, code: "c", error: "" }),
       );
+
       assert.deepStrictEqual(retry, {
         ok: false,
         status: 409,
@@ -449,10 +455,12 @@ describe("claude login", () => {
       });
 
       const started = yield* begin(h, "claude");
-      cancelNow = () => void h.table.delete(started.state);
+      cancelNow = () => h.table.delete(started.state);
+
       const result = yield* h.run(
         h.service.callback({ state: started.state, code: "c", error: "" }),
       );
+
       assert.deepStrictEqual(result, { ok: true, outcome: "cancelled" });
       expect(h.files.size).toBe(0);
     }),
@@ -529,7 +537,7 @@ describe("codex login", () => {
         scope: "openid email profile offline_access",
         prompt: "login",
       });
-      const verifier = String(h.table.get(started.state)?.data.code_verifier);
+      const verifier = asString(h.table.get(started.state)?.data.code_verifier);
       expect(parts.code_challenge).toBe(yield* Effect.promise(() => s256(verifier)));
 
       yield* h.run(
@@ -599,6 +607,7 @@ describe("antigravity login", () => {
   const USERINFO = "GET https://www.googleapis.com/oauth2/v2/userinfo?alt=json";
   const LOAD = "POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
   const ONBOARD = "POST https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser";
+
   const tokens = {
     body: {
       access_token: "ya29.at",
@@ -720,9 +729,11 @@ describe("antigravity login", () => {
         );
 
         const started = yield* begin(h, "antigravity");
+
         const fiber = yield* Effect.forkChild(
           h.run(h.service.callback({ state: started.state, code: "c", error: "" })),
         );
+
         yield* TestClock.adjust("2 seconds");
         assert.deepStrictEqual(yield* Fiber.join(fiber), { ok: true, outcome: "completed" });
         expect(onboardCalls).toBe(2);
@@ -785,6 +796,7 @@ describe("antigravity login", () => {
 describe("devin login", () => {
   const TOKEN = "POST https://api.devin.ai/auth/cli/token";
   const SELF = "GET https://api.devin.ai/v3/self";
+
   const STATUS =
     "POST https://server.codeium.com/exa.seat_management_pb.SeatManagementService/GetUserStatus";
 
@@ -814,7 +826,7 @@ describe("devin login", () => {
           code_challenge_method: "S256",
           state: started.state,
         });
-        const verifier = String(h.table.get(started.state)?.data.code_verifier);
+        const verifier = asString(h.table.get(started.state)?.data.code_verifier);
         expect(parts.code_challenge).toBe(yield* Effect.promise(() => s256(verifier)));
 
         yield* h.run(
@@ -843,9 +855,11 @@ describe("devin login", () => {
   it.effect("hides exchange failures and maps a denied authorization", () =>
     Effect.gen(function* () {
       yield* startClock;
+
       const h = makeOAuth(
         routes({ [TOKEN]: { status: 400, body: { error: "bad code leak-me" } } }),
       );
+
       const started = yield* begin(h, "devin");
       yield* h.run(h.service.callback({ state: started.state, code: "c", error: "" }));
       assert.deepStrictEqual(yield* statusOf(h, started.state), {

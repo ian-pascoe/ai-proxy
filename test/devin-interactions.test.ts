@@ -7,8 +7,9 @@ import {
   parseSignatureBytes,
 } from "../src/executor/devin/interactions.ts";
 import { json } from "./support/executor-run.ts";
+import type { Json } from "../src/json/index.ts";
 
-const parse = (payload: unknown, original?: unknown) =>
+const parse = (payload: Json, original?: Json) =>
   parseInteractionsPayload(json(payload), original === undefined ? undefined : json(original));
 
 const text = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);

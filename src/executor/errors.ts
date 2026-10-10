@@ -45,14 +45,8 @@ export const notImplemented = (message: string): ExecutionError =>
   new ExecutionError({ status: 501, message, requestScoped: true });
 
 /** Plain record of response headers (lower-case names). */
-export const headersRecord = (headers: Headers): Record<string, string> => {
-  const out: Record<string, string> = {};
-  headers.forEach((value, name) => {
-    out[name] = value;
-  });
-
-  return out;
-};
+export const headersRecord = (headers: Headers): Record<string, string> =>
+  Object.fromEntries(headers.entries());
 
 /** Copy of `error` with some fields replaced (an `Error` subclass does not survive object spread). */
 export const withErrorFields = (

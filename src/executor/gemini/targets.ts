@@ -6,6 +6,7 @@
  * vertexBaseURL, vertexInteractionsURL, isNativeVertexInteractionsAuth, shouldExecuteVertexInteractions).
  */
 import { Effect } from "effect";
+import type { JsonObject } from "../../json/index.ts";
 import { Formats } from "../../translator/formats.ts";
 import { ExecutionError } from "../errors.ts";
 
@@ -96,19 +97,21 @@ export const isNativeVertexInteractions = (context: ExecutionContext): boolean =
   return metadata["interactions"] === true || metadata["native_interactions"] === true;
 };
 
-const accessTokenOf = (metadata: Readonly<Record<string, unknown>>): string =>
-  metadataString(metadata, "access_token");
+const accessTokenOf = (metadata: JsonObject): string => metadataString(metadata, "access_token");
 
-const metadataString = (metadata: Readonly<Record<string, unknown>>, key: string): string => {
+const metadataString = (metadata: JsonObject, key: string): string => {
   const value = metadata[key];
 
   return typeof value === "string" ? value.trim() : "";
 };
 
+interface VertexApiCreds {
+  readonly apiKey: string;
+  readonly baseUrl: string;
+}
+
 /** `vertexAPICreds`: the `api_key` attribute, else an access token stored on an API-key style credential. */
-const vertexApiKey = (
-  context: ExecutionContext,
-): { readonly apiKey: string; readonly baseUrl: string } => {
+const vertexApiKey = (context: ExecutionContext): VertexApiCreds => {
   const { attributes, metadata } = context.credential;
   let apiKey = attributes["api_key"] ?? "";
 

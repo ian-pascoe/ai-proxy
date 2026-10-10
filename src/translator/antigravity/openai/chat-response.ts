@@ -66,13 +66,14 @@ const paramsOf = (context: ResponseContext): Params => {
     context.state.value = fresh;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   return context.state.value as Params;
 };
 
+type ResolveFinishReasonResult = { finishReason: string; nativeFinishReason: string };
+
 /** `resolveOpenAIFinishReason`. */
-const resolveFinishReason = (
-  params: Params,
-): { finishReason: string; nativeFinishReason: string } => {
+const resolveFinishReason = (params: Params): ResolveFinishReasonResult => {
   let finishReason = "stop";
 
   if (params.sawToolCall) finishReason = "tool_calls";
@@ -116,6 +117,7 @@ export const convertAntigravityResponseToOpenAI = (
     if (params.responseId !== "") template["id"] = params.responseId;
 
     if (params.pendingUsageMetadata !== undefined) setUsage(template, params.pendingUsageMetadata);
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const choice = (template["choices"] as JsonObject[])[0] as JsonObject;
     choice["finish_reason"] = finishReason;
     choice["native_finish_reason"] = nativeFinishReason;
@@ -133,6 +135,7 @@ export const convertAntigravityResponseToOpenAI = (
     reasoning_content: null,
     tool_calls: null,
   };
+
   const choice: JsonObject = { index: 0, delta, finish_reason: null, native_finish_reason: null };
 
   const template: JsonObject = {
@@ -191,8 +194,10 @@ export const convertAntigravityResponseToOpenAI = (
       const functionCall = get(part, "functionCall");
       const thoughtSignature = get(part, "thoughtSignature") ?? get(part, "thought_signature");
       const inlineData = get(part, "inlineData") ?? get(part, "inline_data");
+
       const hasThoughtSignature =
         thoughtSignature !== undefined && asString(thoughtSignature) !== "";
+
       const hasContentPayload =
         text !== undefined || functionCall !== undefined || inlineData !== undefined;
 
@@ -211,6 +216,7 @@ export const convertAntigravityResponseToOpenAI = (
 
         if (isJsonArray(existing)) index = existing.length;
         else delta["tool_calls"] = [];
+
         const name = restoreSanitizedToolName(
           params.sanitizedNameMap,
           asString(get(functionCall, "name")),
@@ -225,8 +231,11 @@ export const convertAntigravityResponseToOpenAI = (
 
         const args = get(functionCall, "args");
 
-        if (args !== undefined) (call["function"] as JsonObject)["arguments"] = asString(args);
+        if (args !== undefined)
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+          (call["function"] as JsonObject)["arguments"] = asString(args);
         delta["role"] = "assistant";
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         (delta["tool_calls"] as Json[]).push(call);
       } else if (inlineData !== undefined) {
         const data = asString(get(inlineData, "data"));
@@ -239,7 +248,7 @@ export const convertAntigravityResponseToOpenAI = (
         if (mimeType === "") mimeType = "image/png";
 
         if (!isJsonArray(delta["images"])) delta["images"] = [];
-        const images = delta["images"] as Json[];
+        const images = delta["images"];
         delta["role"] = "assistant";
         images.push({
           type: "image_url",

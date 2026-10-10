@@ -97,7 +97,7 @@ const logFields = (
   path: string,
   status: number,
   latencyMs: number,
-): Record<string, unknown> => ({
+) => ({
   requestId: trace.requestId,
   method,
   path,
@@ -110,7 +110,10 @@ const logFields = (
   ...(trace.attempts === 0 ? {} : { attempts: trace.attempts }),
 });
 
-const logRequest = (fields: Record<string, unknown>, status: number) => {
+const logRequest = (
+  fields: ReturnType<typeof logFields> & { readonly failed?: boolean },
+  status: number,
+) => {
   const log = status >= 500 ? Effect.logError : status >= 400 ? Effect.logWarning : Effect.logInfo;
 
   return log("request").pipe(Effect.annotateLogs(fields));

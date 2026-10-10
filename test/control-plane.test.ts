@@ -74,9 +74,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       const stub = controlPlane();
       yield* Effect.promise(async () => await stub.putConfig("routing: { strategy: fill-first }"));
+
       const second = yield* Effect.promise(
         async () => await stub.putConfig('{"routing":{"strategy":"round-robin"}}'),
       );
+
       assert.isTrue(second.ok && second.version === 2);
       const unchanged = yield* Effect.promise(async () => await stub.getConfig(2));
       assert.isTrue(unchanged.unchanged);
@@ -90,9 +92,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       const stub = controlPlane();
       yield* Effect.promise(async () => await stub.putConfig("routing: { strategy: fill-first }"));
+
       const bad = yield* Effect.promise(
         async () => await stub.putConfig("routing: { retry: { request-retry: many } }"),
       );
+
       assert.isFalse(bad.ok);
 
       if (bad.ok) return;
@@ -127,9 +131,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
         async () =>
           await env.CONTROL_PLANE.getByName(name).putConfig("routing: { strategy: fill-first }"),
       );
+
       const snapshot = yield* Effect.promise(
         async () => await env.CONTROL_PLANE.getByName(name).getConfig(),
       );
+
       assert.strictEqual(snapshot.version, 1);
     }),
   );
@@ -159,6 +165,7 @@ interface FakeSource {
 
 const makeFakeSource = Effect.gen(function* () {
   const calls = yield* Ref.make<ReadonlyArray<number | undefined>>([]);
+
   const state = yield* Ref.make({
     version: 1,
     yaml: "routing: { strategy: fill-first }",

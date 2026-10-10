@@ -36,7 +36,7 @@ export const isValidGrokEncryptedContent = (raw: string): boolean => {
   if (splitSignatureProviderPrefix(sig) !== undefined) return false;
 
   // Foreign envelopes can only start with one of the self-describing first characters.
-  if ("CEQRg".includes(sig[0] as string)) {
+  if ("CEQRg".includes(sig.charAt(0))) {
     if (sig.startsWith("gAAAA")) return false;
 
     if (isValidClaudeThinkingSignature(sig, { strict: true })) return false;

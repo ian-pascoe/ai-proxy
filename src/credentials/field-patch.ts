@@ -90,10 +90,10 @@ const patchHeaders = (metadata: JsonObject, value: Json): void => {
     }
   }
 
-  for (const [key, item] of Object.entries(value as Record<string, string>)) {
+  for (const [key, item] of Object.entries(value)) {
     const name = key.trim();
 
-    if (name === "") continue;
+    if (name === "" || typeof item !== "string") continue;
 
     if (item.trim() === "") delete next[name];
     else next[name] = item.trim();

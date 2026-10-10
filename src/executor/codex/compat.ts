@@ -4,7 +4,7 @@
  * Go source: internal/runtime/executor/codex_executor_auth.go (resolveCodexModelIsCompat, resolveCodexKeyConfig),
  * sdk/cliproxy/auth/api_key_model_capabilities.go (CodexAPIKeyModelIsCompat).
  */
-import type { ApiKeyEntry, Config, ModelEntry } from "../../config/schema.ts";
+import type { Config, ModelEntry } from "../../config/schema.ts";
 import { parseSuffix } from "../suffix.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorRequest } from "../types.ts";
@@ -20,7 +20,7 @@ const flatEntries = (config: Config): FlatEntry[] => {
   const out: FlatEntry[] = [];
 
   for (const group of config["api-keys"].codex) {
-    for (const key of group.keys as ReadonlyArray<ApiKeyEntry>) {
+    for (const key of group.keys) {
       out.push({
         apiKey: key["api-key"].trim(),
         baseUrl: (group["base-url"] ?? "").trim(),

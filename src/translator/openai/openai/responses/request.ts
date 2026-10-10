@@ -55,7 +55,12 @@ const collectOpenAIResponsesReasoningContent = (item: Json): string => {
 };
 
 /** `normalizeChatImageDetail`: `ok` is false when the value is not a string. */
-const normalizeChatImageDetail = (detail: Json | undefined): { detail: string; ok: boolean } => {
+interface ChatImageDetail {
+  detail: string;
+  ok: boolean;
+}
+
+const normalizeChatImageDetail = (detail: Json | undefined): ChatImageDetail => {
   if (detail === undefined) return { detail: "", ok: true };
 
   if (typeof detail !== "string") return { detail: "", ok: false };
@@ -199,7 +204,7 @@ const hasChatToolOutputImagePart = (content: Json | undefined): boolean => {
 
 const tryParse = (text: string): Json | undefined => {
   try {
-    return JSON.parse(text) as Json;
+    return JSON.parse(text);
   } catch {
     return undefined;
   }
@@ -219,8 +224,8 @@ const setFunctionCallOutputContent = (toolMessage: JsonObject, output: Json): Js
     }
   }
 
-  if (hasChatToolOutputImagePart(structured)) {
-    const items = (structured as Json[]).map(chatToolOutputContentPart);
+  if (isArr(structured) && hasChatToolOutputImagePart(structured)) {
+    const items = structured.map(chatToolOutputContentPart);
 
     if (items.length > 0) toolMessage.content = items;
 
@@ -327,7 +332,7 @@ const sjsonStringify = (value: string): string => {
 const appendStandaloneResponsesToolOutputAsUser = (
   output: Json | undefined,
   setContent: (message: JsonObject, output: Json) => JsonObject,
-  appendMessage: (message: Json) => void,
+  appendMessage: (message: JsonObject) => void,
 ): void => {
   const userMessage: JsonObject = { role: "user", content: "" };
 
@@ -353,8 +358,8 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
   const toolIndex = new ResponsesToolIndex(root);
   const messages: JsonObject[] = [];
 
-  const appendMessage = (message: Json): void => {
-    messages.push(message as JsonObject);
+  const appendMessage = (message: JsonObject): void => {
+    messages.push(message);
   };
 
   const textFormat = get(root, "text.format");
@@ -413,6 +418,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
 
         if (itemType === "function_call_output" || itemType === "custom_tool_call_output") {
           if (idx < rawInputArray.length && extractResponsesCallID(rawInputArray[idx]) === "") {
+            // SAFETY: itemType was read from `item` and is a *_output type, which only object items carry.
             const copy = structuredClone(item) as JsonObject;
             delete copy.call_id;
             delete copy.tool_call_id;
@@ -481,6 +487,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       let mergedIntoAssistant = false;
 
       if (mergeableAssistantIndex >= 0 && mergeableAssistantIndex === messages.length - 1) {
+        // SAFETY: mergeableAssistantIndex === messages.length - 1 was checked, and it is >= 0.
         const assistantMessage = messages[mergeableAssistantIndex] as JsonObject;
 
         if (
@@ -536,7 +543,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
       mergeableAssistantIndex = -1;
     };
 
-    const appendRegularMessage = (message: Json): number => {
+    const appendRegularMessage = (message: JsonObject): number => {
       appendMessage(message);
 
       return messages.length - 1;

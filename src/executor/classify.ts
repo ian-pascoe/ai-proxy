@@ -7,6 +7,7 @@
  * applyRequestScopedActionToResult). Docs: credentials.md §7, §8.3-8.4. The pure classifiers live in
  * `credentials/cooldown/classify.ts` (shared with the ControlPlane); this module adapts `ExecutionError`.
  */
+import { isJsonArray, isJsonObject, type Json } from "../json/index.ts";
 import type { Config, RequestScopedErrorRule } from "../config/schema.ts";
 import {
   type ClassifiableError,
@@ -21,7 +22,7 @@ import {
   isTransientTransportError,
 } from "../credentials/cooldown/classify.ts";
 import type { ReportResult } from "../credentials/selection/types.ts";
-import type { ExecutionError } from "./errors.ts";
+import { type ExecutionError, headersRecord } from "./errors.ts";
 import type { CredentialSnapshot } from "./picker.ts";
 
 /** Largest error text sent to the ControlPlane (upstream bodies can be huge). */
@@ -74,12 +75,14 @@ const ACTIONS: ReadonlySet<string> = new Set([
   "continue-and-cooldown",
 ]);
 
-const asRules = (value: unknown): RequestScopedErrorRule[] => {
-  if (!Array.isArray(value)) return [];
+const isAction = (action: string): action is RequestScopedAction => ACTIONS.has(action);
 
-  return value.filter(
-    (item): item is RequestScopedErrorRule => typeof item === "object" && item !== null,
-  );
+const metadataRules = (value: Json | undefined): RequestScopedErrorRule[] => {
+  if (!isJsonArray(value)) return [];
+
+  // SAFETY: rules in credential metadata are written by `credentials/synthesize.ts` or the auth file as
+  // `RequestScopedErrorRule` objects; non-object items are dropped by the filter.
+  return value.filter(isJsonObject);
 };
 
 /**
@@ -90,7 +93,7 @@ export const requestScopedRules = (
   config: Config,
   credential: CredentialSnapshot,
 ): RequestScopedErrorRule[] => {
-  const own = asRules(
+  const own = metadataRules(
     credential.metadata["request_scoped_errors"] ?? credential.metadata["request-scoped-errors"],
   );
 
@@ -98,7 +101,9 @@ export const requestScopedRules = (
 
   if (credential.kind !== "oauth") return [];
 
-  return asRules(config.oauth["request-scoped-errors"][credential.provider.trim().toLowerCase()]);
+  return [
+    ...(config.oauth["request-scoped-errors"][credential.provider.trim().toLowerCase()] ?? []),
+  ];
 };
 
 /** `matchRequestScopedErrorAction`: the first rule whose status and body pattern match decides. */
@@ -134,7 +139,7 @@ export const matchRequestScopedAction = (
     if (!matched) continue;
     const action = (rule.action ?? "").trim().toLowerCase();
 
-    if (ACTIONS.has(action)) return action as RequestScopedAction;
+    if (isAction(action)) return action;
   }
 
   return undefined;
@@ -164,15 +169,7 @@ const headerRecord = (
   headers: Headers | Readonly<Record<string, string>> | undefined,
 ): Record<string, string> | undefined => {
   if (headers === undefined) return undefined;
-  const out: Record<string, string> = {};
-
-  if (headers instanceof Headers) {
-    headers.forEach((value, name) => {
-      out[name] = value;
-    });
-  } else {
-    Object.assign(out, headers);
-  }
+  const out = headers instanceof Headers ? headersRecord(headers) : Object.assign({}, headers);
 
   return Object.keys(out).length === 0 ? undefined : out;
 };
@@ -180,7 +177,7 @@ const headerRecord = (
 const withProviderHeaders = (
   provider: string,
   headers: Headers | Readonly<Record<string, string>> | undefined,
-): { headers?: Record<string, string> } => {
+): Pick<ReportResult, "headers"> => {
   if (!SIGNAL_PROVIDERS.has(provider.trim().toLowerCase())) return {};
   const record = headerRecord(headers);
 

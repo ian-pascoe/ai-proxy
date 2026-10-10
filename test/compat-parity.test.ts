@@ -29,6 +29,7 @@ describe("shouldNormalizeToolResults (Go parity)", () => {
         keys: [],
         models: entry.models,
       } as unknown as OpenAICompatGroup;
+
       expect(shouldNormalizeToolResults(group, entry.upstream, entry.requested)).toBe(
         entry.normalize,
       );
@@ -140,7 +141,7 @@ describe("OpenAI-compatible executor parity", () => {
           model: entry.model,
           payload: json({ model: entry.model, messages: [{ role: "user", content: "x" }] }),
         },
-        options({ sourceFormat: entry.from as "openai", metadata }),
+        options({ sourceFormat: entry.from, metadata }),
       );
       // Foreign protocols are translated to chat completions first; the key only depends on the source format.
       expect(get(JSON.parse(h.calls[0]!.text) as Json, "prompt_cache_key")).toBe(entry.key);
@@ -162,11 +163,13 @@ describe("OpenAI-compatible executor parity", () => {
     const h2 = await harness(mockCredential(), completion, YAML);
     await execute(executor, h2, request({}), options());
     expect(get(JSON.parse(h2.calls[0]!.text) as Json, "prompt_cache_key")).toBeUndefined();
+
     const h3 = await harness(
       mockCredential(),
       completion,
       YAML.replace("support-prompt-cache-key: true", ""),
     );
+
     await execute(executor, h3, request({}), withSession);
     expect(get(JSON.parse(h3.calls[0]!.text) as Json, "prompt_cache_key")).toBeUndefined();
   });

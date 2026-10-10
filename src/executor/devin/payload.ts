@@ -15,6 +15,7 @@ import {
   type JsonObject,
   jsonEquals,
   cloneJson,
+  tryParseJson,
 } from "../../json/index.ts";
 import {
   fieldDouble,
@@ -107,7 +108,11 @@ const fromBase64 = (text: string): Uint8Array => {
 const sortedObject = (entries: ReadonlyMap<string, Json>): JsonObject => {
   const out: JsonObject = {};
 
-  for (const key of [...entries.keys()].toSorted()) out[key] = entries.get(key) as Json;
+  for (const key of [...entries.keys()].toSorted()) {
+    const value = entries.get(key);
+
+    if (value !== undefined) out[key] = value;
+  }
 
   return out;
 };
@@ -128,11 +133,7 @@ const decode = (wire: Uint8Array, schema: ReadonlyMap<number, PayloadField>): Js
         const text = fieldText(field);
 
         if (known.jsonValue === true) {
-          try {
-            value = JSON.parse(text) as Json;
-          } catch {
-            value = text;
-          }
+          value = tryParseJson(text) ?? text;
         } else {
           value = text;
         }
@@ -210,6 +211,11 @@ const encode = (
 export const devinPayloadView = (wire: Uint8Array): JsonObject =>
   decode(wire, DEVIN_PAYLOAD_FIELDS);
 
+export interface FinalizedDevinPayload {
+  readonly wire: Uint8Array;
+  readonly view: Json;
+}
+
 /**
  * `FinalizeDevinPayload`: `finalize` receives the view and returns the configured one (mutating in place is fine);
  * an unchanged view keeps the original bytes, otherwise only the business fields are replaced.
@@ -217,9 +223,9 @@ export const devinPayloadView = (wire: Uint8Array): JsonObject =>
 export const finalizeDevinPayload = (
   wire: Uint8Array,
   finalize: (view: JsonObject) => Json,
-): { readonly wire: Uint8Array; readonly view: Json } => {
+): FinalizedDevinPayload => {
   const view = devinPayloadView(wire);
-  const configured = finalize(cloneJson(view) as JsonObject);
+  const configured = finalize(cloneJson(view));
 
   if (jsonEquals(configured, view)) return { wire, view: configured };
   const writer = new ProtoWriter();
@@ -291,5 +297,7 @@ const setPath = (root: JsonObject, path: string, value: Json): void => {
     }
   }
 
-  node[parts[parts.length - 1] as string] = value;
+  const last = parts.at(-1);
+
+  if (last !== undefined) node[last] = value;
 };

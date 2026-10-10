@@ -123,6 +123,7 @@ export const convertGeminiResponseToClaude = (
     } satisfies Params;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const p = state.value as Params;
   let output = "";
 
@@ -246,10 +247,12 @@ export const convertGeminiResponseToClaude = (
 
       if (functionCall !== undefined) {
         p.sawToolCall = true;
+
         const upstreamToolName = restoreSanitizedToolName(
           p.sanitizedNameMap,
           asString(get(functionCall, "name")),
         );
+
         const clientToolName = mapToolName(p.toolNameMap, upstreamToolName);
         const args = get(functionCall, "args");
 
@@ -340,6 +343,7 @@ export const convertGeminiResponseToClaude = (
   if (usage !== undefined) {
     const cachedTokens = asInt(get(usage, "cachedContentTokenCount"));
     const promptTokens = Math.max(0, asInt(get(usage, "promptTokenCount")) - cachedTokens);
+
     let outputTokens =
       asInt(get(usage, "candidatesTokenCount")) + asInt(get(usage, "thoughtsTokenCount"));
 
@@ -385,6 +389,7 @@ export const convertGeminiResponseToClaudeNonStream = (
   const sanitizedNameMap = sanitizedToolNameMap(context.originalRequest);
 
   const cachedTokens = asInt(get(root, "usageMetadata.cachedContentTokenCount"));
+
   const inputTokens = Math.max(
     0,
     asInt(get(root, "usageMetadata.promptTokenCount")) - cachedTokens,
@@ -476,10 +481,12 @@ export const convertGeminiResponseToClaudeNonStream = (
 
         if (partSig !== "") appendCarrierThinkingBlock(partSig);
         hasToolCall = true;
+
         const upstreamToolName = restoreSanitizedToolName(
           sanitizedNameMap,
           asString(get(functionCall, "name")),
         );
+
         const clientToolName = mapToolName(toolNameMap, upstreamToolName);
         toolIdCounter++;
         const args = get(functionCall, "args");

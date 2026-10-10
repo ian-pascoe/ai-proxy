@@ -63,7 +63,8 @@ describe("withApiKeyScope", () => {
 
   it("wraps the providers whose Go executors implement ForAPIKey (not Devin)", async () => {
     const config = await loadConfig(YAML);
-    const usage = (await harness(credential("meta"), () => new Response(""))).usage;
+    const h = await harness(credential("meta"), () => new Response(""));
+    const usage = h.usage;
 
     for (const provider of [
       "codex",
@@ -76,11 +77,13 @@ describe("withApiKeyScope", () => {
     ]) {
       seen.length = 0;
       await Effect.runPromise(
-        withApiKeyScope(provider, probe).execute(
-          { config, usage, credential: credential(provider, { kind: "apikey" }) },
-          { model: "m", payload: {} },
-          {} as never,
-        ) as Effect.Effect<unknown>,
+        withApiKeyScope(provider, probe)
+          .execute(
+            { config, usage, credential: credential(provider, { kind: "apikey" }) },
+            { model: "m", payload: {} },
+            {} as never,
+          )
+          .pipe(Effect.provide(h.layers)),
       );
       expect(seen[0]?.config.oauth.providers.devin["sensitive-words"]).toEqual([]);
     }

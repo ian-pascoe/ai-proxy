@@ -3,7 +3,7 @@
 // fallback, identity helpers and scripted LCP matcher scenarios.
 import { describe, expect, it } from "vitest";
 import { extractSessionInfo } from "../src/handlers/session.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 import { derivedAntigravitySessionId } from "../src/executor/antigravity/derived-session.ts";
 import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts";
 import {
@@ -47,9 +47,11 @@ describe("derived identity and message hash (Go parity)", () => {
     it(`${index}: ${entry.name} [${entry.callerScope || "no scope"}${entry.headers === undefined ? "" : ` ${JSON.stringify(entry.headers)}`}]`, () => {
       const headers = new Headers(entry.headers ?? {});
       const body = parse(entry.body);
+
       const derived = hasExplicitSession(headers, body)
         ? ""
         : deriveId(entry.format, body, entry.callerScope);
+
       expect(derived).toBe(entry.derived);
 
       // Go's ExtractSessionID falls back to the message hash only without an explicit identity.
@@ -112,7 +114,7 @@ describe("LCP matcher scenarios (Go parity)", () => {
 
         const namespace = step.namespace ?? "";
         const auth = step.auth ?? "";
-        let actual: Record<string, unknown> = { ok: true };
+        let actual: JsonObject = { ok: true };
 
         switch (step.op) {
           case "advance":
@@ -178,8 +180,10 @@ describe("LCP matcher scenarios (Go parity)", () => {
             break;
           case "lookup": {
             const found = matcher.match(namespace, prepared, now);
+
             const looked =
               found === undefined ? undefined : matcher.lookupSession(found.sessionId, now);
+
             actual =
               found === undefined
                 ? { ok: false }

@@ -55,7 +55,12 @@ interface AliasResult {
 
 const NO_ALIAS: AliasResult = { upstreamModel: "", forceMapping: false, originalAlias: "" };
 
-const lookupCandidates = (requested: string): { suffix: ModelSuffix; candidates: string[] } => {
+interface LookupCandidates {
+  readonly suffix: ModelSuffix;
+  readonly candidates: string[];
+}
+
+const lookupCandidates = (requested: string): LookupCandidates => {
   const trimmed = requested.trim();
 
   if (trimmed === "") return { suffix: parseModelSuffix(""), candidates: [] };
@@ -197,12 +202,13 @@ export const rotateRoute = (route: ModelRoute, offset: number): ModelRoute => {
   const start = ((offset % size) + size) % size;
 
   if (start === 0) return route;
+
   const upstreamModels = [
     ...route.upstreamModels.slice(start),
     ...route.upstreamModels.slice(0, start),
   ];
 
-  return { ...route, upstreamModel: upstreamModels[0] as string, upstreamModels };
+  return { ...route, upstreamModel: upstreamModels[0] ?? "", upstreamModels };
 };
 
 /**
@@ -232,7 +238,7 @@ export const resolveModelRoute = (
     return {
       requestedModel,
       routeModel,
-      upstreamModel: upstreamModels[0] as string,
+      upstreamModel: upstreamModels[0] ?? "",
       ...fields,
     } satisfies ModelRoute;
   };

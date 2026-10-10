@@ -1,7 +1,7 @@
 // Unit tests for the Claude executor building blocks: xxHash64, CCH signing, betas, cache control, MCP aliases,
 // rate-limit classification, sanitising and cloaking helpers.
 import { describe, expect, it } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject, Json } from "../src/json/index.ts";
 import {
   BETA,
   claudeCodeCLIBetas,
@@ -79,12 +79,14 @@ describe("CCH signing", () => {
   it("ignores model, max_tokens, fallbacks and fallback_credit_token when hashing", () => {
     const a = body();
     ensureBillingCCHPlaceholder(a, "");
+
     const b = {
       ...body(),
       model: "claude-opus-4-6",
       max_tokens: 5,
       fallbacks: [{ model: "x" }],
     } as JsonObject;
+
     ensureBillingCCHPlaceholder(b, "");
     const cchOf = (text: string) => /cch=([0-9a-f]{5});/.exec(text)?.[1];
     expect(cchOf(serializeAndSign(a, true))).toBe(cchOf(serializeAndSign(b, true)));
@@ -368,8 +370,10 @@ describe("MCP tool aliases", () => {
     expect(tools[2]).toEqual({ type: "web_search_20250305", name: "web_search" });
     expect(tools[3]?.name).toBe("mcp__srv__keep");
     expect((body.tool_choice as JsonObject).name).toBe(alias);
+
     const historyContent = ((body.messages as JsonObject[])[0] as JsonObject)
       .content as JsonObject[];
+
     expect((historyContent[0] as JsonObject).name).toBe(alias);
     expect(reverse.get(alias)).toBe("get_weather");
 
@@ -541,8 +545,7 @@ describe("Responses reasoning replay", () => {
       ],
     });
 
-    const blocks = (body: JsonObject): unknown =>
-      (body.messages as JsonObject[])[1]?.content as unknown;
+    const blocks = (body: JsonObject): Json => (body.messages as JsonObject[])[1]?.content as Json;
 
     const native = convertOpenAIResponsesRequestToClaude(
       "claude-sonnet-4-5",
@@ -554,11 +557,13 @@ describe("Responses reasoning replay", () => {
       { type: "thinking", thinking: "why", signature: claudeSignature() },
       { type: "text", text: "a" },
     ]);
+
     const foreign = convertOpenAIResponsesRequestToClaude(
       "claude-sonnet-4-5",
       input("opaque"),
       false,
     ) as JsonObject;
+
     expect(blocks(foreign)).toBe("a");
 
     const compat = convertOpenAIResponsesRequestToClaudeWithCompat(

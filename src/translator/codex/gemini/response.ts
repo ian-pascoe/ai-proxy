@@ -135,6 +135,7 @@ export const convertCodexResponseToGemini = (
     context.state.value = initial;
   }
 
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a GeminiParams before this read.
   const params = context.state.value as GeminiParams;
 
   if (!line.startsWith("data:")) return [];

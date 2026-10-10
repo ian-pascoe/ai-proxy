@@ -4,7 +4,7 @@
  * Go source: internal/runtime/executor/meta_executor.go (`parseMetaRetryAfter`, `isMetaSubscriptionQuota`),
  * meta_executor_execute.go (`wrapMetaUpstreamError`, `metaStreamEventError`, `metaNotFoundCooldown`).
  */
-import { asInt, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asInt, asString, get, type Json, tryParseJson } from "../../json/index.ts";
 import { ExecutionError } from "../errors.ts";
 
 /** `metaNotFoundCooldown`: a 404 without a usable `resets_at` cools the model for five minutes. */
@@ -27,8 +27,8 @@ export const parseMetaRetryAfterMs = (
 /** `isMetaSubscriptionQuota`: a 429 that exhausts the subscription rather than the model. */
 export const isMetaSubscriptionQuota = (status: number, body: Json | undefined): boolean => {
   if (status !== 429 || body === undefined) return false;
-  const message = String(get(body, "error.message") ?? "").toLowerCase();
-  const code = String(get(body, "error.code") ?? "").toLowerCase();
+  const message = asString(get(body, "error.message")).toLowerCase();
+  const code = asString(get(body, "error.code")).toLowerCase();
 
   if (message.includes("subscription quota") || message.includes("quota exhausted")) return true;
 
@@ -75,7 +75,7 @@ export const metaStreamEventError = (
   payload: string,
   nowMs: number,
 ): ExecutionError | undefined => {
-  const type = String(get(event, "type") ?? "");
+  const type = asString(get(event, "type"));
 
   if (type !== "error" && type !== "response.failed") return undefined;
   const code = asInt(get(event, "error.code"));

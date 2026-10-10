@@ -131,8 +131,10 @@ export const buildGeminiFunctionDeclarations = (
 
   for (const descriptor of winning) {
     const mapped = sanitized.get(descriptor.name);
+
     const geminiName =
       mapped !== undefined && mapped !== "" ? mapped : sanitizeFunctionName(descriptor.name);
+
     forwardMap.set(descriptor.name, geminiName);
 
     if (
@@ -246,6 +248,7 @@ export const convertResponsesToolChoiceToGemini = (
       mode = "ANY";
       const trimmed = (path: string): string => asString(get(toolChoice, path)).trim();
       let name = trimmed("name") || trimmed("function.name") || trimmed("custom.name");
+
       const namespace =
         trimmed("namespace") || trimmed("function.namespace") || trimmed("custom.namespace");
 

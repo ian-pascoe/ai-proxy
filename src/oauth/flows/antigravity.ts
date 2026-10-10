@@ -14,7 +14,7 @@ import {
   ANTIGRAVITY_CLIENT_SECRET,
   ANTIGRAVITY_TOKEN_URL,
 } from "../../credentials/refresh/antigravity.ts";
-import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
 import { encodeQuery } from "../encoding.ts";
 import { call, parseJsonObject, rfc3339, seconds, str } from "./http.ts";
 import { type CallbackFlow, type FlowFailure, flowFailure } from "./types.ts";
@@ -86,7 +86,7 @@ const jsonPost = (
   url: string,
   accessToken: string,
   userAgent: string,
-  body: unknown,
+  body: Json,
   extra: Record<string, string> = {},
 ) =>
   HttpClientRequest.post(url).pipe(
@@ -139,6 +139,7 @@ const onboardUser = (
 export const fetchProjectId = (accessToken: string) =>
   Effect.gen(function* () {
     const url = `${ANTIGRAVITY_API_ENDPOINT}/${API_VERSION}:loadCodeAssist`;
+
     const reply = yield* call(
       jsonPost(url, accessToken, SHORT_USER_AGENT, { metadata: { ideType: "ANTIGRAVITY" } }),
     );
@@ -189,10 +190,12 @@ export const antigravityFlow = (): CallbackFlow => ({
       );
 
       const tokenReply = yield* call(exchange, "Failed to exchange token");
+
       const tokens =
         tokenReply.status >= 200 && tokenReply.status < 300
           ? parseJsonObject(tokenReply.text)
           : undefined;
+
       const accessToken = str(tokens?.access_token);
 
       if (tokens === undefined || accessToken === "")

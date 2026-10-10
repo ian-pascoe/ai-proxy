@@ -19,6 +19,7 @@ TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com
 - Tests under `test/` run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code.
 - Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); layers stay free of them.
 - Translators/thinking/payload rules are pure sync functions over parsed JSON; cite the Go source path at the top of each ported module. Payload rules stay the final mutation before upstream requests.
+- Lint (`docs/DEVELOPMENT.md` "Lint and format") must have zero errors; fix findings instead of silencing them. An unavoidable type assertion gets a `// SAFETY: <invariant>` comment before it.
 - Redact tokens/API keys/JWTs in logs (`redactHeaders`); drive time in tests with `TestClock`; justify every `any` with a comment.
 - Document every deliberate behaviour difference from Go in the module header and in `docs/ARCHITECTURE.md`.
 

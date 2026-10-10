@@ -16,6 +16,7 @@ import {
   type UpstreamConnection,
 } from "./support/websocket.ts";
 import { xaiPicker, type XaiPickerLog } from "./support/xai.ts";
+import type { Json } from "../src/json/index.ts";
 
 const created = (id: string, extra: Record<string, unknown> = {}) => ({
   type: "response.created",
@@ -78,6 +79,7 @@ const setup = (
   });
 
   afterAll(p.dispose);
+
   const connect = async () =>
     connectClient(await p.call("/v1/responses", { headers: { upgrade: "websocket" } }));
 
@@ -96,9 +98,7 @@ const frames = (connection: UpstreamConnection | undefined) =>
 
 /** Scripted upstream: `script(frame, index, connection)` answers each frame the proxy writes. */
 const scripted =
-  (
-    script: (frame: Record<string, unknown>, index: number, send: (event: unknown) => void) => void,
-  ) =>
+  (script: (frame: Record<string, unknown>, index: number, send: (event: Json) => void) => void) =>
   (connection: UpstreamConnection): void => {
     void (async () => {
       for (let index = 0; ; index++) {

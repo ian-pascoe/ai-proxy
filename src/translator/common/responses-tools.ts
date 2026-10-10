@@ -197,7 +197,7 @@ export const unwrapResponsesCustomToolInput = (argumentsText: string): string =>
   let parsed: Json;
 
   try {
-    parsed = JSON.parse(trimmed) as Json;
+    parsed = JSON.parse(trimmed);
   } catch {
     return trimmed;
   }

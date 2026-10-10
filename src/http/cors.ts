@@ -1,5 +1,5 @@
 // Port of corsMiddleware (internal/api/server_middleware.go:25-143).
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { classifyPath } from "../access/routes.ts";
 
@@ -48,7 +48,7 @@ export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpSe
           ? HttpServerResponse.empty({ status: 204 })
           : yield* app.pipe(
               Effect.catchTag("HttpServerError", (error) =>
-                error.reason._tag === "RouteNotFound"
+                Predicate.isTagged(error.reason, "RouteNotFound")
                   ? Effect.succeed(notFound)
                   : Effect.fail(error),
               ),

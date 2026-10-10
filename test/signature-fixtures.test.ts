@@ -110,10 +110,7 @@ const reportOf = (report: SignatureSanitizeReport): Report => ({
   reasons: report.decisions.map((decision) => decision.reason),
 });
 
-const runSanitize = (
-  testCase: SanitizeCase,
-  sig: string,
-): { readonly payload: unknown; readonly report: Report } => {
+const runSanitize = (testCase: SanitizeCase, sig: string) => {
   const payload = history(sig);
 
   const empty: Report = {
@@ -300,6 +297,7 @@ describe("signature fixtures (Go internal/signature)", () => {
       // Go appends the wrapped base64 decoder error to its own prefix; only the prefix is portable.
       const stable = (text: string) =>
         text.replace(/base64 decode failed.*$/, "base64 decode failed");
+
       expect(stable(thought ?? ""), `${testCase.name} thought`).toBe(stable(testCase.thought));
       expect(
         validateGeminiFunctionCallPairing(JSON.parse(input)) ?? "",

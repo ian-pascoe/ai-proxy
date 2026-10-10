@@ -206,6 +206,11 @@ export interface BridgeResult {
 const asError = (error: string | Error): Error =>
   typeof error === "string" ? new Error(error) : error;
 
+interface EnvelopedEvent {
+  readonly raw: Json;
+  readonly preceding: Json[];
+}
+
 /** `ApplyPatchResponsesBridge`: handles JSON event payloads without SSE framing; local to one response. */
 export class ApplyPatchResponsesBridge {
   /** `ApplyPatchErrorState`: the retained conversion error. */
@@ -318,6 +323,7 @@ export class ApplyPatchResponsesBridge {
       bad = true;
     const descriptor = this.#descriptor(item);
     const known = descriptor !== undefined;
+
     let incomingPatch =
       known && isApplyPatchCustomTool(descriptor.tool) && str(item, "type") !== "custom_tool_call";
 
@@ -412,7 +418,7 @@ export class ApplyPatchResponsesBridge {
     try {
       this.#resolve(event, item);
     } catch (error) {
-      return asError(error as Error);
+      return asError(error instanceof Error ? error : String(error));
     }
 
     return undefined;
@@ -498,6 +504,7 @@ export class ApplyPatchResponsesBridge {
     if (!r.added) {
       const added: Json =
         item !== undefined ? cloneJson(item) : { type: "function_call", name: "", arguments: "" };
+
       set(added, "name", r.state.name);
 
       if (r.state.itemId !== "") set(added, "id", r.state.itemId);
@@ -638,6 +645,7 @@ export class ApplyPatchResponsesBridge {
       (this.#tools.get(r.qualified)?.namespace ?? "") !== ""
     ) {
       event = cloneJson(raw);
+      // SAFETY: the condition checked get(raw, "item") !== undefined, and `item` holds that value.
       set(event, "item", this.#restoreItem(item as Json, r, "", false));
     }
 
@@ -653,14 +661,16 @@ export class ApplyPatchResponsesBridge {
   }
 
   /** `envelope`: a terminal event or bare response; items are restored and unfinished calls closed. */
-  #envelope(original: Json, stream: boolean): { readonly raw: Json; readonly preceding: Json[] } {
+  #envelope(original: Json, stream: boolean): EnvelopedEvent {
     const raw = cloneJson(original);
     let path = "output";
     let response: Json = original;
 
-    if (get(original, "response") !== undefined) {
+    const innerResponse = get(original, "response");
+
+    if (innerResponse !== undefined) {
       path = "response.output";
-      response = get(original, "response") as Json;
+      response = innerResponse;
     }
 
     const preceding: Json[] = [];
@@ -694,6 +704,7 @@ export class ApplyPatchResponsesBridge {
         output_index: index,
         item: cloneJson(item),
       };
+
       const r = this.#resolve(event, item);
       seen.add(r);
 
@@ -711,7 +722,7 @@ export class ApplyPatchResponsesBridge {
         set(raw, `${path}.${i}`, this.#restoreItem(item, r, "", false));
       }
 
-      items.push(cloneJson(get(raw, `${path}.${i}`) as Json));
+      items.push(cloneJson(get(raw, `${path}.${i}`) ?? null));
     });
 
     for (const r of this.#records) {
@@ -794,7 +805,7 @@ export class ApplyPatchResponsesBridge {
           out = [event];
       }
     } catch (error) {
-      return this.#failure(asError(error as Error));
+      return this.#failure(asError(error instanceof Error ? error : String(error)));
     }
 
     const nativeCustom =
@@ -829,9 +840,10 @@ export class ApplyPatchResponsesBridge {
       return { body: this.#envelope(response, false).raw };
     } catch (error) {
       this.#failed = true;
-      this.setToolInputError(asError(error as Error));
+      const failure = asError(error instanceof Error ? error : String(error));
+      this.setToolInputError(failure);
 
-      return { error: this.#toolInputError as Error };
+      return { error: failure };
     }
   }
 

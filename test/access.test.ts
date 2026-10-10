@@ -14,6 +14,7 @@ import { JWKS_REFRESH_COOLDOWN_MS } from "../src/access/jwks.ts";
 import { callerScope, makeIdentity, principalId } from "../src/access/principal.ts";
 import { classifyPath } from "../src/access/routes.ts";
 import { verifyAccessJwt } from "../src/access/verify.ts";
+import { ConfigStoreError } from "../src/config/errors.ts";
 import { requestContext } from "../src/platform/env.ts";
 import {
   AUD,
@@ -99,6 +100,7 @@ describe("verifyAccessJwt", () => {
         const error = yield* Effect.flip(
           verifyAccessJwt(yield* token(keyA, { audience: "nope" }), config),
         );
+
         assert.strictEqual(error._tag, "UnauthorizedError");
         assert.strictEqual(error.message, "Invalid API key");
       }),
@@ -268,6 +270,7 @@ describe("authenticateRequest", () => {
         const error = yield* Effect.flip(
           authenticateRequest({}, "https://proxy.test/v1/models", "protected"),
         );
+
         assert.strictEqual(error._tag, "UnauthorizedError");
         assert.strictEqual(error.message, "Missing API key");
       }),
@@ -296,6 +299,7 @@ describe("authenticateRequest", () => {
             claims: userClaims("ADMIN@example.com"),
           }),
         };
+
         assert.strictEqual(
           (yield* authenticateRequest(admin, url, "management")).principal.kind,
           "user",
@@ -304,13 +308,16 @@ describe("authenticateRequest", () => {
         const svc = {
           "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("admin.access") }),
         };
+
         assert.strictEqual(
           (yield* authenticateRequest(svc, url, "management")).principalId,
           "service:admin.access",
         );
+
         const other = {
           "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("other.access") }),
         };
+
         assert.strictEqual(
           (yield* Effect.flip(authenticateRequest(other, url, "management")))._tag,
           "ForbiddenError",
@@ -346,6 +353,7 @@ describe("authenticateRequest", () => {
             claims: userClaims("carol@example.com"),
           }),
         };
+
         assert.strictEqual(
           (yield* authenticateRequest(carol, url, "management", extra)).principalId,
           "user:carol@example.com",
@@ -354,21 +362,25 @@ describe("authenticateRequest", () => {
           (yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag,
           "ForbiddenError",
         );
+
         const svc = {
           "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("cfg.access") }),
         };
+
         assert.strictEqual(
           (yield* authenticateRequest(svc, url, "management", extra)).principalId,
           "service:cfg.access",
         );
         // Env admins never need the config (an admin can always repair a broken document).
         reads = 0;
+
         const admin = {
           "cf-access-jwt-assertion": yield* token(keyA, {
             claims: userClaims("admin@example.com"),
           }),
         };
-        const broken = Effect.fail("control plane down");
+
+        const broken = Effect.fail(new ConfigStoreError({ message: "control plane down" }));
         assert.strictEqual(
           (yield* authenticateRequest(admin, url, "management", broken)).principal.kind,
           "user",
@@ -450,11 +462,13 @@ describe("config", () => {
       assert.isTrue(isAdmin(loaded, { kind: "user", email: "ONE@x.com", sub: "" }));
       assert.isFalse(isAdmin(loaded, { kind: "user", email: "three@x.com", sub: "" }));
       assert.isTrue(isAdmin(loaded, { kind: "service", commonName: "t1.access" }));
+
       const short = yield* loadAccessConfig({
         ...base,
         ACCESS_TEAM_DOMAIN: "team",
         ACCESS_AUD: "a",
       });
+
       assert.strictEqual(short.issuer, "https://team.cloudflareaccess.com");
     }),
   );
@@ -464,11 +478,13 @@ describe("config", () => {
       assert.strictEqual((yield* Effect.flip(loadAccessConfig(base)))._tag, "ConfigurationError");
       const noAud = loadAccessConfig({ ...base, ACCESS_TEAM_DOMAIN: "team" });
       assert.strictEqual((yield* Effect.flip(noAud))._tag, "ConfigurationError");
+
       const badHost = loadAccessConfig({
         ...base,
         ACCESS_TEAM_DOMAIN: "evil.com/path?x",
         ACCESS_AUD: "a",
       });
+
       assert.strictEqual((yield* Effect.flip(badHost))._tag, "ConfigurationError");
     }),
   );
@@ -492,14 +508,13 @@ describe("config", () => {
     // Never once Access is configured.
     const configured = { ACCESS_DEV_BYPASS: "true", ACCESS_TEAM_DOMAIN: "team", ACCESS_AUD: "" };
     expect(devBypassEmail(configured, "http://localhost:8787/v1/models")).toBeUndefined();
-    expect(devBypass(configured, "http://localhost:8787/v1/models")).toEqual({ _tag: "Refused" });
-    expect(devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: "aud" }, "http://127.0.0.1/")).toEqual({
-      _tag: "Refused",
-    });
-    expect(devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: " " }, "http://127.0.0.1/")).toEqual({
-      _tag: "Active",
-      email: "dev@localhost",
-    });
+    expect(devBypass(configured, "http://localhost:8787/v1/models")?._tag).toBe("Refused");
+    expect(
+      devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: "aud" }, "http://127.0.0.1/")?._tag,
+    ).toBe("Refused");
+    const active = devBypass({ ACCESS_DEV_BYPASS: "1", ACCESS_AUD: " " }, "http://127.0.0.1/");
+    expect(active?._tag).toBe("Active");
+    expect(active).toMatchObject({ email: "dev@localhost" });
   });
 });
 

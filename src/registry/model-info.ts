@@ -8,7 +8,7 @@
  * Go zero values mean "absent" for every optional field (`omitempty`, `> 0` checks), so consumers test truthiness
  * instead of `=== undefined`.
  */
-import { Schema } from "effect";
+import { Schema, type Types } from "effect";
 
 export interface ThinkingSupport {
   readonly min?: number;
@@ -116,7 +116,7 @@ const put = <T extends object, K extends keyof T>(
 };
 
 export const fromWire = (wire: WireModel): ModelInfo => {
-  const info: { -readonly [K in keyof ModelInfo]: ModelInfo[K] } = {
+  const info: Types.Mutable<ModelInfo> = {
     id: wire.id,
     object: wire.object ?? "",
     created: wire.created ?? 0,
@@ -147,7 +147,7 @@ export const fromWire = (wire: WireModel): ModelInfo => {
   }
 
   if (wire.thinking !== undefined && wire.thinking !== null) {
-    const thinking: { -readonly [K in keyof ThinkingSupport]: ThinkingSupport[K] } = {};
+    const thinking: Types.Mutable<ThinkingSupport> = {};
     put(thinking, "min", wire.thinking.min);
     put(thinking, "max", wire.thinking.max);
     put(thinking, "zeroAllowed", wire.thinking.zero_allowed);

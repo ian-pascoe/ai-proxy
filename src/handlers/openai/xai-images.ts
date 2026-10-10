@@ -236,8 +236,10 @@ export const buildEditRequest = (
 
   const refs = images.filter((image) => image.trim() !== "");
 
-  if (refs.length === 1) {
-    request["image"] = imageRef(refs[0] as string);
+  const [firstRef] = refs;
+
+  if (refs.length === 1 && firstRef !== undefined) {
+    request["image"] = imageRef(firstRef);
   } else if (refs.length > 1) {
     request["images"] = refs.map(imageRef);
   }

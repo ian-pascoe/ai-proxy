@@ -17,6 +17,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import { isValidGrokEncryptedContent } from "../../signature/grok.ts";
 import { hasFunctionToolNamed, qualifyNamespaceToolName } from "./tools.ts";
@@ -74,11 +75,8 @@ const customToolCallArguments = (input: Json | undefined): string => {
   if (typeof input === "string") {
     const text = input.trim();
 
-    try {
-      if (isJsonObject(JSON.parse(text) as Json)) return text;
-    } catch {
-      // Not JSON: wrapped below.
-    }
+    // Not JSON: wrapped below.
+    if (isJsonObject(tryParseJson(text))) return text;
 
     return `{"input":${goMarshal(input)}}`;
   }
@@ -169,11 +167,7 @@ export const normalizeInputNamespaceToolCalls = (body: Json, shouldFold: boolean
       const rawArgs = asString(item["arguments"]);
 
       if (rawArgs !== "") {
-        try {
-          dispatcherArgs["arguments"] = JSON.parse(rawArgs) as Json;
-        } catch {
-          dispatcherArgs["arguments"] = rawArgs;
-        }
+        dispatcherArgs["arguments"] = tryParseJson(rawArgs) ?? rawArgs;
       }
 
       item["name"] = namespaceName;

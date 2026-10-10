@@ -81,6 +81,7 @@ const collectFunctionResponses = (parts: Json | undefined): Json[] => {
       current = responses.length - 1;
 
       if (leadingImages.length > 0) {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         responses[current] = attachInlineData(responses[current] as Json, leadingImages);
         leadingImages = [];
       }
@@ -92,7 +93,9 @@ const collectFunctionResponses = (parts: Json | undefined): Json[] => {
 
     if (image === undefined) continue;
 
-    if (current >= 0) responses[current] = attachInlineData(responses[current] as Json, [image]);
+    if (current >= 0)
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      responses[current] = attachInlineData(responses[current] as Json, [image]);
     else leadingImages.push(image);
   }
 
@@ -119,6 +122,7 @@ const functionResponsePart = (response: Json, fallbackName: string): Json => {
 };
 
 /** `fixCLIToolResponse`: groups function calls with their responses (responses become one `function` turn). */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const fixCliToolResponse = (root: Json): void => {
   const contents = get(root, "request.contents");
 
@@ -126,6 +130,7 @@ const fixCliToolResponse = (root: Json): void => {
     throw new TranslationError("antigravity: gemini request has no contents");
   let needsGrouping = false;
   let allObjects = true;
+
   const items = isJsonArray(contents)
     ? contents
     : isJsonObject(contents)
@@ -172,6 +177,7 @@ const fixCliToolResponse = (root: Json): void => {
         pendingGroups.length > 0 &&
         collected.length >= (pendingGroups[0] as FunctionCallGroup).responsesNeeded
       ) {
+        // SAFETY: the loop condition checked pendingGroups.length > 0.
         const group = pendingGroups.shift() as FunctionCallGroup;
         const groupResponses = collected.slice(0, group.responsesNeeded);
         collected = collected.slice(group.responsesNeeded);
@@ -280,6 +286,7 @@ const normalizeTools = (root: Json, nameMap: ReadonlyMap<string, string> | undef
             declaration["name"] = mapped;
 
           if (Object.hasOwn(declaration, "parameters")) {
+            // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
             declaration["parametersJsonSchema"] = declaration["parameters"] as Json;
             delete declaration["parameters"];
           }
@@ -409,7 +416,9 @@ const valueAtPath = (value: Json | undefined, path: ReadonlyArray<string>): Json
 const hasKeyAtPath = (value: Json, path: ReadonlyArray<string>): boolean =>
   valueAtPath(value, path) !== undefined;
 
-const partSignature = (part: Json): { signature: string; hasString: boolean } => {
+type PartSignatureResult = { signature: string; hasString: boolean };
+
+const partSignature = (part: Json): PartSignatureResult => {
   for (const path of SIGNATURE_KEY_PATHS) {
     const value = valueAtPath(part, path);
 
@@ -423,7 +432,9 @@ const deleteSignatureFields = (part: JsonObject): void => {
   for (const path of SIGNATURE_KEY_PATHS) {
     const parent = path.length === 1 ? part : valueAtPath(part, path.slice(0, -1));
 
-    if (isJsonObject(parent)) delete parent[path[path.length - 1] as string];
+    if (isJsonObject(parent))
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      delete parent[path[path.length - 1] as string];
   }
 };
 

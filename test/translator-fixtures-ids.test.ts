@@ -128,6 +128,7 @@ describe("translator golden fixtures with generated ids", () => {
               context(),
               c.responseBodyText,
             );
+
             expect(out === undefined ? undefined : normalize(out)).toEqual(
               c.nonStreamOutput === undefined ? undefined : normalize(c.nonStreamOutput),
             );

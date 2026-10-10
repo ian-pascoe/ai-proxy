@@ -20,7 +20,7 @@ const encodeSchema = Schema.encodeSync(Config);
  * Validates a raw document (parsed YAML or JSON; v8 or legacy layout) and returns the normalised `Config`.
  * Unknown keys and keys that do not apply on Workers are dropped.
  */
-export const decodeConfig = (raw: unknown): Effect.Effect<Config, ConfigValidationError> =>
+export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationError> =>
   Effect.gen(function* () {
     const prepared = yield* Effect.try({
       try: () => prepareDocument(raw),
@@ -41,7 +41,7 @@ export const decodeConfig = (raw: unknown): Effect.Effect<Config, ConfigValidati
 export const parseConfigYaml = (text: string): Effect.Effect<Config, ConfigValidationError> =>
   Effect.gen(function* () {
     const raw = yield* Effect.try({
-      try: () => (text.trim() === "" ? {} : (parse(text) as unknown)),
+      try: (): Json => (text.trim() === "" ? {} : parse(text)),
       catch: (error) =>
         new ConfigValidationError({
           message: `invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
@@ -86,8 +86,11 @@ export interface YamlExportOptions {
 
 /** Serialises `config` as v8 YAML. */
 export const stringifyConfigYaml = (config: Config, options: YamlExportOptions = {}): string => {
-  const encoded = encodeConfig(config) as unknown as Json;
-  const sparse = omitDefaults(encoded, defaults() as unknown as Json);
+  // SAFETY: the encoded config is a plain JSON document (the schema's encoded side only holds JSON values).
+  const encoded = encodeConfig(config) as Json;
+  // SAFETY: the defaults document is encoded by the same schema, hence also plain JSON.
+  const sparse = omitDefaults(encoded, defaults() as Json);
+
   const document =
     options.includeDefaults === true ? encoded : Object.assign({ "config-version": 8 }, sparse);
 

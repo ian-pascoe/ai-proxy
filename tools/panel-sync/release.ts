@@ -7,9 +7,13 @@
  * downloaded file whose hash differs is never installed. Unlike Go there is no unverified fallback download: an
  * unverifiable panel is an error (pass `allowUnverified` to accept a release without a digest).
  */
+import type { Json, JsonObject } from "../../src/json/index.ts";
+
 export const DEFAULT_REPOSITORY = "router-for-me/Cli-Proxy-API-Management-Center";
 
 export const ASSET_NAME = "management.html";
+
+const USER_AGENT = "CLIProxyAPI-management-updater";
 
 /** Go reads at most 50 MiB. */
 export const MAX_PANEL_BYTES = 50 * 1024 * 1024;
@@ -39,16 +43,20 @@ export const releaseApiUrl = (repository: string, tag?: string): string => {
   let slug: string | undefined;
   const direct = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/.exec(text);
 
-  if (direct !== null) slug = `${direct[1]}/${(direct[2] as string).replace(/\.git$/, "")}`;
-  else {
+  if (direct !== null) {
+    const [, owner, name = ""] = direct;
+    slug = `${owner}/${name.replace(/\.git$/, "")}`;
+  } else {
     try {
       const url = new URL(text);
       const parts = url.pathname.split("/").filter((part) => part !== "");
 
-      if (url.hostname === "github.com" && parts.length >= 2) {
-        slug = `${parts[0]}/${(parts[1] as string).replace(/\.git$/, "")}`;
-      } else if (url.hostname === "api.github.com" && parts[0] === "repos" && parts.length >= 3) {
-        slug = `${parts[1]}/${parts[2]}`;
+      const [first, second, third] = parts;
+
+      if (url.hostname === "github.com" && second !== undefined) {
+        slug = `${first}/${second.replace(/\.git$/, "")}`;
+      } else if (url.hostname === "api.github.com" && first === "repos" && third !== undefined) {
+        slug = `${second}/${third}`;
       }
     } catch {
       // Falls through to the error below.
@@ -63,7 +71,7 @@ export const releaseApiUrl = (repository: string, tag?: string): string => {
 };
 
 export const sha256Hex = async (bytes: Uint8Array): Promise<string> => {
-  const digest = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
 
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
@@ -75,38 +83,33 @@ export interface PanelRelease {
   readonly sha256: string | undefined;
 }
 
-const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+const asRecord = (value: Json | undefined): JsonObject | undefined =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
+
+const asText = (value: Json | undefined): string => (typeof value === "string" ? value : "");
 
 /** Picks the `management.html` asset of a GitHub release document. */
-export const selectPanelAsset = (release: unknown): PanelRelease => {
+export const selectPanelAsset = (release: Json | undefined): PanelRelease => {
   const document = asRecord(release);
   const assets = Array.isArray(document?.assets) ? document.assets : [];
 
   for (const raw of assets) {
     const asset = asRecord(raw);
 
-    if (
-      asset === undefined ||
-      String(asset.name ?? "")
-        .trim()
-        .toLowerCase() !== ASSET_NAME
-    )
-      continue;
-    const downloadUrl = String(asset.browser_download_url ?? "").trim();
+    if (asset === undefined || asText(asset.name).trim().toLowerCase() !== ASSET_NAME) continue;
+    const downloadUrl = asText(asset.browser_download_url).trim();
 
     if (downloadUrl === "") continue;
+
     const digest =
       typeof asset.digest === "string"
         ? /^sha256:([0-9a-f]{64})$/i.exec(asset.digest.trim())
         : null;
 
     return {
-      tag: String(document?.tag_name ?? "").trim(),
+      tag: asText(document?.tag_name).trim(),
       downloadUrl,
-      sha256: digest === null ? undefined : (digest[1] as string).toLowerCase(),
+      sha256: digest?.[1]?.toLowerCase(),
     };
   }
 
@@ -136,16 +139,26 @@ export type FetchPanelResult =
       readonly bytes: Uint8Array;
     };
 
+const readJson = async (response: Response): Promise<Json | undefined> => {
+  try {
+    const parsed: Json = JSON.parse(await response.text());
+
+    return parsed;
+  } catch {
+    return undefined;
+  }
+};
+
 export const fetchPanel = async (options: FetchPanelOptions = {}): Promise<FetchPanelResult> => {
   const doFetch = options.fetch ?? fetch;
 
-  const apiHeaders: Record<string, string> = {
+  const apiHeaders = {
     accept: "application/vnd.github+json",
-    "user-agent": "CLIProxyAPI-management-updater",
+    "user-agent": USER_AGENT,
+    ...(options.token !== undefined && options.token !== ""
+      ? { authorization: `Bearer ${options.token}` }
+      : {}),
   };
-
-  if (options.token !== undefined && options.token !== "")
-    apiHeaders.authorization = `Bearer ${options.token}`;
 
   const releaseResponse = await doFetch(
     releaseApiUrl(options.repository ?? DEFAULT_REPOSITORY, options.tag),
@@ -161,7 +174,7 @@ export const fetchPanel = async (options: FetchPanelOptions = {}): Promise<Fetch
     );
   }
 
-  const release = selectPanelAsset(await releaseResponse.json().catch(() => undefined));
+  const release = selectPanelAsset(await readJson(releaseResponse));
 
   if (release.sha256 === undefined && options.allowUnverified !== true) {
     throw new PanelSyncError(
@@ -177,7 +190,7 @@ export const fetchPanel = async (options: FetchPanelOptions = {}): Promise<Fetch
   const limit = options.maxBytes ?? MAX_PANEL_BYTES;
 
   const download = await doFetch(release.downloadUrl, {
-    headers: { "user-agent": apiHeaders["user-agent"] as string },
+    headers: { "user-agent": USER_AGENT },
   }).catch(() => undefined);
 
   if (download === undefined || !download.ok) {

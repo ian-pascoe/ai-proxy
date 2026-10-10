@@ -1,7 +1,8 @@
 // Codex stream bootstrap buffering (`upstream.codex.stream-bootstrap-buffering` / `-timeout`): reader unit tests with an
 // injected clock, the Go duration parser, and end-to-end failover through the conductor (Go
 // codex_executor_stream_*_test.go scenarios).
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Result, Stream } from "effect";
+import type { Json, JsonObject } from "../src/json/index.ts";
 import type { HttpServerRequest } from "effect/http";
 import { describe, expect, it } from "vitest";
 import { AccessPrincipal } from "../src/access/principal.ts";
@@ -36,7 +37,7 @@ import {
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
 
-const data = (event: object): string => `data: ${JSON.stringify(event)}`;
+const data = (event: Json): string => `data: ${JSON.stringify(event)}`;
 
 const created = data({ type: "response.created", response: { id: "r1", status: "in_progress" } });
 
@@ -199,10 +200,12 @@ describe("bootstrap buffering reader", () => {
 
   it("releases when the byte budget would be exceeded", () => {
     const r = reader();
+
     const big = data({
       type: "response.in_progress",
       response: { id: "x".repeat(BOOTSTRAP_MAX_BUFFERED_BYTES) },
     });
+
     expect(r.push(created).chunks).toEqual([]);
     expect(r.push(big).chunks.join("")).toContain("response.created");
   });
@@ -301,8 +304,9 @@ describe("bootstrap helpers", () => {
   });
 
   it("only buffers events that carry nothing observable", () => {
-    const empty = (type: string, event: object = {}) =>
+    const empty = (type: string, event: JsonObject = {}) =>
       isBootstrapBufferableEvent(type, "{}", { type, ...event });
+
     expect(isBootstrapBufferableEvent("", "  ", undefined)).toBe(true);
     expect(empty("keepalive")).toBe(true);
     expect(empty("codex.rate_limits")).toBe(true);
@@ -408,6 +412,7 @@ describe("bootstrap failover through the conductor", () => {
 
   const bearer = (call: UpstreamCall): string =>
     (call.headers["authorization"] ?? "").replace("Bearer ", "");
+
   const frames = (...lines: string[]): Response => sseResponse(lines.map((line) => `${line}\n\n`));
 
   const servedBy = (call: UpstreamCall) =>
@@ -420,13 +425,16 @@ describe("bootstrap failover through the conductor", () => {
       "upstream:\n  codex:\n    stream-bootstrap-buffering: true\n",
       servedBy,
     );
+
     expect(outcome.result._tag).toBe("Success");
-    const out = outcome.result._tag === "Success" ? outcome.result.success.join("") : "";
+    const out = Result.isSuccess(outcome.result) ? outcome.result.success.join("") : "";
     expect(out).toContain("response.completed");
     // The overloaded stream never reached the client.
     expect(out).not.toContain("server_is_overloaded");
     expect(outcome.calls.map(bearer).toSorted()).toEqual(["tok-a", "tok-b"]);
-    expect(outcome.records.map((record) => record.failed).toSorted()).toEqual([false, true]);
+    expect(
+      outcome.records.map((record) => record.failed).toSorted((a, b) => Number(a) - Number(b)),
+    ).toEqual([false, true]);
   });
 
   it("without buffering the rejection is delivered in-stream (no failover)", async () => {

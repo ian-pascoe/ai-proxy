@@ -10,8 +10,8 @@
  * TTL 1 h) with a per-isolate in-memory fallback.
  */
 import { createHash } from "node:crypto";
-import { Effect, Stream } from "effect";
-import { cloneJson, type Json, type JsonObject, isJsonObject } from "../../json/index.ts";
+import { Effect, Exit, Stream } from "effect";
+import { cloneJson, type Json, isJsonObject } from "../../json/index.ts";
 import { replayScopeFromRequest } from "../codex/replay.ts";
 import {
   makeMemoryReplayStore,
@@ -83,6 +83,7 @@ export const prepareKimiReplay = (
     );
 
     const modelFamily = kimiReplayFamily(request.model);
+
     const empty: ReplayScope = {
       modelFamily,
       sessionKey,
@@ -96,7 +97,7 @@ export const prepareKimiReplay = (
     const base: ReplayScope = { ...empty, snapshot: stored?.snapshot, cacheReady: true };
 
     if (stored === undefined || !isJsonObject(request.payload)) return { request, scope: base };
-    const restored = cloneJson(request.payload) as JsonObject;
+    const restored = cloneJson(request.payload);
     let applied = false;
 
     for (const content of stored.contents)
@@ -149,7 +150,7 @@ export const wrapReplayStream = <E extends ExecutionError>(
       }),
     ),
     Stream.onExit((exit) => {
-      if (exit._tag !== "Success") return Effect.void;
+      if (!Exit.isSuccess(exit)) return Effect.void;
       const content = accumulator.content();
 
       return content === undefined ? Effect.void : cacheReplay(store, scope, content);

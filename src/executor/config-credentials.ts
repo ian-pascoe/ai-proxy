@@ -6,7 +6,8 @@
  * (addConfigHeadersToAttrs), sdk/cliproxy/service_models.go (buildOpenAICompatibilityConfigModels,
  * buildConfiguredModelInfo, applyModelPrefixes). Ids are derived from config positions (never from key material).
  */
-import type { Config, OpenAICompatGroup } from "../config/schema.ts";
+import type { Config, OpenAICompatGroup, RequestScopedErrorRule } from "../config/schema.ts";
+import type { JsonObject } from "../json/index.ts";
 import { claudeConfigCredentials } from "./claude/config-credentials.ts";
 import { openAICompatibleProviderKey } from "./models.ts";
 import type { CredentialSnapshot } from "./picker.ts";
@@ -47,17 +48,27 @@ export const openAICompatModelIds = (
   return ids;
 };
 
-const headerAttributes = (
-  headers: Readonly<Record<string, string>> | undefined,
-): Record<string, string> => {
-  const out: Record<string, string> = {};
+const headerAttributes = (headers: Readonly<Record<string, string>> | undefined) =>
+  Object.fromEntries(
+    Object.entries(headers ?? {}).flatMap(([name, value]) => {
+      const key = name.trim();
+      const val = value.trim();
 
-  for (const [name, value] of Object.entries(headers ?? {})) {
-    const key = name.trim();
-    const val = value.trim();
+      return key !== "" && val !== "" ? [[`header:${key}`, val] as const] : [];
+    }),
+  );
 
-    if (key !== "" && val !== "") out[`header:${key}`] = val;
-  }
+/** Request-scoped error rules as credential metadata (plain JSON, fields kept as configured). */
+const ruleMetadata = (rule: RequestScopedErrorRule): JsonObject => {
+  const out: JsonObject = {};
+
+  if (rule.status !== undefined) out["status"] = rule.status;
+
+  if (rule.match !== undefined) out["match"] = [...rule.match];
+
+  if (rule["match-regexr"] !== undefined) out["match-regexr"] = [...rule["match-regexr"]];
+
+  if (rule.action !== undefined) out["action"] = rule.action;
 
   return out;
 };
@@ -73,7 +84,7 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
     const models = new Set(openAICompatModelIds(group, forceModelPrefix));
     const priority = group.priority ?? 0;
 
-    const base: Record<string, string> = {
+    const base = {
       base_url: group["base-url"].trim(),
       compat_name: group.name,
       provider_key: provider,
@@ -82,13 +93,13 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
       ...headerAttributes(group.headers),
     };
 
-    const metadata: Record<string, unknown> = {
+    const metadata: JsonObject = {
       ...(group["disable-cooling"] !== undefined
         ? { disable_cooling: group["disable-cooling"] }
         : {}),
       ...(group["request-retry"] !== undefined ? { request_retry: group["request-retry"] } : {}),
       ...(group["request-scoped-errors"] !== undefined
-        ? { request_scoped_errors: group["request-scoped-errors"] }
+        ? { request_scoped_errors: group["request-scoped-errors"].map(ruleMetadata) }
         : {}),
     };
 

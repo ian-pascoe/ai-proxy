@@ -106,13 +106,13 @@ describe("Antigravity reasoning replay across invocations", () => {
             content: null,
             tool_calls: [
               {
-                id: call?.id,
+                id: call?.id ?? "",
                 type: "function",
                 function: { name: "read_file", arguments: '{"path":"a.txt"}' },
               },
             ],
           },
-          { role: "tool", tool_call_id: call?.id, content: "file contents" },
+          { role: "tool", tool_call_id: call?.id ?? "", content: "file contents" },
         ],
       }),
     );
@@ -203,11 +203,11 @@ describe("Antigravity reasoning replay across invocations", () => {
           { type: "message", role: "user", content: [{ type: "input_text", text: prompt }] },
           {
             type: "function_call",
-            call_id: callId,
+            call_id: callId ?? "",
             name: "read_file",
             arguments: '{"path":"b.txt"}',
           },
-          { type: "function_call_output", call_id: callId, output: "contents" },
+          { type: "function_call_output", call_id: callId ?? "", output: "contents" },
         ],
       }),
     );
@@ -300,10 +300,12 @@ describe("Antigravity Interactions continuation across invocations", () => {
     });
 
     afterAll(h.dispose);
+
     const user = {
       type: "user_input",
       content: [{ type: "text", text: `x ${crypto.randomUUID()}` }],
     };
+
     await h.call("/v1beta/interactions", postJson({ model: "gemini-2.5-pro", input: [user] }));
     await h.call(
       "/v1beta/interactions",

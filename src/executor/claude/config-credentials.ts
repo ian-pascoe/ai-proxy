@@ -12,16 +12,14 @@ import type { ConfigCredential } from "../config-credentials.ts";
 const headerAttributes = (
   headers: Readonly<Record<string, string>> | undefined,
 ): Record<string, string> => {
-  const out: Record<string, string> = {};
+  return Object.fromEntries(
+    Object.entries(headers ?? {}).flatMap(([name, value]): Array<[string, string]> => {
+      const key = name.trim();
+      const val = value.trim();
 
-  for (const [name, value] of Object.entries(headers ?? {})) {
-    const key = name.trim();
-    const val = value.trim();
-
-    if (key !== "" && val !== "") out[`header:${key}`] = val;
-  }
-
-  return out;
+      return key !== "" && val !== "" ? [[`header:${key}`, val]] : [];
+    }),
+  );
 };
 
 const modelIds = (
@@ -67,7 +65,9 @@ export const claudeConfigCredentials = (
       const priority = entry.priority ?? group.priority ?? 0;
       const profile = (entry["fingerprint-profile"] ?? "").trim().toLowerCase();
 
-      const attributes: Record<string, string> = {
+      const baseUrl = (group["base-url"] ?? "").trim();
+
+      const attributes = {
         api_key: apiKey,
         auth_kind: "apikey",
         source: `config:claude[${groupIndex}.${keyIndex}]`,
@@ -80,11 +80,9 @@ export const claudeConfigCredentials = (
           : {}),
         ...headerAttributes(group.headers),
         ...headerAttributes(entry.headers),
+        ...(baseUrl !== "" ? { base_url: baseUrl } : {}),
       };
 
-      const baseUrl = (group["base-url"] ?? "").trim();
-
-      if (baseUrl !== "") attributes.base_url = baseUrl;
       out.push({
         credential: {
           id: `claude#${groupIndex}.${keyIndex}`,

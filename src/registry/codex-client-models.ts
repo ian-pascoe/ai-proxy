@@ -9,13 +9,13 @@
  * model clones the `gpt-5.5` template with compact instructions. Bodies are serialised like Go's compact encoder (sorted
  * keys, no HTML escaping).
  */
-import { type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { compareStrings } from "./compare.ts";
 import type { ModelInfo, ThinkingSupport } from "./model-info.ts";
 
 export interface CodexClientModelsInput {
   /** The validated `codex_client_models.json` catalog (`{ models: [...] }`). */
-  readonly catalog: unknown;
+  readonly catalog: Json;
   /** The public models (sorted by id), as `ModelInfo` records. */
   readonly models: ReadonlyArray<ModelInfo>;
   readonly providersForModel: (modelId: string) => string[];
@@ -88,10 +88,13 @@ const NON_CHAT_IDS = new Set([
   "grok-voice-tts-1.0",
 ]);
 
-type Entry = Record<string, Json>;
+type Entry = JsonObject;
 
-const isObject = (value: unknown): value is Entry =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+const firstEntry = (list: readonly Json[]): Entry | undefined => {
+  const [first] = list;
+
+  return isJsonObject(first) ? first : undefined;
+};
 
 /** `stringModelValue`: the trimmed string at `key`, else `""`. */
 const stringValue = (model: Entry | undefined, key: string): string => {
@@ -125,8 +128,8 @@ interface Templates {
 
 const templateCache = new WeakMap<object, Templates>();
 
-const loadTemplates = (catalog: unknown): Templates | undefined => {
-  if (!isObject(catalog)) return undefined;
+const loadTemplates = (catalog: Json | undefined): Templates | undefined => {
+  if (!isJsonObject(catalog)) return undefined;
   const cached = templateCache.get(catalog);
 
   if (cached !== undefined) return cached;
@@ -137,7 +140,7 @@ const loadTemplates = (catalog: unknown): Templates | undefined => {
   let fallback: Entry | undefined;
 
   for (const model of models) {
-    if (!isObject(model)) continue;
+    if (!isJsonObject(model)) continue;
     const slug = stringValue(model, "slug");
 
     if (slug === "") continue;
@@ -154,6 +157,10 @@ const loadTemplates = (catalog: unknown): Templates | undefined => {
 
 // --- model records ----------------------------------------------------------------------------------------------------
 
+/** `{ [key]: value }` when `value` is a positive number, else nothing to spread. */
+const positiveField = (key: string, value: number | undefined): Entry =>
+  value !== undefined && value > 0 ? { [key]: value } : {};
+
 /** `convertModelToMap(model, "openai")`: the model map Go hands to the catalog builder. */
 const openaiModelMap = (model: ModelInfo): Entry => ({
   id: model.id,
@@ -164,13 +171,9 @@ const openaiModelMap = (model: ModelInfo): Entry => ({
   ...(model.displayName ? { display_name: model.displayName } : {}),
   ...(model.version ? { version: model.version } : {}),
   ...(model.description ? { description: model.description } : {}),
-  ...((model.contextLength ?? 0) > 0 ? { context_length: model.contextLength as number } : {}),
-  ...((model.maxContextLength ?? 0) > 0
-    ? { max_context_length: model.maxContextLength as number }
-    : {}),
-  ...((model.maxCompletionTokens ?? 0) > 0
-    ? { max_completion_tokens: model.maxCompletionTokens as number }
-    : {}),
+  ...positiveField("context_length", model.contextLength),
+  ...positiveField("max_context_length", model.maxContextLength),
+  ...positiveField("max_completion_tokens", model.maxCompletionTokens),
   ...((model.supportedParameters?.length ?? 0) > 0
     ? { supported_parameters: [...(model.supportedParameters ?? [])] }
     : {}),
@@ -311,7 +314,7 @@ const sanitizeReasoningMetadata = (entry: Entry, clientVersion: string): void =>
   const allowedDefaults = new Set<string>();
 
   for (const item of raw) {
-    if (!isObject(item)) continue;
+    if (!isJsonObject(item)) continue;
     const level = normalizeReasoningLevel(stringValue(item, "effort"), clientVersion);
 
     if (level === "") continue;
@@ -333,7 +336,7 @@ const sanitizeReasoningMetadata = (entry: Entry, clientVersion: string): void =>
     clientVersion,
   );
 
-  if (!allowedDefaults.has(defaultLevel)) defaultLevel = stringValue(levels[0] as Entry, "effort");
+  if (!allowedDefaults.has(defaultLevel)) defaultLevel = stringValue(firstEntry(levels), "effort");
   entry["supported_reasoning_levels"] = levels;
   entry["default_reasoning_level"] = defaultLevel;
 };
@@ -736,7 +739,7 @@ const applyModelMetadata = (
     if (info.description) description = info.description;
 
     if (contextWindow <= 0 && (info.contextLength ?? 0) > 0)
-      contextWindow = info.contextLength as number;
+      contextWindow = info.contextLength ?? contextWindow;
 
     if (info.type === "openai-image") {
       entry["visibility"] = "hide";
@@ -768,7 +771,7 @@ const applyModelMetadata = (
   }
 
   if ("available_in_plans" in model)
-    entry["available_in_plans"] = clone(model["available_in_plans"] as Json);
+    entry["available_in_plans"] = clone(model["available_in_plans"]);
   // Codex 0.156+ caps an explicit model_catalog_url body at 1MiB: non-template models get compact instructions.
   useCompactInstructions(entry);
 };
@@ -790,6 +793,7 @@ const applyNonTemplatePriorities = (
 
   for (const template of templates.values())
     basePriority = Math.max(basePriority, priorityOf(template));
+
   const pending: Array<{
     readonly index: number;
     readonly displayName: string;
@@ -811,7 +815,9 @@ const applyNonTemplatePriorities = (
   });
 
   for (const [rank, item] of pending.entries()) {
-    (result[item.index] as Entry)["priority"] = basePriority + 100 * (rank + 1);
+    const target = result[item.index];
+
+    if (target !== undefined) target["priority"] = basePriority + 100 * (rank + 1);
   }
 };
 

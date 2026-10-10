@@ -10,6 +10,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
+import type { Json } from "../src/json/index.ts";
 
 let config: Config;
 
@@ -75,7 +76,7 @@ describe("POST /v1beta/interactions", () => {
   });
 
   it("streams native interaction events as SSE frames", async () => {
-    const frame = (event: string, data: unknown) =>
+    const frame = (event: string, data: Json) =>
       `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
     const h = harness(() =>
@@ -152,10 +153,12 @@ describe("POST /v1beta/interactions", () => {
   it("routes agent requests to the gemini-interactions provider and selects credentials as for gemini-2.5-flash", async () => {
     const h = harness(() => jsonResponse({ ...INTERACTION, id: "agent_1" }));
     afterAll(h.dispose);
+
     const response = await h.call(
       "/v1beta/interactions",
       postJson({ agent: "deep-research-pro", input: "research" }),
     );
+
     expect(response.status).toBe(200);
     expect(h.picks[0]).toMatchObject({
       providers: ["gemini-interactions"],

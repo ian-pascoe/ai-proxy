@@ -9,6 +9,7 @@
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import { sha256Hex } from "../../hash.ts";
+import { isJsonObject, tryParseJson } from "../../json/index.ts";
 import { isClaudeCodeAttributionSystemText } from "../../translator/common/claude-messages.ts";
 import type { SensitiveWordMatcher } from "../claude/cloaking.ts";
 import {
@@ -71,7 +72,7 @@ export interface DevinPrompt {
   /** Type of a user media part Devin cannot send; never put on the wire. */
   droppedPart: string;
   thinking: string;
-  signature: Uint8Array<ArrayBufferLike>;
+  signature: Uint8Array;
   signatureType: string;
 }
 
@@ -333,7 +334,9 @@ export interface DevinFrame {
 }
 
 const concatBytes = (parts: ReadonlyArray<Uint8Array>): Uint8Array => {
-  if (parts.length === 1) return parts[0] as Uint8Array;
+  const [only] = parts;
+
+  if (parts.length === 1 && only !== undefined) return only;
   const out = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
   let offset = 0;
 
@@ -709,17 +712,12 @@ export const parseTrailerError = (payload: Uint8Array): DevinTrailerError | unde
   const text = new TextDecoder().decode(payload).trim();
 
   if (text === "" || text === "{}") return undefined;
-  let parsed: unknown;
+  const parsed = tryParseJson(text);
 
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
+  if (!isJsonObject(parsed)) return undefined;
+  const error = parsed["error"];
 
-  const error = (parsed as { error?: { code?: unknown; message?: unknown } } | null)?.error;
-
-  if (error === undefined || error === null || typeof error !== "object") return undefined;
+  if (!isJsonObject(error)) return undefined;
 
   // Go decodes into string fields: a non-string code or message is a decode failure, i.e. no error.
   if (

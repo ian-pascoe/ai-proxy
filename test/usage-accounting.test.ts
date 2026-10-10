@@ -198,6 +198,7 @@ describe("ensureTokenBreakdown per provider semantics", () => {
       detail({ reasoningTokens: 12, cacheReadTokens: 7 }),
       "plugin-provider",
     );
+
     expect(result.totalTokens).toBe(19);
     expect(result.tokenBreakdown).toMatchObject({
       quality: "unclassified",
@@ -235,6 +236,7 @@ describe("ensureTokenBreakdown per provider semantics", () => {
       detail({ inputTokens: 100, outputTokens: 30, reasoningTokens: 12 }),
       "openai",
     );
+
     expect(result.totalTokens).toBe(130);
     expect(result.tokenBreakdown).toMatchObject({
       quality: "complete",
@@ -246,6 +248,7 @@ describe("ensureTokenBreakdown per provider semantics", () => {
     const parsed = parseClaudeUsage(
       '{"usage":{"input_tokens":3,"output_tokens":10,"thinking_tokens":4}}',
     );
+
     expect(ensureTokenBreakdown(parsed, "openai").tokenBreakdown).toBe(parsed.tokenBreakdown);
   });
 });
@@ -310,6 +313,7 @@ describe("OpenAI-style parsers", () => {
     const parsed = parseOpenAIUsage(
       '{"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":42}}',
     );
+
     expect(parsed.tokenBreakdown?.quality).toBe("inconsistent");
   });
 
@@ -403,9 +407,11 @@ describe("Claude parsers", () => {
     expect(parsed.tokenBreakdown).toMatchObject({
       output: { totalTokens: 244, nonReasoningTokens: 204, reasoningTokens: 40 },
     });
+
     const streamed = parseClaudeStreamUsage(
       `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},${body}}`,
     );
+
     expect(streamed).toMatchObject({ outputTokens: 244, reasoningTokens: 40, totalTokens: 45302 });
     expect(streamed?.tokenBreakdown?.output.nonReasoningTokens).toBe(204);
   });
@@ -427,6 +433,7 @@ describe("Claude parsers", () => {
     const parsed = parseClaudeUsage(
       '{"usage":{"input_tokens":3,"output_tokens":10,"thinking_tokens":4}}',
     );
+
     expect(parsed).toMatchObject({ outputTokens: 10, reasoningTokens: 4, totalTokens: 13 });
     expect(parsed.tokenBreakdown?.output.nonReasoningTokens).toBe(6);
   });
@@ -520,6 +527,7 @@ describe("Gemini family parsers", () => {
   it("Antigravity reads the response envelope", () => {
     const body =
       '{"response":{"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":3,"thoughtsTokenCount":2}}}';
+
     expect(parseAntigravityUsage(body)).toMatchObject({
       inputTokens: 7,
       outputTokens: 3,

@@ -6,7 +6,7 @@
  * and profile signals; on Workers a Cron Trigger walks every stored Devin credential. A failing credential keeps its
  * stored data (Go returns the unchanged auth with the error). Tokens never appear in logs or errors.
  */
-import { Effect } from "effect";
+import { Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { devinCredentials } from "../executor/devin/credentials.ts";
 import { generateDeviceFingerprint } from "../executor/devin/wire.ts";
@@ -86,7 +86,7 @@ const PROFILE_KEYS = [
 ] as const;
 
 /** `Quota.Signals` of `Refresh` (percentages as `N%`, timestamps RFC3339 UTC). */
-export const devinQuotaSignals = (status: DevinUserStatus): Record<string, string> => {
+export const devinQuotaSignals = (status: DevinUserStatus) => {
   const signals: Record<string, string> = {};
 
   if (status.plan !== "") signals["plan"] = status.plan;
@@ -107,13 +107,18 @@ export const devinQuotaSignals = (status: DevinUserStatus): Record<string, strin
   return signals;
 };
 
+export interface AppliedDevinStatus {
+  readonly metadata: JsonObject;
+  readonly state: CredentialState;
+}
+
 /** Applies a status to the stored metadata and runtime state (Go `updated` auth of `Refresh`). */
 export const applyDevinStatus = (
   metadata: JsonObject,
   state: CredentialState,
   status: DevinUserStatus,
   nowMs: number,
-): { readonly metadata: JsonObject; readonly state: CredentialState } => {
+): AppliedDevinStatus => {
   const next: JsonObject = { ...metadata };
 
   for (const [key, field] of PROFILE_KEYS) if (status[field] !== "") next[key] = status[field];
@@ -174,7 +179,7 @@ export const refreshDevinStatuses = (
         fetchDevinUserStatus({ sessionToken: apiKey, baseUrl, deviceSeed }),
       );
 
-      if (result._tag === "Failure") {
+      if (Result.isFailure(result)) {
         failed += 1;
         yield* Effect.logWarning(
           `devin executor: failed to refresh user status for ${credential.id}: ${result.failure}`,

@@ -4,7 +4,7 @@ import { sectionModels } from "../src/registry/catalog.ts";
 import type { ModelInfo } from "../src/registry/model-info.ts";
 import { ModelRegistryIndex } from "../src/registry/registry.ts";
 import {
-  canon,
+  canonOf,
   catalogs,
   fixture,
   fixtureNow,
@@ -29,26 +29,26 @@ describe("registry index parity with Go (model_registry.go)", () => {
       it("GetModelInfo (provider specific, then last registered)", () => {
         for (const query of scenario.registry.infos) {
           expect(
-            canon(index.modelInfo(query.model, query.provider)),
+            canonOf(index.modelInfo(query.model, query.provider)),
             `${query.model}@${query.provider}`,
-          ).toEqual(canon(fromGo(query.info)));
+          ).toEqual(canonOf(fromGo(query.info)));
         }
       });
 
       it("LookupModelInfo falls back to the static catalogs", () => {
         for (const query of scenario.registry.lookups) {
           expect(
-            canon(index.lookupModelInfo(catalogs, query.model, query.provider)),
+            canonOf(index.lookupModelInfo(catalogs, query.model, query.provider)),
             `${query.model}@${query.provider}`,
-          ).toEqual(canon(fromGo(query.info)));
+          ).toEqual(canonOf(fromGo(query.info)));
         }
 
         expect(index.lookupModelInfo(catalogs, "   ")).toBeUndefined();
       });
 
       it("GetAvailableModelInfos", () => {
-        const actual = index.availableModels(fixtureNow()).map((model) => canon(model));
-        expect(actual).toEqual(scenario.registry.available.map((model) => canon(fromGo(model))));
+        const actual = index.availableModels(fixtureNow()).map((model) => canonOf(model));
+        expect(actual).toEqual(scenario.registry.available.map((model) => canonOf(fromGo(model))));
       });
 
       it("GetFirstAvailableModel picks the newest available model", () => {

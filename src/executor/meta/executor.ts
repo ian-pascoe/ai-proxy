@@ -83,15 +83,14 @@ export const metaHeaders = (
   clientHeaders: Headers,
   sessionId: string | undefined,
 ): Record<string, string> => {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    authorization: `Bearer ${token}`,
-    "user-agent": META_USER_AGENT,
-    "x-client-id": META_CLIENT_ID,
-    ...(stream
-      ? { accept: "text/event-stream", "cache-control": "no-cache" }
-      : { accept: "application/json" }),
-  };
+  const headers: Record<string, string> = {};
+  headers["content-type"] = "application/json";
+  headers["authorization"] = `Bearer ${token}`;
+  headers["user-agent"] = META_USER_AGENT;
+  headers["x-client-id"] = META_CLIENT_ID;
+  headers["accept"] = stream ? "text/event-stream" : "application/json";
+
+  if (stream) headers["cache-control"] = "no-cache";
 
   return applyCustomHeaders(headers, credential, clientHeaders, sessionId);
 };
@@ -147,7 +146,10 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
 
     const creds = yield* Effect.try({
       try: () => requireMetaToken(context.credential),
-      catch: (error) => error as ExecutionError,
+      catch: (error) =>
+        error instanceof ExecutionError
+          ? error
+          : new ExecutionError({ status: 500, message: String(error) }),
     });
 
     const prepared = yield* prepareMetaRequest(registry, context, request, options, META_PROVIDER);
@@ -198,8 +200,10 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     context.usage.observeResponseModel(responseModelOf(tryParseJson(data)));
     const collector = new OutputItemCollector();
     const nowMs = yield* Clock.currentTimeMillis;
+
     const gatewayError = () =>
       new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE });
+
     let completed: JsonObject | undefined;
 
     for (const line of data.split("\n")) {
@@ -253,8 +257,8 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
       patchCodexCompletedOutput(event, collector);
       const bridged = prepared.applyPatch.bridge.transformNonStream(event);
 
-      if ("error" in bridged) return yield* gatewayError();
-      event = bridged.body as JsonObject;
+      if ("error" in bridged || !isJsonObject(bridged.body)) return yield* gatewayError();
+      event = bridged.body;
     } else {
       event = cloneJson(completed);
 
@@ -289,6 +293,7 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     const { response, prepared } = yield* send(context, request, options);
     const collector = new OutputItemCollector();
     const state = responseContext(prepared, request, options);
+
     const gatewayError = () =>
       new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE });
 
@@ -317,7 +322,7 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
       Stream.mapError(transportError),
       Stream.mapEffect((line) =>
         Effect.gen(function* () {
-          if (stopped) return { chunks: [] } as StepResult;
+          if (stopped) return { chunks: [] };
 
           if (!line.startsWith("data:")) return emit(line);
           const payload = line.slice(5).trim();
@@ -395,8 +400,12 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
   ) {
     yield* Effect.try({
       try: () => requireMetaToken(context.credential),
-      catch: (error) => error as ExecutionError,
+      catch: (error) =>
+        error instanceof ExecutionError
+          ? error
+          : new ExecutionError({ status: 500, message: String(error) }),
     });
+
     const prepared = yield* prepareMetaRequest(
       registry,
       context,
@@ -405,6 +414,7 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
       META_PROVIDER,
       false,
     );
+
     const count = countCodexInputTokens(getCodec("o200k_base"), prepared.body);
 
     return {

@@ -41,7 +41,17 @@ const mapOpenAIFinishReasonToGemini = (reason: string): string => {
 const isSpace = (ch: string | undefined): boolean =>
   ch === " " || ch === "\n" || ch === "\r" || ch === "\t";
 
-const parseJsonStringToken = (text: string, start: number): { token: string; next: number } => {
+interface JsonStringToken {
+  token: string;
+  next: number;
+}
+
+interface BracketedSegment {
+  segment: string;
+  next: number;
+}
+
+const parseJsonStringToken = (text: string, start: number): JsonStringToken => {
   if (start >= text.length || text[start] !== '"') return { token: "", next: -1 };
   let i = start + 1;
   let escaped = false;
@@ -65,7 +75,7 @@ const parseJsonStringToken = (text: string, start: number): { token: string; nex
 
 const jsonStringTokenToRawString = (token: string): string => {
   try {
-    const parsed = JSON.parse(token) as Json;
+    const parsed = JSON.parse(token);
 
     if (typeof parsed === "string") return parsed;
   } catch {
@@ -77,10 +87,21 @@ const jsonStringTokenToRawString = (token: string): string => {
   return token;
 };
 
-const captureBracketed = (text: string, i: number): { segment: string; next: number } => {
+const closingRune = (open: string | undefined): string | undefined => {
+  switch (open) {
+    case "{":
+      return "}";
+    case "[":
+      return "]";
+    default:
+      return undefined;
+  }
+};
+
+const captureBracketed = (text: string, i: number): BracketedSegment => {
   if (i >= text.length) return { segment: "", next: -1 };
   const startRune = text[i];
-  const endRune = startRune === "{" ? "}" : startRune === "[" ? "]" : undefined;
+  const endRune = closingRune(startRune);
 
   if (endRune === undefined) return { segment: "", next: -1 };
   let depth = 0;
@@ -191,7 +212,7 @@ const tolerantParseJsonObject = (s: string): JsonObject => {
         let value: Json = captured.segment;
 
         try {
-          value = JSON.parse(captured.segment) as Json;
+          value = JSON.parse(captured.segment);
         } catch {
           // Invalid JSON segments are stored as strings.
         }
@@ -231,7 +252,7 @@ export const parseArgsToObject = (argsStr: string): JsonObject => {
   if (trimmed === "" || trimmed === "{}") return {};
 
   try {
-    const strict = JSON.parse(trimmed) as Json;
+    const strict = JSON.parse(trimmed);
 
     if (isJsonObject(strict)) return strict;
   } catch {
@@ -301,7 +322,8 @@ const setGeminiUsageMetadata = (out: JsonObject, usage: Json | undefined): JsonO
   const prompt = tokenCountFromUsage(usage, "prompt_tokens", "input_tokens");
   const completion = tokenCountFromUsage(usage, "completion_tokens", "output_tokens");
   const total = tokenCountFromUsage(usage, "total_tokens");
-  const metadata: JsonObject = (out.usageMetadata as JsonObject | undefined) ?? {};
+  const existingMetadata = out.usageMetadata;
+  const metadata: JsonObject = isJsonObject(existingMetadata) ? existingMetadata : {};
   out.usageMetadata = metadata;
 
   if (prompt !== undefined) metadata.promptTokenCount = prompt;
@@ -321,7 +343,22 @@ const setGeminiUsageMetadata = (out: JsonObject, usage: Json | undefined): JsonO
   return out;
 };
 
-const newTemplate = (): { out: JsonObject; candidate: JsonObject } => {
+interface GeminiTemplate {
+  out: JsonObject;
+  candidate: JsonObject;
+}
+
+// SAFETY: every template comes from newTemplate (or JSON parsed from it): `candidates` holds one candidate object.
+const templateCandidate = (template: JsonObject): JsonObject =>
+  (template.candidates as Json[])[0] as JsonObject;
+
+// SAFETY: newTemplate gives each candidate a `content` object, and no code path replaces it with another type.
+const candidateContent = (candidate: JsonObject): JsonObject => candidate.content as JsonObject;
+
+const templateContent = (template: JsonObject): JsonObject =>
+  candidateContent(templateCandidate(template));
+
+const newTemplate = (): GeminiTemplate => {
   const candidate: JsonObject = { content: { parts: [], role: "model" }, index: 0 };
 
   return { out: { candidates: [candidate] }, candidate };
@@ -342,6 +379,7 @@ export const convertOpenAIResponseToGemini = (
     } satisfies GeminiStreamParams;
   }
 
+  // SAFETY: this translator is the only writer of `state.value` and initialises it to a GeminiStreamParams before this read.
   const param = state.value as GeminiStreamParams;
 
   let payload = line;
@@ -353,7 +391,7 @@ export const convertOpenAIResponseToGemini = (
   let root: Json;
 
   try {
-    root = JSON.parse(payload) as Json;
+    root = JSON.parse(payload);
   } catch {
     return [];
   }
@@ -384,14 +422,13 @@ export const convertOpenAIResponseToGemini = (
 
     if (modelValue !== undefined) base.out.model = str(modelValue);
     const baseJson = JSON.stringify(base.out);
-    let template = JSON.parse(baseJson) as JsonObject;
+    let template: JsonObject = JSON.parse(baseJson);
     const delta = get(choice, "delta");
 
     const role = get(delta, "role");
 
     if (role !== undefined && param.isFirstChunk) {
-      if (str(role) === "assistant")
-        (((template.candidates as Json[])[0] as JsonObject).content as JsonObject).role = "model";
+      if (str(role) === "assistant") templateContent(template).role = "model";
       param.isFirstChunk = false;
       results.push(JSON.stringify(template));
       continue;
@@ -404,11 +441,9 @@ export const convertOpenAIResponseToGemini = (
       for (const reasoningText of extractReasoningTexts(reasoning)) {
         if (reasoningText === "") continue;
 
-        const t = JSON.parse(baseJson) as JsonObject;
+        const t: JsonObject = JSON.parse(baseJson);
 
-        (((t.candidates as Json[])[0] as JsonObject).content as JsonObject).parts = [
-          { thought: true, text: reasoningText },
-        ];
+        templateContent(t).parts = [{ thought: true, text: reasoningText }];
         chunkOutputs.push(JSON.stringify(t));
       }
     }
@@ -419,11 +454,9 @@ export const convertOpenAIResponseToGemini = (
       const contentText = str(content);
       param.contentAccumulatorLength += contentText.length;
 
-      const t = JSON.parse(baseJson) as JsonObject;
+      const t: JsonObject = JSON.parse(baseJson);
 
-      (((t.candidates as Json[])[0] as JsonObject).content as JsonObject).parts = [
-        { text: contentText },
-      ];
+      templateContent(t).parts = [{ text: contentText }];
       chunkOutputs.push(JSON.stringify(t));
     }
 
@@ -469,15 +502,16 @@ export const convertOpenAIResponseToGemini = (
     const finishReason = get(choice, "finish_reason");
 
     if (typeof finishReason === "string" && finishReason !== "") {
-      const candidate = (template.candidates as Json[])[0] as JsonObject;
+      const candidate = templateCandidate(template);
       candidate.finishReason = mapOpenAIFinishReasonToGemini(finishReason);
 
       if (param.toolCallsAccumulator.size > 0) {
         // Go iterates a map here (random order); the port emits calls in ascending index order.
         const parts: Json[] = [];
 
-        for (const index of [...param.toolCallsAccumulator.keys()].sort((a, b) => a - b)) {
-          const accumulator = param.toolCallsAccumulator.get(index) as ToolCallAccumulator;
+        for (const [, accumulator] of [...param.toolCallsAccumulator.entries()].sort(
+          (a, b) => a[0] - b[0],
+        )) {
           const functionCall: JsonObject = {};
 
           if (accumulator.id !== "") functionCall.id = accumulator.id;
@@ -486,7 +520,7 @@ export const convertOpenAIResponseToGemini = (
           parts.push({ functionCall });
         }
 
-        (candidate.content as JsonObject).parts = parts;
+        candidateContent(candidate).parts = parts;
         param.toolCallsAccumulator = new Map();
       }
 
@@ -513,7 +547,7 @@ export const convertOpenAIResponseToGeminiNonStream = (
   let root: Json;
 
   try {
-    root = JSON.parse(body) as Json;
+    root = JSON.parse(body);
   } catch {
     root = {};
   }
@@ -530,7 +564,7 @@ export const convertOpenAIResponseToGeminiNonStream = (
     const ensurePart = (idx: number): JsonObject => {
       while (allParts.length <= idx) allParts.push({});
 
-      return allParts[idx] as JsonObject;
+      return allParts[idx] ?? {};
     };
 
     for (const choice of choices) {
@@ -539,7 +573,7 @@ export const convertOpenAIResponseToGeminiNonStream = (
       const role = get(message, "role");
 
       if (role !== undefined && str(role) === "assistant")
-        (candidate.content as JsonObject).role = "model";
+        candidateContent(candidate).role = "model";
 
       let partIndex = 0;
       const reasoning = get(message, "reasoning_content");
@@ -587,7 +621,7 @@ export const convertOpenAIResponseToGeminiNonStream = (
       candidate.index = choiceIdx;
     }
 
-    if (allParts.length > 0) (candidate.content as JsonObject).parts = allParts;
+    if (allParts.length > 0) candidateContent(candidate).parts = allParts;
   }
 
   const usage = get(root, "usage");

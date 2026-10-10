@@ -56,9 +56,11 @@ export const resolveCompatConfig = (
     credential.attributes["compat_name"],
     credential.attributes["provider_key"],
     credential.provider,
-  ]
-    .map((value) => value?.trim() ?? "")
-    .filter((value) => value !== "");
+  ].flatMap((value) => {
+    const name = value?.trim() ?? "";
+
+    return name === "" ? [] : [name];
+  });
 
   return groups.find(
     (group) =>

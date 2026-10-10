@@ -19,6 +19,7 @@ import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import { Formats } from "../src/translator/formats.ts";
+import { asString } from "../src/json/index.ts";
 import type { UsageRecord } from "../src/usage/record.ts";
 import { UsageSink } from "../src/usage/sink.ts";
 import {
@@ -286,6 +287,7 @@ describe("retry rounds (TestExecuteRetryRoundCredentialWindows / MaxCredentialsA
         const run = yield* setup(config(group("a", "disable-cooling: true")), () =>
           upstreamError(500),
         );
+
         yield* failure(run.exec(executeNonStream(chatInput())));
         assert.strictEqual(run.calls.length, 1);
       }),
@@ -326,6 +328,7 @@ describe("cooldown waits", () => {
         group("a"),
         "routing:\n  retry:\n    request-retry: 1\n    max-retry-interval: 5",
       );
+
       const run = yield* setup(yaml, () => upstreamError(429, "quota", { "retry-after": "90" }));
       const error = yield* failure(run.exec(executeNonStream(chatInput())));
       assert.strictEqual(error.status, 429);
@@ -341,6 +344,7 @@ describe("cooldown waits", () => {
         const run = yield* setup(config(group("a")), () =>
           upstreamError(429, "quota", { "retry-after": "30" }),
         );
+
         yield* failure(run.exec(executeNonStream(chatInput())));
         const error = yield* failure(run.exec(executeNonStream(chatInput())));
         assert.strictEqual(error.status, 429);
@@ -367,6 +371,7 @@ describe("request-scoped error rules", () => {
         config(group("a", rule("continue")) + group("b")),
         respondContextWindow,
       );
+
       const result = yield* run.exec(executeNonStream(chatInput()));
       assert.include(result.payload, "chat.completion");
       assert.deepStrictEqual(run.calls.map(keyOf), ["a", "b"]);
@@ -381,6 +386,7 @@ describe("request-scoped error rules", () => {
         config(group("a", rule("continue-and-cooldown")) + group("b")),
         respondContextWindow,
       );
+
       yield* run.exec(executeNonStream(chatInput()));
       yield* run.exec(executeNonStream(chatInput()));
       assert.deepStrictEqual(run.calls.map(keyOf), ["a", "b", "b"]);
@@ -393,6 +399,7 @@ describe("request-scoped error rules", () => {
         config(group("a", rule("stop")) + group("b")),
         respondContextWindow,
       );
+
       const error = yield* failure(stop.exec(executeNonStream(chatInput())));
       assert.strictEqual(error.status, 400);
       assert.strictEqual(stop.calls.length, 1);
@@ -401,6 +408,7 @@ describe("request-scoped error rules", () => {
         config(group("a", rule("stop-and-cooldown"))),
         respondContextWindow,
       );
+
       yield* failure(cool.exec(executeNonStream(chatInput())));
       const next = yield* failure(cool.exec(executeNonStream(chatInput())));
       assert.strictEqual(next.code, "auth_unavailable");
@@ -546,6 +554,7 @@ describe("streaming", () => {
         const run = yield* setup(config(group("a")), () =>
           sseResponse([chunk("one"), chunk("two"), "data: [DONE]\n\n"]),
         );
+
         yield* collect(run);
         assert.deepStrictEqual(
           run.harness.pool.list().map((item) => [item.failed, item.unavailable]),
@@ -556,9 +565,11 @@ describe("streaming", () => {
         yield* run.exec(
           Effect.gen(function* () {
             const scope = yield* Scope.make();
+
             const output = yield* executeStream(chatInput("m", { stream: true })).pipe(
               Scope.provide(scope),
             );
+
             yield* Stream.take(output.chunks, 1).pipe(Stream.runDrain, Scope.provide(scope));
             yield* Scope.close(scope, Exit.void);
           }),
@@ -590,6 +601,7 @@ describe("streaming", () => {
         const none = yield* setup(config(group("a", "disable-cooling: true")), () =>
           sseResponse([": nothing\n\n"]),
         );
+
         const exit = yield* Effect.exit(collect(none));
         assert.isTrue(Exit.isFailure(exit));
         assert.strictEqual(none.calls.length, 1);
@@ -604,6 +616,7 @@ describe("session affinity and thinking", () => {
         group("a") + group("b") + group("c"),
         "routing:\n  session-affinity: true",
       );
+
       const run = yield* setup(yaml, () => jsonResponse(CHAT_OK));
       const sessionInput = chatInput("m", {}, { "x-session-id": "session-42" });
 
@@ -673,7 +686,7 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
   const tokenExecutor = (seen: string[]): Layer.Layer<ExecutorRegistry> => {
     const execute: ProviderExecutor["execute"] = (context) =>
       Effect.suspend(() => {
-        const token = String(context.credential.metadata["access_token"] ?? "");
+        const token = asString(context.credential.metadata["access_token"]);
         seen.push(token);
 
         return token === "old"

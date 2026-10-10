@@ -6,7 +6,7 @@
  * IsClaudeSubagentRequest, ClaudeSubagentRequests1h, IsClaudeNewPromptTurn, ExtractClaudeBillingTags),
  * claude_executor_request.go / claude_executor_cloaking.go (model family predicates).
  */
-import { get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
+import { get, isJsonObject, tryParseJson, type Json, type JsonObject } from "../../json/index.ts";
 import { isArr, isObj, str, toArray } from "../../translator/common/gjson.ts";
 import { payloadHas1hTTL } from "./cache-control.ts";
 
@@ -61,13 +61,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** `isValidUserID`: JSON `{device_id: 64 hex, account_uuid: ""|uuid, session_id: uuid}`. */
 export const isValidUserID = (userID: string): boolean => {
-  let value: Json;
-
-  try {
-    value = JSON.parse(userID) as Json;
-  } catch {
-    return false;
-  }
+  const value = tryParseJson(userID);
 
   if (!isObj(value)) return false;
 
@@ -326,7 +320,7 @@ export const usesLegacySystemReminder = (body: JsonObject): boolean =>
   LEGACY_SYSTEM_REMINDER_MODELS.has(canonicalModel(str(body.model)));
 
 /** `ExtractClaudeBillingTags`: `cc_prev_req` and `cc_prompt_id` of an existing billing block. */
-export const extractBillingTags = (body: JsonObject): { prevReq: string; promptId: string } => {
+export const extractBillingTags = (body: JsonObject) => {
   const system = body.system;
   let text = "";
 

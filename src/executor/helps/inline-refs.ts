@@ -54,8 +54,11 @@ const cyclicFallback = (node: JsonObject, target: Json, ref: string): JsonObject
   const out: JsonObject = {};
 
   if (isJsonObject(target)) {
-    for (const key of ["type", "nullable", "description"])
-      if (Object.hasOwn(target, key)) out[key] = target[key] as Json;
+    for (const key of ["type", "nullable", "description"]) {
+      const value = target[key];
+
+      if (Object.hasOwn(target, key) && value !== undefined) out[key] = value;
+    }
   }
 
   for (const [key, value] of Object.entries(node)) if (key !== "$ref") out[key] = value;

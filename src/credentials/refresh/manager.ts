@@ -483,6 +483,7 @@ export class RefreshManager {
     }
 
     if (replaced) return this.#unchanged(current);
+
     const merged = mergeRefreshedMetadata(
       credential.metadata,
       current.credential.metadata,
@@ -498,6 +499,7 @@ export class RefreshManager {
 
     const { rejectedAccessToken: _rejected, ...probeState } = current.state;
     const stillDue = shouldRefresh(finishedAt, probe, { ...probeState, nextRefreshAfter: 0 });
+
     const nextState = applyRefreshSuccess(
       baseState,
       current.state,

@@ -51,11 +51,16 @@ const UNAUTHORIZED_ERROR = (message: string): CredentialError => ({
   httpStatus: 401,
 });
 
+export interface RefreshFailureOutcome {
+  readonly state: CredentialState;
+  readonly schedule: ScheduleEffect;
+}
+
 /** Failure branch of `refreshAuthForRequestAtEpoch`. Returns the new state and what to do with the alarm schedule. */
 export const applyRefreshFailure = (
   state: CredentialState,
   input: FailureInput,
-): { readonly state: CredentialState; readonly schedule: ScheduleEffect } => {
+): RefreshFailureOutcome => {
   const { now } = input;
   const unauthorized = isUnauthorized(input);
   const invalidGrant = isInvalidGrant(input);
@@ -247,6 +252,7 @@ export const applyRefreshSuccess = (
   // A status of "disabled" only sticks while the credential file is still disabled (user re-enabled it meanwhile).
   const currentStatus = current.status === "disabled" && !disabled ? "active" : current.status;
   const cleared = clearUnauthorizedModelStates(current, now);
+
   const {
     rejectedAccessToken: _rejected,
     lastError: _lastError,

@@ -147,14 +147,18 @@ describe("POST /v1/chat/completions (non-stream)", () => {
   it("passes upstream JSON errors through with the upstream status", async () => {
     const upstreamError =
       '{ "error": { "message": "slow down", "type": "rate_limit_error", "code": "rate_limit" } }';
+
     const p = pipeline(() =>
       jsonResponse(upstreamError, { status: 429, headers: { "retry-after": "7" } }),
     );
+
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [] }),
     );
+
     expect(response.status).toBe(429);
     expect(response.headers.get("content-type")).toBe("application/json");
     // Upstream headers are only exposed with passthrough-headers.
@@ -168,10 +172,12 @@ describe("POST /v1/chat/completions (non-stream)", () => {
   it("wraps plain-text upstream errors in an OpenAI error body", async () => {
     const p = pipeline(() => new Response("bad gateway <html>", { status: 502 }));
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [] }),
     );
+
     expect(response.status).toBe(502);
     expect(await response.text()).toBe(
       '{"error":{"message":"bad gateway \\u003chtml\\u003e","type":"server_error","code":"internal_server_error"}}',
@@ -181,10 +187,12 @@ describe("POST /v1/chat/completions (non-stream)", () => {
   it("rejects unknown models with 400 model_not_found", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION));
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "nope", messages: [] }),
     );
+
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: {
@@ -208,10 +216,12 @@ describe("POST /v1/chat/completions (non-stream)", () => {
         type: "invalid_request_error",
       },
     });
+
     const gzip = await p.call(
       "/v1/chat/completions",
       postJson("\u0001\u0002", { "content-encoding": "gzip" }),
     );
+
     expect(gzip.status).toBe(400);
     expect(await gzip.json()).toEqual({
       error: {
@@ -252,10 +262,12 @@ describe("POST /v1/chat/completions (non-stream)", () => {
 
     const p = pipeline(() => jsonResponse(COMPLETION), { config: empty });
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/chat/completions",
       postJson({ model: "alias-model", messages: [] }),
     );
+
     expect(response.status).toBe(400);
     expect(p.calls).toHaveLength(0);
   });
@@ -489,10 +501,12 @@ describe("POST /v1/completions", () => {
     );
 
     afterAll(p.dispose);
+
     const response = await p.call(
       "/v1/completions",
       postJson({ model: "alias-model", prompt: "x", stream: true }),
     );
+
     expect(response.status).toBe(200);
     expect(await response.text()).toBe(
       'data: {"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"","index":0,"text":"Hi"}]}\n\n' +

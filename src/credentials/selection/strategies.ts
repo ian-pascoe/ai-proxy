@@ -29,7 +29,7 @@ export const successorIndex = (
   while (low < high) {
     const mid = (low + high) >>> 1;
 
-    if ((candidates[mid] as { id: string }).id > lastId) high = mid;
+    if ((candidates[mid]?.id ?? "") > lastId) high = mid;
     else low = mid + 1;
   }
 
@@ -124,7 +124,9 @@ export class RotationState {
 
     if (!this.#lastPicked.has(key) && this.#lastPicked.size >= this.#maxKeys)
       this.#lastPicked = new Map();
-    const picked = candidates[successorIndex(candidates, this.#lastPicked.get(key))] as T;
+    const picked = candidates[successorIndex(candidates, this.#lastPicked.get(key))];
+
+    if (picked === undefined) return undefined;
     this.#lastPicked.set(key, picked.id);
 
     return picked;

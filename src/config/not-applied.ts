@@ -42,4 +42,4 @@ const RULES: ReadonlyArray<NotAppliedRule> = [
 
 /** Keys of {@link RULES} that `config` sets to a non-default value, in a stable order. */
 export const notAppliedSettings = (config: Config): ReadonlyArray<string> =>
-  RULES.filter((rule) => rule.isSet(config)).map((rule) => rule.key);
+  RULES.flatMap((rule) => (rule.isSet(config) ? [rule.key] : []));

@@ -154,8 +154,10 @@ export const rewriteCodexOrphanDelegationInput = (
     if (asString(get(item, "type")) !== "function_call_output") continue;
     const callId = asString(get(item, "call_id"));
 
-    if (callId.trim() !== "" && (availableCalls.get(callId) ?? 0) > 0) {
-      availableCalls.set(callId, (availableCalls.get(callId) as number) - 1);
+    const remaining = availableCalls.get(callId) ?? 0;
+
+    if (callId.trim() !== "" && remaining > 0) {
+      availableCalls.set(callId, remaining - 1);
       continue;
     }
 
@@ -366,9 +368,7 @@ export interface SpawnAgentSource {
   /** The validated `codex_client_models.json` catalog (`{ models: [...] }`). */
   readonly catalog: unknown;
   /** `registry.LookupModelInfo(modelID)`. */
-  readonly lookupModel: (
-    modelId: string,
-  ) =>
+  readonly lookupModel: (modelId: string) =>
     | {
         readonly description?: string;
         readonly thinking?: { readonly levels?: ReadonlyArray<string> };
@@ -399,9 +399,12 @@ const normalizeReasoningEffort = (effort: string): string => {
 };
 
 /** `codexReasoningMetadata`. */
-const reasoningMetadata = (
-  metadata: Json,
-): { readonly efforts: string[]; readonly defaultEffort: string } => {
+interface ReasoningMetadata {
+  readonly efforts: string[];
+  readonly defaultEffort: string;
+}
+
+const reasoningMetadata = (metadata: Json): ReasoningMetadata => {
   const levels = get(metadata, "supported_reasoning_levels");
   const efforts: string[] = [];
 
@@ -416,7 +419,7 @@ const reasoningMetadata = (
   if (efforts.length === 0) return { efforts: [], defaultEffort: "" };
   let defaultEffort = normalizeReasoningEffort(mapString(metadata, "default_reasoning_level"));
 
-  if (!efforts.includes(defaultEffort)) defaultEffort = efforts[0] as string;
+  if (!efforts.includes(defaultEffort)) defaultEffort = efforts[0] ?? "";
 
   return { efforts, defaultEffort };
 };
@@ -481,7 +484,7 @@ const applySpawnAgentThinking = (
 
 /** `codexSpawnAgentModelsFromTemplates`: template models by priority, then synthesised ones by display name. */
 const spawnAgentModels = (source: SpawnAgentSource): SpawnAgentModel[] => {
-  const catalogModels = get(source.catalog as Json, "models");
+  const catalogModels = get(isJsonObject(source.catalog) ? source.catalog : undefined, "models");
 
   if (!isJsonArray(catalogModels) || catalogModels.length === 0) return [];
   const templates = new Map<string, Json>();
@@ -521,8 +524,9 @@ const spawnAgentModels = (source: SpawnAgentSource): SpawnAgentModel[] => {
     const info = source.lookupModel(modelId);
 
     if (info !== undefined) {
-      if ((info.description ?? "").trim() !== "")
-        profile.description = (info.description as string).trim();
+      const detail = (info.description ?? "").trim();
+
+      if (detail !== "") profile.description = detail;
       applySpawnAgentThinking(profile, info.thinking?.levels);
     }
 
@@ -605,10 +609,13 @@ const splitAfterNewline = (text: string): string[] => {
   return lines;
 };
 
+interface ModelSections {
+  readonly cleaned: string;
+  readonly headingIndent: string;
+}
+
 /** `removeCodexSpawnAgentModelSections`: drops earlier model lists, remembering the heading indentation. */
-const removeModelSections = (
-  description: string,
-): { readonly cleaned: string; readonly headingIndent: string } => {
+const removeModelSections = (description: string): ModelSections => {
   if (!description.includes(SPAWN_AGENT_MODELS_HEADING))
     return { cleaned: description, headingIndent: "" };
   const lines = splitAfterNewline(description);
@@ -616,7 +623,9 @@ const removeModelSections = (
   let headingIndent = "";
 
   for (let index = 0; index < lines.length;) {
-    const line = lines[index] as string;
+    const line = lines[index];
+
+    if (line === undefined) break;
 
     if (line.trim() !== SPAWN_AGENT_MODELS_HEADING) {
       cleaned += line;
@@ -632,7 +641,7 @@ const removeModelSections = (
 
     index++;
 
-    while (index < lines.length && (lines[index] as string).trim().startsWith("- ")) index++;
+    while (index < lines.length && lines[index]?.trim().startsWith("- ") === true) index++;
   }
 
   return { cleaned, headingIndent };
@@ -675,6 +684,16 @@ const rewriteCollaborationTools = (
   removeMessageEncryption(messageTools);
 };
 
+export interface PreparedTools {
+  readonly payload: Json;
+  readonly prepared: boolean;
+}
+
+export interface OptimizedRequest {
+  readonly payload: Json;
+  readonly optimized: boolean;
+}
+
 /**
  * `PrepareCodexMultiAgentV2Tools`: prepares the collaboration tool definitions at the Responses API boundary without
  * renaming the namespace. `prepared` is false when the optimisation does not apply to this request.
@@ -684,7 +703,7 @@ export const prepareCodexMultiAgentV2Tools = (
   payload: Json,
   enabled: boolean,
   source?: SpawnAgentSource,
-): { readonly payload: Json; readonly prepared: boolean } => {
+): PreparedTools => {
   if (!multiAgentClientEnabled(headers, enabled)) return { payload, prepared: false };
   const spawnAgentTools = toolsByNames(payload, SPAWN_AGENT_TOOLS);
   const messageTools = toolsByNames(payload, COLLABORATION_MESSAGE_TOOLS);
@@ -737,7 +756,7 @@ export const optimizeCodexMultiAgentV2Request = (
   payload: Json,
   config: Config,
   options: { readonly source?: SpawnAgentSource; readonly toolsPrepared?: boolean } = {},
-): { readonly payload: Json; readonly optimized: boolean } => {
+): OptimizedRequest => {
   if (!codexMultiAgentV2Enabled(headers, config)) return { payload, optimized: false };
   rewriteAgentMessageContent(payload);
 
@@ -770,7 +789,7 @@ export const optimizeCodexMultiAgentV2RequestForAuth = (
   config: Config,
   isCompat: boolean,
   options: { readonly source?: SpawnAgentSource; readonly toolsPrepared?: boolean } = {},
-): { readonly payload: Json; readonly optimized: boolean } => {
+): OptimizedRequest => {
   rewriteCodexOrphanDelegationInputForConfig(headers, payload, config);
   const result = optimizeCodexMultiAgentV2Request(headers, payload, config, options);
 

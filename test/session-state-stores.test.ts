@@ -26,10 +26,10 @@ import {
 import type { SessionAddress } from "../src/session-state/protocol.ts";
 import { grokCiphertext } from "./support/xai.ts";
 
-const workerEnv = env as unknown as Env;
+const workerEnv = env;
 
 /** One Worker invocation: the effect runs with its own request context (the bindings of `env`). */
-const invocation = <A, E>(effect: Effect.Effect<A, E, never>): Effect.Effect<A, E> =>
+const invocation = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
   effect.pipe(Effect.provideService(WorkerEnv, workerEnv));
 
 // The Durable Object arms alarms at absolute expiry times: start the test clock at the real time so they stay in the
@@ -41,21 +41,18 @@ const unique = (name: string): string => `${name}-${crypto.randomUUID()}`;
 const MINUTE = 60_000;
 
 /** Counts backend round trips. */
-const counting = (
-  inner: SessionStateBackend,
-): { backend: SessionStateBackend; runs: () => number } => {
+const counting = (inner: SessionStateBackend) => {
   let count = 0;
 
-  return {
-    backend: {
-      run: (address, ops) => {
-        count++;
+  const backend: SessionStateBackend = {
+    run: (address, ops) => {
+      count++;
 
-        return inner.run(address, ops);
-      },
+      return inner.run(address, ops);
     },
-    runs: () => count,
   };
+
+  return { backend, runs: () => count };
 };
 
 const countingDo = () => counting(durableObjectBackend(workerEnv.SESSION_STATE));
@@ -282,6 +279,7 @@ describe("Claude continuity over SessionState", () => {
         const other = yield* invocation(
           b.begin(`id:${unique("cred")}`, session, false, "", "2026-02-01"),
         );
+
         assert.strictEqual(other?.previousMessageId, "");
         assert.strictEqual(other?.pinnedDate, "2026-02-01");
 
@@ -333,7 +331,10 @@ describe("Devin turn counter over SessionState", () => {
         { concurrency: 2 },
       );
 
-      assert.deepStrictEqual([x, y].toSorted(), [3, 4]);
+      assert.deepStrictEqual(
+        [x, y].toSorted((a, b) => a - b),
+        [3, 4],
+      );
     }),
   );
 

@@ -28,7 +28,7 @@ const decodeEncodings = (raw: Uint8Array, encoding: string, limit: number): Uint
   const parts = encoding.split(",");
 
   for (let i = parts.length - 1; i >= 0; i--) {
-    const enc = (parts[i] as string).trim().toLowerCase();
+    const enc = (parts[i] ?? "").trim().toLowerCase();
 
     if (enc === "" || enc === "identity") continue;
 

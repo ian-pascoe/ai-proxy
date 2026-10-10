@@ -9,7 +9,7 @@
  * same 1024-entry bound, and expire after 7 days.
  */
 import { Effect } from "effect";
-import type { Json, JsonObject } from "../../json/index.ts";
+import { type JsonObject, tryParseJson } from "../../json/index.ts";
 import { isArr, isObj, str } from "../../translator/common/gjson.ts";
 import {
   type BackendResolver,
@@ -89,7 +89,7 @@ const parseAliases = (text: string | undefined): ReadonlyMap<string, string> | u
   if (text === undefined) return undefined;
 
   try {
-    const parsed = JSON.parse(text) as Json;
+    const parsed = tryParseJson(text);
 
     if (!isObj(parsed)) return undefined;
 

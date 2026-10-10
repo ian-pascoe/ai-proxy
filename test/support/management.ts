@@ -10,6 +10,7 @@ import { requestContext } from "../../src/platform/env.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
 import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
 import { type MockHandler, mockHttp } from "./refresh.ts";
+import type { Json } from "../../src/json/index.ts";
 
 const key = await makeKey("management-kid");
 
@@ -58,6 +59,7 @@ export const makeHarness = (
 ): Harness => {
   const outbound = mockHttp(http);
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
+
   const routes = ManagementRoutes.pipe(
     Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer)),
   );
@@ -77,7 +79,7 @@ export const makeHarness = (
 
     return await web.handler(
       new Request(`https://proxy.test${path}`, { ...rest, headers }),
-      requestContext({ ...baseEnv, ...bindings } as Env, ctx),
+      requestContext({ ...baseEnv, ...bindings }, ctx),
     );
   };
 
@@ -98,7 +100,7 @@ export const makeHarness = (
   };
 };
 
-export const jsonInit = (method: string, body: unknown): RequestInit => ({
+export const jsonInit = (method: string, body: Json): RequestInit => ({
   method,
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body),

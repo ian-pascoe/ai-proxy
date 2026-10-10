@@ -7,7 +7,7 @@
  * and body come back unchanged. OAuth credentials call the ChatGPT backend, API keys need `alpha-search` enabled and
  * a base URL.
  */
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Result } from "effect";
 import {
   HttpClient,
   HttpClientRequest,
@@ -59,27 +59,27 @@ const upstreamHeaders = (
   clientHeaders: Headers,
   sessionId: string | undefined,
 ): Record<string, string> => {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    accept: "application/json",
-    originator: "codex_cli_rs",
-  };
+  const headers = new Map([
+    ["content-type", "application/json"],
+    ["accept", "application/json"],
+    ["originator", "codex_cli_rs"],
+  ]);
 
   for (const name of ["version", "user-agent", "session_id", "x-client-request-id"]) {
     const value = (clientHeaders.get(name) ?? "").trim();
 
-    if (value !== "") headers[name] = value;
+    if (value !== "") headers.set(name, value);
   }
 
   const accountId = credential.metadata["account_id"];
 
   if (typeof accountId === "string" && accountId.trim() !== "")
-    headers["chatgpt-account-id"] = accountId;
+    headers.set("chatgpt-account-id", accountId);
   const { apiKey } = codexCreds(credential);
 
-  if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`;
+  if (apiKey.trim() !== "") headers.set("authorization", `Bearer ${apiKey}`);
 
-  return applyCustomHeaders(headers, credential, clientHeaders, sessionId);
+  return applyCustomHeaders(Object.fromEntries(headers), credential, clientHeaders, sessionId);
 };
 
 const handle = Effect.gen(function* () {
@@ -87,13 +87,13 @@ const handle = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const configResult = yield* Effect.result(currentConfig);
 
-  if (configResult._tag === "Failure")
+  if (Result.isFailure(configResult))
     return errorJson(configResult.failure.status, configResult.failure.message);
   const config = configResult.success;
 
   const read = yield* Effect.result(readRequestBody(request));
 
-  if (read._tag === "Failure")
+  if (Result.isFailure(read))
     return errorJson(read.failure.status, "Failed to read search request");
 
   if (read.success.text.length > MAX_BODY_BYTES)
@@ -115,7 +115,7 @@ const handle = Effect.gen(function* () {
     }),
   );
 
-  if (picked._tag === "Failure") {
+  if (Result.isFailure(picked)) {
     const failure = picked.failure;
     const retryAfter = failure.safeHeaders?.["retry-after"] ?? failure.safeHeaders?.["Retry-After"];
 
@@ -147,7 +147,7 @@ const handle = Effect.gen(function* () {
   });
 
   const client = yield* HttpClient.HttpClient;
-  const clientHeaders = new Headers(request.headers as Record<string, string>);
+  const clientHeaders = new Headers(request.headers);
 
   // One attempt against `current`: a 401 fails (so the refresh helper can repeat it), everything else is answered
   // as the upstream sent it.
@@ -205,6 +205,7 @@ const handle = Effect.gen(function* () {
       const bytes = yield* response.arrayBuffer.pipe(
         Effect.orElseSucceed(() => new ArrayBuffer(0)),
       );
+
       const contentType = response.headers["content-type"];
 
       if (response.status === 401) {
@@ -222,7 +223,7 @@ const handle = Effect.gen(function* () {
     withCredentialRefresh({ credential, config, usage }, attempt),
   );
 
-  if (outcome._tag === "Failure") {
+  if (Result.isFailure(outcome)) {
     const error = outcome.failure;
     yield* fail(error);
 

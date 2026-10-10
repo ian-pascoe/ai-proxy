@@ -16,20 +16,22 @@ const RETRY_INFO = "type.googleapis.com/google.rpc.RetryInfo";
 
 const ERROR_INFO = "type.googleapis.com/google.rpc.ErrorInfo";
 
+const UNIT_MS = new Map([
+  ["ns", 1e-6],
+  ["us", 1e-3],
+  ["µs", 1e-3],
+  ["ms", 1],
+  ["s", 1000],
+  ["m", 60_000],
+  ["h", 3_600_000],
+]);
+
 /** Go `time.ParseDuration` for the unit set Google emits (`3.500s`, `1h2m3s`, `300ms`); `undefined` when invalid. */
 export const parseGoDuration = (text: string): number | undefined => {
   const value = text.trim();
 
   if (value === "" || value === "0") return value === "0" ? 0 : undefined;
-  const unitMs: Record<string, number> = {
-    ns: 1e-6,
-    us: 1e-3,
-    µs: 1e-3,
-    ms: 1,
-    s: 1000,
-    m: 60_000,
-    h: 3_600_000,
-  };
+
   let rest = value;
   let sign = 1;
 
@@ -45,7 +47,11 @@ export const parseGoDuration = (text: string): number | undefined => {
     const match = /^(\d+(?:\.\d*)?|\.\d+)(ns|us|µs|ms|s|m|h)/.exec(rest);
 
     if (match === null) return undefined;
-    total += Number.parseFloat(match[1] as string) * (unitMs[match[2] as string] as number);
+    const [, amount, unit] = match;
+    const factor = unit === undefined ? undefined : UNIT_MS.get(unit);
+
+    if (amount === undefined || factor === undefined) return undefined;
+    total += Number.parseFloat(amount) * factor;
     rest = rest.slice(match[0].length);
   }
 
@@ -83,7 +89,7 @@ export const parseRetryDelayMs = (body: string): number | undefined => {
   if (message !== "") {
     const seconds = /after\s+(\d+)s\.?/.exec(message);
 
-    if (seconds !== null) return Number.parseInt(seconds[1] as string, 10) * 1000;
+    if (seconds?.[1] !== undefined) return Number.parseInt(seconds[1], 10) * 1000;
     const human = /after\s+((?:\d+h)?(?:\d+m)?(?:\d+s)?)\.?/.exec(message.toLowerCase());
 
     if (human !== null && human[1] !== undefined && human[1] !== "") {

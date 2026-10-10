@@ -18,6 +18,11 @@ import {
   type JsonObject,
 } from "../../json/index.ts";
 
+interface TranscriptReset {
+  readonly payload: JsonObject;
+  readonly replayed: boolean;
+}
+
 export class XaiIdState {
   readonly downstreamToUpstream = new Map<string, string>();
   sequence = 0;
@@ -58,10 +63,7 @@ export class XaiIdState {
   }
 
   /** `prependCompactedTranscriptOnReset`. */
-  prependCompactedTranscriptOnReset(payload: JsonObject): {
-    readonly payload: JsonObject;
-    readonly replayed: boolean;
-  } {
+  prependCompactedTranscriptOnReset(payload: JsonObject): TranscriptReset {
     if (!this.replayCompactedTranscriptOnReset || this.transcriptInput.length === 0)
       return { payload, replayed: false };
 

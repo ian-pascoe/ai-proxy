@@ -93,7 +93,7 @@ const restoreFunctionNames = (root: Json | undefined, nameMap: NameMap): Json | 
 };
 
 /** `antigravityStreamPayloads`: one payload, or the `response` of every element of an array. */
-const streamPayloads = (line: string): Array<Json | "[DONE]" | undefined> => {
+const streamPayloads = (line: string): Array<Json | undefined> => {
   let trimmed = line.trim();
   const isData = trimmed.startsWith("data:");
 
@@ -309,10 +309,12 @@ const stepStart = (st: StreamState, stepType: string, part: Json | undefined): s
 
 const stepStop = (st: StreamState): string[] => {
   if (!st.activeStepOpen) return [];
+
   const out = sseEventData(
     "step.stop",
     JSON.stringify({ index: st.activeStepIndex, event_type: "step.stop" }),
   );
+
   st.activeStepOpen = false;
   st.activeStepType = "";
 
@@ -420,6 +422,7 @@ export const convertAntigravityResponseToInteractions = (
     context.state.value = fresh;
   }
 
+  // SAFETY: the stream state slot is only ever written with this type by this translator (initialised just above).
   const st = context.state.value as StreamState;
   const modelName = context.model;
   const out: string[] = [];
@@ -493,11 +496,13 @@ const partToSteps = (part: Json): JsonObject[] => {
     const steps: JsonObject[] = [];
 
     if (sig !== "") steps.push(thoughtStep(sig, ""));
+
     const step: JsonObject = {
       type: "function_call",
       name: asString(get(functionCall, "name")),
       arguments: {},
     };
+
     const id = get(functionCall, "id");
 
     if (id !== undefined) step["call_id"] = asString(id);
@@ -523,6 +528,7 @@ const partToSteps = (part: Json): JsonObject[] => {
       name: asString(get(functionResponse, "name")),
       result: {},
     };
+
     const id = get(functionResponse, "id");
 
     if (id !== undefined) step["call_id"] = asString(id);
@@ -545,6 +551,7 @@ const partToSteps = (part: Json): JsonObject[] => {
     if (asBool(get(part, "thought"))) return [thoughtStep(sig, asString(text))];
 
     if (asString(text) === "") return sig !== "" ? [thoughtStep(sig, "")] : [];
+
     const steps: JsonObject[] = [
       { type: "model_output", content: [{ type: "text", text: asString(text) }] },
     ];

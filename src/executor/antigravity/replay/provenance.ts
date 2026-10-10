@@ -126,8 +126,7 @@ export const validateFunctionCallPairing = (payload: Json): string | undefined =
   if (!isJsonArray(contents)) return undefined;
   let pending: CallRef[] = [];
 
-  for (let i = 0; i < contents.length; i++) {
-    const content = contents[i] as Json;
+  for (const [i, content] of contents.entries()) {
     const parts = get(content, "parts");
 
     if (!isJsonArray(parts) || parts.length === 0) {
@@ -141,8 +140,7 @@ export const validateFunctionCallPairing = (payload: Json): string | undefined =
     const calls: CallRef[] = [];
     const responses: Array<{ part: Json; path: string }> = [];
 
-    for (let j = 0; j < parts.length; j++) {
-      const part = parts[j] as Json;
+    for (const [j, part] of parts.entries()) {
       const partPath = `${contentsPath}[${i}].parts[${j}]`;
       const call = get(part, "functionCall");
 
@@ -189,10 +187,11 @@ export const validateFunctionCallPairing = (payload: Json): string | undefined =
       return `${contentsPath}[${i}]: functionResponse count ${responses.length} does not match pending functionCall count ${pending.length}`;
     }
 
-    for (let k = 0; k < responses.length; k++) {
-      const { part, path } = responses[k] as { part: Json; path: string };
+    for (const [k, { part, path }] of responses.entries()) {
       const response = get(part, "functionResponse");
-      const call = pending[k] as CallRef;
+      const call = pending[k];
+
+      if (call === undefined) break;
       const responseId = asString(get(response, "id"));
       const responseName = asString(get(response, "name"));
 

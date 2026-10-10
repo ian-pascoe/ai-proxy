@@ -26,9 +26,10 @@ export interface XaiHeaderInput {
 }
 
 /** `applyXAIDefaultHeaders`. */
-const defaultHeaders = (input: XaiHeaderInput): Record<string, string> => {
+const defaultHeaders = (input: XaiHeaderInput) => {
   const { token } = xaiCreds(input.credential);
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {};
+  headers["content-type"] = "application/json";
 
   if (token.trim() !== "") headers["authorization"] = `Bearer ${token}`;
   headers["accept"] = input.stream ? "text/event-stream" : "application/json";
@@ -39,10 +40,7 @@ const defaultHeaders = (input: XaiHeaderInput): Record<string, string> => {
   return headers;
 };
 
-const withCustom = (
-  headers: Record<string, string>,
-  input: XaiHeaderInput,
-): Record<string, string> => {
+const withCustom = (headers: Record<string, string>, input: XaiHeaderInput) => {
   applyCustomHeaders(headers, input.credential, input.clientHeaders, input.sessionId);
   const out: Record<string, string> = {};
 
@@ -79,7 +77,8 @@ export const buildXaiChatHeaders = (
  */
 export const buildXaiWebsocketHeaders = (input: XaiHeaderInput): Record<string, string> => {
   const { token } = xaiCreds(input.credential);
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers: Record<string, string> = {};
+  headers["content-type"] = "application/json";
 
   if (token.trim() !== "") headers["authorization"] = `Bearer ${token}`;
 

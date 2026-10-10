@@ -15,6 +15,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  tryParseJson,
 } from "../../json/index.ts";
 import { parseOpenAIUsage } from "../../usage/record.ts";
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
@@ -91,11 +92,14 @@ export const claudeCompactionSourcePayload = (
 ): Json => {
   let payload: Json = request.payload;
 
+  const original = options.originalRequest;
+
   if (
+    original !== undefined &&
     !hasResponsesCompactionTrigger(payload) &&
-    hasResponsesCompactionTrigger(options.originalRequest)
+    hasResponsesCompactionTrigger(original)
   ) {
-    payload = options.originalRequest as Json;
+    payload = original;
   }
 
   if ((payload === undefined || payload === null) && options.originalRequest !== undefined) {
@@ -185,16 +189,18 @@ export const finalizeClaudeCompactionSummaryBody = (body: JsonObject): JsonObjec
   return flattenClaudeToolBlocksForCompaction(body);
 };
 
-/** `claudeCompactionResponsesUsage`: input includes cache creation and read; `cached` is the cache read. */
-export const claudeCompactionUsage = (
-  payload: Json | undefined,
-  rawBody: string,
-): {
+export interface CompactionUsage {
   readonly input: number;
   readonly output: number;
   readonly total: number;
   readonly cached: number;
-} => {
+}
+
+/** `claudeCompactionResponsesUsage`: input includes cache creation and read; `cached` is the cache read. */
+export const claudeCompactionUsage = (
+  payload: Json | undefined,
+  rawBody: string,
+): CompactionUsage => {
   const usage = get(payload, "usage");
 
   if (usage === undefined) {
@@ -209,8 +215,10 @@ export const claudeCompactionUsage = (
   }
 
   const cached = asInt(get(usage, "cache_read_input_tokens"));
+
   const input =
     asInt(get(usage, "input_tokens")) + asInt(get(usage, "cache_creation_input_tokens")) + cached;
+
   const output = asInt(get(usage, "output_tokens"));
 
   return { input, output, total: input + output, cached };
@@ -230,13 +238,9 @@ export const patchClaudeCompactionStreamUsage = (
   const index = chunk.indexOf(prefix);
 
   if (index < 0) return chunk;
-  let data: Json;
+  const data = tryParseJson(chunk.slice(index + prefix.length).trim());
 
-  try {
-    data = JSON.parse(chunk.slice(index + prefix.length).trim()) as Json;
-  } catch {
-    return chunk;
-  }
+  if (data === undefined) return chunk;
 
   const path =
     get(data, "response.usage") !== undefined

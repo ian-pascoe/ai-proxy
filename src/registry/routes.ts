@@ -4,7 +4,6 @@
  * Go source: internal/api/server_routes.go (routes at :66-67 and :131-134, `unifiedModelsHandler`). Authentication is
  * the Access gate (`withAccess` on the layer in `http/app.ts`).
  */
-import type { Context } from "effect";
 import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { buildCodexClientModels, supportsApplyPatchProviders } from "./codex-client-models.ts";
@@ -39,7 +38,7 @@ const remainder = (pathname: string, prefix: string): string | undefined => {
   }
 };
 
-type Registry = Context.Service.Shape<typeof ModelRegistry>;
+type Registry = ModelRegistry["Service"];
 
 const v1Models = (registry: Registry) =>
   Effect.gen(function* () {

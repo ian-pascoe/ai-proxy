@@ -42,12 +42,14 @@ const pipeline = (
   credentials: ReadonlyArray<CredentialSnapshot> = [xaiOauth()],
 ) => {
   const log: XaiPickerLog = { picks: [], reports: [] };
+
   const p = makePipeline({
     config,
     respond,
     credentialPicker: xaiPicker(credentials, log),
     modelProviders: xaiModels,
   });
+
   afterAll(p.dispose);
 
   return { ...p, log };
@@ -160,21 +162,26 @@ describe("images (xai models on /v1/images/*)", () => {
       "/v1/images/edits",
       postJson({ model: "grok-imagine-image", prompt: "edit" }),
     );
+
     expect(missing.status).toBe(400);
   });
 
   it("answers 502 when the upstream returns no image and lists the xAI models for unknown ones", async () => {
     const p = pipeline(() => jsonResponse({ data: [] }));
+
     const empty = await p.call(
       "/v1/images/generations",
       postJson({ model: "grok-imagine-image", prompt: "p" }),
     );
+
     expect(empty.status).toBe(502);
     expect(await empty.text()).toContain("upstream did not return image output");
+
     const unknown = await p.call(
       "/v1/images/generations",
       postJson({ model: "nope", prompt: "p" }),
     );
+
     expect(unknown.status).toBe(400);
     expect(await unknown.text()).toContain("grok-imagine-image");
   });
@@ -336,10 +343,12 @@ describe("videos", () => {
         message: expect.stringContaining("size must be one of"),
       },
     });
+
     const model = await p.call(
       "/openai/v1/videos",
       postJson({ model: "gpt-image-2", prompt: "p" }),
     );
+
     expect(model.status).toBe(400);
     const prompt = await p.call("/openai/v1/videos", postJson({}));
     expect(((await prompt.json()) as { error: { message: string } }).error.message).toContain(
@@ -389,6 +398,7 @@ describe("speech", () => {
       "/v1/tts",
       postJson({ input: "hi", voice: "custom-voice", language: "de" }),
     );
+
     expect(tts.headers.get("content-type")).toBe("audio/mpeg");
     expect(JSON.parse(p.calls[1]!.body)).toMatchObject({
       voice_id: "custom-voice",

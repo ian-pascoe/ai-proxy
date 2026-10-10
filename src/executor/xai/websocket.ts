@@ -20,7 +20,7 @@
  *
  * Not ported: the Claude stream input-token estimate.
  */
-import { Clock, Effect, Option, Stream } from "effect";
+import { Clock, Effect, Option, Result, Stream } from "effect";
 import {
   asInt,
   asString,
@@ -86,6 +86,7 @@ export const buildWarmupCompletedPayload = (created: Json): JsonObject => {
     type: "response.completed",
     response: { output: [], usage: cloneJson(WARMUP_USAGE) },
   };
+
   const sequence = get(created, "sequence_number");
 
   if (sequence !== undefined) completed["sequence_number"] = asInt(sequence) + 1;
@@ -198,12 +199,16 @@ export const makeXaiWebsocketStream =
       if (requestType !== "") body = { ...body, type: requestType };
 
       const { baseURL } = xaiCreds(context.credential);
+
       const url = websocketUrl(
         joinUrl(baseURL === "" ? XAI_DEFAULT_API_BASE_URL : baseURL, "/responses"),
       );
+
       const store = deps.store ?? xaiSessionStore;
+
       const state =
         sessionId === undefined ? undefined : (deps.idStates ?? xaiIdStates).get(sessionId);
+
       const mapper =
         state === undefined ? undefined : new XaiRequestIdMapper(state, request.payload);
 
@@ -262,6 +267,7 @@ export const makeXaiWebsocketStream =
           context.usage.recordFirstPacket(yield* Clock.currentTimeMillis);
           const collector = new OutputItemCollector();
           let recordedTranscript = false;
+
           const fail = (error: ExecutionError) =>
             turn.invalidate.pipe(Effect.andThen(Effect.fail(error)));
 
@@ -284,7 +290,7 @@ export const makeXaiWebsocketStream =
             if (pendingError !== undefined) return yield* fail(pendingError);
             const read = yield* Effect.result(turn.read);
 
-            if (read._tag === "Failure") {
+            if (Result.isFailure(read)) {
               // An upstream drop while an apply_patch call is unvalidated ends with the local failure frame.
               const unfinished = prepared.applyPatch.finish();
 
@@ -414,7 +420,9 @@ export const makeXaiWebsocketStream =
             return [out, Option.some<void>(undefined)] as const;
           });
 
-          return Stream.paginate(undefined as void, () => page).pipe(
+          const firstPage: void = undefined;
+
+          return Stream.paginate(firstPage, () => page).pipe(
             Stream.tapError((error) =>
               Effect.sync(() => context.usage.fail(error.status, error.message)),
             ),

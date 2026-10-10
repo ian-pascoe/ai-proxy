@@ -8,7 +8,7 @@ import { lookupStaticModelInfo } from "../src/registry/catalog.ts";
 import { ModelRegistry, ModelRegistryError, SNAPSHOT_TTL_MS } from "../src/registry/service.ts";
 import type { ModelSource } from "../src/registry/source.ts";
 import { applyThinking, type ModelInfoLookup } from "../src/thinking/index.ts";
-import { catalogs, canon } from "./support/registry.ts";
+import { catalogs, canonOf } from "./support/registry.ts";
 import { FakeKv, fakeConfig } from "./support/registry-refresh.ts";
 import { source } from "./support/registry-sources.ts";
 import { fixture as thinkingFixture } from "./support/thinking.ts";
@@ -143,7 +143,7 @@ describe("static lookups agree with the thinking fixtures' Go catalog", () => {
       const actual = lookupStaticModelInfo(catalogs, id);
       expect(actual, id).toBeDefined();
       expect(
-        canon({
+        canonOf({
           id: actual?.id,
           type: actual?.type,
           userDefined: actual?.userDefined,
@@ -152,7 +152,7 @@ describe("static lookups agree with the thinking fixtures' Go catalog", () => {
           thinking: actual?.thinking,
         }),
         id,
-      ).toEqual(canon(expected));
+      ).toEqual(canonOf(expected));
     }
   });
 });

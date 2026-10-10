@@ -24,7 +24,7 @@ export const redactSecrets = (text: string): string => {
   let out = text.replace(/\s+/g, " ").trim();
 
   for (const [pattern, replacement] of PATTERNS) out = out.replace(pattern, replacement);
-  const chars = [...out];
+  const chars = Array.from(out);
 
   return chars.length > MAX_SUMMARY ? `${chars.slice(0, MAX_SUMMARY - 3).join("")}...` : out;
 };

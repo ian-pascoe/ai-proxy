@@ -146,6 +146,9 @@ const sameJson = (left: Json | undefined, right: Json | undefined): boolean =>
 const isDone = (event: Json | undefined): boolean =>
   typeof event === "string" && event.trim() === "[DONE]";
 
+const toError = (cause: unknown): Error =>
+  cause instanceof Error ? cause : new Error(String(cause));
+
 export class ApplyPatchResponsesState {
   readonly bridge: ApplyPatchResponsesBridge;
   readonly #tools: Map<string, ResponsesToolDescriptor>;
@@ -444,6 +447,7 @@ export class ApplyPatchResponsesState {
 
     for (const wrapperRaw of wrappers) {
       const wrapper = tryParseJson(wrapperRaw);
+
       const child = this.#tools.get(
         qualifyResponsesNamespaceToolName(call.namespace, str(wrapper, "name")),
       );
@@ -469,9 +473,11 @@ export class ApplyPatchResponsesState {
     const out: Json[] = [];
 
     for (let i = start; i < call.events.length; i++) {
-      const p = call.events[i] as Json;
+      const p = call.events[i];
+      const originalRoot = call.originals[i];
+
+      if (p === undefined || originalRoot === undefined) continue;
       const pending = cloneJson(p);
-      const originalRoot = call.originals[i] as Json;
 
       if (patch) {
         for (const namespacePath of ["namespace", "item.namespace"]) {
@@ -645,7 +651,7 @@ export class ApplyPatchResponsesState {
         try {
           events = this.#expandDispatcher(done, originalDone);
         } catch (error) {
-          return this.#fail(error as Error);
+          return this.#fail(toError(error));
         }
 
         preceding.push(...events);
@@ -678,7 +684,7 @@ export class ApplyPatchResponsesState {
     try {
       expanded = this.#expandDispatcher(current, original);
     } catch (error) {
-      return this.#fail(error as Error);
+      return this.#fail(toError(error));
     }
 
     const events = [...preceding, ...expanded];
@@ -761,7 +767,7 @@ export class ApplyPatchResponsesState {
       result = this.#fail(finished);
     } else {
       parsed = tryParseJson(payload);
-      result = parsed === undefined ? { events: [payload as Json] } : this.transform(parsed);
+      result = parsed === undefined ? { events: [payload] } : this.transform(parsed);
     }
 
     const events = result.events;

@@ -38,9 +38,10 @@ export const antigravitySupportsNativeGoogleSearch = (model: string): boolean =>
 
   if (id === "") return false;
 
-  return (
-    (lookupModelInfo(id, "antigravity") as WebSearchCapable | undefined)?.supportsWebSearch === true
-  );
+  // SAFETY: the registry lookup returns the full ModelInfo record at runtime (it carries supportsWebSearch); ThinkingModelInfo only types the thinking subset.
+  const info = lookupModelInfo(id, "antigravity") as WebSearchCapable | undefined;
+
+  return info?.supportsWebSearch === true;
 };
 
 export const isClaudeTypedWebSearchToolType = (toolType: string): boolean =>
@@ -296,6 +297,7 @@ const parseGroundingSupports = (grounding: Json): GroundingSupport[] | undefined
         const chunkIndex = asInt(index);
 
         if (chunkIndex < 0 || chunkIndex >= chunkData.length) continue;
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const data = chunkData[chunkIndex] as { url: string; title: string };
         parsed.chunkUrls.push(data.url);
 
@@ -347,6 +349,7 @@ const buildCitedTextBlocks = (
     }
 
     if (citedText !== "" && support.chunkUrls.length > 0) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       blocks.push({
         text: citedText,
         citations: [
@@ -377,12 +380,14 @@ export const buildClaudeWebSearchContent = (
   grounding: Json,
 ): Json[] => {
   const content: Json[] = [];
+
   const serverToolUse: JsonObject = {
     type: "server_tool_use",
     id: toolUseId,
     name: "web_search",
     input: {},
   };
+
   const query = webSearchQueryFromGrounding(grounding);
 
   if (query !== "") serverToolUse["input"] = { query };
@@ -407,7 +412,7 @@ export const buildClaudeWebSearchContent = (
 /** `splitRunesForWebSearch`. */
 const splitRunes = (text: string, chunkSize: number): string[] => {
   if (text === "") return [];
-  const runes = [...text];
+  const runes = Array.from(text);
   const chunks: string[] = [];
 
   for (let start = 0; start < runes.length; start += chunkSize)

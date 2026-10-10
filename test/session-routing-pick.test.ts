@@ -87,9 +87,11 @@ describe("LCP affinity in the pool", () => {
 
   it("spreads unrelated conversations", async () => {
     const { pool } = await makePool(yaml(true));
+
     const ids = ["x", "y", "z"].map(
       (name) => pickLcp(pool, conversation("sys", `hello ${name}`, "hi")).credential.id,
     );
+
     expect(new Set(ids).size).toBe(3);
   });
 
@@ -113,11 +115,13 @@ describe("LCP affinity in the pool", () => {
     const off = await makePool(yaml(false));
     expect(pickLcp(off.pool, turns2).session).toBeUndefined();
     const on = await makePool(yaml(true));
+
     const noScope = on.pool.pick({
       providers,
       model: "m",
       lcp: { ...lcpOf(turns2), callerScope: "" },
     });
+
     expect(noScope.ok && noScope.session).toBeFalsy();
     const shortBody = conversation("only system");
     const noTurns = on.pool.pick({ providers, model: "m", lcp: { ...lcpOf(shortBody) } });

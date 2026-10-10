@@ -69,6 +69,7 @@ const trimmedOrUndefined = (value: string | undefined): string | undefined => {
 
 /** Builds an object without `undefined` values (required by `exactOptionalPropertyTypes`). */
 const compact = <T extends object>(value: { [K in keyof T]: T[K] | undefined }): T =>
+  // SAFETY: only undefined-valued keys are dropped, so every remaining property keeps its declared type in T.
   Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T;
 
 const normalizeScopedErrors = (
@@ -82,13 +83,10 @@ const normalizeScopedErrors = (
     const match = (rule.match ?? []).map((m) => m.trim()).filter((m) => m !== "");
     const matchRegexr = (rule["match-regexr"] ?? []).map((m) => m.trim()).filter((m) => m !== "");
 
-    if (
-      (rule.status ?? 0) <= 0 ||
-      (match.length === 0 && matchRegexr.length === 0) ||
-      action === ""
-    )
-      continue;
-    clean.push({ status: rule.status as number, match, "match-regexr": matchRegexr, action });
+    const status = rule.status ?? 0;
+
+    if (status <= 0 || (match.length === 0 && matchRegexr.length === 0) || action === "") continue;
+    clean.push({ status, match, "match-regexr": matchRegexr, action });
   }
 
   return clean;
@@ -100,6 +98,7 @@ const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
   const prefix = group.prefix === undefined ? undefined : normalizeModelPrefix(group.prefix);
   const scoped = normalizeScopedErrors(group["request-scoped-errors"]);
 
+  // SAFETY: the spread keeps every ApiKeyGroup field; the overrides only differ by explicit undefined values.
   return {
     ...group,
     name: trimmedOrUndefined(group.name),
@@ -135,7 +134,7 @@ const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
 const sortedHeadersId = (headers: Readonly<Record<string, string>> | undefined): string =>
   Object.keys(headers ?? {})
     .toSorted()
-    .map((name) => `${name}\0${(headers as Record<string, string>)[name]}\0`)
+    .map((name) => `${name}\0${headers?.[name] ?? ""}\0`)
     .join("");
 
 /** Vertex models need both a name and an alias (`SanitizeVertexCompatKeys`). */
@@ -272,9 +271,7 @@ const normalizeCompat = (groups: readonly OpenAICompatGroup[]): OpenAICompatGrou
 
 const lowerKey = (key: string): string => key.trim().toLowerCase();
 
-const normalizeAliases = (
-  input: Readonly<Record<string, readonly OAuthModelAlias[]>>,
-): Record<string, OAuthModelAlias[]> => {
+const normalizeAliases = (input: Readonly<Record<string, readonly OAuthModelAlias[]>>) => {
   const out: Record<string, OAuthModelAlias[]> = {};
 
   for (const [rawChannel, aliases] of Object.entries(input)) {
@@ -310,9 +307,7 @@ const normalizeAliases = (
 };
 
 /** Dedupes by `lower(name)->lower(alias)`, keeping the last occurrence in its original relative order. */
-const normalizeSettings = (
-  input: Readonly<Record<string, readonly OAuthModelSetting[]>>,
-): Record<string, OAuthModelSetting[]> => {
+const normalizeSettings = (input: Readonly<Record<string, readonly OAuthModelSetting[]>>) => {
   const out: Record<string, OAuthModelSetting[]> = {};
 
   for (const [rawChannel, settings] of Object.entries(input)) {
@@ -346,9 +341,7 @@ const normalizeSettings = (
   return out;
 };
 
-const normalizeExcludedMap = (
-  input: Readonly<Record<string, readonly string[]>>,
-): Record<string, string[]> => {
+const normalizeExcludedMap = (input: Readonly<Record<string, readonly string[]>>) => {
   const out: Record<string, string[]> = {};
 
   for (const [provider, models] of Object.entries(input)) {
@@ -363,7 +356,7 @@ const normalizeExcludedMap = (
 
 const normalizeScopedErrorMap = (
   input: Readonly<Record<string, readonly RequestScopedErrorRule[]>>,
-): Record<string, RequestScopedErrorRule[]> => {
+) => {
   const out: Record<string, RequestScopedErrorRule[]> = {};
 
   for (const [channel, rules] of Object.entries(input)) {
@@ -391,6 +384,7 @@ const sanitizeRawRules = (rules: readonly PayloadRule[]): PayloadRule[] =>
   });
 
 const trimValues = <T extends Record<string, unknown>>(value: T): T =>
+  // SAFETY: only string values are replaced (by their trimmed form), so every property keeps its type in T.
   Object.fromEntries(
     Object.entries(value).map(([k, v]) => [k, typeof v === "string" ? v.trim() : v]),
   ) as T;

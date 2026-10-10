@@ -66,6 +66,12 @@ const mediaModel = (request: ExecutorRequest): string => {
 
 const sessionOf = (options: ExecutorOptions): string | undefined => options.metadata.sessionId;
 
+const sessionField = (options: ExecutorOptions) => {
+  const sessionId = sessionOf(options);
+
+  return sessionId !== undefined ? { sessionId } : {};
+};
+
 const publishModel = (context: ExecutionContext, text: string): void =>
   context.usage.observeResponseModel(responseModelOf(tryParseJson(text)));
 
@@ -77,6 +83,7 @@ export const executeImages = Effect.fnUntraced(function* (
 ) {
   const model = mediaModel(request);
   const payload = finalize(model, request.payload, normalizeImageRefs(cloneJson(request.payload)));
+
   const url = joinUrl(
     xaiChatBaseUrl(context.credential),
     imageEndpointPath(options.metadata.requestPath),
@@ -86,7 +93,7 @@ export const executeImages = Effect.fnUntraced(function* (
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
-    ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {}),
+    ...sessionField(options),
   });
 
   const response = yield* sendUpstream(context, {
@@ -130,7 +137,7 @@ export const executeVideos = Effect.fnUntraced(function* (
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
-    ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {}),
+    ...sessionField(options),
   });
 
   if (method === "POST") {
@@ -170,7 +177,7 @@ export const executeSpeech = Effect.fnUntraced(function* (
     credential: context.credential,
     clientHeaders: options.headers,
     stream: false,
-    ...(sessionOf(options) !== undefined ? { sessionId: sessionOf(options) as string } : {}),
+    ...sessionField(options),
   });
 
   // Official TTS returns raw audio; the media header helper asks for JSON.

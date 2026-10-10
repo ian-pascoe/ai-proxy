@@ -10,13 +10,15 @@ import { asString, get, isJsonArray, isJsonObject, type Json } from "../../json/
 
 const ID_LIMIT = 64;
 
-const PREFIXES: Readonly<Record<string, string>> = {
-  message: "msg",
-  reasoning: "rs",
-  function_call: "fc",
-  custom_tool_call: "ctc",
-  custom_tool_call_output: "ctco",
-};
+const PREFIXES = new Map<string, string>(
+  Object.entries({
+    message: "msg",
+    reasoning: "rs",
+    function_call: "fc",
+    custom_tool_call: "ctc",
+    custom_tool_call_output: "ctco",
+  }),
+);
 
 const OCCUPIED = 1;
 
@@ -30,10 +32,10 @@ const runeLength = (text: string): number => {
   return count;
 };
 
-const runes = (text: string): string[] => [...text];
+const runes = (text: string): string[] => Array.from(text);
 
 const normalizeItemId = (item: Json, id: string): string => {
-  const prefix = PREFIXES[asString(get(item, "type"))];
+  const prefix = PREFIXES.get(asString(get(item, "type")));
 
   if (prefix === undefined) return id;
 
@@ -117,7 +119,7 @@ export const sanitizeCodexInputItemIds = <T extends Json>(body: T): T => {
           }
         }
 
-        id = collisionId as string;
+        id = collisionId;
       }
 
       if (runeLength(id) > ID_LIMIT) {

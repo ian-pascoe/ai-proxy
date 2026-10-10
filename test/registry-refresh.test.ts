@@ -160,12 +160,15 @@ describe("refreshCatalogs (cron)", () => {
     Effect.gen(function* () {
       const kv = new FakeKv();
       yield* runRefresh(kv, { [MODELS_URL]: catalogText(["a"]) });
+
       const merged = JSON.parse(kv.data.get(CATALOG_KEYS.models) ?? "{}") as {
         meta: Array<{ id: string }>;
       };
+
       const embeddedMeta = (modelsJson as unknown as { meta: Array<{ id: string }> }).meta.map(
         (model) => model.id,
       );
+
       assert.deepStrictEqual(
         merged.meta.map((model) => model.id),
         embeddedMeta,
@@ -174,9 +177,11 @@ describe("refreshCatalogs (cron)", () => {
       const kv2 = new FakeKv();
       kv2.data.set(CATALOG_KEYS.models, catalogText(["old"], ["stored-meta"]));
       yield* runRefresh(kv2, { [MODELS_URL]: catalogText(["b"]) });
+
       const merged2 = JSON.parse(kv2.data.get(CATALOG_KEYS.models) ?? "{}") as {
         meta: Array<{ id: string }>;
       };
+
       assert.deepStrictEqual(
         merged2.meta.map((model) => model.id),
         ["stored-meta"],
@@ -187,10 +192,12 @@ describe("refreshCatalogs (cron)", () => {
   it.effect("rejects responses above the 8 MiB limit", () =>
     Effect.gen(function* () {
       const kv = new FakeKv();
+
       const huge = JSON.stringify({
         ...JSON.parse(catalogText(["x"])),
         pad: "x".repeat(MAX_CATALOG_BYTES),
       });
+
       const outcomes = yield* runRefresh(kv, { [MODELS_URL]: huge, [MODELS_MIRROR]: huge });
       assert.strictEqual(outcomes[0]?.status, "failed");
     }),

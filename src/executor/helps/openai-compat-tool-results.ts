@@ -6,14 +6,7 @@
  * (the Claude relay notice + image parts of the following user message) are replaced by a short marker.
  */
 import type { ModelEntry, OpenAICompatGroup } from "../../config/schema.ts";
-import {
-  asString,
-  isJsonArray,
-  isJsonObject,
-  type Json,
-  type JsonObject,
-  set,
-} from "../../json/index.ts";
+import { asString, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
 import { parseSuffix } from "../suffix.ts";
 
 const IMAGE_OMITTED_TEXT = "[image omitted: unsupported by upstream]";
@@ -201,7 +194,7 @@ export const normalizeToolResultsTextOnly = (payload: Json): Json => {
 
           // The synthetic relay message contained only relayed images: omit it entirely.
           if (remaining.length === 0) continue;
-          message = { ...message, content: remaining } as JsonObject;
+          message = { ...message, content: remaining };
         }
       }
 

@@ -9,7 +9,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
 import {
   CLAUDE_CLIENT_ID,
   CLAUDE_OAUTH_SCOPE,
@@ -55,11 +55,8 @@ interface Identity {
   organizationName: string;
 }
 
-const nested = (value: unknown, key: string): string => {
-  if (typeof value !== "object" || value === null) return "";
-
-  return str((value as Record<string, unknown>)[key]);
-};
+const nested = (value: Json | undefined, key: string): string =>
+  isJsonObject(value) ? str(value[key]) : "";
 
 /** Profile (identity wins) and roles lookups the native client issues after the exchange; both are advisory. */
 const inspectAccount = (accessToken: string, identity: Identity) =>

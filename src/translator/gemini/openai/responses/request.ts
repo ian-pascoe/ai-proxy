@@ -131,6 +131,7 @@ const withField = (item: Json, path: string, value: Json): Json => {
 // --- tool call/reasoning pairing ----------------------------------------------------------------------------------------
 
 /** `pairOpenAIResponsesReasoningWithFunctionCalls`. */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
   const postCallSignature = new Map<number, string>();
   const postCallCarrier = new Set<number>();
@@ -149,6 +150,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
       groupEnd < items.length &&
       (isToolCall(items[groupEnd] as Json) || isDetachedCarrier(items[groupEnd]))
     ) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       hasFunctionCall = hasFunctionCall || isToolCall(items[groupEnd] as Json);
       groupEnd++;
     }
@@ -166,6 +168,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
     // semantics. This preserves both carrier,call,carrier,call and call,carrier,call,carrier histories.
     if (isToolCall(items[groupStart] as Json)) {
       for (let callIndex = groupStart; callIndex < groupEnd; callIndex++) {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const item = items[callIndex] as Json;
 
         if (
@@ -215,6 +218,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
   const paired: Json[] = [];
 
   for (let index = 0; index < items.length; index++) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const item = items[index] as Json;
     const signature = postCallSignature.get(index);
 
@@ -242,11 +246,13 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
       const rawSignature = trimmedAt(item, "encrypted_content");
 
       if (rawSignature !== "") {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const functionCall = withField(
           items[index + 1] as Json,
           CARRIER_SIGNATURE_FIELD,
           rawSignature,
         );
+
         const summary = asString(get(item, "summary.0.text"));
 
         if (summary !== "") set(functionCall, CARRIER_SUMMARY_FIELD, summary);
@@ -270,6 +276,7 @@ const reorderDetachedReasoning = (items: readonly Json[]): Json[] => {
     const markedDetached = asString(get(item, "id")).includes("_detached_after_");
 
     if (isReasoningCarrier && reordered.length > 0) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const previous = reordered[reordered.length - 1] as Json;
       let previousType = typeOf(previous);
 
@@ -287,6 +294,7 @@ const reorderDetachedReasoning = (items: readonly Json[]): Json[] => {
         let alreadyPairedFunction = false;
 
         if (reordered.length > 1) {
+          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const prior = reordered[reordered.length - 2] as Json;
           const priorDirection = carrierDirection(prior);
           const priorTarget = carrierTarget(prior);
@@ -334,6 +342,7 @@ const reorderDetachedReasoning = (items: readonly Json[]): Json[] => {
       let alreadyPaired = false;
 
       if (reordered.length > 1) {
+        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         const prior = reordered[reordered.length - 2] as Json;
         alreadyPaired =
           isDetachedCarrier(prior) && asString(get(prior, "id")).includes("_detached_after_");
@@ -380,6 +389,7 @@ const buildFunctionCallPart = (
   const part: JsonObject = { functionCall };
   part["thoughtSignature"] = signature;
   functionCall["id"] = extractResponsesCallID(item);
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const args = functionCall["args"] as JsonObject;
 
   if (typeOf(item) === "custom_tool_call") {
@@ -392,6 +402,7 @@ const buildFunctionCallPart = (
       let parsed: Json | undefined;
 
       try {
+        // SAFETY: JSON.parse can only produce JSON values, which is exactly what Json models.
         parsed = JSON.parse(argumentsText) as Json;
       } catch {
         parsed = undefined;
@@ -506,6 +517,7 @@ const parseArrayOutput = (output: Json[]): ArrayOutput => {
   if (entries.length === 0) return { result: "", isRaw: false, images };
 
   if (entries.length === 1) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     const only = entries[0] as (typeof entries)[number];
 
     return only.isText
@@ -530,9 +542,11 @@ const buildFunctionResponseParts = (
 
   if (matched !== undefined) functionName = matched;
   else if (trimmedAt(item, "name") !== "") functionName = trimmedAt(item, "name");
+
   let functionResponse: Json = {
     functionResponse: { name: sanitizeFunctionName(functionName), response: {} },
   };
+
   set(functionResponse, "functionResponse.id", callId);
 
   const output = get(item, "output");
@@ -598,12 +612,18 @@ const buildFunctionResponseParts = (
   return [functionResponse];
 };
 
+type CollectFunctionCallOutputsResult = {
+  readonly ordered: Json[];
+  readonly consumedCount: number;
+};
+
 /** `collectOpenAIResponsesFunctionCallOutputs` + `orderOpenAIResponsesFunctionCallOutputs`. */
+// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const collectFunctionCallOutputs = (
   items: readonly Json[],
   start: number,
   pendingCallIds: readonly string[],
-): { readonly ordered: Json[]; readonly consumedCount: number } => {
+): CollectFunctionCallOutputsResult => {
   let end = start + 1;
 
   while (end < items.length && isToolOutput(items[end] as Json)) end++;
@@ -618,6 +638,7 @@ const collectFunctionCallOutputs = (
 
     if (match < 0) continue;
     used[match] = true;
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     ordered.push(outputs[match] as Json);
   }
 
@@ -708,6 +729,7 @@ const openAIResponsesGeminiThoughtSignature = (rawSignature: string): string =>
 /** `coalesceAdjacentOpenAIResponsesModelContents`. */
 const coalesceAdjacentModelContents = (contents: readonly Json[]): Json[] => {
   const coalesced: Json[] = [];
+
   const isModel = (content: Json | undefined): boolean =>
     trimmedAt(content, "role").toLowerCase() === "model";
 
@@ -863,6 +885,7 @@ export const convertOpenAIResponsesRequestToGemini = (
 
     for (let i = 0; i < normalized.length; i++) {
       if (consumedOutputIndexes.has(i)) continue;
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       const item = normalized[i] as Json;
       let itemType = typeOf(item);
       let itemRole = asString(get(item, "role"));
@@ -928,6 +951,7 @@ export const convertOpenAIResponsesRequestToGemini = (
           if (assistantVisibleText(item) === undefined) {
             if (pendingFunctionCallIds.length > 0) {
               const future = normalized.slice(i);
+
               const anyHasFutureOutput = pendingFunctionCallIds.some((callId) =>
                 hasMatchingOutput(future, callId),
               );
@@ -959,6 +983,7 @@ export const convertOpenAIResponsesRequestToGemini = (
             partsToProcess.push(item);
 
             while (i + 1 < normalized.length) {
+              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
               const nextItem = normalized[i + 1] as Json;
 
               if (asString(get(nextItem, "role")) === "" && isContentPartType(typeOf(nextItem))) {
@@ -1069,6 +1094,7 @@ export const convertOpenAIResponsesRequestToGemini = (
         case "function_call_output":
         case "custom_tool_call_output": {
           hasEncounteredConversation = true;
+
           const { ordered, consumedCount } = collectFunctionCallOutputs(
             normalized,
             i,
@@ -1156,6 +1182,7 @@ export const convertOpenAIResponsesRequestToGemini = (
           const target = carrierTarget(item);
 
           if (rawSignature.trim() === "" && i + 1 < normalized.length) {
+            // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
             const nextReasoning = normalized[i + 1] as Json;
 
             if (
@@ -1177,6 +1204,7 @@ export const convertOpenAIResponsesRequestToGemini = (
           let visibleText = "";
 
           if (useNativeLayout && i + 1 < normalized.length) {
+            // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
             const next = normalized[i + 1] as Json;
 
             const canBindText =

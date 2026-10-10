@@ -29,17 +29,19 @@ export const formatSortedHeaders = (
 ): string => {
   const names = Object.keys(headers ?? {}).toSorted();
 
-  return names.map((name) => `${name}\0${(headers as Record<string, string>)[name]}\0`).join("");
+  return names.map((name) => `${name}\0${headers?.[name] ?? ""}\0`).join("");
 };
+
+interface GeneratedId {
+  readonly id: string;
+  readonly token: string;
+}
 
 /** Go `StableIDGenerator`: `<kind>:<12 hex of sha256(kind 0 part 0 part ...)>` with `-n` for duplicates. */
 export class StableIdGenerator {
   readonly #counters = new Map<string, number>();
 
-  next(
-    kind: string,
-    ...parts: ReadonlyArray<string>
-  ): { readonly id: string; readonly token: string } {
+  next(kind: string, ...parts: ReadonlyArray<string>): GeneratedId {
     const hash = createHash("sha256");
     hash.update(kind);
 
@@ -111,28 +113,30 @@ const FAMILY_ORDER: ReadonlyArray<Family> = [
 type Flat = ApiKeyEntry & { readonly "base-url"?: string };
 
 const flatten = (group: ApiKeyGroup, key: ApiKeyEntry): Flat => {
-  const merged: Record<string, unknown> = {};
+  const merged = Object.fromEntries(
+    (
+      [
+        "priority",
+        "prefix",
+        "proxy-url",
+        "headers",
+        "models",
+        "excluded-models",
+        "disable-cooling",
+        "request-retry",
+        "request-scoped-errors",
+      ] as const
+    ).flatMap((field) => {
+      const value = key[field] ?? group[field];
 
-  for (const field of [
-    "priority",
-    "prefix",
-    "proxy-url",
-    "headers",
-    "models",
-    "excluded-models",
-    "disable-cooling",
-    "request-retry",
-    "request-scoped-errors",
-  ] as const) {
-    const value = key[field] ?? group[field];
-
-    if (value !== undefined) merged[field] = value;
-  }
+      return value === undefined ? [] : [[field, value] as const];
+    }),
+  );
 
   const base = group["base-url"];
 
   // Key fields beyond the shared ones (cloak, websockets, ...) come straight from the key.
-  return { ...key, ...merged, ...(base === undefined ? {} : { "base-url": base }) } as Flat;
+  return { ...key, ...merged, ...(base === undefined ? {} : { "base-url": base }) };
 };
 
 /** `addRequestRetryToMetadata`, `disable_cooling`, `request_scoped_errors`. */
@@ -213,10 +217,9 @@ const synthesizeKey = (
       ? ids.next(spec.idKind, key, baseUrl, proxyUrl)
       : ids.next(spec.idKind, key, baseUrl, proxyUrl, prefix, formatSortedHeaders(headers));
 
-  const attributes: Record<string, string> = {
-    source: `config:${spec.sourceName}[${token}]`,
-    config_index: String(index),
-  };
+  const attributes: Record<string, string> = {};
+  attributes.source = `config:${spec.sourceName}[${token}]`;
+  attributes.config_index = String(index);
 
   if (key !== "") attributes.api_key = key;
   const priority = entry.priority ?? 0;
@@ -307,13 +310,12 @@ const synthesizeCompat = (
     keyEntry: (typeof group.keys)[number] | undefined,
     generated: { id: string; token: string },
   ): Credential => {
-    const attributes: Record<string, string> = {
-      source: `config:${providerName}[${generated.token}]`,
-      base_url: baseUrl,
-      compat_name: group.name,
-      provider_key: providerKey,
-      config_index: String(index),
-    };
+    const attributes: Record<string, string> = {};
+    attributes.source = `config:${providerName}[${generated.token}]`;
+    attributes.base_url = baseUrl;
+    attributes.compat_name = group.name;
+    attributes.provider_key = providerKey;
+    attributes.config_index = String(index);
 
     if (priority !== 0) attributes.priority = String(priority);
     const weight = weightOf(keyEntry?.weight);
