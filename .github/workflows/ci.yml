@@ -133,7 +133,8 @@ jobs:
         id: deploy
         run: |
           pnpm run deploy --stage "$STAGE" --no-input --yes
-          url="$(pnpm -s exec alchemy state read "cliproxy/$STAGE/output" | jq -r '.url // empty')"
+          # The CLI may log lines before the JSON on stdout in CI; keep only the top-level object.
+          url="$(pnpm -s exec alchemy state read "cliproxy/$STAGE/output" --no-input | sed -n '/^{/,/^}/p' | jq -r '.url // empty')"
           if [ -z "$url" ]; then echo "::error::the stack output has no url" >&2; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Check through Access
