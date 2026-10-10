@@ -17,6 +17,7 @@ import {
   type Json,
   type JsonObject,
   set,
+  parseJsonOrText,
   tryParseJson,
 } from "../../json/index.ts";
 import { isValidGrokEncryptedContent } from "../../signature/grok.ts";
@@ -167,7 +168,7 @@ export const normalizeInputNamespaceToolCalls = (body: Json, shouldFold: boolean
       const rawArgs = asString(item["arguments"]);
 
       if (rawArgs !== "") {
-        dispatcherArgs["arguments"] = tryParseJson(rawArgs) ?? rawArgs;
+        dispatcherArgs["arguments"] = parseJsonOrText(rawArgs);
       }
 
       item["name"] = namespaceName;

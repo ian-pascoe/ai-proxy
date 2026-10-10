@@ -142,9 +142,9 @@ export const convertGeminiResponseToOpenAI = (
   if (isJsonArray(candidates)) {
     for (const candidate of candidates) {
       const template = structuredClone(base);
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `template` is a clone of `baseChunk()`, whose `choices` is a one-element array of objects.
       const choice = (template["choices"] as JsonObject[])[0] as JsonObject;
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `choice.delta` is the object literal from `baseChunk()`'s choice.
       const delta = choice["delta"] as JsonObject;
       const candidateIndex = asInt(get(candidate, "index"));
       choice["index"] = candidateIndex;
@@ -216,7 +216,7 @@ export const convertGeminiResponseToOpenAI = (
             const args = get(functionCall, "args");
 
             if (args !== undefined)
-              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+              // SAFETY: `call` was built just above with `function` set to an object literal.
               (call["function"] as JsonObject)["arguments"] = JSON.stringify(args);
             setAssistantRole();
             toolCalls.push(call);
@@ -361,7 +361,7 @@ export const convertGeminiResponseToOpenAINonStream = (
             const args = get(functionCall, "args");
 
             if (args !== undefined)
-              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+              // SAFETY: `call` was built just above with `function` set to an object literal.
               (call["function"] as JsonObject)["arguments"] = JSON.stringify(args);
             toolCalls.push(call);
           } else if (inlineData !== undefined) {

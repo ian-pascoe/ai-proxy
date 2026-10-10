@@ -41,7 +41,7 @@ const normalizeTools = (body: Json): void => {
     if (!isJsonObject(tool)) continue;
 
     if (exists(tool, "functionDeclarations")) {
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `exists(tool, "functionDeclarations")` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       tool["function_declarations"] = tool["functionDeclarations"] as Json;
       delete tool["functionDeclarations"];
     }
@@ -52,7 +52,7 @@ const normalizeTools = (body: Json): void => {
 
     for (const declaration of declarations) {
       if (isJsonObject(declaration) && exists(declaration, "parameters")) {
-        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        // SAFETY: `exists(declaration, "parameters")` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         declaration["parametersJsonSchema"] = declaration["parameters"] as Json;
         delete declaration["parameters"];
       }

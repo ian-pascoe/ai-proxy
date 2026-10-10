@@ -102,7 +102,6 @@ const runeLength = (text: string): number => {
 const stripResponsePrefix = (id: string): string => (id.startsWith("resp_") ? id.slice(5) : id);
 
 /** `ConvertGeminiResponseToOpenAIResponsesNonStream`: `undefined` when a retained tool-input error aborts it. */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 export const convertGeminiResponseToOpenAIResponsesNonStream = (
   context: ResponseContext,
   body: string,
@@ -443,6 +442,7 @@ export const convertGeminiResponseToOpenAIResponsesNonStream = (
 
   if (isJsonArray(parts)) {
     for (let index = 0; index < parts.length; index++) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       if (!handlePart(parts[index] as Json, index)) break;
     }
   }

@@ -117,7 +117,7 @@ export const convertAntigravityResponseToOpenAI = (
     if (params.responseId !== "") template["id"] = params.responseId;
 
     if (params.pendingUsageMetadata !== undefined) setUsage(template, params.pendingUsageMetadata);
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: `template` was built just above with `choices` a one-element array of objects.
     const choice = (template["choices"] as JsonObject[])[0] as JsonObject;
     choice["finish_reason"] = finishReason;
     choice["native_finish_reason"] = nativeFinishReason;
@@ -232,10 +232,10 @@ export const convertAntigravityResponseToOpenAI = (
         const args = get(functionCall, "args");
 
         if (args !== undefined)
-          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+          // SAFETY: `call` was built just above with `function` set to an object literal.
           (call["function"] as JsonObject)["arguments"] = asString(args);
         delta["role"] = "assistant";
-        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        // SAFETY: `delta.tool_calls` is an array: it was already one or was set to `[]` above.
         (delta["tool_calls"] as Json[]).push(call);
       } else if (inlineData !== undefined) {
         const data = asString(get(inlineData, "data"));

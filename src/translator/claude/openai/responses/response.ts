@@ -286,7 +286,7 @@ const sortKeysDeep = (value: Json): Json => {
   if (isArr(value)) return value.map(sortKeysDeep);
 
   if (isObj(value)) {
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: keys come from `Object.keys(value)`, so `value[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     return Object.fromEntries(
       Object.keys(value)
         .toSorted()

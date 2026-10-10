@@ -122,7 +122,6 @@ const functionResponsePart = (response: Json, fallbackName: string): Json => {
 };
 
 /** `fixCLIToolResponse`: groups function calls with their responses (responses become one `function` turn). */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const fixCliToolResponse = (root: Json): void => {
   const contents = get(root, "request.contents");
 
@@ -173,6 +172,7 @@ const fixCliToolResponse = (root: Json): void => {
     if (responses.length > 0) {
       collected.push(...responses);
 
+      // SAFETY: the `&&` short-circuits unless `pendingGroups.length > 0`, so `pendingGroups[0]` exists; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       while (
         pendingGroups.length > 0 &&
         collected.length >= (pendingGroups[0] as FunctionCallGroup).responsesNeeded
@@ -286,7 +286,7 @@ const normalizeTools = (root: Json, nameMap: ReadonlyMap<string, string> | undef
             declaration["name"] = mapped;
 
           if (Object.hasOwn(declaration, "parameters")) {
-            // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+            // SAFETY: `Object.hasOwn(declaration, "parameters")` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
             declaration["parametersJsonSchema"] = declaration["parameters"] as Json;
             delete declaration["parameters"];
           }
@@ -433,7 +433,7 @@ const deleteSignatureFields = (part: JsonObject): void => {
     const parent = path.length === 1 ? part : valueAtPath(part, path.slice(0, -1));
 
     if (isJsonObject(parent))
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: every entry of SIGNATURE_KEY_PATHS is a non-empty path, so its last segment exists; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       delete parent[path[path.length - 1] as string];
   }
 };

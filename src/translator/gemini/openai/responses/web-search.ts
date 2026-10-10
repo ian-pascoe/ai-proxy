@@ -308,7 +308,7 @@ export const mergeGroundingMetadata = (
         if (prevRawCount === 0) cumulativeRemap.set(i, existingIdx);
 
         if (title !== "") {
-          // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+          // SAFETY: `existingIdx` was stored in `uriToMergedIndex` when its chunk was pushed to `mergedChunks`, so it indexes an existing chunk; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
           const existingChunk = mergedChunks[existingIdx] as Json;
 
           if (trimmed(get(existingChunk, "web.title")) === "") {

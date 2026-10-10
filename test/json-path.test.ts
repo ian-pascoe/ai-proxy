@@ -10,6 +10,7 @@ import {
   get,
   type Json,
   JsonPathError,
+  parseJsonOrText,
   set,
   setRaw,
   wildcardMatch,
@@ -119,5 +120,13 @@ describe("path engine behaviours", () => {
     expect(wildcardMatch("abcabd", "*abc")).toBe(false);
     expect(wildcardMatch("", "*")).toBe(true);
     expect(wildcardMatch("", "?")).toBe(false);
+  });
+});
+
+describe("parseJsonOrText", () => {
+  it("parses JSON, keeps JSON null, and falls back to the raw text", () => {
+    expect(parseJsonOrText('{"a":1}')).toEqual({ a: 1 });
+    expect(parseJsonOrText("null")).toBeNull();
+    expect(parseJsonOrText("{not json")).toBe("{not json");
   });
 });

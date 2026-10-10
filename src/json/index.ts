@@ -14,6 +14,7 @@ export {
   type JsonObject,
   type JsonPrimitive,
   jsonEquals,
+  parseJsonOrText,
   tryParseJson,
 } from "./value.ts";
 

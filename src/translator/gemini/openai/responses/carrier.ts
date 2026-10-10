@@ -242,7 +242,7 @@ const stripCarrierMetadata = (item: Json): JsonObject | undefined => {
 
   for (const key of Object.keys(item).toSorted()) {
     if (!CARRIER_FIELDS.includes(key))
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: keys come from `Object.keys(item)`, so `item[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       out[key] = item[key] as Json;
   }
 

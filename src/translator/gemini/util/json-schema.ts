@@ -107,12 +107,12 @@ const NAME_MAP_KEYWORDS = new Set([
 ]);
 
 /** Whether `path` addresses a map keyed by author-chosen names (odd trailing run of name-map keywords). */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const isPropertyDefinition = (path: string): boolean => {
   const segments = splitPath(path);
   let trailing = 0;
 
   for (let i = segments.length - 1; i >= 0; i--) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (!NAME_MAP_KEYWORDS.has(unescapeKey(segments[i] as string))) break;
     trailing++;
   }
@@ -622,7 +622,7 @@ const resolveJsonPointer = (
 
     if (isJsonObject(current)) {
       if (!Object.hasOwn(current, part)) return { found: false };
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `Object.hasOwn(current, part)` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       current = current[part] as Json;
     } else if (isJsonArray(current)) {
       if (!/^-?\d+$/.test(part)) return { found: false };
@@ -657,7 +657,7 @@ const cyclicRefFallback = (node: JsonObject, target: Json, ref: string): JsonObj
   if (isJsonObject(target)) {
     for (const key of ["type", "nullable", "description"])
       if (Object.hasOwn(target, key))
-        // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+        // SAFETY: `Object.hasOwn(target, key)` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
         out[key] = target[key] as Json;
   }
 

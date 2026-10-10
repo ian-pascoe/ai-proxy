@@ -8,7 +8,7 @@
  *
  * Gemini and Interactions handlers reuse the OpenAI-shaped body.
  */
-import { compactJson, goMarshal, goMarshalSorted, isValidJson } from "./json-text.ts";
+import { compactJson, goMarshal, goMarshalSorted, goSprint, isValidJson } from "./json-text.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { statusText } from "./status.ts";
 
@@ -235,10 +235,6 @@ const responsesErrorClass = (status: number): ResponsesErrorClass => {
   }
 };
 
-/** Go `fmt.Sprint`-style text of a non-string JSON value. */
-const jsonText = (value: Json): string =>
-  typeof value === "object" ? JSON.stringify(value) : String(value);
-
 const responsesErrorDetail = (
   status: number,
   errText: string,
@@ -263,7 +259,7 @@ const responsesErrorDetail = (
     const c = payload["code"];
 
     if (c !== undefined && c !== null)
-      code = typeof c === "string" && c.trim() !== "" ? c.trim() : jsonText(c).trim();
+      code = typeof c === "string" && c.trim() !== "" ? c.trim() : goSprint(c).trim();
   }
 
   const detail: JsonObject = { type: responsesErrorClass(status).type, code, message, param: null };

@@ -47,7 +47,7 @@ const sorted = (value: JsonObject): JsonObject => {
   const out: JsonObject = {};
 
   for (const key of Object.keys(value).toSorted())
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: keys come from `Object.keys(value)`, so `value[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     out[key] = value[key] as Json;
 
   return out;
@@ -490,7 +490,7 @@ const copyInteractionsTools = (out: Json, root: Json): void => {
               ["web_search", "googleSearch"],
             ] as const) {
               if (Object.hasOwn(rawMap, from)) {
-                // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+                // SAFETY: `Object.hasOwn(rawMap, from)` was checked above, so the key is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
                 rawMap[to] = rawMap[from] as Json;
                 delete rawMap[from];
               }
@@ -886,7 +886,6 @@ const appendStepToGemini = (ctx: InputContext, item: Json, defaultRole: string):
 };
 
 /** `appendInteractionsInput`; throws the refusal for an emptied user turn. */
-// SAFETY: the branch condition checked that `steps` is an array.
 const appendInteractionsInput = (
   items: JsonObject[],
   input: Json | undefined,
@@ -918,6 +917,7 @@ const appendInteractionsInput = (
     if (role === "model" || role === "assistant") defaultRole = "model";
     ctx.instruction = isInteractionsInstructionStep(input, false);
 
+    // SAFETY: the enclosing `isJsonArray(get(input, "steps"))` branch condition checked that `steps` is an array.
     for (const step of get(input, "steps") as Json[]) appendStepToGemini(ctx, step, defaultRole);
     ctx.instruction = false;
   } else {

@@ -66,6 +66,16 @@ export const setOwn = (target: JsonObject, key: string, value: Json): void => {
   }
 };
 
+/**
+ * Parses JSON text, or returns the text itself when it is not valid JSON. Unlike `tryParseJson(text) ?? text`, the
+ * JSON text `null` stays `null`.
+ */
+export const parseJsonOrText = (text: string): Json => {
+  const parsed = tryParseJson(text);
+
+  return parsed === undefined ? text : parsed;
+};
+
 /** Parses JSON text, returning `undefined` when it is not valid JSON (gjson.Valid semantics). */
 export const tryParseJson = (text: string): Json | undefined => {
   try {

@@ -131,13 +131,13 @@ const withField = (item: Json, path: string, value: Json): Json => {
 // --- tool call/reasoning pairing ----------------------------------------------------------------------------------------
 
 /** `pairOpenAIResponsesReasoningWithFunctionCalls`. */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
   const postCallSignature = new Map<number, string>();
   const postCallCarrier = new Set<number>();
   const consumedPostCallCarrier = new Set<number>();
 
   for (let groupStart = 0; groupStart < items.length;) {
+    // SAFETY: `groupStart < items.length` by the loop bound; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (!isToolCall(items[groupStart] as Json) && !isDetachedCarrier(items[groupStart])) {
       groupStart++;
       continue;
@@ -146,6 +146,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
     let groupEnd = groupStart;
     let hasFunctionCall = false;
 
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     while (
       groupEnd < items.length &&
       (isToolCall(items[groupEnd] as Json) || isDetachedCarrier(items[groupEnd]))
@@ -155,6 +156,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
       groupEnd++;
     }
 
+    // SAFETY: `groupEnd >= items.length` short-circuits before `items[groupEnd]`; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (!hasFunctionCall || groupEnd >= items.length || !isToolOutput(items[groupEnd] as Json)) {
       groupStart = groupEnd;
       continue;
@@ -162,10 +164,12 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
 
     let outputEnd = groupEnd;
 
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     while (outputEnd < items.length && isToolOutput(items[outputEnd] as Json)) outputEnd++;
 
     // A run beginning with a carrier uses leading-carrier semantics. A run beginning with a call uses post-call
     // semantics. This preserves both carrier,call,carrier,call and call,carrier,call,carrier histories.
+    // SAFETY: `groupStart < items.length` by the loop bound; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (isToolCall(items[groupStart] as Json)) {
       for (let callIndex = groupStart; callIndex < groupEnd; callIndex++) {
         // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
@@ -235,6 +239,7 @@ const pairReasoningWithFunctionCalls = (items: readonly Json[]): Json[] => {
       direction === "" ||
       (direction === CARRIER_NEXT && (target === CARRIER_FUNCTION || target === CARRIER_ANY));
 
+    // SAFETY: the `&&` chain checked `index + 1 < items.length` before `items[index + 1]`; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (
       typeOf(item) === "reasoning" &&
       !postCallCarrier.has(index) &&
@@ -389,7 +394,7 @@ const buildFunctionCallPart = (
   const part: JsonObject = { functionCall };
   part["thoughtSignature"] = signature;
   functionCall["id"] = extractResponsesCallID(item);
-  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+  // SAFETY: `functionCall` was built just above with `args` set to `{}`.
   const args = functionCall["args"] as JsonObject;
 
   if (typeOf(item) === "custom_tool_call") {
@@ -618,7 +623,6 @@ type CollectFunctionCallOutputsResult = {
 };
 
 /** `collectOpenAIResponsesFunctionCallOutputs` + `orderOpenAIResponsesFunctionCallOutputs`. */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const collectFunctionCallOutputs = (
   items: readonly Json[],
   start: number,
@@ -626,6 +630,7 @@ const collectFunctionCallOutputs = (
 ): CollectFunctionCallOutputsResult => {
   let end = start + 1;
 
+  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   while (end < items.length && isToolOutput(items[end] as Json)) end++;
   const outputs = items.slice(start, end);
   const used = outputs.map(() => false);
@@ -638,7 +643,7 @@ const collectFunctionCallOutputs = (
 
     if (match < 0) continue;
     used[match] = true;
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: `match` is a non-negative index returned by `findIndex` over `outputs` (`match < 0` was skipped above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     ordered.push(outputs[match] as Json);
   }
 

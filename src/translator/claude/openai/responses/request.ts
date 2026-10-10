@@ -266,7 +266,6 @@ const convertRequest = (
     pendingToolUseParts.push(toolUse);
   };
 
-  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   const appendReasoning = (reasoningPart: JsonObject | undefined): void => {
     if (reasoningPart === undefined) return;
 
@@ -282,6 +281,7 @@ const convertRequest = (
     if (str(reasoningPart.type) === "thinking" && pendingParts.length > 0) {
       const lastIdx = pendingParts.length - 1;
 
+      // SAFETY: `lastIdx` is the last index of `pendingParts`, which was checked to be non-empty; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       if (str((pendingParts[lastIdx] as JsonObject).type) === "thinking") {
         pendingParts[lastIdx] = reasoningPart;
 
@@ -793,14 +793,15 @@ const reasoningPartsText = (parts: Json | undefined): string => {
   return out;
 };
 
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 const thinkingSeparatorForToolUse = (parts: JsonObject[]): JsonObject | undefined => {
   if (parts.length === 0) return undefined;
 
+  // SAFETY: `parts.length === 0` returned above, so the last index is in bounds; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
   if (str((parts[parts.length - 1] as JsonObject).type) !== "web_search_tool_result")
     return undefined;
 
   for (let index = parts.length - 1; index >= 0; index--) {
+    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
     if (str((parts[index] as JsonObject).type) === "thinking") return parts[index];
   }
 

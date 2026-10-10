@@ -452,7 +452,7 @@ const setUsage = (out: JsonObject, path: string, usage: Json | undefined): void 
     target = isObj(out[first]) ? out[first] : {};
     out[first] = target;
   } else {
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: the only caller passing a two-segment path is `setUsage({ interaction }, "interaction.usage", ...)`, so `out.interaction` is the `interaction` object that caller passed in.
     const parent = out[first] as JsonObject;
     target = isObj(parent[second]) ? parent[second] : {};
     parent[second] = target;

@@ -469,11 +469,11 @@ const buildGeminiChunk = (
 ): Json => {
   const out: JsonObject = { candidates: [{ content: { parts: [], role: "model" }, index: 0 }] };
   const items = parts.length === 0 && includeEmptyPart ? [geminiTextPartJson("", false)] : parts;
-  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+  // SAFETY: `out` was built just above with `candidates` a one-element array of objects.
   const candidate = (out["candidates"] as JsonObject[])[0] as JsonObject;
 
   if (items.length > 0)
-    // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+    // SAFETY: `candidate.content` is the `{ parts: [], role: "model" }` object literal built above.
     (candidate["content"] as JsonObject)["parts"] = items;
 
   if (finishReason !== "") candidate["finishReason"] = finishReason;

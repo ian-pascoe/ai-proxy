@@ -308,7 +308,6 @@ const determineWebSearchStreamMode = (
 const stripResponsePrefix = (id: string): string => (id.startsWith("resp_") ? id.slice(5) : id);
 
 /** `ConvertGeminiResponseToOpenAIResponses`. */
-// SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
 export const convertGeminiResponseToOpenAIResponses = (
   context: ResponseContext,
   line: string,
@@ -864,7 +863,7 @@ export const convertGeminiResponseToOpenAIResponses = (
     };
 
     if (requestModelName !== "")
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `created.response` is the object literal built just above.
       (created["response"] as JsonObject)["model"] = requestModelName;
     emit("response.created", created);
 
@@ -881,7 +880,7 @@ export const convertGeminiResponseToOpenAIResponses = (
     };
 
     if (requestModelName !== "")
-      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+      // SAFETY: `inProgress.response` is the object literal built just above.
       (inProgress["response"] as JsonObject)["model"] = requestModelName;
     emit("response.in_progress", inProgress);
     st.started = true;
@@ -1415,6 +1414,7 @@ export const convertGeminiResponseToOpenAIResponses = (
 
   if (isJsonArray(parts)) {
     for (let index = 0; index < parts.length; index++) {
+      // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       if (!handlePart(parts[index] as Json, index)) break;
     }
   }

@@ -15,7 +15,7 @@ import {
   type JsonObject,
   jsonEquals,
   cloneJson,
-  tryParseJson,
+  parseJsonOrText,
 } from "../../json/index.ts";
 import {
   fieldDouble,
@@ -133,7 +133,7 @@ const decode = (wire: Uint8Array, schema: ReadonlyMap<number, PayloadField>): Js
         const text = fieldText(field);
 
         if (known.jsonValue === true) {
-          value = tryParseJson(text) ?? text;
+          value = parseJsonOrText(text);
         } else {
           value = text;
         }

@@ -181,7 +181,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
                 functionResponse: { name: "", response: { result: "" }, id: toolCallId },
               };
 
-              // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+              // SAFETY: `part` was built just above with `functionResponse` set to an object literal.
               (part["functionResponse"] as JsonObject)["name"] = funcName;
 
               if (toolResult.resultIsRaw) {
@@ -191,7 +191,7 @@ const convert = (modelName: string, request: Json, preserveEmptyThinkingBlocks: 
                   toolResult.result,
                 );
               } else {
-                // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+                // SAFETY: `part.functionResponse.response` is the `{ result: "" }` object literal built above.
                 ((part["functionResponse"] as JsonObject)["response"] as JsonObject)["result"] =
                   toolResult.result;
               }

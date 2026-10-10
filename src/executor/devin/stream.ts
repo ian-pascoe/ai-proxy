@@ -9,7 +9,7 @@
  * content is suppressed (the caller turns it into an HTTP error); the stream must end with the EOS trailer.
  */
 import { randomUUID } from "node:crypto";
-import { asString, type JsonObject, tryParseJson } from "../../json/index.ts";
+import { asString, type JsonObject, parseJsonOrText } from "../../json/index.ts";
 import { Formats } from "../../translator/formats.ts";
 import {
   applyDimensionUsage,
@@ -574,7 +574,7 @@ export class DevinAggregator {
       };
 
       if (tool.args !== "") {
-        step["arguments"] = tryParseJson(tool.args) ?? tool.args;
+        step["arguments"] = parseJsonOrText(tool.args);
       }
 
       steps.push(step);

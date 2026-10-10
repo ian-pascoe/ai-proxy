@@ -91,3 +91,47 @@ export const compactJson = (text: string): string => {
 
   return out;
 };
+
+/**
+ * `strconv.FormatFloat(value, 'g', -1, 64)` as used by `fmt` for `%v`: the shortest digits, in exponent form when the
+ * decimal exponent is below -4 or at least 6 (`1e+06`, `1.5e-07`), otherwise plain (`123456`, `0.0001`).
+ */
+const goFloat = (value: number): string => {
+  if (Number.isNaN(value)) return "NaN";
+
+  if (!Number.isFinite(value)) return value > 0 ? "+Inf" : "-Inf";
+
+  if (value === 0) return Object.is(value, -0) ? "-0" : "0";
+  const [mantissa = "", exponentText = "0"] = value.toExponential().split("e");
+  const exponent = Number(exponentText);
+
+  if (exponent < -4 || exponent >= 6) {
+    const sign = exponent < 0 ? "-" : "+";
+
+    return `${mantissa}e${sign}${String(Math.abs(exponent)).padStart(2, "0")}`;
+  }
+
+  return String(value);
+};
+
+/**
+ * `fmt.Sprint` of a value decoded by `encoding/json` into `any`: strings verbatim, `<nil>`, float64 numbers, slices as
+ * `[a b]` and maps as `map[k:v]` with sorted keys.
+ */
+export const goSprint = (value: Json): string => {
+  if (value === null) return "<nil>";
+
+  if (typeof value === "string") return value;
+
+  if (typeof value === "number") return goFloat(value);
+
+  if (typeof value === "boolean") return value ? "true" : "false";
+
+  if (isJsonArray(value)) return `[${value.map(goSprint).join(" ")}]`;
+
+  const entries = Object.keys(value)
+    .toSorted()
+    .map((key) => `${key}:${goSprint(value[key] ?? null)}`);
+
+  return `map[${entries.join(" ")}]`;
+};

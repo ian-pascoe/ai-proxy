@@ -648,7 +648,7 @@ export const convertAntigravityResponseToClaudeNonStream = (
     usage: { input_tokens: promptTokens, output_tokens: outputTokens },
   };
 
-  // SAFETY: the index is in bounds (loop bound or length check above); the cast only drops the `undefined` added by noUncheckedIndexedAccess.
+  // SAFETY: `responseJson` was built just above with `usage` set to an object literal.
   const usage = responseJson["usage"] as JsonObject;
 
   if (cachedTokens > 0) usage["cache_read_input_tokens"] = cachedTokens;
