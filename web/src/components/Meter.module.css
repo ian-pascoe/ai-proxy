@@ -1,14 +1,14 @@
 .meter {
   display: grid;
-  grid-template-columns: 4rem minmax(4rem, 1fr) 2.75rem;
+  grid-template-columns: 5rem minmax(4rem, 1fr) 2.75rem;
   align-items: center;
   gap: var(--space-3);
 }
 
 .label {
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--stone-4);
-  white-space: nowrap;
 }
 
 .track {

@@ -1,6 +1,6 @@
-// Quota windows of an account, read from the upstream rate-limit headers the Worker last observed for it
-// (`quota.signals`, src/credentials/cooldown/quota-signals.ts) and from its cooldowns. Pure: no DOM, tested in
-// test/web-quota.test.ts.
+// Quota windows of an account: from the server's quota check (`quota_report`, src/quota/) or from the upstream
+// rate-limit headers the Worker last observed for it (`quota.signals`, src/credentials/cooldown/quota-signals.ts),
+// whichever is fresher, and from its cooldowns. Pure: no DOM, tested in test/web-quota.test.ts.
 import type { CredentialEntry } from "#contract/credentials.ts";
 
 export type QuotaLevel = "ok" | "near" | "out";
@@ -12,6 +12,8 @@ export interface QuotaWindow {
   readonly usedPercent: number;
   /** When the window's allowance resets (epoch ms), when the provider says. */
   readonly resetsAt: number | undefined;
+  /** The window's length in seconds, when known (the history counts past windows with it). */
+  readonly seconds: number | undefined;
 }
 
 /** From this share on a window is "near its limit" (amber). */
@@ -63,6 +65,12 @@ export const windowLabel = (minutes: number): string => {
   return `${minutes}-minute`;
 };
 
+const HOUR_SECONDS = 3600;
+
+const DAY_SECONDS = 24 * HOUR_SECONDS;
+
+const WEEK_SECONDS = 7 * DAY_SECONDS;
+
 const claudeWindows = (signals: Signals): QuotaWindow[] =>
   (
     [
@@ -80,6 +88,7 @@ const claudeWindows = (signals: Signals): QuotaWindow[] =>
         // Anthropic reports a fraction (0.69 is 69%).
         usedPercent: clampPercent(utilization * 100),
         resetsAt: instant(signal(signals, `anthropic-ratelimit-unified-${key}-reset`)),
+        seconds: key === "5h" ? 5 * HOUR_SECONDS : WEEK_SECONDS,
       },
     ];
   });
@@ -101,6 +110,7 @@ const codexWindows = (signals: Signals, observedAt: number | undefined): QuotaWi
         resetsAt:
           at ??
           (after === undefined || observedAt === undefined ? undefined : observedAt + after * 1000),
+        seconds: minutes === undefined ? undefined : minutes * 60,
       },
     ];
   });
@@ -121,32 +131,88 @@ const devinWindows = (signals: Signals): QuotaWindow[] =>
         label,
         usedPercent: clampPercent(100 - remaining),
         resetsAt: instant(signal(signals, `${key}_quota_reset_at`)),
+        seconds: key === "daily" ? DAY_SECONDS : WEEK_SECONDS,
       },
     ];
   });
 
-/** Providers whose responses carry quota figures the panel can read. */
-export const reportsQuota = (provider: string): boolean =>
-  provider === "claude" || provider === "codex" || provider === "devin";
+/** Providers the server's quota check can ask for figures (src/quota/). */
+const CHECKED_PROVIDERS = new Set([
+  "claude",
+  "codex",
+  "antigravity",
+  "kimi",
+  "kimi-ai",
+  "xai",
+  "meta",
+  "devin",
+]);
 
-/** The account's quota windows, shortest first; empty when the provider reported none. */
-export const quotaWindows = (entry: CredentialEntry): ReadonlyArray<QuotaWindow> => {
+export const checksQuota = (provider: string): boolean => CHECKED_PROVIDERS.has(provider);
+
+const parsedTime = (raw: string | undefined): number | undefined => {
+  if (raw === undefined) return undefined;
+  const at = Date.parse(raw);
+
+  return Number.isNaN(at) ? undefined : at;
+};
+
+const headerWindows = (entry: CredentialEntry): QuotaWindow[] => {
   const { signals } = entry.quota;
-
-  const observedAt =
-    entry.quota.observed_at === undefined ? undefined : Date.parse(entry.quota.observed_at);
+  const observedAt = parsedTime(entry.quota.observed_at);
 
   switch (entry.provider) {
     case "claude":
       return claudeWindows(signals);
     case "codex":
-      return codexWindows(signals, Number.isNaN(observedAt) ? undefined : observedAt);
+      return codexWindows(signals, observedAt);
     case "devin":
       return devinWindows(signals);
     default:
       return [];
   }
 };
+
+const reportWindows = (entry: CredentialEntry): QuotaWindow[] =>
+  (entry.quota_report?.windows ?? []).map((window) => ({
+    label: window.label,
+    usedPercent: clampPercent(window.used_percent),
+    resetsAt: parsedTime(window.resets_at),
+    seconds: window.window_seconds,
+  }));
+
+export interface QuotaReading {
+  readonly windows: ReadonlyArray<QuotaWindow>;
+  /** Where the figures come from: the server's quota check or the headers of the last response; none without figures. */
+  readonly source: "check" | "response" | undefined;
+  /** When the figures were read (epoch ms). */
+  readonly readAt: number | undefined;
+}
+
+/** The account's freshest figures: the last successful quota check, or the last response's headers when newer. */
+export const quotaReading = (entry: CredentialEntry): QuotaReading => {
+  const fromHeaders = headerWindows(entry);
+  const headersAt = parsedTime(entry.quota.observed_at);
+  const fromCheck = reportWindows(entry);
+  const checkedAt = parsedTime(entry.quota_report?.refreshed_at);
+
+  const checkIsFresher =
+    fromCheck.length > 0 &&
+    (fromHeaders.length === 0 ||
+      headersAt === undefined ||
+      (checkedAt !== undefined && checkedAt >= headersAt));
+
+  if (checkIsFresher) return { windows: fromCheck, source: "check", readAt: checkedAt };
+
+  if (fromHeaders.length > 0)
+    return { windows: fromHeaders, source: "response", readAt: headersAt };
+
+  return { windows: [], source: undefined, readAt: undefined };
+};
+
+/** The account's quota windows (shortest first for header figures, the provider's order for checked ones). */
+export const quotaWindows = (entry: CredentialEntry): ReadonlyArray<QuotaWindow> =>
+  quotaReading(entry).windows;
 
 export const windowLevel = (window: QuotaWindow): QuotaLevel => {
   if (window.usedPercent >= 100) return "out";
@@ -158,10 +224,7 @@ export const windowLevel = (window: QuotaWindow): QuotaLevel => {
 export const cutOffUntil = (entry: CredentialEntry): number | undefined => {
   const credentialWide = entry.cooldowns.find((cooldown) => cooldown.scope === "credential");
 
-  if (credentialWide === undefined) return undefined;
-  const at = Date.parse(credentialWide.retry_at);
-
-  return Number.isNaN(at) ? undefined : at;
+  return credentialWide === undefined ? undefined : parsedTime(credentialWide.retry_at);
 };
 
 export interface AccountStanding {

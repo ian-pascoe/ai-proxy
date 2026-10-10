@@ -41,6 +41,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
     handlers/                 inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
     management/               /v8/management API (+ contract/: shared Effect HttpApi schemas), panel serving, OAuth flows
     usage/                    usage records, D1 persistence
+    quota/                    server-side quota check: provider usage endpoints, stored per-credential reports
   web/                        control panel served at / (React, Effect Atom, TanStack Router; built into public/)
   test/                       vitest suites (+ fixtures generated from the Go code)
   tools/fixturegen/           Go programs (own module, root go.work) that emit golden fixtures from the Go code
@@ -63,7 +64,8 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
 - **Static assets** (`public/`, Worker runs first): the control panel (`web/` build) and the upstream panel.
-- **Cron trigger**: model catalog refresh (3 h in Go) and a safety sweep that re-arms credential refresh alarms.
+- **Cron trigger**: model catalog refresh (3 h in Go), the quota check of connected accounts and a safety sweep that
+  re-arms credential refresh alarms.
 
 Request flow:
 
@@ -775,17 +777,70 @@ until the next page load).
 - **Control panel** (`web-panel.ts`, `web/`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
   `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
   management zone, so only Access admins get them. Every page path answers `public/index.html` (the browser router picks
-  the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths), `404` with a build
+  the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths and chart sizes), `404` with a build
   hint when it is missing. The panel calls `/v8/management` on its own origin with no key; Access authenticates the calls.
   Its client is derived from `contract/` (Effect `HttpApi` groups for the endpoints it uses, imported by the worker tests
   and the browser as `#contract/*`; `test/management-contract.test.ts` decodes real responses through it). Deviation
   from Go: `/` was a public JSON banner there.
+- **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
+  All / Needs attention / Disabled, search, allowance meters); Account (`/accounts/$authIndex`: allowance with reset
+  blades, cooldowns with clear, window history, routing priority and note, details, served models, check quota, refresh
+  tokens, enable/disable, delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
+  code, Vertex service-account import, auth-file upload). Allowance figures (`web/src/lib/quota.ts`) come from the
+  stored quota check when it is newer than the last response's rate-limit headers, otherwise from the headers. Window
+  history (`web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
+  windows, counted back from the current reset (approximate for windows the provider starts on first use), or into days
+  for an account without windows. The Vertex import is multipart, so the panel posts a `FormData` itself and decodes the
+  answer with `contract/oauth.ts` `VertexImported` / `VertexImportFailed`. Pure helpers in `web/src/lib/` are tested in
+  workerd (`test/web-*.test.ts`, included by `tsconfig.worker.json`).
 - **Upstream panel asset** (until the control panel covers every page): `GET /management.html` serves `public/management.html` through the `ASSETS` binding
   (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
   (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
   file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
-  limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings.
+  limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
+  `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_).
+
+## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
+
+Workers addition with no Go counterpart: the upstream panel asks the provider usage endpoints itself, from the browser,
+through `POST /requests/api-call`. Here the server does it, so tokens never reach the browser and the result is stored.
+
+- **Flow** (`check.ts`): the ControlPlane resolves the auth file and its token (`quotaProbeTarget`: `ensureFresh`, then
+  `target.ts`; the `$TOKEN$` value of api-call, the Meta `dca_token`, the Devin session token). The **Worker** then calls
+  the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer object is never held by a
+  slow provider. Finally the ControlPlane merges the outcome into the stored report (`recordQuotaReport`, `report.ts`).
+- **Routes**:
+  - `POST /v8/management/credentials/quota {name}` answers `200 {status: "ok", report}`, including when the upstream call
+    failed; the report then carries `error`.
+  - `404` for an unknown auth file; `422 quota check is not supported for <provider>` for providers without a usage
+    endpoint.
+- **Cron** task `quota-check` (`runQuotaSweep`): checks every enabled auth file of a supported provider, four at a time.
+- **Report**:
+  - `checked_at` is the last attempt and `refreshed_at` the last success.
+  - `windows` and `plan` survive a failed check, and a success without a plan keeps the previous plan.
+  - `error` is a fixed message plus the upstream status, never a response body.
+- **Storage** (`store.ts`): a separate SQLite table `credential_quota_report` in the ControlPlane, one JSON row per
+  credential. It is not part of the cooldown state (`credential_state`), so `save-cooldown-status` and cooldown resets
+  do not touch it. A row is deleted with its credential and when an upsert replaces an existing credential's token
+  material (a re-login). `listCredentialEntries`/`refreshCredential` add it to the entry as `quota_report`.
+- **Providers and window ids**:
+
+| Executor key      | Endpoint                                                                                  | Window ids                                                                                                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `claude`          | `GET api.anthropic.com/api/oauth/usage` (plus `/profile` for the plan, failure tolerated) | the payload keys (`five_hour`, `seven_day`, `seven_day_opus`, …, unknown keys title-cased); dollar pools skipped; `limits[]` `weekly_scoped` → `seven_day_<model>` |
+| `codex`           | `GET chatgpt.com/backend-api/wham/usage`                                                  | `primary`, `secondary`, `code_review_*`, `<limit>_*`; labelled from `limit_window_seconds`; plan = `plan_type`                                                     |
+| `antigravity`     | `POST …/v1internal:retrieveUserQuotaSummary` (three hosts in order)                       | `bucketId`, labelled "Group · bucket", `used = 1 - remainingFraction`                                                                                              |
+| `kimi`, `kimi-ai` | `GET api.kimi.com` / `api.kimi.ai` `/coding/v1/usages` (only these two hosts)             | `limits[]` by length (`five_hour`, …, else `limit_<n>`), `weekly` (summary), `monthly`                                                                             |
+| `xai`             | `GET cli-chat-proxy.grok.com/v1/billing` (`?format=credits` for weekly)                   | `weekly`, `monthly`                                                                                                                                                |
+| `meta`            | `POST api.meta.ai/muse-code/key` with the `dca_token`                                     | `window`, `weekly`                                                                                                                                                 |
+| `devin`           | `GetUserStatus` (the `devin-user-status` call)                                            | `daily`, `weekly` (`used = 100 - remaining`)                                                                                                                       |
+
+- **Differences from the upstream panel**:
+  - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion).
+  - The Codex subscription and reset-credit calls and the Antigravity tier call are skipped.
+  - Windows without a percentage are dropped (`used_percent` is required).
+  - Labels are English and fixed.
 
 ## Usage accounting and observability (`src/usage/`, `src/observability/`, `src/management/usage-routes.ts`)
 
@@ -827,7 +882,11 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   use the masked API key), `.../queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|auth_id|failed`, `limit`, keyset `before`) and
-  `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT).
+  `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
+  `.../series` (not in Go; the panel's per-account quota-window bars: `since` required, `until` default now, `bucket=hour|day`
+  UTC, `group_by=auth|model|provider`, filters `provider|model|auth_id`; per key the points `{start, requests, failed,
+  total_tokens}` (`acct_total_tokens`) of buckets with requests, one aggregate query; hour ranges are capped at 31 days and
+  day ranges at 400, else 400).
 - **Trace and logs** (`observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
   reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = `yyyyMMddHHmmss-<auth index>-<request id>`
   (UTC; refreshed on every credential selection, `auth_index` = management `auth_index`) or the bare request id when no

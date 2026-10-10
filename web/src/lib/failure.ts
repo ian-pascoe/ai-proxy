@@ -5,7 +5,7 @@ import type { AsyncResult } from "effect/reactivity";
 import { ManagementError } from "#contract/errors.ts";
 
 /** Server messages are lower-case fragments ("the control plane is unavailable"); print them as a sentence. */
-const asSentence = (message: string): string => {
+export const asSentence = (message: string): string => {
   const trimmed = message.trim();
 
   if (trimmed === "") return "The server reported an error without a message.";
@@ -15,8 +15,9 @@ const asSentence = (message: string): string => {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 };
 
-export const failureMessage = <A, E>(result: AsyncResult.Failure<A, E>): string => {
-  const failure = Cause.findErrorOption(result.cause);
+/** What a failed call's cause tells the operator (a mutation's `Exit` carries one). */
+export const causeMessage = (cause: Cause.Cause<unknown>): string => {
+  const failure = Cause.findErrorOption(cause);
 
   if (Option.isSome(failure) && failure.value instanceof ManagementError) {
     return asSentence(failure.value.error);
@@ -24,3 +25,6 @@ export const failureMessage = <A, E>(result: AsyncResult.Failure<A, E>): string 
 
   return "The server did not answer. If your Access session expired, reload the page to sign in again.";
 };
+
+export const failureMessage = <A, E>(result: AsyncResult.Failure<A, E>): string =>
+  causeMessage(result.cause);

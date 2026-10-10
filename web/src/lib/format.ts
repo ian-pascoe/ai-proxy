@@ -58,3 +58,24 @@ const clock = new Intl.DateTimeFormat("en-US", {
 
 /** An instant in the operator's time zone: "Sat 4:35 PM". */
 export const formatClock = (epochMs: number): string => clock.format(epochMs);
+
+/** How long ago something happened, in its largest unit: "just now", "12 min ago", "3 h ago", "4 d ago". */
+export const formatAgo = (ms: number): string => {
+  if (ms < MINUTE) return "just now";
+
+  if (ms < HOUR) return `${Math.floor(ms / MINUTE)} min ago`;
+
+  if (ms < DAY) return `${Math.floor(ms / HOUR)} h ago`;
+
+  return `${Math.floor(ms / DAY)} d ago`;
+};
+
+const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+/** A calendar date in the operator's time zone: "Oct 10, 2026". */
+export const formatDate = (epochMs: number): string => date.format(epochMs);
+
+const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+
+/** A day of the month: "Oct 10". */
+export const formatDay = (epochMs: number): string => shortDate.format(epochMs);
