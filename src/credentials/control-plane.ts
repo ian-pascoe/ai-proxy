@@ -30,6 +30,13 @@ import { CredentialStore } from "./store.ts";
 import type { CredentialSummary } from "./summary.ts";
 import type { ModelSource } from "../registry/source.ts";
 import { authIndexOf } from "../management/auth-index.ts";
+import {
+  type ApiKeyProbeTargetResult,
+  buildApiKeyProbeTarget,
+} from "../management/api-keys-probe.ts";
+import { buildApiKeysList } from "../management/api-keys-view.ts";
+import { locateKey, setKeyExcludedAll } from "../management/api-keys-write.ts";
+import { configKeyIds } from "../management/config-document.ts";
 import { buildCredentialEntry } from "../management/credential-entry.ts";
 import {
   apiCallToken,
@@ -82,8 +89,12 @@ const isProtectedMetadataKey = (key: string): boolean =>
 type WireJsonObject = Record<string, Schema.MutableJson>;
 
 export type SetDisabledResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly error: "not_found" | "config_credential" };
+  | { readonly ok: true; readonly via?: "config:excluded-models" }
+  | {
+      readonly ok: false;
+      readonly error: "not_found" | "config_credential" | "compat_endpoint" | "invalid";
+      readonly message?: string;
+    };
 
 /**
  * Singleton Durable Object (`CONTROL_PLANE.getByName("global")`): the single writer for config, credentials,
@@ -390,7 +401,11 @@ export class ControlPlane extends DurableObject<Env> {
     return { ok: true, id: target.credential.id };
   }
 
-  /** Enables/disables a credential addressed by file name and/or `auth_index`. */
+  /**
+   * Enables/disables a credential addressed by file name and/or `auth_index`. A config API key is disabled by
+   * adding `*` to its `excluded-models` in the config (Go `toggleConfigAPIKeyExcludedAll`); the credential id and
+   * `auth_index` stay the same (`excluded-models` is not part of the identity).
+   */
   async setCredentialDisabledByRef(
     ref: CredentialRef,
     disabled: boolean,
@@ -399,7 +414,57 @@ export class ControlPlane extends DurableObject<Env> {
 
     if (target === undefined) return { ok: false, error: "not_found" };
 
+    if (target.credential.source === "config")
+      return this.#setConfigKeyDisabled(target.credential, disabled);
+
     return await this.setCredentialDisabled(target.credential.id, disabled);
+  }
+
+  #setConfigKeyDisabled(credential: Credential, disabled: boolean): SetDisabledResult {
+    // Go has no compat loop in config_apikey_disable.go: an endpoint is disabled as a whole (`disabled` on its group).
+    if (credential.attributes.compat_name !== undefined)
+      return { ok: false, error: "compat_endpoint" };
+    const view = this.#currentConfig();
+    const snapshot = this.#config.get();
+    const position = locateKey(configKeyIds(view.config), credential.id);
+
+    if (position === undefined) return { ok: false, error: "not_found" };
+    // SAFETY: the stored config document is always a serialized JSON object (writes reject non-objects).
+    const document = JSON.parse(snapshot.document ?? "{}") as JsonObject;
+
+    const edit = setKeyExcludedAll(document, position, disabled);
+
+    if (!edit.ok) return { ok: false, error: "not_found" };
+    // Synchronous read-check-write: nothing can interleave, the version check only documents that.
+    const stored = this.#config.put(JSON.stringify(edit.value), snapshot.version);
+
+    return stored.ok
+      ? { ok: true, via: "config:excluded-models" }
+      : { ok: false, error: "invalid", message: stored.message };
+  }
+
+  // --- API keys page (src/management/api-keys-*.ts) ------------------------------------------------------------
+
+  /** The `api-keys` groups with runtime state: one snapshot of config version and credential pool (no secrets). */
+  apiKeysView(): WireJsonObject {
+    const { version, config } = this.#currentConfig();
+
+    return buildApiKeysList(version, config, this.#pool.entries(), Date.now());
+  }
+
+  /**
+   * What the Worker needs to probe a config API key (`POST /api-keys/probe`): the family, base URL, headers and the
+   * key itself. Carries the secret: the Worker uses it for the upstream call only and never returns it.
+   */
+  apiKeyProbeTarget(authIndex: string): ApiKeyProbeTargetResult {
+    const target = findCredential(this.#pool.entries(), { authIndex });
+
+    const probe =
+      target?.credential.source === "config"
+        ? buildApiKeyProbeTarget(target.credential)
+        : undefined;
+
+    return probe === undefined ? { ok: false, error: "not_found" } : { ok: true, target: probe };
   }
 
   /** Clears quota/cooldown state (`POST /routing/cooldown/reset`). */

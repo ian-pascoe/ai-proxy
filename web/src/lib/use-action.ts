@@ -4,11 +4,16 @@ import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import type { Atom } from "effect/reactivity";
 import { useCallback, useState } from "react";
-import { causeMessage } from "./failure.ts";
+import { causeMessage, serverError } from "./failure.ts";
 
 export type Outcome<A> =
   | { readonly ok: true; readonly value: A }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly message: string;
+      /** The server's raw error text (`conflict`, ...), to tell failures apart. */
+      readonly error: string | undefined;
+    };
 
 export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
   const call = useAtomSet(atom, { mode: "promiseExit" });
@@ -23,7 +28,7 @@ export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
 
         return Exit.isSuccess(exit)
           ? { ok: true, value: exit.value }
-          : { ok: false, message: causeMessage(exit.cause) };
+          : { ok: false, message: causeMessage(exit.cause), error: serverError(exit.cause) };
       } finally {
         setBusy(false);
       }

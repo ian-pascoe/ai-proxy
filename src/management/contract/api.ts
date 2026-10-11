@@ -7,6 +7,7 @@
  * Browser-safe: modules under `contract/` import `effect` and each other only.
  */
 import { HttpApi } from "effect/http-api";
+import { ApiKeysGroup } from "./api-keys.ts";
 import { CredentialsGroup } from "./credentials.ts";
 import { OAuthGroup } from "./oauth.ts";
 import { UsageGroupApi } from "./usage.ts";
@@ -17,4 +18,5 @@ export class ManagementApi extends HttpApi.make("management")
   .add(CredentialsGroup)
   .add(UsageGroupApi)
   .add(OAuthGroup)
+  .add(ApiKeysGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

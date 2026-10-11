@@ -174,7 +174,36 @@ export const accountModelsAtom = Atom.family((name: string) =>
   }),
 );
 
-// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards.
+/** The API keys page refetches after a mutation tagged with this key. */
+export const API_KEYS = ["api-keys"] as const;
+
+/** Every configured API key group with its keys' state and the config version writes send back. */
+export const apiKeysAtom = ManagementClient.query("apiKeys", "list", {
+  reactivityKeys: API_KEYS,
+  timeToLive: KEEP,
+});
+
+// Group writes: call with `reactivityKeys: API_KEYS`.
+export const putKeyGroupAtom = ManagementClient.mutation("apiKeys", "putGroup");
+
+export const deleteKeyGroupAtom = ManagementClient.mutation("apiKeys", "deleteGroup");
+
+/**
+ * One connection test per key (`auth_index`; call it with no argument). `mutation` atoms are shared per endpoint and
+ * keep one call at a time, so keys tested together would read each other's answers.
+ */
+export const probeKeyAtom = Atom.family((authIndex: string) =>
+  ManagementClient.runtime.fn(() =>
+    Effect.gen(function* () {
+      const client = yield* ManagementClient;
+
+      return yield* client.apiKeys.probe({ payload: { auth_index: authIndex } });
+    }),
+  ),
+);
+
+// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`API_KEYS` for a
+// config API key).
 export const setDisabledAtom = ManagementClient.mutation("credentials", "setDisabled");
 
 export const patchFieldsAtom = ManagementClient.mutation("credentials", "patchFields");

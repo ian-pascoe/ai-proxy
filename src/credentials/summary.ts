@@ -20,6 +20,10 @@ const SAFE_KEYS = new Set(["token_type", "token_endpoint", "dca_expired", "dca_e
 
 const SECRET_ATTRIBUTES = new Set(["api_key"]);
 
+/** Does a metadata key or header name look like it carries a secret (`x-api-key`, `authorization`, ...)? */
+export const isSecretName = (name: string): boolean =>
+  SECRET_KEY.test(name) && !SAFE_KEYS.has(name);
+
 /** Last four characters only, so a key is recognisable without being usable. */
 export const maskSecret = (value: string): string =>
   value.length <= 8 ? "[redacted]" : `[redacted]…${value.slice(-4)}`;
@@ -37,7 +41,7 @@ export const redactMetadata = (metadata: JsonObject): JsonObject => {
   const out: JsonObject = {};
 
   for (const [key, value] of Object.entries(metadata)) {
-    if (SECRET_KEY.test(key) && !SAFE_KEYS.has(key)) {
+    if (isSecretName(key)) {
       out[key] =
         typeof value === "string" && value !== ""
           ? maskSecret(value)

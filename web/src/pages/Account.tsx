@@ -23,7 +23,7 @@ import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
 import { Meter } from "../components/Meter.tsx";
 import { ResetBlade, TrailMark } from "../components/Signs.tsx";
-import { accountName, assess, refreshable } from "../lib/accounts.ts";
+import { accountName, assess, cooldownReason, refreshable } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
 import {
   formatAgo,
@@ -208,21 +208,6 @@ const Cooldowns = ({
       </table>
     </Section>
   );
-};
-
-const cooldownReason = (reason: string): string => {
-  switch (reason) {
-    case "quota":
-      return "Rate limit";
-    case "credential_quota":
-      return "Account quota used up";
-    case "cloudflare_challenge":
-      return "Blocked by a Cloudflare challenge";
-    case "unknown":
-      return "Unknown";
-    default:
-      return reason;
-  }
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -526,10 +511,10 @@ const Remove = ({
         <Trash2 aria-hidden="true" size={16} strokeWidth={2.25} />
         Delete account
       </button>
-      <dialog ref={dialog} className={styles["dialog"]} aria-labelledby={titleId}>
+      <dialog ref={dialog} className={kit["dialog"]} aria-labelledby={titleId}>
         <form
           method="dialog"
-          className={styles["dialogBody"]}
+          className={kit["dialogBody"]}
           onSubmit={async (event) => {
             event.preventDefault();
 
@@ -550,14 +535,14 @@ const Remove = ({
             }
           }}
         >
-          <h2 id={titleId} className={styles["dialogTitle"]}>
+          <h2 id={titleId} className={kit["dialogTitle"]}>
             Delete {accountName(entry)}?
           </h2>
           <p>
             Requests stop going to this {providerName(entry.provider)} account and its tokens are
             removed from the proxy.
           </p>
-          <div className={styles["dialogActions"]}>
+          <div className={kit["dialogActions"]}>
             <button type="submit" className={kit["danger"]} disabled={remove.busy}>
               {remove.busy ? "Deleting…" : "Delete account"}
             </button>

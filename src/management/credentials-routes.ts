@@ -343,7 +343,8 @@ const refOf = (body: JsonObject) => {
 const patchStatus = Effect.gen(function* () {
   const body = yield* bodyObject;
 
-  if (text(body.name) === "") return yield* replyError(400, "name is required");
+  if (text(body.name) === "" && text(body.auth_index) === "")
+    return yield* replyError(400, "name is required");
 
   if (typeof body.disabled !== "boolean") return yield* replyError(400, "disabled is required");
 
@@ -352,7 +353,15 @@ const patchStatus = Effect.gen(function* () {
     stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean),
   );
 
-  if (result.ok) return jsonReply(200, { status: "ok", disabled: body.disabled });
+  // A config API key is disabled through its excluded-models (`*`), like Go answers.
+  if (result.ok) {
+    return jsonReply(
+      200,
+      result.via === undefined
+        ? { status: "ok", disabled: body.disabled }
+        : { status: "ok", disabled: body.disabled, via: result.via, excluded_pattern: "*" },
+    );
+  }
 
   if (result.error === "config_credential") {
     return yield* replyError(
@@ -360,6 +369,15 @@ const patchStatus = Effect.gen(function* () {
       'config API keys are disabled by adding "*" to their excluded-models in the config',
     );
   }
+
+  if (result.error === "compat_endpoint") {
+    return yield* replyError(
+      409,
+      "OpenAI-compatible keys cannot be disabled one by one: disable the endpoint",
+    );
+  }
+
+  if (result.error === "invalid") return yield* replyError(422, result.message ?? "invalid config");
 
   return yield* replyError(404, "auth file not found");
 });
