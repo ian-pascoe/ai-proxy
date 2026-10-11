@@ -12,6 +12,18 @@
  */
 import { Effect, Schema } from "effect";
 import { PayloadConfig } from "./payload/schema.ts";
+import {
+  API_KEY_FAMILIES,
+  ApiKeyEntry,
+  ApiKeyFamily,
+  ApiKeyGroup,
+  CloakConfig,
+  ModelEntry,
+  OpenAICompatGroup,
+  OpenAICompatKey,
+  RequestScopedErrorRule,
+  ThinkingSupport,
+} from "../management/contract/api-keys.ts";
 
 // --- field helpers -------------------------------------------------------------------------------------------------
 
@@ -36,130 +48,21 @@ const optional = Schema.optionalKey;
 
 const Strings = Schema.Array(Schema.String);
 
-const StringMap = Schema.Record(Schema.String, Schema.String);
-
-/** Credential weight (internal/credentialweight): any integer, but at most 1,000,000. */
-const Weight = Schema.Int.check(Schema.isLessThanOrEqualTo(1_000_000));
-
 // --- shared pieces -------------------------------------------------------------------------------------------------
 
-export const RequestScopedErrorRule = Schema.Struct({
-  status: optional(Schema.Int),
-  match: optional(Strings),
-  "match-regexr": optional(Strings),
-  /** `stop`, `stop-and-cooldown`, `continue` or `continue-and-cooldown`. */
-  action: optional(Schema.String),
-});
-
-export type RequestScopedErrorRule = typeof RequestScopedErrorRule.Type;
-
-export const ThinkingSupport = Schema.Struct({
-  min: optional(Schema.Int),
-  max: optional(Schema.Int),
-  "zero-allowed": optional(Schema.Boolean),
-  "dynamic-allowed": optional(Schema.Boolean),
-  levels: optional(Strings),
-});
-
-export type ThinkingSupport = typeof ThinkingSupport.Type;
-
-/** Model entry of an API-key group (the union of the per-provider Go model structs). */
-export const ModelEntry = Schema.Struct({
-  /** Upstream model name. */
-  name: Schema.String,
-  /** Client-visible alias. */
-  alias: optional(Schema.String),
-  "display-name": optional(Schema.String),
-  "max-context-length": optional(Schema.Int),
-  "force-mapping": optional(Schema.Boolean),
-  "is-compat": optional(Schema.Boolean),
-  thinking: optional(ThinkingSupport),
-  /** Codex only. */
-  "support-configuration-update": optional(Schema.Boolean),
-  /** OpenAI-compatibility only. */
-  image: optional(Schema.Boolean),
-  "input-modalities": optional(Strings),
-  "output-modalities": optional(Strings),
-  "use-max-completion-tokens": optional(Schema.Boolean),
-});
-
-export type ModelEntry = typeof ModelEntry.Type;
-
-export const CloakConfig = Schema.Struct({
-  mode: optional(Schema.String),
-  "strict-mode": optional(Schema.Boolean),
-  "sensitive-words": optional(Strings),
-  "cache-user-id": optional(Schema.Boolean),
-});
-
-export type CloakConfig = typeof CloakConfig.Type;
-
-/** Settings shared by a group and (as overrides) by its keys. A missing key inherits the group value. */
-const sharedKeyFields = {
-  priority: optional(Schema.Int),
-  prefix: optional(Schema.String),
-  "proxy-url": optional(Schema.String),
-  headers: optional(StringMap),
-  models: optional(Schema.Array(ModelEntry)),
-  "excluded-models": optional(Strings),
-  "disable-cooling": optional(Schema.Boolean),
-  "request-retry": optional(Schema.Int),
-  "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule)),
+// The API-key group schemas are browser-safe and shared with the control panel: they live in the management contract.
+export {
+  API_KEY_FAMILIES,
+  ApiKeyEntry,
+  ApiKeyFamily,
+  ApiKeyGroup,
+  CloakConfig,
+  ModelEntry,
+  OpenAICompatGroup,
+  OpenAICompatKey,
+  RequestScopedErrorRule,
+  ThinkingSupport,
 };
-
-/** One credential inside an API-key group. */
-export const ApiKeyEntry = Schema.Struct({
-  "api-key": Schema.String,
-  weight: optional(Weight),
-  ...sharedKeyFields,
-  /** Claude. */
-  "rebuild-mid-system-message": optional(Schema.Boolean),
-  cloak: optional(CloakConfig),
-  "fingerprint-profile": optional(Schema.String),
-  "experimental-cch-signing": optional(Schema.Boolean),
-  /** Codex / xAI / Meta. */
-  websockets: optional(Schema.Boolean),
-  "alpha-search": optional(Schema.Boolean),
-  "disable-codex-cloaking": optional(Schema.Boolean),
-  /** Vertex. */
-  interactions: optional(Schema.Boolean),
-});
-
-export type ApiKeyEntry = typeof ApiKeyEntry.Type;
-
-/** `api-keys.<provider>[]` group: one endpoint, shared settings and a list of keys. */
-export const ApiKeyGroup = Schema.Struct({
-  name: optional(Schema.String),
-  "base-url": optional(Schema.String),
-  ...sharedKeyFields,
-  keys: Schema.Array(ApiKeyEntry),
-});
-
-export type ApiKeyGroup = typeof ApiKeyGroup.Type;
-
-export const OpenAICompatKey = Schema.Struct({
-  "api-key": Schema.String,
-  weight: optional(Weight),
-  "proxy-url": optional(Schema.String),
-});
-
-/** `api-keys.openai-compatibility[]` group. */
-export const OpenAICompatGroup = Schema.Struct({
-  name: Schema.String,
-  priority: optional(Schema.Int),
-  disabled: optional(Schema.Boolean),
-  prefix: optional(Schema.String),
-  "base-url": Schema.String,
-  headers: optional(StringMap),
-  models: optional(Schema.Array(ModelEntry)),
-  "support-prompt-cache-key": optional(Schema.Boolean),
-  "disable-cooling": optional(Schema.Boolean),
-  "request-retry": optional(Schema.Int),
-  "request-scoped-errors": optional(Schema.Array(RequestScopedErrorRule)),
-  keys: Schema.Array(OpenAICompatKey),
-});
-
-export type OpenAICompatGroup = typeof OpenAICompatGroup.Type;
 
 export const OAuthModelAlias = Schema.Struct({
   name: Schema.String,
@@ -368,17 +271,3 @@ export const Config = Schema.Struct({
 export type Config = typeof Config.Type;
 
 export type ConfigEncoded = typeof Config.Encoded;
-
-/** The v8 provider family names that may appear under `api-keys`. */
-export const API_KEY_FAMILIES = [
-  "gemini",
-  "interactions",
-  "vertex",
-  "codex",
-  "claude",
-  "xai",
-  "meta",
-  "openai-compatibility",
-] as const;
-
-export type ApiKeyFamily = (typeof API_KEY_FAMILIES)[number];

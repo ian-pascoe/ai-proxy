@@ -1,13 +1,18 @@
 // Pure helpers of the management API: config document edits, credential entries, field patches, cooldown reset.
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
+import { decodeConfig } from "../src/config/codec.ts";
 import type { JsonObject } from "../src/json/index.ts";
 import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";
 import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
 import { classifyPath } from "../src/access/routes.ts";
+import { authIndexOf } from "../src/management/auth-index.ts";
 import {
+  configKeyIds,
   deleteAtPath,
   getAtPath,
+  injectAuthIndexes,
   mergePatch,
   parseConfigPath,
   stripAuthIndexes,
@@ -77,6 +82,78 @@ describe("config document paths", () => {
       "api-keys": { claude: [{ keys: [{ "api-key": "x" }] }] },
       other: { auth_index: "keep" },
     });
+  });
+});
+
+describe("config key ids", () => {
+  const document: JsonObject = {
+    "api-keys": {
+      claude: [
+        { keys: [{ "api-key": "sk-ant-1" }, { "api-key": "sk-ant-2" }] },
+        { "base-url": "https://claude.test", keys: [{ "api-key": "sk-ant-3" }] },
+      ],
+      vertex: [{ "base-url": "https://vertex.test", keys: [{ "api-key": "vx-1" }] }],
+      "openai-compatibility": [
+        { name: "empty", "base-url": "https://empty.test/v1", keys: [] },
+        {
+          name: "off",
+          disabled: true,
+          "base-url": "https://off.test/v1",
+          keys: [{ "api-key": "off-1" }, { "api-key": "off-2" }],
+        },
+        {
+          name: "on",
+          "base-url": "https://on.test/v1",
+          keys: [{ "api-key": "on-1" }, { "api-key": "on-2" }],
+        },
+      ],
+    },
+  };
+
+  const config = Effect.runSync(decodeConfig(document));
+
+  it("maps every key position to the credential id that injectAuthIndexes uses", () => {
+    const ids = configKeyIds(config);
+    const injected = injectAuthIndexes(document, config)["api-keys"] as Record<string, unknown>;
+
+    const indexes = (family: string) =>
+      (injected[family] as Array<{ keys: Array<{ auth_index?: string }> }>).map((group) =>
+        group.keys.map((key) => key.auth_index),
+      );
+
+    for (const family of ["claude", "vertex", "openai-compatibility"] as const) {
+      expect(
+        ids[family].map((group) =>
+          group.keys.map((id) => (id === undefined ? undefined : authIndexOf(id))),
+        ),
+      ).toEqual(indexes(family));
+    }
+
+    // Keys of one family are distinct, in config order across groups.
+    const claude = ids.claude.flatMap((group) => group.keys);
+
+    expect(new Set(claude).size).toBe(3);
+    expect(claude.every((id) => id?.startsWith("claude:apikey:"))).toBe(true);
+  });
+
+  it("gives no id to the keys of an empty or disabled compat group", () => {
+    const ids = configKeyIds(config);
+
+    expect(ids["openai-compatibility"][0]?.keys).toEqual([]);
+    expect(ids["openai-compatibility"][1]?.keys.every((id) => id === undefined)).toBe(true);
+    expect(ids["openai-compatibility"][2]?.keys.every((id) => id !== undefined)).toBe(true);
+  });
+
+  it("includeDisabledGroups addresses the keys of a disabled group and changes nothing else", () => {
+    const base = configKeyIds(config);
+    const all = configKeyIds(config, { includeDisabledGroups: true });
+
+    expect(all["openai-compatibility"][1]?.keys.every((id) => id !== undefined)).toBe(true);
+    expect(all["openai-compatibility"][1]?.keys.length).toBe(2);
+    expect(all["openai-compatibility"][0]).toEqual(base["openai-compatibility"][0]);
+    expect(all["openai-compatibility"][2]).toEqual(base["openai-compatibility"][2]);
+    expect(all.claude).toEqual(base.claude);
+    expect(all.vertex).toEqual(base.vertex);
   });
 });
 

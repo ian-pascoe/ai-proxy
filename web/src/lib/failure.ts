@@ -15,6 +15,15 @@ export const asSentence = (message: string): string => {
   return /[.!?]$/.test(capitalised) ? capitalised : `${capitalised}.`;
 };
 
+/** The server's own error text (`conflict`, `unknown_auth_index`, ...), when it sent one. */
+export const serverError = (cause: Cause.Cause<unknown>): string | undefined => {
+  const failure = Cause.findErrorOption(cause);
+
+  return Option.isSome(failure) && failure.value instanceof ManagementError
+    ? failure.value.error
+    : undefined;
+};
+
 /** What a failed call's cause tells the operator (a mutation's `Exit` carries one). */
 export const causeMessage = (cause: Cause.Cause<unknown>): string => {
   const failure = Cause.findErrorOption(cause);

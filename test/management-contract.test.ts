@@ -6,6 +6,7 @@ import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { ManagementApi } from "../src/management/contract/api.ts";
+import type { ApiKeysList, GroupView } from "../src/management/contract/api-keys.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";
 import { UsageGroupBy } from "../src/management/contract/usage.ts";
 import { GROUP_BY, insertUsageRecord } from "../src/usage/d1.ts";
@@ -16,6 +17,7 @@ import {
   makeHarness,
   resetControlPlane,
 } from "./support/management.ts";
+import type { MockHandler, RecordedRequest } from "./support/refresh.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const harness = makeHarness();
@@ -43,12 +45,18 @@ afterEach(() => {
   upstream = () => undefined;
 });
 
+// Probes call the provider through the Worker's own HttpClient: a harness whose outbound answers come from `probeReply`.
+let probeReply: MockHandler = () => ({ status: 599 });
+
+const probing = makeHarness((request) => probeReply(request));
+
 const withoutUsage = makeHarness(undefined, { USAGE: undefined as unknown as D1Database });
 
 afterAll(async () => {
   globalThis.fetch = realFetch;
   await harness.dispose();
   await withoutUsage.dispose();
+  await probing.dispose();
 });
 
 /** `fetch` that answers through the harness (an admin's Access token is added). */
@@ -567,5 +575,449 @@ describe("management contract", () => {
         assert.strictEqual(stateless.error, "state is required");
       }).pipe(through(harness)),
     );
+  });
+
+  describe("api keys", () => {
+    const SECRETS = [
+      "sk-ant-AAAA1111",
+      "sk-ant-BBBB2222",
+      "sk-codex-CCCC3333",
+      "sk-acme-DDDD4444",
+      "hdr-secret-9876",
+    ];
+
+    const seedKeys = (extra: Record<string, unknown> = {}) =>
+      Effect.promise(async () => {
+        await controlPlane().putConfig(
+          JSON.stringify({
+            "api-keys": {
+              claude: [
+                {
+                  name: "main",
+                  "base-url": "https://api.anthropic.com",
+                  "proxy-url": "http://127.0.0.1:9",
+                  headers: { "X-Api-Key": "hdr-secret-9876", "X-Team": "blue" },
+                  keys: [{ "api-key": SECRETS[0] }, { "api-key": SECRETS[1], weight: 3 }],
+                },
+              ],
+              codex: [
+                {
+                  "base-url": "https://codex.test/backend-api/codex",
+                  keys: [{ "api-key": SECRETS[2] }],
+                },
+              ],
+              "openai-compatibility": [
+                {
+                  name: "acme",
+                  "base-url": "https://api.acme.test/v1",
+                  keys: [{ "api-key": SECRETS[3] }],
+                },
+              ],
+              ...extra,
+            },
+          }),
+        );
+      });
+
+    const claudeGroup = (list: ApiKeysList): GroupView => {
+      const group = list.families.claude[0];
+
+      assert.isDefined(group);
+
+      return group!;
+    };
+
+    /** The claude group as an input that keeps every key (by `auth_index`) and every field. */
+    const claudeInput = (view: GroupView) => ({
+      ...(view.group.name === undefined ? {} : { name: view.group.name }),
+      ...(view.group["base-url"] === undefined ? {} : { "base-url": view.group["base-url"] }),
+      ...(view.group.headers === undefined ? {} : { headers: view.group.headers }),
+      keys: view.group.keys.map((key) => ({
+        auth_index: key.auth_index!,
+        ...(key.weight === undefined ? {} : { weight: key.weight }),
+      })),
+    });
+
+    const storedDocument = () =>
+      Effect.promise(async () => (await controlPlane().getConfig()).document ?? "");
+
+    it.effect("lists groups with runtime state and never a secret", () =>
+      Effect.gen(function* () {
+        yield* seedKeys();
+        const api = yield* client;
+        const list = yield* api.apiKeys.list();
+        const claude = claudeGroup(list);
+
+        assert.strictEqual(claude.group.keys.length, 2);
+        assert.strictEqual(claude.effective_base_url, "https://api.anthropic.com");
+        assert.deepStrictEqual(
+          claude.group.keys.map((key) => key.key_preview),
+          ["[redacted]…1111", "[redacted]…2222"],
+        );
+        assert.strictEqual(claude.group.keys[1]?.weight, 3);
+        assert.strictEqual(
+          claude.group.keys[0]?.runtime?.auth_index,
+          claude.group.keys[0]?.auth_index,
+        );
+        assert.strictEqual(claude.group.keys[0]?.runtime?.success, 0);
+        assert.deepStrictEqual(claude.group.headers, {
+          "X-Api-Key": "[redacted]…9876",
+          "X-Team": "blue",
+        });
+        // The hidden proxy is reported as a warning only.
+        assert.strictEqual(claude.warnings.length, 1);
+        assert.strictEqual(list.families.codex.length, 1);
+        assert.strictEqual(list.families["openai-compatibility"][0]?.group.name, "acme");
+        assert.strictEqual(list.families["openai-compatibility"][0]?.group.keys.length, 1);
+
+        const raw = yield* Effect.promise(async () =>
+          (await harness.call("/v8/management/api-keys")).text(),
+        );
+
+        for (const secret of SECRETS) assert.notInclude(raw, secret);
+        assert.notInclude(raw, "127.0.0.1:9");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("a write keeps stored keys by auth_index and replaces a key given a new secret", () =>
+      Effect.gen(function* () {
+        yield* seedKeys();
+        const api = yield* client;
+        const before = yield* api.apiKeys.list();
+        const view = claudeGroup(before);
+        const [kept, replaced] = view.group.keys;
+
+        const written = yield* api.apiKeys.putGroup({
+          payload: {
+            version: before.version,
+            family: "claude",
+            index: 0,
+            group: {
+              ...claudeInput(view),
+              keys: [
+                { auth_index: kept!.auth_index!, priority: 5 },
+                { "api-key": "sk-ant-NEW33333", weight: 3 },
+              ],
+            },
+          },
+        });
+
+        assert.isAbove(written.version, before.version);
+
+        const after = yield* api.apiKeys.list();
+        const keys = claudeGroup(after).group.keys;
+
+        assert.strictEqual(after.version, written.version);
+        assert.strictEqual(keys[0]?.auth_index, kept?.auth_index);
+        assert.strictEqual(keys[0]?.runtime?.id, kept?.runtime?.id);
+        assert.strictEqual(keys[0]?.priority, 5);
+        assert.strictEqual(keys[1]?.key_preview, "[redacted]…3333");
+        assert.notStrictEqual(keys[1]?.auth_index, replaced?.auth_index);
+
+        // Hidden settings and masked headers are carried over from the stored entry.
+        const document = yield* storedDocument();
+
+        assert.include(document, "http://127.0.0.1:9");
+        assert.include(document, "hdr-secret-9876");
+        assert.include(document, "sk-ant-NEW33333");
+        assert.notInclude(document, "sk-ant-BBBB2222");
+      }).pipe(through(harness)),
+    );
+
+    it.effect(
+      "refuses a stale version, an unknown auth_index and a group the config would drop",
+      () =>
+        Effect.gen(function* () {
+          yield* seedKeys();
+          const api = yield* client;
+          const before = yield* api.apiKeys.list();
+          const view = claudeGroup(before);
+
+          yield* api.apiKeys.putGroup({
+            payload: {
+              version: before.version,
+              family: "claude",
+              index: 0,
+              group: claudeInput(view),
+            },
+          });
+
+          const stale = yield* Effect.flip(
+            api.apiKeys.putGroup({
+              payload: {
+                version: before.version,
+                family: "claude",
+                index: 0,
+                group: claudeInput(view),
+              },
+            }),
+          );
+
+          assert.instanceOf(stale, ManagementError);
+          assert.strictEqual(stale.error, "conflict");
+
+          const current = (yield* api.apiKeys.list()).version;
+
+          const unknown = yield* Effect.flip(
+            api.apiKeys.putGroup({
+              payload: {
+                version: current,
+                family: "claude",
+                index: 0,
+                group: { ...claudeInput(view), keys: [{ auth_index: "0000000000000000" }] },
+              },
+            }),
+          );
+
+          assert.instanceOf(unknown, ManagementError);
+          assert.strictEqual(unknown.error, "unknown_auth_index");
+
+          const noBase = yield* Effect.flip(
+            api.apiKeys.putGroup({
+              payload: {
+                version: current,
+                family: "codex",
+                group: { keys: [{ "api-key": "sk-codex-X" }] },
+              },
+            }),
+          );
+
+          assert.instanceOf(noBase, ManagementError);
+          assert.isAbove(noBase.error.length, 0);
+
+          const missing = yield* Effect.flip(
+            api.apiKeys.deleteGroup({ payload: { version: current, family: "claude", index: 4 } }),
+          );
+
+          assert.instanceOf(missing, ManagementError);
+          assert.strictEqual(missing.error, "group not found");
+
+          // Nothing was stored by the refused writes.
+          assert.strictEqual((yield* api.apiKeys.list()).version, current);
+        }).pipe(through(harness)),
+    );
+
+    it.effect("refuses a duplicate key and deletes a group", () =>
+      Effect.gen(function* () {
+        yield* seedKeys({ gemini: [{ keys: [{ "api-key": "gm-one" }] }] });
+        const api = yield* client;
+        const list = yield* api.apiKeys.list();
+
+        const duplicate = yield* Effect.flip(
+          api.apiKeys.putGroup({
+            payload: {
+              version: list.version,
+              family: "gemini",
+              group: { keys: [{ "api-key": "gm-one" }] },
+            },
+          }),
+        );
+
+        assert.instanceOf(duplicate, ManagementError);
+        assert.isAbove(duplicate.error.length, 0);
+
+        const deleted = yield* api.apiKeys.deleteGroup({
+          payload: { version: list.version, family: "gemini", index: 0 },
+        });
+
+        const after = yield* api.apiKeys.list();
+
+        assert.strictEqual(after.version, deleted.version);
+        assert.strictEqual(after.families.gemini.length, 0);
+        assert.strictEqual(after.families.claude.length, 1);
+      }).pipe(through(harness)),
+    );
+
+    it.effect(
+      "setDisabled toggles a config key through excluded-models and refuses compat keys",
+      () =>
+        Effect.gen(function* () {
+          yield* seedKeys();
+          const api = yield* client;
+          const view = claudeGroup(yield* api.apiKeys.list());
+          const key = view.group.keys[0]!;
+
+          const off = yield* api.credentials.setDisabled({
+            payload: { name: key.runtime!.id, disabled: true },
+          });
+
+          assert.deepStrictEqual(off, {
+            status: "ok",
+            disabled: true,
+            via: "config:excluded-models",
+            excluded_pattern: "*",
+          });
+
+          const disabled = claudeGroup(yield* api.apiKeys.list()).group.keys[0]!;
+
+          assert.strictEqual(disabled.disabled, true);
+          assert.strictEqual(disabled.auth_index, key.auth_index);
+          assert.deepStrictEqual(disabled["excluded-models"], ["*"]);
+
+          yield* api.credentials.setDisabled({
+            payload: { name: "", auth_index: key.auth_index!, disabled: false },
+          });
+          assert.strictEqual(claudeGroup(yield* api.apiKeys.list()).group.keys[0]?.disabled, false);
+
+          const compat = (yield* api.apiKeys.list()).families["openai-compatibility"][0]!.group
+            .keys[0]!;
+
+          const refused = yield* Effect.flip(
+            api.credentials.setDisabled({ payload: { name: compat.runtime!.id, disabled: true } }),
+          );
+
+          assert.instanceOf(refused, ManagementError);
+          assert.include(refused.error, "disable the endpoint");
+        }).pipe(through(harness)),
+    );
+
+    describe("probe", () => {
+      beforeEach(() => {
+        probing.requests.length = 0;
+        probeReply = () => ({ status: 599 });
+      });
+
+      const authIndexOfFirst = (
+        list: ApiKeysList,
+        family: "claude" | "codex" | "gemini" | "vertex",
+      ) => list.families[family][0]!.group.keys[0]!.auth_index!;
+
+      const probe = (authIndex: string) =>
+        Effect.gen(function* () {
+          const api = yield* client;
+
+          return yield* api.apiKeys.probe({ payload: { auth_index: authIndex } });
+        });
+
+      it.effect("lists the models of each family with the family's authentication", () =>
+        Effect.gen(function* () {
+          yield* seedKeys({
+            gemini: [{ "base-url": "https://gemini.test", keys: [{ "api-key": "gm-key-1234" }] }],
+            vertex: [
+              {
+                "base-url": "https://vertex.test",
+                models: [{ name: "gemini-2.5-pro", alias: "pro" }],
+                keys: [{ "api-key": "vx-key-1234" }],
+              },
+            ],
+          });
+
+          const api = yield* client;
+          const list = yield* api.apiKeys.list();
+          const seen = probing.requests;
+
+          probeReply = (request: RecordedRequest) => {
+            const url = new URL(request.url);
+
+            if (url.host === "api.anthropic.com")
+              return { body: { data: [{ id: "claude-sonnet", display_name: "Claude Sonnet" }] } };
+
+            if (url.host === "codex.test") return { body: { data: [{ id: "gpt-5-codex" }] } };
+
+            if (url.host === "api.acme.test") return { body: { data: [{ id: "acme-1" }] } };
+
+            if (url.host === "gemini.test")
+              return url.searchParams.get("pageToken") === "p2"
+                ? { body: { models: [{ name: "models/gemini-b" }] } }
+                : {
+                    body: {
+                      models: [{ name: "models/gemini-a", displayName: "Gemini A" }],
+                      nextPageToken: "p2",
+                    },
+                  };
+
+            if (url.host === "vertex.test") return { body: { totalTokens: 1 } };
+
+            return { status: 599 };
+          };
+
+          const claude = yield* probe(authIndexOfFirst(list, "claude"));
+
+          assert.strictEqual(claude.ok, true);
+          assert.deepStrictEqual(claude.models, [
+            { id: "claude-sonnet", display_name: "Claude Sonnet" },
+          ]);
+          assert.strictEqual(seen[0]?.url, "https://api.anthropic.com/v1/models?limit=1000");
+          assert.strictEqual(seen[0]?.headers["x-api-key"], SECRETS[0]);
+          assert.isDefined(seen[0]?.headers["anthropic-version"]);
+          // The configured headers go along, the authentication ones last.
+          assert.strictEqual(seen[0]?.headers["x-team"], "blue");
+
+          const codex = yield* probe(authIndexOfFirst(list, "codex"));
+
+          assert.deepStrictEqual(codex.models, [{ id: "gpt-5-codex" }]);
+          assert.strictEqual(seen[1]?.url, "https://codex.test/backend-api/codex/v1/models");
+          assert.strictEqual(seen[1]?.headers.authorization, `Bearer ${SECRETS[2]}`);
+
+          const compatKey = list.families["openai-compatibility"][0]!.group.keys[0]!;
+          const compat = yield* probe(compatKey.auth_index!);
+
+          assert.deepStrictEqual(compat.models, [{ id: "acme-1" }]);
+          assert.strictEqual(seen[2]?.url, "https://api.acme.test/v1/models");
+
+          const gemini = yield* probe(authIndexOfFirst(list, "gemini"));
+
+          assert.deepStrictEqual(
+            gemini.models?.map((model) => model.id),
+            ["gemini-a", "gemini-b"],
+          );
+          assert.strictEqual(seen[3]?.headers["x-goog-api-key"], "gm-key-1234");
+          assert.strictEqual(seen.length, 5);
+
+          const vertex = yield* probe(authIndexOfFirst(list, "vertex"));
+
+          assert.strictEqual(vertex.ok, true);
+
+          const count = seen[5];
+
+          assert.strictEqual(count?.method, "POST");
+          assert.strictEqual(
+            count?.url,
+            "https://vertex.test/v1/publishers/google/models/gemini-2.5-pro:countTokens",
+          );
+          assert.strictEqual(count?.headers["x-goog-api-key"], "vx-key-1234");
+
+          // A probe is not a request: the credential pool's counters stay untouched.
+          const after = yield* api.apiKeys.list();
+
+          for (const group of after.families.claude)
+            for (const key of group.group.keys) {
+              assert.strictEqual(key.runtime?.success, 0);
+              assert.strictEqual(key.runtime?.failed, 0);
+            }
+        }).pipe(through(probing)),
+      );
+
+      it.effect("reports an upstream refusal without echoing the key or the body", () =>
+        Effect.gen(function* () {
+          yield* seedKeys();
+          const api = yield* client;
+          const list = yield* api.apiKeys.list();
+
+          probeReply = () => ({ status: 401, body: { error: `invalid key ${SECRETS[0]}` } });
+
+          const refused = yield* probe(authIndexOfFirst(list, "claude"));
+
+          assert.strictEqual(refused.ok, false);
+          assert.strictEqual(refused.status_code, 401);
+          assert.isAtLeast(refused.latency_ms, 0);
+          assert.notInclude(JSON.stringify(refused), SECRETS[0]!);
+          assert.notInclude(JSON.stringify(refused), "invalid key");
+
+          probeReply = () => ({ transportError: true });
+
+          const unreachable = yield* probe(authIndexOfFirst(list, "codex"));
+
+          assert.strictEqual(unreachable.ok, false);
+          assert.strictEqual(unreachable.status_code, undefined);
+          assert.isDefined(unreachable.error);
+
+          const missing = yield* Effect.flip(probe("0000000000000000"));
+
+          assert.instanceOf(missing, ManagementError);
+          assert.strictEqual(missing.error, "api key not found");
+        }).pipe(through(probing)),
+      );
+    });
   });
 });

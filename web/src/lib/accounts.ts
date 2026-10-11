@@ -63,3 +63,19 @@ const REFRESHABLE = new Set([
 ]);
 
 export const refreshable = (provider: string): boolean => REFRESHABLE.has(provider);
+
+/** A cooldown's reason as the operator reads it. */
+export const cooldownReason = (reason: string): string => {
+  switch (reason) {
+    case "quota":
+      return "Rate limit";
+    case "credential_quota":
+      return "Account quota used up";
+    case "cloudflare_challenge":
+      return "Blocked by a Cloudflare challenge";
+    case "unknown":
+      return "Unknown";
+    default:
+      return reason;
+  }
+};

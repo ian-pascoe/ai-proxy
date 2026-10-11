@@ -20,6 +20,7 @@ import type { WorkerEnv } from "../platform/env.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
 import { apiCallHandler } from "./api-call.ts";
+import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
 import { configRoutes } from "./config-routes.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { modelDefinitionsHandler } from "./model-definitions.ts";
@@ -55,11 +56,13 @@ export const ManagementRoutes = HttpRouter.addAll(
 
     return [
       ...configRoutes,
+      ...apiKeysRoutes,
       ...credentialRoutes,
       ...usageRoutes,
       ...oauthRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),
+      HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/server/latest-version`, bound(latestVersionHandler)),
       HttpRouter.route("POST", `${BASE}/requests/api-call`, bound(apiCallHandler)),
       HttpRouter.route(

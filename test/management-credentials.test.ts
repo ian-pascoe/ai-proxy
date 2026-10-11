@@ -346,7 +346,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     ).toBe(404);
   });
 
-  it("refuses to toggle config API keys", async () => {
+  it("toggles config API keys through excluded-models and refuses compat keys", async () => {
     await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n");
 
     const config = (await json("/v8/management/config/api-keys/claude")).body as Array<{
@@ -362,9 +362,51 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
         "/v8/management/credentials/status",
         jsonInit("PATCH", { name: id, disabled: true }),
       ),
-    ).toMatchObject({ status: 409 });
+    ).toMatchObject({
+      status: 200,
+      body: { status: "ok", disabled: true, via: "config:excluded-models", excluded_pattern: "*" },
+    });
+
+    const claudeKeyDisabled = async () => {
+      const view = (await controlPlane().apiKeysView()) as unknown as {
+        families: { claude: Array<{ group: { keys: Array<{ disabled: boolean }> } }> };
+      };
+
+      return view.families.claude[0]!.group.keys[0]!.disabled;
+    };
+
+    // The id (and so auth_index) is unchanged: excluded-models is not part of the identity.
+    const stored = (await json("/v8/management/config/api-keys/claude")).body as Array<{
+      keys: Array<{ auth_index: string; "excluded-models"?: string[] }>;
+    }>;
+
+    expect(stored[0]!.keys[0]).toMatchObject({ auth_index: authIndex, "excluded-models": ["*"] });
+    expect(await claudeKeyDisabled()).toBe(true);
+
+    expect(
+      await json(
+        "/v8/management/credentials/status",
+        jsonInit("PATCH", { auth_index: authIndex, disabled: false }),
+      ),
+    ).toMatchObject({ status: 200, body: { disabled: false } });
+    expect(await claudeKeyDisabled()).toBe(false);
+
     // Config credentials are not auth files.
     expect((await list()).files).toEqual([]);
+
+    // An OpenAI-compatible endpoint is disabled as a whole.
+    await controlPlane().putConfig(
+      "openai-compatibility:\n  - name: acme\n    base-url: https://api.acme.test/v1\n    api-key-entries: [{ api-key: sk-acme }]\n",
+    );
+
+    const compat = (await controlPlane().listCredentials()).find((e) => e.source === "config")!;
+
+    expect(
+      await json(
+        "/v8/management/credentials/status",
+        jsonInit("PATCH", { name: compat.id, disabled: true }),
+      ),
+    ).toMatchObject({ status: 409 });
   });
 
   it("patches fields by dotted path, canonicalises keys and merges headers", async () => {

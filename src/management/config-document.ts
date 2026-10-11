@@ -135,21 +135,51 @@ const FAMILY_PROVIDERS: Readonly<Record<Exclude<ApiKeyFamily, "openai-compatibil
   meta: "meta",
 };
 
+/** Credential ids of one group: one per key (`undefined` when the key produced no credential). */
+export interface GroupKeyIds {
+  readonly keys: ReadonlyArray<string | undefined>;
+  /** A key-less OpenAI-compatibility group still produces one credential: its id. */
+  readonly group?: string;
+}
+
+/** Per family and group index: the ids of the credentials `synthesizeConfigCredentials` made for them. */
+export type ConfigKeyIds = Readonly<Record<ApiKeyFamily, ReadonlyArray<GroupKeyIds>>>;
+
+export interface ConfigKeyIdsOptions {
+  /**
+   * Also give the keys of a disabled OpenAI-compatibility group an id (as if the group were enabled), so the panel
+   * can still address them. Off for `auth_index` injection: a disabled group has no credentials (as in Go).
+   */
+  readonly includeDisabledGroups?: boolean;
+}
+
 /**
- * Adds `auth_index` to every `api-keys.<family>[].keys[]` entry (and to key-less OpenAI-compatibility groups), the
- * way the Go server does, so the panel can address those credentials (`/requests/api-call`, cooldown reset).
- * `document` must be the JSON form of `config`; the result is a modified copy. Positions are matched through the
- * synthesised credentials (`attributes.config_index`), the same order the credential pool uses.
+ * Maps every position in `config["api-keys"]` (family, group, key) to the id of the credential it produced, through
+ * the synthesised credentials (`attributes.config_index`), the same order the credential pool uses. Shared by
+ * `injectAuthIndexes` and the API keys view/writes, so both agree on which key an `auth_index` names.
  */
-export const injectAuthIndexes = (
-  document: JsonObject,
+export const configKeyIds = (
   config: Pick<Config, "api-keys">,
-): JsonObject => {
-  const credentials = synthesizeConfigCredentials(config, 0);
+  options: ConfigKeyIdsOptions = {},
+): ConfigKeyIds => {
+  const apiKeys = config["api-keys"];
+
+  const synthesised: Pick<Config, "api-keys"> =
+    options.includeDisabledGroups === true
+      ? {
+          "api-keys": {
+            ...apiKeys,
+            "openai-compatibility": apiKeys["openai-compatibility"].map((group) =>
+              group.disabled === true ? { ...group, disabled: false } : group,
+            ),
+          },
+        }
+      : config;
+
   const byPosition = new Map<string, string>();
   const compat = new Map<string, string[]>();
 
-  for (const credential of credentials) {
+  for (const credential of synthesizeConfigCredentials(synthesised, 0)) {
     const index = credential.attributes.config_index;
 
     if (index === undefined) continue;
@@ -163,6 +193,50 @@ export const injectAuthIndexes = (
     }
   }
 
+  const grouped = (family: Exclude<ApiKeyFamily, "openai-compatibility">): GroupKeyIds[] => {
+    const provider = FAMILY_PROVIDERS[family];
+    let position = 0;
+
+    return apiKeys[family].map((group) => ({
+      keys: group.keys.map(() => {
+        const id = byPosition.get(`${provider}:${position}`);
+        position += 1;
+
+        return id;
+      }),
+    }));
+  };
+
+  return {
+    gemini: grouped("gemini"),
+    interactions: grouped("interactions"),
+    vertex: grouped("vertex"),
+    codex: grouped("codex"),
+    claude: grouped("claude"),
+    xai: grouped("xai"),
+    meta: grouped("meta"),
+    "openai-compatibility": apiKeys["openai-compatibility"].map((group, index) => {
+      const ids = compat.get(String(index)) ?? [];
+
+      return {
+        keys: group.keys.map((_, keyIndex) => ids[keyIndex]),
+        ...(group.keys.length === 0 && ids[0] !== undefined ? { group: ids[0] } : {}),
+      };
+    }),
+  };
+};
+
+/**
+ * Adds `auth_index` to every `api-keys.<family>[].keys[]` entry (and to key-less OpenAI-compatibility groups), the
+ * way the Go server does, so the panel can address those credentials (`/requests/api-call`, cooldown reset).
+ * `document` must be the JSON form of `config`; the result is a modified copy. Positions come from
+ * {@link configKeyIds}.
+ */
+export const injectAuthIndexes = (
+  document: JsonObject,
+  config: Pick<Config, "api-keys">,
+): JsonObject => {
+  const ids = configKeyIds(config);
   const out = structuredClone(document);
   const apiKeys = out["api-keys"];
 
@@ -173,40 +247,22 @@ export const injectAuthIndexes = (
 
     if (!Array.isArray(groups)) continue;
 
-    if (family === "openai-compatibility") {
-      groups.forEach((group, groupIndex) => {
-        if (!isJsonObject(group)) return;
-        const ids = compat.get(String(groupIndex)) ?? [];
-        const keys = group.keys;
+    groups.forEach((group, groupIndex) => {
+      if (!isJsonObject(group)) return;
+      const groupIds = ids[family][groupIndex];
 
-        if (Array.isArray(keys) && keys.length > 0) {
-          keys.forEach((key, keyIndex) => {
-            const id = ids[keyIndex];
+      if (groupIds === undefined) return;
 
-            if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id);
-          });
-        } else if (ids[0] !== undefined) {
-          group.auth_index = authIndexOf(ids[0]);
-        }
-      });
-      continue;
-    }
+      if (Array.isArray(group.keys)) {
+        group.keys.forEach((key, keyIndex) => {
+          const id = groupIds.keys[keyIndex];
 
-    const provider = FAMILY_PROVIDERS[family];
-    let position = 0;
-
-    for (const group of groups) {
-      const keys = isJsonObject(group) ? group.keys : undefined;
-
-      if (!Array.isArray(keys)) continue;
-
-      for (const key of keys) {
-        const id = byPosition.get(`${provider}:${position}`);
-        position += 1;
-
-        if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id);
+          if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id);
+        });
       }
-    }
+
+      if (groupIds.group !== undefined) group.auth_index = authIndexOf(groupIds.group);
+    });
   }
 
   return out;

@@ -5,9 +5,12 @@ import { Shell } from "./components/Shell.tsx";
 import { AccountPage } from "./pages/Account.tsx";
 import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
+import { KeyGroupPage, NewKeyGroupPage } from "./pages/KeyGroup.tsx";
+import { KeysPage } from "./pages/Keys.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound, Placeholder } from "./pages/Placeholder.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
+import { readNewKeySearch } from "./lib/keys.ts";
 import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
@@ -32,11 +35,18 @@ const routeTree = rootRoute.addChildren([
     path: "/accounts/$authIndex",
     component: AccountPage,
   }),
-  page(
-    "/keys",
-    "API keys",
-    "Provider API keys grouped by provider, with connection tests and model discovery.",
-  ),
+  createRoute({ getParentRoute: () => rootRoute, path: "/keys", component: KeysPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/keys/new",
+    validateSearch: readNewKeySearch,
+    component: NewKeyGroupPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/keys/$family/$index",
+    component: KeyGroupPage,
+  }),
   page(
     "/models",
     "Models",

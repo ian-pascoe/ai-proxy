@@ -765,10 +765,42 @@ until the next page load).
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
-  auth files are listed (config API keys are not auth files; toggling them answers 409). `auth_index` =
+  auth files are listed (config API keys are not auth files; `status` toggles one through its `excluded-models`, see
+  _API keys_ below). `auth_index` =
   `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
   entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
   `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`).
+- **API keys** (`api-keys-routes.ts`, `api-keys-view.ts`, `api-keys-write.ts`, `api-keys-probe.ts`, contract `api-keys.ts`):
+  the control panel's keys page. Workers addition, no Go counterpart (Go's panel edits whole family arrays with raw keys).
+  - `GET /api-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
+    effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
+    holds `*`) and the runtime of its credential (counters, cooldowns, last error). Built in the ControlPlane
+    (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, header
+    values with secret-looking names are masked (`[redacted]…`), `proxy-url` and `experimental-cch-signing` (no effect
+    on Workers) are left out and only reported as group `warnings`.
+  - `PUT /api-keys/groups` (`{version, family, index?, group}`: replace or append) and `DELETE /api-keys/groups`
+    (`{version, family, index}`): the Worker reads the stored config, answers `409 conflict` when `version` is stale,
+    applies the edit to the document, dry-runs it through the config decoder and stores it with
+    `putConfig(text, version)` **without retry** (the panel re-reads and the user decides). A key in a written group is
+    `auth_index` (keep the stored secret; same credential id) and/or `api-key` (new secret, new id); an unknown
+    `auth_index` is `409 unknown_auth_index`, a missing group `404 group not found`. Hidden settings and masked header
+    values are carried over from the stored entry, so a write is lossless. The config normaliser drops groups and keys
+    silently (codex without `base-url`, duplicate keys): the dry run compares the result with the request and answers
+    `422` with the reason instead of "succeeding". The stored document is already canonical (`ConfigStore.put`
+    round-trips it), so list positions are document positions.
+  - `POST /api-keys/probe {auth_index}`: one connection test, made by the **Worker** with the credential's own base URL
+    and headers (the ControlPlane only hands over the target, `apiKeyProbeTarget`, like `quotaProbeTarget`): a model
+    listing (gemini/interactions `/v1beta/models` paged, claude `/v1/models` with `x-api-key` on api.anthropic.com
+    else Bearer, codex/xai/meta `/models` or `/v1/models`, compat `/models`) or, for Vertex (no listing), a one-token
+    `countTokens` on the first configured model. 30 s bound, not reported to the credential pool (no counters or
+    cooldown), `200` always (`ok: false` with `status_code` and a fixed message; bodies and keys are never copied).
+    Meta `/models` and Vertex `countTokens` are unverified against the live services.
+  - `PATCH /credentials/status` (`name` or `auth_index`) on a config API key adds or removes `*` in its
+    `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
+    the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`).
+  - `configKeyIds` (`config-document.ts`) maps config positions to credential ids through the synthesised credentials;
+    `auth_index` injection and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
+    group (they have no credentials in the pool).
 - **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
   60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
@@ -788,7 +820,12 @@ until the next page load).
   tokens, enable/disable, delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
   code, Vertex service-account import, auth-file upload); Usage (`/usage`: totals, tokens per hour or day, a breakdown
   by model, account, provider, user or endpoint whose rows narrow the page, and the request log with each request's
-  details and failure body). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  details and failure body); API keys (`/keys`: every `api-keys` group by provider, each OpenAI-compatible endpoint
+  its own section, keys by their last characters with state, recent requests, a connection test, clear cooldowns and
+  enable/disable; `/keys/$family/$index` and `/keys/new?family=` edit or add one group: endpoint, keys typed in once,
+  models with discovery through the probe, exclusions, delete; reads `GET /api-keys` and writes one group with
+  `PUT /api-keys/groups` carrying the list's `version`, existing keys by `auth_index`, everything the form does not
+  show kept as stored; a `409` offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
@@ -806,7 +843,10 @@ until the next page load).
   file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
-  `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_).
+  `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_). The API keys
+  routes are a Workers addition (secrets never in their responses, versioned writes); `GET /config` stays raw (keys
+  included) for the upstream `management.html`, which the control panel does not use. Config API keys can be toggled
+  (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
 ## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
 

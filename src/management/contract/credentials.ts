@@ -160,10 +160,23 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
     success: CredentialList,
     error: managementErrors,
   }),
-  /** Enable or disable one credential. */
+  /**
+   * Enable or disable one credential. A config API key (`name` is its credential id, `KeyRuntime.id`) is disabled by
+   * adding `*` to its `excluded-models` (`via`, as Go answers); its `auth_index` stays the same. OpenAI-compatible
+   * keys answer 409: disable the endpoint (the group's `disabled`) instead.
+   */
   HttpApiEndpoint.patch("setDisabled", "/credentials/status", {
-    payload: Schema.Struct({ name: Schema.String, disabled: Schema.Boolean }),
-    success: Schema.Struct({ status: Schema.Literal("ok"), disabled: Schema.Boolean }),
+    payload: Schema.Struct({
+      name: Schema.String,
+      auth_index: optional(Schema.String),
+      disabled: Schema.Boolean,
+    }),
+    success: Schema.Struct({
+      status: Schema.Literal("ok"),
+      disabled: Schema.Boolean,
+      via: optional(Schema.Literal("config:excluded-models")),
+      excluded_pattern: optional(Schema.String),
+    }),
     error: managementErrors,
   }),
   HttpApiEndpoint.patch("patchFields", "/credentials/fields", {
